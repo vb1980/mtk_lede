@@ -237,6 +237,7 @@ struct cb_rx_desc_info4 {
 #define FOE_MAGIC_PPE		    0x76
 #define FOE_MAGIC_WED0		    0x78
 #define FOE_MAGIC_WED1		    0x79
+#define FOE_MAGIC_WED2		    0x7A
 #define FOE_MAGIC_MED		    0x80
 #define FOE_MAGIC_EDMA0		    0x81
 #define FOE_MAGIC_EDMA1		    0x82
@@ -265,6 +266,16 @@ struct cb_rx_desc_info4 {
 #define FOE_RX_ID(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->RXID)
 #define FOE_WC_ID(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->WCID)
 #define FOE_BSS_ID(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->BSSID)
+#define FOE_USR_INFO(skb)	\
+	(((struct dmad_rx_descinfo4 *)((skb)->head))->USR_INFO)
+#define FOE_TID(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->TID)
+#define FOE_IS_FIXEDRATE(skb)	\
+	(((struct dmad_rx_descinfo4 *)((skb)->head))->IS_FIXEDRATE)
+#define FOE_IS_PRIOR(skb)	\
+	(((struct dmad_rx_descinfo4 *)((skb)->head))->IS_PRIOR)
+#define FOE_IS_SP(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->IS_SP)
+#define FOE_HF(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->HF)
+#define FOE_AMSDU(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->AMSDU)
 #define FOE_PPE(skb)	(((struct dmad_rx_descinfo4 *)((skb)->head))->ppe)
 
 /***********************HEAD FORMAT*************************************/

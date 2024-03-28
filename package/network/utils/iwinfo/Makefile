@@ -78,7 +78,7 @@ define Build/Configure
 endef
 
 IWINFO_BACKENDS := \
-	$(if $(CONFIG_PACKAGE_kmod-mt7615d_dbdc),ra) \
+	$(if $(CONFIG_PACKAGE_kmod-mt7615d_dbdc),mtk) \
 	$(if $(CONFIG_PACKAGE_kmod-cfg80211),nl80211)
 
 TARGET_CFLAGS += \

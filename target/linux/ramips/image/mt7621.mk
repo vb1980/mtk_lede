@@ -1445,6 +1445,18 @@ define Device/sercomm_na502
 endef
 TARGET_DEVICES += sercomm_na502
 
+define Device/skspruce_wia3300-10
+  $(Device/dsa-migration)
+  IMAGE_SIZE := 32448k
+  DEVICE_VENDOR := Skspruce
+  DEVICE_MODEL := WIA3300-10
+  SUPPORTED_DEVICES += wia3300-10
+  DEVICE_COMPAT_VERSION := 1.0
+  DEVICE_PACKAGES := -luci-newapi kmod-mt7615d_dbdc kmod-usb3 \
+	kmod-usb-ledtrig-usbport wireless-tools
+endef
+TARGET_DEVICES += skspruce_wia3300-10
+
 define Device/storylink_sap-g3200u3
   $(Device/dsa-migration)
   IMAGE_SIZE := 7872k

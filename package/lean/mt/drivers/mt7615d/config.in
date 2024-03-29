@@ -51,6 +51,7 @@ choice
 	default MTK_SECOND_IF_NONE if TARGET_ramips_mt7621_DEVICE_jcg_y2
 	default MTK_SECOND_IF_NONE if TARGET_ramips_mt7621_DEVICE_phicomm_k2p
 	default MTK_SECOND_IF_NONE if TARGET_ramips_mt7621_DEVICE_raisecom_msg1500-x-00
+	default MTK_SECOND_IF_NONE if TARGET_ramips_mt7621_DEVICE_skspruce_wia3300-10
 	default MTK_SECOND_IF_MT7615E
 
 config MTK_SECOND_IF_NONE
@@ -291,6 +292,7 @@ config MTK_DBDC_MODE
 	default y if TARGET_ramips_mt7621_DEVICE_jcg_y2
 	default y if TARGET_ramips_mt7621_DEVICE_phicomm_k2p || TARGET_DEVICE_ramips_mt7621_DEVICE_phicomm_k2p
 	default y if TARGET_ramips_mt7621_DEVICE_raisecom_msg1500-x-00 || TARGET_DEVICE_ramips_mt7621_DEVICE_raisecom_msg1500-x-00
+	default y if TARGET_ramips_mt7621_DEVICE_skspruce_wia3300-10 || TARGET_DEVICE_ramips_mt7621_DEVICE_skspruce_wia3300-10
 	default n
 
 config MTK_MULTI_PROFILE_SUPPORT
@@ -305,6 +307,7 @@ config MTK_DEFAULT_5G_PROFILE
 	default y if TARGET_ramips_mt7621_DEVICE_jcg_y2
 	default y if TARGET_ramips_mt7621_DEVICE_phicomm_k2p || TARGET_DEVICE_ramips_mt7621_DEVICE_phicomm_k2p
 	default y if TARGET_ramips_mt7621_DEVICE_raisecom_msg1500-x-00 || TARGET_DEVICE_ramips_mt7621_DEVICE_raisecom_msg1500-x-00
+	default y if TARGET_ramips_mt7621_DEVICE_skspruce_wia3300-10 || TARGET_DEVICE_ramips_mt7621_DEVICE_skspruce_wia3300-10
 	default n
 
 config MTK_WSC_INCLUDED

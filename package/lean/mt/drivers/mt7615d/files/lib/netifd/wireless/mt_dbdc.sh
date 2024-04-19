@@ -47,12 +47,34 @@ drv_mt_dbdc_init_device_config() {
 	config_add_boolean hidessid bndstrg isolate dfs
 	config_add_array channels
 	config_add_array scan_list
+
+	config_add_boolean \
+		rxldpc \
+		short_gi_80 \
+		short_gi_160 \
+		tx_stbc_2by1 \
+		su_beamformer \
+		su_beamformee \
+		mu_beamformer \
+		mu_beamformee \
+		vht_txop_ps \
+		htc_vht \
+		rx_antenna_pattern \
+		tx_antenna_pattern
+	config_add_int vht_max_a_mpdu_len_exp vht_max_mpdu vht_link_adapt vht160 rx_stbc tx_stbc
+	
+	config_add_boolean \
+		ldpc \
+		greenfield \
+		short_gi_20 \
+		short_gi_40 \
+		dsss_cck_40
 }
 
 #读取iface相关设置项并写入json
 drv_mt_dbdc_init_iface_config() {
 	config_add_boolean disabled
-	config_add_string mode ifname bssid 'ssid:string' encryption
+	config_add_string mode ifname 'macaddr:macaddr' bssid 'ssid:string' encryption
 	config_add_string auth_server auth_port auth_secret acct_secret own_ip_addr own_radius_port
 	config_add_boolean hidden isolate isolate_mb br_isolate_mode ieee80211k ieee80211v ieee80211r
 	config_add_boolean powersave enable coloring ldpc lofdm
@@ -1002,7 +1024,6 @@ PreAuthifname=
 RadioLinkSelection=0
 ProbeReqFloodThreshold=64
 RadioOn=1
-RDRegion=${FCC}
 RDRegion=CE
 ReassocReqFloodThreshold=64
 RED_Enable=1

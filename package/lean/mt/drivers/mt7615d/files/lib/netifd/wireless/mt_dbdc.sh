@@ -39,12 +39,12 @@ drv_mt_dbdc_init_device_config() {
 	config_add_string txburst cell_density
 	config_add_string distance
 	config_add_int beacon_int chanbw frag rts dtim_period vendor_vht mu_beamformer whnat
-	config_add_int rxantenna txantenna antenna_gain txpower min_tx_power distance noscan
+	config_add_int rxantenna txantenna antenna_gain txpower min_tx_power noscan
 	config_add_int num_global_macaddr multiple_bssid legacy_rates
 	config_add_boolean greenap diversity noscan ht_coex acs_exclude_dfs background_radar
 	config_add_int powersave doth
 	config_add_int maxassoc
-	config_add_boolean hidessid bndstrg isolate
+	config_add_boolean hidessid bndstrg isolate dfs
 	config_add_array channels
 	config_add_array scan_list
 }
@@ -301,14 +301,14 @@ mt_dbdc_ap_vif_pre_config() {
 		mt_cmd iwpriv $ifname set WscConfMode=0
 	fi
 	mt_cmd echo "Other settings for ${ifname}."
-	[ -n "$disassoc_low_ack" ]  && [ "$disassoc_low_ack" != "0" ] && {
+	[ -n "$disassoc_low_ack" ] && [ "$disassoc_low_ack" != "0" ] && {
 		mt_cmd iwpriv $ifname set KickStaRssiLow=$kicklow
 		mt_cmd iwpriv $ifname set AssocReqRssiThres=$assocthres
 	}
-	[ -n "$ieee80211k" ]  && [ "$ieee80211k" != "0" ] && mt_cmd iwpriv $ifname set rrmenable=1
-	# [ -n "$ieee80211v" ]  && [ "$ieee80211v" != "0" ] && mt_cmd iwpriv $ifname set wnmenable=1
-	[ -n "$ieee80211r" ]  && [ "$ieee80211r" != "0" ] && mt_cmd iwpriv $ifname set ftenable=1
-	# [ -n "$ieee80211w" ]  && [ "$ieee80211w" != "0" ] && mt_cmd iwpriv $ifname set pmfenable=1
+	[ -n "$ieee80211k" ] && [ "$ieee80211k" != "0" ] && mt_cmd iwpriv $ifname set rrmenable=1
+	# [ -n "$ieee80211v" ] && [ "$ieee80211v" != "0" ] && mt_cmd iwpriv $ifname set wnmenable=1
+	[ -n "$ieee80211r" ] && [ "$ieee80211r" != "0" ] && mt_cmd iwpriv $ifname set ftenable=1
+	# [ -n "$ieee80211w" ] && [ "$ieee80211w" != "0" ] && mt_cmd iwpriv $ifname set pmfenable=1
 }
 
 mt_dbdc_wds_vif_pre_config() {
@@ -501,23 +501,22 @@ mt_dbdc_sta_vif_pre_config() {
 	if [[ "${ApCliEncrypType}" = "WEP" ]]; then
 		mt_cmd iwpriv $APCLI_IF set ApCliDefaultKeyID=${ApCliDefKId}
 		# mt_cmd iwpriv $APCLI_IF set ApCliKey1Type=1 # 0:hex, 1:ascii
-		mt_cmd iwpriv $APCLI_IF set "\"ApCliKey1Str=${key1##*:}\""
+		mt_cmd iwpriv $APCLI_IF set ApCliKey1Str=${key1##*:}
 		# mt_cmd iwpriv $APCLI_IF set ApCliKey2Type=1
-		mt_cmd iwpriv $APCLI_IF set "\"ApCliKey2Str=${key2##*:}\""
+		mt_cmd iwpriv $APCLI_IF set ApCliKey2Str=${key2##*:}
 		# mt_cmd iwpriv $APCLI_IF set ApCliKey3Type=1
-		mt_cmd iwpriv $APCLI_IF set "\"ApCliKey3Str=${key3##*:}\""
+		mt_cmd iwpriv $APCLI_IF set ApCliKey3Str=${key3##*:}
 		# mt_cmd iwpriv $APCLI_IF set ApCliKey4Type=1
-		mt_cmd iwpriv $APCLI_IF set "\"ApCliKey4Str=${key4##*:}\""
+		mt_cmd iwpriv $APCLI_IF set ApCliKey4Str=${key4##*:}
 	elif ! [[ "${ApCliEncrypType}" = "NONE" ]]; then
-		mt_cmd iwpriv $APCLI_IF set "\"ApCliWPAPSK=${key}\""
+		mt_cmd iwpriv $APCLI_IF set ApCliWPAPSK=${key}
 	fi
 	if [[ "${ApCliAuthMode}" = "OWE" ]]; then
 		mt_cmd iwpriv $APCLI_IF set ApCliOWETranIe=1
 		echo "ApCliOWETranIe=${ApCliOWETranIe:-1}" >> $MTWIFI_PROFILE_PATH
 	fi
-	[ -z "$bssid" ] || mt_cmd iwpriv $APCLI_IF set "ApCliBssid=$(echo $bssid | tr 'A-Z' 'a-z')"
-	mt_cmd iwpriv $APCLI_IF set "\"ApCliSsid=${ssid}\""
-	# mt_cmd iwpriv $APCLI_IF set ApCliMacAddress=${macaddr}
+	[ -z "$bssid" ] || mt_cmd iwpriv $APCLI_IF set ApCliBssid=$(echo $bssid | tr 'A-Z' 'a-z')
+	mt_cmd iwpriv $APCLI_IF set ApCliSsid=${ssid}
 	mt_cmd iwpriv $APCLI_IF set ApCliDelPMKIDList=1
 	if [ "$wps_pushbutton" == "1" ] && [ "${ApCliAuthMode}" != "none" ]; then
 		mt_cmd echo "Enable WPS PIN for ${APCLI_IF}."
@@ -612,7 +611,7 @@ drv_mt_dbdc_setup() {
 	json_get_vars main_if phy_name macaddr channel mode hwmode htmode \
 		txpower country macfilter maclist greenap \
 		diversity frag rts hidden \
-		disabled noscan ht_coex #device所有配置项
+		disabled noscan:1 ht_coex #device所有配置项
 
 	json_get_vars \
 			ldpc:1 \
@@ -637,6 +636,7 @@ drv_mt_dbdc_setup() {
 			dsss_cck_40:1
 			
 	json_get_vars \
+			dfs:0 \
 			rxldpc:1 \
 			short_gi_80:1 \
 			short_gi_160:1 \
@@ -754,7 +754,7 @@ drv_mt_dbdc_setup() {
 #强制HT40/VHT80
 		[[ "$noscan" = "1" ]] && HT_CE=0 && MTWIFI_FORCE_HT=1
 #HT HTC
-		[[ "$ht_htc" = "1" ]] && HT_HTC=1
+		HT_HTC=1
 	}
 
 #TxPower功率设置
@@ -768,38 +768,52 @@ drv_mt_dbdc_setup() {
 		txpower=100
 	}
 
-#自动处理CountryRegion:指定信道的时候支持全频段
-	[ "$channel" != "auto" -o "$channel" != "0" ] && {
-		#Country US
-		countryregion=5
-		countryregion_a=7
-		#AutoChannelSelect=0
+#BG保护功能设置
+	[ "${legacy_rates}" == "0" ] && {
+		BGProtection=2
 	}
+#或者
+	[ "${legacy_rates}" == "1" ] && {
+		BGProtection=1
+	}
+
+#自动处理CountryRegion:指定信道的时候支持全频段
+#	[ "$channel" != "auto" -o "$channel" != "0" ] && {
+#		#Country US
+#		countryregion=5
+#		countryregion_a=7
+#		#AutoChannelSelect=0
+#	}
 
 #其它相关
 	case "$hwmode" in
 		a)
 			EXTCHA=1
-			[ "$channel" != "auto" ] && [ "$channel" != "0" ] && [ "$(( ($channel / 4) % 2 ))" == "0" ] && EXTCHA=0
-			[ "$channel" == "165" ] && EXTCHA=0
-			[ "$channel" == "auto" -o "$channel" == "0" ] && {
-				#country=CN
+			[ "${channel}" != "auto" ] && [ "${channel}" != "0" ] && [ "$(( (${channel} / 4) % 2 ))" == "0" ] && EXTCHA=0
+			[ "${channel}" == "165" ] && EXTCHA=0
+			[ "${channel}" == "auto" -o "${channel}" == "0" ] && {
+				mt_cmd iwpriv ra${MTWIFI_IFPREFIX}0 set AutoChannelSel=3
 				channel=0
+			}
+			[ "${country}" == "CN" -o "${country}" != "US" ] && {
 				countryregion=1
 				countryregion_a=0
-				AutoChannelSelect=2
+			}
+			[ "${country}" == "US" -a "${country}" != "CN" ] && {
+				countryregion=5
+				countryregion_a=7
 			}
 			ACSSKIP="52;56;60;64;100;104;108;112;116;120;124;128;132;136;140;165"
 		;;
 		g)
 			EXTCHA=0
-			[ "$channel" != "auto" ] && [ "$channel" != "0" ] && [ "$channel" -lt "7" ] && EXTCHA=1
-			[ "$channel" == "auto" -o "$channel" == "0" ] && {
-				#country=CN
+			[ "${channel}" != "auto" ] && [ "${channel}" != "0" ] && [ "${channel}" -lt "7" ] && EXTCHA=1
+			[ "${channel}" == "auto" -o "${channel}" == "0" ] && {
+				mt_cmd iwpriv ra${MTWIFI_IFPREFIX}0 set AutoChannelSel=3
 				channel=0
-				countryregion=1
-				AutoChannelSelect=3
 			}
+			[ "${country}" == "CN" -o "${country}" != "US" ] && countryregion=1
+			[ "${country}" == "US" -a "${country}" != "CN" ] && countryregion=5
 			ACSSKIP="14"
 		;;
 	esac
@@ -840,11 +854,11 @@ BandDeltaRssi=-12
 BandSteering=0
 BasicRate=15
 BcnProt=0
-BeaconPeriod=${beacon_int}
+BeaconPeriod=${beacon_int:-100}
 BFBACKOFFenable=0
 BGMultiClient=${legacy_rates}
 BgndScanSkipCh=
-BGProtection=${legacy_rates}
+BGProtection=${BGProtection:-0}
 BlockCh=
 BndStrgAge=600000
 BndStrgCheckTime=6000
@@ -878,7 +892,7 @@ DebugFlags=0
 DfsApplyStopWifi=0
 DfsCalibration=0
 DfsDedicatedZeroWait=0
-DfsEnable=0
+DfsEnable=${dfs:-0}
 DfsFalseAlarmPrevent=0
 DfsLowerLimit=0
 DfsOutdoor=0
@@ -896,7 +910,7 @@ Dot11vMbssid=0
 DppEnable=1
 DscpPriMapBss=
 DscpPriMapEnable=1
-DtimPeriod=${dtim_period}
+DtimPeriod=${dtim_period:-1}
 DyncVgaEnable=1
 E2pAccessMode=2
 EAPifname=
@@ -962,9 +976,9 @@ MAP_Turnkey=1
 MAP_Ext=0
 MboSupport=1
 MaxStaNum=${maxassoc}
-MbssMaxStaNum=${maxassoc}
+MbssMaxStaNum=${maxassoc:-64}
 MBSSWirelessMode=
-MUTxRxEnable=${mu_beamformer}
+MUTxRxEnable=${mu_beamformer:-0}
 NoForwardingBTNBSSID=0
 NoForwardingMBCast=0
 NonTxBSSIndex=0
@@ -1025,14 +1039,14 @@ TxBurst=${txburst:-1}
 TxPower=${txpower:-100}
 TxRate=0
 UAPSDCapable=1
-UseVhtRateFor2g=${vendor_vht}
+UseVhtRateFor2g=${vendor_vht:-1}
 VHT_BW=${VHT_BW:-1}
 VHT_BW_SIGNAL=0
 VHT_DisallowNonVHT=${VHT_DisallowNonVHT:-0}
-VHT_LDPC=${ldpc}
+VHT_LDPC=${ldpc:-1}
 VHT_Sec80_Channel=0
-VHT_SGI=${VHT_SGI}
-VHT_STBC=${tx_stbc}
+VHT_SGI=${VHT_SGI:-1}
+VHT_STBC=${tx_stbc:-1}
 VLANID=0
 VLANPriority=0
 VLANTag=0

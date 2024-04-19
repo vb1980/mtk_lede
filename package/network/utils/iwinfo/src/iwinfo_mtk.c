@@ -582,7 +582,7 @@ static void fill_rate_info(HTTRANSMIT_SETTING HTSetting, struct iwinfo_rate_entr
 	re->rate = (uint32_t)(DataRate * 1000);
 }
 
-static void mtk_parse_rateinfo(RT_802_11_MAC_ENTRY *pe, 
+static void mtk_parse_rateinfo(RT_802_11_MAC_ENTRY *pe,
 	struct iwinfo_rate_entry *rx_rate, struct iwinfo_rate_entry *tx_rate)
 {
 	HTTRANSMIT_SETTING TxRate;
@@ -695,18 +695,18 @@ int mtk_get_assoclist(const char *ifname, char *buf, int *len)
 int mtk_get_txpwrlist(const char *ifname, char *buf, int *len)
 {
 	struct iwinfo_txpwrlist_entry entry;
-	uint8_t dbm[8] = {0, 7, 10, 12, 14, 17, 19, 20};
-	uint16_t mw[8] = {1, 5, 10, 15, 25, 50, 79, 100};
+	uint8_t dbm[7] = {0, 8, 11, 14, 17, 19, 20};
+	uint16_t mw[7] = {1, 6, 12, 25, 50, 79, 100};
 	int i;
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < 7; i++)
 	{
 		entry.dbm = dbm[i];
 		entry.mw = mw[i];
 		memcpy(&buf[i * sizeof(entry)], &entry, sizeof(entry));
 	}
 
-	*len = 8 * sizeof(entry);
+	*len = 7 * sizeof(entry);
 	return 0;
 }
 

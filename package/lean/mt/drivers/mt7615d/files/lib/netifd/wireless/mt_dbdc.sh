@@ -47,28 +47,6 @@ drv_mt_dbdc_init_device_config() {
 	config_add_boolean hidessid bndstrg isolate dfs
 	config_add_array channels
 	config_add_array scan_list
-
-	config_add_boolean \
-		rxldpc \
-		short_gi_80 \
-		short_gi_160 \
-		tx_stbc_2by1 \
-		su_beamformer \
-		su_beamformee \
-		mu_beamformer \
-		mu_beamformee \
-		vht_txop_ps \
-		htc_vht \
-		rx_antenna_pattern \
-		tx_antenna_pattern
-	config_add_int vht_max_a_mpdu_len_exp vht_max_mpdu vht_link_adapt vht160 rx_stbc tx_stbc
-	
-	config_add_boolean \
-		ldpc \
-		greenfield \
-		short_gi_20 \
-		short_gi_40 \
-		dsss_cck_40
 }
 
 #读取iface相关设置项并写入json
@@ -852,18 +830,13 @@ AntCtrl=
 APACM=0;0;0;0
 APAifsn=3;7;1;1
 ApCliBcnProt=0
-ApCliOCVSupport=0
 ApCliPMFSHA256=0
-ApCliTxMcs=33
-ApCliTxMode=
 ApCliWirelessMode=
-ApCli_Wsc4digitPinCode=
-ApCliWscScanMode=
 APCwmax=6;10;4;3
 APCwmin=4;4;3;2
 ApMWDS=1
 ApProbeRspTimes=3
-APSDCapable=0
+APSDCapable=1
 APTxop=0;0;94;47
 AssocReqFloodThreshold=64
 AuthFloodThreshold=64
@@ -878,7 +851,7 @@ BasicRate=15
 BcnProt=0
 BeaconPeriod=${beacon_int:-100}
 BFBACKOFFenable=0
-BGMultiClient=${legacy_rates}
+BGMultiClient=${legacy_rates:-1}
 BgndScanSkipCh=
 BGProtection=${BGProtection:-0}
 BlockCh=
@@ -983,7 +956,7 @@ HT_TxStream=2
 IcapMode=0
 idle_timeout_interval=0
 IdsEnable=0
-IEEE80211H=${doth}
+IEEE80211H=${doth:-0}
 IEEE8021X=0
 IgmpSnEnable=${igmp_snooping:-0}
 IsICAPFW=0
@@ -1019,6 +992,14 @@ PhyRateLimit=0
 PktAggregate=1
 PMFSHA256=0
 PMKCachePeriod=10
+PowerUpCckOfdm=0:0:0:0:0:0:0
+PowerUpHT20=0:0:0:0:0:0:0
+PowerUpHT40=0:0:0:0:0:0:0
+PowerUpVHT160=0:0:0:0:0:0:0
+PowerUpVHT20=0:0:0:0:0:0:0
+PowerUpVHT40=0:0:0:0:0:0:0
+PowerUpVHT80=0:0:0:0:0:0:0
+PPDUTxType=4
 PreAntSwitch=1
 PreAuthifname=
 RadioLinkSelection=0
@@ -1029,7 +1010,7 @@ ReassocReqFloodThreshold=64
 RED_Enable=1
 RegDomain=Global
 ResetCounter=1
-RTSThreshold=${rts}
+RTSThreshold=${rts:-2347}
 ScsEnable=1
 session_timeout_interval=0
 quiet_interval=0
@@ -1157,7 +1138,6 @@ ApCliUAPSDCapable=1
 QuickChannelSwitch=1
 WDS_VLANID=0
 ApCliMWDS=1
-OCVSupport=0
 SRMeshUlMode=1
 WdsMac=
 EOF

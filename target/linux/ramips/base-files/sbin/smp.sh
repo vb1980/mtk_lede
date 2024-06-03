@@ -336,6 +336,10 @@ dbg2()
 	fi
 }
 
+if [ $1 == "usb0" ]; then
+	dbg "echo 5 > /sys/class/net/$1/queues/rx-0/rps_cpus"
+	echo 5 > /sys/class/net/$1/queues/rx-0/rps_cpus
+else
 #NUM_OF_CPU=4	#7621
 dbg "# RPS and AFFINITY Setting"
 dbg "# NUM_OF_CPU=$NUM_OF_CPU"
@@ -349,5 +353,6 @@ setup_model
 set_rps_cpu_bitmap
 set_rps_cpus $DEFAULT_RPS
 set_smp_affinity
+fi
 
 #end of file

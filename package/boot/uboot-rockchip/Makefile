@@ -5,10 +5,10 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
-PKG_VERSION:=2023.07
-PKG_RELEASE:=$(AUTORELEASE)
+PKG_VERSION:=2025.07
+PKG_RELEASE:=1
 
-PKG_HASH:=12e921b466ae731cdbc355e6832b7f22bc90b01aeceef9886f98aaba7b394300
+PKG_HASH:=0f933f6c5a426895bf306e93e6ac53c60870e4b54cda56d95211bec99e63bec7
 
 PKG_MAINTAINER:=Tobias Maedel <openwrt@tbspace.de>
 
@@ -38,12 +38,26 @@ define U-Boot/nanopi-r2c-rk3328
     friendlyarm_nanopi-r2c
 endef
 
+define U-Boot/nanopi-r2c-plus-rk3328
+  $(U-Boot/rk3328/Default)
+  NAME:=NanoPi R2C Plus
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r2c-plus
+endef
+
 define U-Boot/nanopi-r2s-rk3328
   $(U-Boot/rk3328/Default)
   NAME:=NanoPi R2S
   BUILD_DEVICES:= \
     friendlyarm_nanopi-r2s \
     friendlyarm_nanopi-neo3
+endef
+
+define U-Boot/nanopi-r2s-plus-rk3328
+  $(U-Boot/rk3328/Default)
+  NAME:=NanoPi R2S Plus
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r2s-plus
 endef
 
 define U-Boot/orangepi-r1-plus-rk3328
@@ -74,6 +88,13 @@ define U-Boot/dlfr100-rk3399
   NAME:=Dilusense DLFR100
   BUILD_DEVICES:= \
     dilusense_dlfr100
+endef
+
+define U-Boot/fine3399-rk3399
+  $(U-Boot/rk3399/Default)
+  NAME:=Fine 3399
+  BUILD_DEVICES:= \
+    rumu3f_fine-3399
 endef
 
 define U-Boot/h3399pc-rk3399
@@ -145,16 +166,6 @@ define U-Boot/xiaobao-nas-v1-rk3399
     codinge_xiaobao-nas-v1
 endef
 
-define U-Boot/fine-3399-rk3399
-  $(U-Boot/rk3399/Default)
-  NAME:=Fine 3399
-  BUILD_DEVICES:= \
-    rumu3f_fine-3399
-  DEPENDS:=+PACKAGE_u-boot-$(1):rkbin-rk3399
-  ATF:=rk3399_bl31_v1.36.elf
-  USE_RKBIN:=1
-endef
-
 define U-Boot/guangmiao-g4c-rk3399
   $(U-Boot/rk3399/Default)
   NAME:=GuangMiao G4C
@@ -172,13 +183,49 @@ define U-Boot/sv901-eaio-rk3399
   USE_RKBIN:=1
 endef
 
+# RK3528 boards
+
+define U-Boot/rk3528/Default
+  BUILD_SUBTARGET:=armv8
+  DEPENDS:=+PACKAGE_u-boot-$(1):rkbin-rk3528
+  ATF:=rk3528_bl31_v1.17.elf
+  TPL:=rk3528_ddr_1056MHz_v1.10.bin
+endef
+
+define U-Boot/generic-rk3528
+  $(U-Boot/rk3528/Default)
+  NAME:=GENERIC RK3528
+  BUILD_DEVICES:= \
+    armsom_sige1 \
+    hinlink_opc-h28k \
+    hinlink_opc-h29k \
+    hinlink_opc-ht2 \
+    widora_mangopi-m28c \
+    widora_mangopi-m28k \
+    widora_mangopi-m28k-pro
+endef
+
+define U-Boot/radxa-e20c-rk3528
+  $(U-Boot/rk3528/Default)
+  NAME:=Radxa E20C
+  BUILD_DEVICES:= \
+    radxa_e20c
+endef
+
 # RK3566 boards
 
 define U-Boot/rk3566/Default
   BUILD_SUBTARGET:=armv8
   DEPENDS:=+PACKAGE_u-boot-$(1):rkbin-rk3566
   ATF:=rk3568_bl31_v1.44.elf
-  TPL:=rk3566_ddr_1056MHz_v1.21.bin
+  TPL:=rk3566_ddr_1056MHz_v1.23.bin
+endef
+
+define U-Boot/nanopi-r3s-rk3566
+  $(U-Boot/rk3566/Default)
+  NAME:=NanoPi R3S
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r3s
 endef
 
 define U-Boot/panther-x2-rk3566
@@ -201,38 +248,64 @@ define U-Boot/rk3568/Default
   BUILD_SUBTARGET:=armv8
   DEPENDS:=+PACKAGE_u-boot-$(1):rkbin-rk3568
   ATF:=rk3568_bl31_v1.44.elf
-  TPL:=rk3568_ddr_1560MHz_v1.21.bin
+  TPL:=rk3568_ddr_1560MHz_v1.23.bin
 endef
 
-define U-Boot/lyt-t68m-rk3568
+define U-Boot/bpi-r2-pro-rk3568
   $(U-Boot/rk3568/Default)
-  NAME:=LYT T68M
-  BUILD_DEVICES:= lyt_t68m
-endef
-
-define U-Boot/mrkaio-m68s-rk3568
-  $(U-Boot/rk3568/Default)
-  NAME:=Mrkaio M68S
+  NAME:=Bananapi-R2 Pro
   BUILD_DEVICES:= \
+    sinovoip_bpi-r2-pro
+endef
+
+define U-Boot/fastrhino-r66s-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=FastRhino R66S
+  BUILD_DEVICES:= \
+    fastrhino_r66s
+endef
+
+define U-Boot/fastrhino-r68s-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=FastRhino R68S
+  BUILD_DEVICES:= \
+     fastrhino_r68s
+endef
+
+define U-Boot/generic-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=GENERIC RK3568
+  BUILD_DEVICES:= \
+    advantech_rsb4810 \
+    armsom_sige3 \
     ezpro_mrkaio-m68s \
-    ezpro_mrkaio-m68s-plus
+    ezpro_mrkaio-m68s-plus \
+    hinlink_opc-h66k \
+    hinlink_opc-h68k \
+    hinlink_opc-h69k \
+    lyt_t68m \
+    seewo_sv21
+endef
+
+define U-Boot/mmbox-anas3035-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=MMBOX ANAS3035
+  BUILD_DEVICES:= \
+    mmbox_anas3035
+endef
+
+define U-Boot/nanopi-r5c-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=NanoPi R5C
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r5c
 endef
 
 define U-Boot/nanopi-r5s-rk3568
   $(U-Boot/rk3568/Default)
   NAME:=NanoPi R5S
   BUILD_DEVICES:= \
-    friendlyarm_nanopi-r5c \
     friendlyarm_nanopi-r5s
-endef
-
-define U-Boot/opc-h68k-rk3568
-  $(U-Boot/rk3568/Default)
-  NAME:=OPC-H68K Board
-  BUILD_DEVICES:= \
-    hinlink_opc-h66k \
-    hinlink_opc-h68k \
-    hinlink_opc-h69k
 endef
 
 define U-Boot/photonicat-rk3568
@@ -240,14 +313,6 @@ define U-Boot/photonicat-rk3568
   NAME:=Ariaboard Photonicat
   BUILD_DEVICES:= \
     ariaboard_photonicat
-endef
-
-define U-Boot/r66s-rk3568
-  $(U-Boot/rk3568/Default)
-  NAME:=R66S/R68S
-  BUILD_DEVICES:= \
-    fastrhino_r66s \
-    fastrhino_r68s
 endef
 
 define U-Boot/radxa-e25-rk3568
@@ -264,68 +329,126 @@ define U-Boot/rock-3a-rk3568
     radxa_rock-3a
 endef
 
-define U-Boot/rsb4810-rk3568
+define U-Boot/rock-3b-rk3568
   $(U-Boot/rk3568/Default)
-  NAME:=Advantech RSB4810
+  NAME:=ROCK 3B
   BUILD_DEVICES:= \
-    advantech_rsb4810
-endef
-
-define U-Boot/seewo-sv21-rk3568
-  $(U-Boot/rk3568/Default)
-  NAME:=Seewo sv21-rk3568
-  BUILD_DEVICES:= \
-    seewo_sv21-rk3568
-endef
-
-define U-Boot/sige3-rk3568
-  $(U-Boot/rk3568/Default)
-  NAME:=Sige3
-  BUILD_DEVICES:= \
-    armsom_sige3
+    radxa_rock-3b
 endef
 
 define U-Boot/station-p2-rk3568
   $(U-Boot/rk3568/Default)
-  NAME:=StationP2
+  NAME:=Station P2
   BUILD_DEVICES:= \
     firefly_station-p2
 endef
 
 # RK3588 boards
 
-define U-Boot/Default/rk3588
+define U-Boot/rk3588/Default
   BUILD_SUBTARGET:=armv8
-  DEPENDS:=+PACKAGE_u-boot-$(1):rkbin-rk3588
-  ATF:=rk3588_bl31_v1.45.elf
-  TPL:=rk3588_ddr_lp4_2112MHz_lp5_2400MHz_v1.16.bin
+  DEPENDS:=+PACKAGE_u-boot-$(1):trusted-firmware-a-rk3588
+  ATF:=rk3588_bl31.elf
+  TPL:=rk3588_ddr_lp4_2112MHz_lp5_2400MHz_v1.18.bin
+endef
+
+define U-Boot/generic-rk3588
+  $(U-Boot/rk3588/Default)
+  NAME:=Generic RK3588
+  BUILD_DEVICES:= \
+    hinlink_owl-h88k \
+    seewo_srcm3588-io \
+    seewo_srcm3588-sw
+endef
+
+define U-Boot/nanopc-t6-rk3588
+  $(U-Boot/rk3588/Default)
+  NAME:=NanoPC T6
+  BUILD_DEVICES:= \
+    friendlyarm_nanopc-t6
+endef
+
+define U-Boot/orangepi-5-plus-rk3588
+  $(U-Boot/rk3588/Default)
+  NAME:=OrangePi 5 Plus
+  BUILD_DEVICES:= \
+    xunlong_orangepi-5-plus
+endef
+
+define U-Boot/rock5b-rk3588
+  $(U-Boot/rk3588/Default)
+  NAME:=ROCK 5B
+  BUILD_DEVICES:= \
+    radxa_rock-5b
 endef
 
 define U-Boot/sige7-rk3588
-  $(U-Boot/Default/rk3588)
+  $(U-Boot/rk3588/Default)
   NAME:=Sige7
   BUILD_DEVICES:= \
     armsom_sige7
 endef
 
+# RK3588S boards
+
+define U-Boot/nanopi-r6c-rk3588s
+  $(U-Boot/rk3588/Default)
+  NAME:=NanoPi R6C
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r6c
+endef
+
+define U-Boot/nanopi-r6s-rk3588s
+  $(U-Boot/rk3588/Default)
+  NAME:=NanoPi R6S
+  BUILD_DEVICES:= \
+    friendlyarm_nanopi-r6s
+endef
+
+define U-Boot/orangepi-5-rk3588s
+  $(U-Boot/rk3588/Default)
+  NAME:=OrangePi 5
+  BUILD_DEVICES:= \
+    xunlong_orangepi-5
+endef
+
+define U-Boot/rock5a-rk3588s
+  $(U-Boot/rk3588/Default)
+  NAME:=ROCK 5A
+  BUILD_DEVICES:= \
+    radxa_rock-5a
+endef
+
 UBOOT_TARGETS := \
+  generic-rk3528 \
+  radxa-e20c-rk3528 \
+  nanopi-r3s-rk3566 \
   panther-x2-rk3566 \
   rock-3c-rk3566 \
-  lyt-t68m-rk3568 \
-  mrkaio-m68s-rk3568 \
+  bpi-r2-pro-rk3568 \
+  generic-rk3568 \
+  fastrhino-r66s-rk3568 \
+  fastrhino-r68s-rk3568 \
+  mmbox-anas3035-rk3568 \
+  nanopi-r5c-rk3568 \
   nanopi-r5s-rk3568 \
-  opc-h68k-rk3568 \
   photonicat-rk3568 \
-  r66s-rk3568 \
   radxa-e25-rk3568 \
   rock-3a-rk3568 \
-  rsb4810-rk3568 \
-  seewo-sv21-rk3568 \
-  sige3-rk3568 \
+  rock-3b-rk3568 \
   station-p2-rk3568 \
+  generic-rk3588 \
+  nanopc-t6-rk3588 \
+  orangepi-5-plus-rk3588 \
+  rock5b-rk3588 \
+  sige7-rk3588 \
+  nanopi-r6c-rk3588s \
+  nanopi-r6s-rk3588s \
+  orangepi-5-rk3588s \
+  rock5a-rk3588s \
   dlfr100-rk3399 \
-  fine-3399-rk3399 \
   h3399pc-rk3399 \
+  fine3399-rk3399 \
   king3399-rk3399 \
   mpc1903-rk3399 \
   nanopc-t4-rk3399 \
@@ -337,10 +460,11 @@ UBOOT_TARGETS := \
   guangmiao-g4c-rk3399 \
   xiaobao-nas-v1-rk3399 \
   nanopi-r2c-rk3328 \
+  nanopi-r2c-plus-rk3328 \
   nanopi-r2s-rk3328 \
+  nanopi-r2s-plus-rk3328 \
   orangepi-r1-plus-rk3328 \
-  orangepi-r1-plus-lts-rk3328 \
-  sige7-rk3588
+  orangepi-r1-plus-lts-rk3328
 
 UBOOT_CONFIGURE_VARS += USE_PRIVATE_LIBGCC=yes
 
@@ -349,11 +473,25 @@ UBOOT_MAKE_FLAGS += \
   PATH=$(STAGING_DIR_HOST)/bin:$(PATH) \
   $(if $(TPL),ROCKCHIP_TPL=$(STAGING_DIR_IMAGE)/$(TPL))
 
+RKBIN_URL:=https://raw.githubusercontent.com/rockchip-linux/rkbin/385bf9f1700cc4b7ab8af1ec96da02f4837c525a
+
+define Download/rk3588-ddr
+  FILE:=rk3588_ddr_lp4_2112MHz_lp5_2400MHz_v1.18.bin
+  URL:=$(RKBIN_URL)/bin/rk35/
+  HASH:=d89d40a8183b099589bfcffc5cc2ce9d874eb5b1d19b78bdad2cfcf45b9cb68f
+endef
+$(eval $(call Download,rk3588-ddr))
+
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	$(CP) $(DL_DIR)/rk3588_ddr_lp4_2112MHz_lp5_2400MHz_v1.18.bin $(STAGING_DIR_IMAGE)/
+endef
+
 define Build/Configure
 	$(call Build/Configure/U-Boot)
 
-	$(SED) 's/CONFIG_TOOLS_LIBCRYPTO=y/# CONFIG_TOOLS_LIBCRYPTO is not set/' $(PKG_BUILD_DIR)/.config
 	$(SED) 's#CONFIG_MKIMAGE_DTC_PATH=.*#CONFIG_MKIMAGE_DTC_PATH="$(PKG_BUILD_DIR)/scripts/dtc/dtc"#g' $(PKG_BUILD_DIR)/.config
+	echo '# CONFIG_TOOLS_MKEFICAPSULE is not set' >> $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_IDENT_STRING=" OpenWrt"' >> $(PKG_BUILD_DIR)/.config
 endef
 

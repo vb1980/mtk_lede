@@ -49,7 +49,7 @@
 
 		led-cellular-l2 {
 			label = "green:4g";
-			gpios = <&gpio 5 GPIO_ACTIVE_LOW>;
+			gpios = <&gpio 10 GPIO_ACTIVE_LOW>;
 		};
 
 		led-cellular-l3 {
@@ -102,13 +102,11 @@
 			partition@30000 {
 				label = "u-boot-env";
 				reg = <0x30000 0x10000>;
-				read-only;
 			};
 
 			factory: partition@40000 {
 				label = "factory";
 				reg = <0x40000 0x10000>;
-				read-only;
 
 				compatible = "nvmem-cells";
 				#address-cells = <1>;

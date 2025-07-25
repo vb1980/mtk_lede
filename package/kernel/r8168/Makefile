@@ -1,12 +1,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=r8168
-PKG_VERSION:=8.053.00
+PKG_VERSION:=8.055.00
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://github.com/openwrt/rtl8168/releases/download/$(PKG_VERSION)
-PKG_HASH:=52f1e6200672b598a04d4ac21ac92a8a9e128b38208c7b03a464bfa93bbfcc8f
+PKG_HASH:=61deb2a9cb7d6b08748ad51734b108da95d629712b64b204e2e6bd3f16d0a48f
 
 PKG_BUILD_PARALLEL:=1
 PKG_LICENSE:=GPLv2
@@ -20,7 +20,7 @@ define KernelPackage/r8168
   TITLE:=Realtek RTL8168 PCI Gigabit Ethernet driver
   DEPENDS:=@PCI_SUPPORT +kmod-libphy
   FILES:=$(PKG_BUILD_DIR)/src/r8168.ko
-  AUTOLOAD:=$(call AutoProbe,r8168)
+  AUTOLOAD:=$(call AutoProbe,r8168,1)
   PROVIDES:=kmod-r8169
 endef
 

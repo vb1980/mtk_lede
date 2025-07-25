@@ -6,13 +6,11 @@
 #
 
 include $(TOPDIR)/rules.mk
+
+PKG_VERSION:=2.12
 PKG_RELEASE:=1
 
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL=https://github.com/ARM-software/arm-trusted-firmware
-PKG_SOURCE_DATE:=2024-09-09
-PKG_SOURCE_VERSION:=0631d68d85881d4b8ffa571f49eb8b767c005f6a
-PKG_MIRROR_HASH:=6e8a83c6ee64faab46e1531948180199fa70194bb2ffec4d4a521c2b2d136cf3
+PKG_HASH:=b4c047493cac1152203e1ba121ae57267e4899b7bf56eb365e22a933342d31c9
 
 PKG_MAINTAINER:=Tobias Maedel <openwrt@tbspace.de>
 
@@ -84,6 +82,7 @@ define Build/Compile
 		OPENSSL_DIR=$(STAGING_DIR_HOST) \
 		$(if $(DTC),DTC="$(DTC)") \
 		PLAT=$(PLAT) \
+		BUILD_STRING="OpenWrt ($(VARIANT))" \
 		$(TFA_MAKE_FLAGS)
 endef
 

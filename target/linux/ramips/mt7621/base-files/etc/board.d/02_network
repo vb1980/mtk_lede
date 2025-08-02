@@ -37,7 +37,6 @@ ramips_setup_interfaces()
 		;;
 	asiarf,ap7621-nv1|\
 	glinet,gl-mt1300|\
-	jcg,q20|\
 	jdcloud,re-sp-01b|\
 	lenovo,newifi-d1|\
 	mikrotik,routerboard-m33g|\
@@ -46,6 +45,12 @@ ramips_setup_interfaces()
 	xiaomi,mi-router-4|\
 	xiaomi,mi-router-4a-gigabit)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
+		;;
+	jcg,q20|\
+	jcg,q10pro)
+		ucidef_add_switch "switch0" \
+			"1:lan" "4:lan" "0:wan" "6u@eth0" "5u@eth1"
+		ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
 		;;
 	beeline,smartbox-turbo-plus)
 		ucidef_add_switch "switch0" \

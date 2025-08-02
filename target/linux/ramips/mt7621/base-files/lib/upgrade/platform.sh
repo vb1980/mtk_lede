@@ -88,6 +88,7 @@ platform_do_upgrade() {
 	h3c,tx1806|\
 	hiwifi,hc5962|\
 	jcg,q20|\
+	jcg,q10pro|\
 	linksys,e5600|\
 	linksys,ea7300-v1|\
 	linksys,ea7300-v2|\

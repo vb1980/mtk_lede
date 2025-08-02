@@ -40,7 +40,9 @@ dlink,dir-853-a3)
 dlink,dir-853-r1)
 	ucidef_set_led_netdev "internet" "internet" "blue:net" "wan"
 	;;
-xiaomi,mi-router-cr660x)
+xiaomi,mi-router-cr6606|\
+xiaomi,mi-router-cr6608|\
+xiaomi,mi-router-cr6609)
 	ucidef_set_led_switch "internet" "internet" "blue:net" "switch0" "0x10"
 	;;
 dlink,dir-860l-b1|\

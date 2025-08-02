@@ -1909,11 +1909,26 @@ define Device/xiaomi_mi-router-cr660x
   IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
 	check-size
   DEVICE_VENDOR := Xiaomi
-  DEVICE_MODEL := Mi Router CR660x
   DEVICE_PACKAGES += kmod-mt_wifi uboot-envtools luci-app-mtwifi
-  SUPPORTED_DEVICES += xiaomi,mi-router-cr6606
 endef
-TARGET_DEVICES += xiaomi_mi-router-cr660x
+
+define Device/xiaomi_mi-router-cr6606
+  $(Device/xiaomi_mi-router-cr660x)
+  DEVICE_MODEL := Mi Router CR6606
+endef
+TARGET_DEVICES += xiaomi_mi-router-cr6606
+
+define Device/xiaomi_mi-router-cr6608
+  $(Device/xiaomi_mi-router-cr660x)
+  DEVICE_MODEL := Mi Router CR6608
+endef
+TARGET_DEVICES += xiaomi_mi-router-cr6608
+
+define Device/xiaomi_mi-router-cr6609
+  $(Device/xiaomi_mi-router-cr660x)
+  DEVICE_MODEL := Mi Router CR6609
+endef
+TARGET_DEVICES += xiaomi_mi-router-cr6609
 
 define Device/xiaomi_redmi-router-ac2100
   $(Device/xiaomi_nand_separate)

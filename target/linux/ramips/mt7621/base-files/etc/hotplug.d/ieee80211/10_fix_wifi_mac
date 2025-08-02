@@ -42,6 +42,11 @@ case "$board" in
 		[ "$PHYNBR" = "0" ] && echo -n ${addr:0:9}'1'${addr:10:7} > /sys${DEVPATH}/macaddress
 		[ "$PHYNBR" = "1" ] && echo -n ${addr:0:9}'7'${addr:10:7} > /sys${DEVPATH}/macaddress
 		;;
+	haier,har-20s2u1|\
+	sim,simax1800t)
+		[ "$PHYNBR" = "1" ] && \
+			macaddr_setbit_la "$(mtd_get_mac_binary factory 0x4)" > /sys${DEVPATH}/macaddress
+		;;
 	jcg,q20|\
 	jcg,q10pro)
 		[ "$PHYNBR" = "1" ] && \

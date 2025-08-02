@@ -46,6 +46,12 @@ ramips_setup_interfaces()
 	xiaomi,mi-router-4a-gigabit)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
 		;;
+	haier,har-20s2u1|\
+	sim,ax1800t)
+		ucidef_add_switch "switch0" \
+			"0:lan" "1:lan" "2:lan" "4:wan" "6u@eth0" "5u@eth1"
+		ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
+		;;
 	jcg,q20|\
 	jcg,q10pro)
 		ucidef_add_switch "switch0" \

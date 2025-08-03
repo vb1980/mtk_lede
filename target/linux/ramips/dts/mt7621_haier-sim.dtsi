@@ -83,6 +83,22 @@
 			label = "factory";
 			reg = <0x100000 0x80000>;
 			read-only;
+			
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				eeprom_factory_0: eeprom@0 {
+					reg = <0x0 0xe00>;
+				};
+
+				macaddr_factory_8004: macaddr@8004 {
+					compatible = "mac-base";
+					reg = <0x8004 0x6>;
+					#nvmem-cell-cells = <1>;
+				};
+			};
 		};
 
 		partition@180000 {
@@ -113,21 +129,33 @@
 	status = "okay";
 };
 
-&pcie1 {
+&pcie1 {	
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x0>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
+		mediatek,disable-radar-background;
 	};
 };
 
 &gmac0 {
-	mtd-mac-address = <&factory 0x80046>;
+	nvmem-cells = <&macaddr_factory_8004 0>;
+	nvmem-cell-names = "mac-address";
 };
 
 &gmac1 {
-	mtd-mac-address = <&factory 0x80043>;
 	status = "okay";
+	label = "wan";
+	phy-handle = <&ethphy4>;
+
+	nvmem-cells = <&macaddr_factory_8004 (-3)>;
+	nvmem-cell-names = "mac-address";
+	status = "okay";
+};
+
+&ethphy4 {
+	/delete-property/ interrupts;
 };
 
 &gsw {

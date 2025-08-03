@@ -145,17 +145,8 @@
 };
 
 &gmac1 {
-	status = "okay";
-	label = "wan";
-	phy-handle = <&ethphy4>;
-
 	nvmem-cells = <&macaddr_factory_8004 (-3)>;
 	nvmem-cell-names = "mac-address";
-	status = "okay";
-};
-
-&ethphy4 {
-	/delete-property/ interrupts;
 };
 
 &gsw {

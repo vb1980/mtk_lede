@@ -58,6 +58,11 @@ ramips_setup_interfaces()
 			"1:lan" "4:lan" "0:wan" "6u@eth0" "5u@eth1"
 		ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
 		;;
+	konka,komi-a8)
+		ucidef_add_switch "switch0" \
+			"0:lan" "1:lan" "2:lan" "4:wan" "6u@eth0" "5u@eth1"
+		ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
+		;;
 	beeline,smartbox-turbo-plus)
 		ucidef_add_switch "switch0" \
 			"1:lan:1" "2:lan:2" "3:lan:3" "4:lan:4" "0:wan" "6@eth0"

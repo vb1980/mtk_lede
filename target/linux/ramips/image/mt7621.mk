@@ -1111,6 +1111,24 @@ define Device/jdcloud_re-sp-01b
 endef
 TARGET_DEVICES += jdcloud_re-sp-01b
 
+define Device/konka_komi-a8
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  UBINIZE_OPTS := -E 5
+  KERNEL_SIZE := 4096k
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	check-size
+  DEVICE_VENDOR := KONKA
+  DEVICE_MODEL := KOMI-A8
+  DEVICE_PACKAGES += kmod-mt_wifi uboot-envtools luci-app-mtwifi
+endef
+TARGET_DEVICES += konka_komi-a8
+
 define Device/lenovo_newifi-d1
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)

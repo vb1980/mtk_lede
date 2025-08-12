@@ -121,6 +121,36 @@ int is_5g(const char *ifname)
 	return 0;
 }
 
+static int mtk_get_l1profile_attr(const char *attr, char *data, int len)
+{
+	FILE *fp;
+	char *key, *val, buf[512];
+
+	fp = fopen(MTK_L1_PROFILE_PATH, "r");
+	if (!fp)
+		return -1;
+
+	while (fgets(buf, sizeof(buf), fp))
+	{
+		key = strtok(buf, " =\n");
+		val = strtok(NULL, "\n");
+		
+		if (!key || !val || !*key || *key == '#')
+			continue;
+
+		if (!strcmp(key, attr))
+		{
+			//printf("l1profile key=%s, val=%s\n", key, val);
+			snprintf(data, len, "%s", val);
+			fclose(fp);
+			return 0;
+		}
+	}
+
+	fclose(fp);
+	return -1;
+}
+
 static int mtk_ioctl(const char *ifname, int cmd, struct iwreq *wrq)
 {
 	if (!strncmp(ifname, "mon.", 4))
@@ -267,6 +297,48 @@ int mtk_get_channel(const char *ifname, int *buf)
 	return -1;
 }
 
+int mtk_get_center_chan1(const char *ifname, int *buf)
+{
+	struct iwreq wrq;
+	int Ch1;
+
+	if (mtk_get_channel(ifname, &Ch1) < 0)
+		return -1;
+
+	wrq.u.data.length = sizeof(Ch1);
+	wrq.u.data.pointer = &Ch1;
+	wrq.u.data.flags = OID_802_11_GET_CENTRAL_CHAN1;
+
+	if (mtk_ioctl(ifname, RT_PRIV_IOCTL, &wrq) >= 0)
+	{
+		*buf = Ch1;
+		return 0;
+	}
+
+	return -1;
+}
+
+int mtk_get_center_chan2(const char *ifname, int *buf)
+{
+	struct iwreq wrq;
+	int Ch2;
+
+	if (mtk_get_channel(ifname, &Ch2) < 0)
+		return -1;
+
+	wrq.u.data.length = sizeof(Ch2);
+	wrq.u.data.pointer = &Ch2;
+	wrq.u.data.flags = OID_802_11_GET_CENTRAL_CHAN2;
+
+	if (mtk_ioctl(ifname, RT_PRIV_IOCTL, &wrq) >= 0)
+	{
+		*buf = Ch2;
+		return 0;
+	}
+
+	return -1;
+}
+
 int mtk_get_frequency(const char *ifname, int *buf)
 {
 	struct iwreq wrq;
@@ -300,7 +372,7 @@ int mtk_get_bitrate(const char *ifname, int *buf)
 
 int mtk_get_signal(const char *ifname, int *buf)
 {
-	int ra_snr_sum, num;
+	int rssi_sum, num;
 	char tmp_buf[8192];
 	struct iwinfo_assoclist_entry tmp;
 	int ret_len, i;
@@ -308,18 +380,18 @@ int mtk_get_signal(const char *ifname, int *buf)
 	if (mtk_get_assoclist(ifname, tmp_buf, &ret_len) == 0)
 	{
 		num = ret_len / sizeof(struct iwinfo_assoclist_entry);
-		ra_snr_sum = 0;
+		rssi_sum = 0;
 
 		for (i = 0; i < num; i++)
 		{
 			memset(&tmp, 0, sizeof(struct iwinfo_assoclist_entry));
 			memcpy(&tmp, tmp_buf + i * sizeof(struct iwinfo_assoclist_entry), sizeof(struct iwinfo_assoclist_entry));
 
-			ra_snr_sum -= tmp.signal;
+			rssi_sum -= tmp.signal;
 		}
 
 		if (num > 0)
-			*buf = -(ra_snr_sum / num);
+			*buf = -(rssi_sum / num);
 		else
 			*buf = -127;
 
@@ -331,7 +403,7 @@ int mtk_get_signal(const char *ifname, int *buf)
 
 int mtk_get_noise(const char *ifname, int *buf)
 {
-	int ra_snr_sum, num;
+	int noise_sum, num;
 	char tmp_buf[8192];
 	struct iwinfo_assoclist_entry tmp;
 	int ret_len, i;
@@ -339,18 +411,18 @@ int mtk_get_noise(const char *ifname, int *buf)
 	if (mtk_get_assoclist(ifname, tmp_buf, &ret_len) == 0)
 	{
 		num = ret_len / sizeof(struct iwinfo_assoclist_entry);
-		ra_snr_sum = 0;
+		noise_sum = 0;
 
 		for (i = 0; i < num; i++)
 		{
 			memset(&tmp, 0, sizeof(struct iwinfo_assoclist_entry));
 			memcpy(&tmp, tmp_buf + i * sizeof(struct iwinfo_assoclist_entry), sizeof(struct iwinfo_assoclist_entry));
 
-			ra_snr_sum -= tmp.noise;
+			noise_sum -= tmp.noise;
 		}
 
 		if (num > 0)
-			*buf = -(ra_snr_sum / num);
+			*buf = -(noise_sum / num);
 		else
 			*buf = -127;
 
@@ -400,143 +472,90 @@ int mtk_get_quality_max(const char *ifname, int *buf)
 	return 0;
 }
 
-static char *mtk_array_get(char *p, int idx) {
-	int i;
-	char *tail;
-	for (i=0; i<idx; ++i) {
-		p = strchr(p, ';');
-		if (p == NULL) {
-			return NULL;
-		}
-		p += 1;
-	}
-	tail = strchr(p, ';');
-	if (!tail) {
-		tail = strchr(p, '\n');
-	}
-	if (!tail) {
-		*tail = '\0';
-	}
-	return p;
-}
-
 int mtk_get_encryption(const char *ifname, char *buf)
 {
-	FILE *fp;
-	const char *filename;
-	int ret = -1;
-	char buffer[512] = {0};
-	char *p = NULL;
-	int idx;
-	int gcmp = 0;
-	int aes = 0;
-	int tkip = 0;
-	int tkipaes = 0;
+	struct iwreq wrq;
+	struct security_info secinfo;
+	unsigned int authMode, encryMode;
+	struct iwinfo_crypto_entry *c = (struct iwinfo_crypto_entry *)buf;
 
-	struct iwinfo_crypto_entry *enc = (struct iwinfo_crypto_entry *)buf;
+	wrq.u.data.length = sizeof(secinfo);
+	wrq.u.data.pointer = &secinfo;
+	wrq.u.data.flags = OID_802_11_SECURITY_TYPE;
 
-	char data[10];
-	if (mtk_oid_ioctl(ifname, RT_OID_VERSION_INFO, data, sizeof(data)) < 0)
-		return -1;
-
-	if (is_5g(ifname)) {
-		filename = "/tmp/profiles/mt_dbdc_5g.dat";
-	} else {
-		filename = "/tmp/profiles/mt_dbdc_2g.dat";
-	}
-	fp = fopen(filename, "r");
-	if (fp == NULL)
+	if (mtk_ioctl(ifname, RT_PRIV_IOCTL, &wrq) >= 0)
 	{
-		fprintf(stderr, "open ifname:%s failed.\n", ifname);
-		return -1;
-	}
-	idx = ifname[strlen(ifname)-1] - '0';
-	while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-		if (!strncmp(buffer, "AuthMode=", 9)) {
-			p = buffer + 9;
-			p = mtk_array_get(p, idx);
-			if (!p)
-				goto end;
-			if (strstr(p, "WPA3"))
-			{
-				enc->enabled = 1;
-				if (strstr(p, "WPA2PSKWPA3PSK"))
-					enc->wpa_version = 5;
-				else if (strstr(p, "WPA3PSK"))
-					enc->wpa_version = 4;
+		authMode = secinfo.auth_mode;
+		encryMode = secinfo.encryp_type;
 
-				enc->auth_suites |= IWINFO_KMGMT_SAE;
-			}
-			else if (strstr(p, "WPA"))
-			{
-				enc->enabled = 1;
-				if (strstr(p, "WPAPSKWPA2PSK"))
-					enc->wpa_version = 3;
-				else if (strstr(p, "WPA2PSK"))
-					enc->wpa_version = 2;
-				else if (strstr(p, "WPAPSK"))
-					enc->wpa_version = 1;
+		c->auth_algs |= IWINFO_AUTH_OPEN;
+		if (IS_AKM_SHARED(authMode))
+			c->auth_algs |= IWINFO_AUTH_SHARED;			
 
-				enc->auth_suites |= IWINFO_KMGMT_PSK;
-			}
-			else if (strstr(p, "OWE"))
-			{
-				enc->enabled = 1;
-				if (strstr(p, "OWE"))
-					enc->wpa_version = 4;
+		if (IS_AKM_WPA1(authMode) || IS_AKM_FT_WPA2(authMode) || IS_AKM_WPANONE(authMode) ||
+			IS_AKM_WPA3(authMode) || IS_AKM_WPA2(authMode) || IS_AKM_WPA3_192BIT(authMode) ||
+			IS_AKM_SUITEB_SHA256(authMode) || IS_AKM_SUITEB_SHA384(authMode) ||
+			IS_AKM_FILS_SHA256(authMode) || IS_AKM_FILS_SHA384(authMode))
+			c->auth_suites |= IWINFO_KMGMT_8021x;
 
-				enc->auth_suites |= IWINFO_KMGMT_OWE;
-			}
-			else if (strstr(p, "WEP"))
-			{
-				enc->enabled = 1;
-				enc->auth_algs |= IWINFO_AUTH_OPEN | IWINFO_AUTH_SHARED;
-				enc->pair_ciphers |= IWINFO_CIPHER_WEP104 | IWINFO_CIPHER_WEP40;
-				enc->auth_suites |= IWINFO_KMGMT_NONE;
-				enc->group_ciphers = enc->pair_ciphers;
-			}
-		} else if (!strncmp(buffer, "EncrypType=", 11)) {
-			if (enc->pair_ciphers & (IWINFO_CIPHER_WEP104 | IWINFO_CIPHER_WEP40))
-				continue;
-			p = buffer + 11;
-			p = mtk_array_get(p, idx);
-			if (!p)
-				goto end;
-			if (strstr(p, "GCMP"))
-				gcmp = 1;
-			if (strstr(p, "AES"))
-				aes = 1;
-			if (strstr(p, "TKIP"))
-				tkip = 1;
-			if (strstr(p, "TKIPAES"))
-				tkipaes = 1;
-		}
-	}
+		if (IS_AKM_WPA1PSK(authMode) || IS_AKM_WPA2PSK(authMode) || IS_AKM_FT_WPA2PSK(authMode) ||
+			IS_AKM_WPA2PSK_SHA256(authMode))
+			c->auth_suites |= IWINFO_KMGMT_PSK;
 
-	if (enc->enabled && enc->auth_suites & IWINFO_KMGMT_SAE) {
-		if (gcmp)
-			enc->pair_ciphers |= IWINFO_CIPHER_GCMP;
-		if (aes)
-			enc->pair_ciphers |= IWINFO_CIPHER_CCMP;
+		if (IS_AKM_FT_SAE_SHA256(authMode) || IS_AKM_SAE_SHA256(authMode) || IS_AKM_WPA3PSK(authMode))
+			c->auth_suites |= IWINFO_KMGMT_SAE;
 
-		enc->group_ciphers = enc->pair_ciphers;
+		if (IS_AKM_OWE(authMode))
+			c->auth_suites |= IWINFO_KMGMT_OWE;
+
+		if (IS_AKM_WPA1(authMode) || IS_AKM_WPA1PSK(authMode))
+			c->wpa_version |= 1 << 0;
+
+		if (IS_AKM_WPA2(authMode) || IS_AKM_WPA2PSK(authMode) || IS_AKM_FT_WPA2(authMode) ||
+			IS_AKM_FT_WPA2PSK(authMode) || IS_AKM_WPA2_SHA256(authMode) || IS_AKM_WPA2PSK_SHA256(authMode) ||
+			IS_AKM_FT_WPA2_SHA384(authMode) || IS_AKM_FILS_SHA256(authMode) || IS_AKM_FILS_SHA384(authMode))
+			c->wpa_version |= 1 << 1;
+
+		if (IS_AKM_WPA3(authMode) || IS_AKM_WPA3PSK(authMode) || IS_AKM_WPA3_192BIT(authMode) ||
+			IS_AKM_SUITEB_SHA256(authMode) || IS_AKM_SUITEB_SHA384(authMode) || IS_AKM_OWE(authMode) ||
+			IS_AKM_FT_SAE_SHA256(authMode) || IS_AKM_SAE_SHA256(authMode))
+			c->wpa_version |= 1 << 2;
+
+		if (IS_CIPHER_NONE(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_NONE;
+
+		if (IS_CIPHER_WEP40(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_WEP40;
+
+		if (IS_CIPHER_WEP104(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_WEP104;
+
+		if (IS_CIPHER_TKIP(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_TKIP;
+
+		if (IS_CIPHER_CCMP128(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_CCMP;
+
+		if (IS_CIPHER_GCMP128(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_GCMP;
+
+		if (IS_CIPHER_CCMP256(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_CCMP256;
+
+		if (IS_CIPHER_GCMP256(encryMode))
+			c->pair_ciphers |= IWINFO_CIPHER_GCMP256;
+
+		c->group_ciphers = c->pair_ciphers;
+
+		if (IS_AKM_OPEN(authMode) && IS_CIPHER_NONE(encryMode))
+			c->enabled = 0;
+		else
+			c->enabled = 1;
+
+		return 0;
 	}
 
-	if (enc->enabled && enc->auth_suites & IWINFO_KMGMT_PSK) {
-		if (aes)
-			enc->pair_ciphers |= IWINFO_CIPHER_CCMP;
-		if (tkip)
-			enc->pair_ciphers |= IWINFO_CIPHER_TKIP;
-		if (tkipaes)
-			enc->pair_ciphers |= IWINFO_CIPHER_TKIP & IWINFO_CIPHER_CCMP;
-
-		enc->group_ciphers = enc->pair_ciphers;
-	}
-
-	ret = 0;
-end:
-	fclose(fp);
-	return ret;
+	return -1;
 }
 
 int mtk_get_phyname(const char *ifname, char *buf)
@@ -665,11 +684,9 @@ int mtk_get_assoclist(const char *ifname, char *buf, int *len)
 
 		memcpy(&entry.mac, &pe->Addr, sizeof(entry.mac));
 
-//		entry.signal = ((int)(pe->AvgRssi0) + (int)(pe->AvgRssi1)) / 3;
-//		entry.signal_avg = ((int)(pe->AvgRssi0) + (int)(pe->AvgRssi1)) / 3;
 		entry.signal = pe->AvgRssi1;
 		entry.signal_avg = pe->AvgRssi1;
-		entry.noise = pe->AvgRssi0;
+		entry.noise = pe->AvgRssi0 - 19;
 		entry.inactive = pe->ConnectedTime;
 //		entry.connected_time = pe->ConnectedTime;
 
@@ -679,7 +696,6 @@ int mtk_get_assoclist(const char *ifname, char *buf, int *len)
 		entry.tx_bytes = pe->TxBytes;
 
 		mtk_parse_rateinfo(pe, &entry.rx_rate, &entry.tx_rate);
-//		entry.rx_rate = entry.tx_rate;
 
 		memcpy(&buf[bl], &entry, sizeof(struct iwinfo_assoclist_entry));
 
@@ -798,6 +814,8 @@ static void fill_find_entry(char *sp, struct iwinfo_scanlist_entry *e)
 	char site_security[23];
 	char site_signal[9];
 	int ssid_len;
+	struct iwinfo_scanlist_ht_chan_entry *ht_chan_info = &e->ht_chan_info;
+	//struct iwinfo_scanlist_vht_chan_entry *vht_chan_info = &e->vht_chan_info;
 
 	sp += 4; // skip No
 	memcpy(site_channel, sp, 4);
@@ -812,6 +830,7 @@ static void fill_find_entry(char *sp, struct iwinfo_scanlist_entry *e)
 	rtrim(site_signal);
 
 	e->channel = atoi(site_channel);
+	ht_chan_info->primary_chan = e->channel;
 	bssid2mac((char *)site_bssid, (unsigned char *)e->mac);
 	/* Mode */
 	e->mode = IWINFO_OPMODE_MASTER;
@@ -832,11 +851,6 @@ static void fill_find_entry(char *sp, struct iwinfo_scanlist_entry *e)
 	e->quality_max = 100;
 
 	ssid_len = rtrim(site_ssid);
-//	if (!strlen(site_ssid))
-//	{
-//		strcpy(site_ssid, "*hidden*");
-//		len = 8;
-//	}
 	memcpy(e->ssid, site_ssid, ssid_len);
 }
 
@@ -872,7 +886,7 @@ int mtk_get_scanlist(const char *ifname, char *buf, int *len)
 	{
 		struct iwinfo_scanlist_entry e;
 		// No  Ch  SSID                             BSSID               Security               Siganl(%)W-Mode  ExtCH  NT SSID_Len WPS DPID BcnRept
-		line_len = 4 + 33 + 20 + 23 + 8 + 9 + 7 + 7 + 3 + 4 + 5 + 10; // +WPS DPID
+		line_len = 4 + 33 + 20 + 23 + 5 + 9 + 7 + 7 + 3 + 4 + 5 + 10; // +WPS DPID
 		if (wrq.u.data.length < line_len + 5 + 10)
 			return -1;
 		sp = wrq.u.data.pointer;
@@ -909,7 +923,7 @@ static const uint16_t CH5G[]={
 	100, 104, 108, 112, 116, 120, 124, 128, 132, 136, //10
 
 	/* 802.11 UNII */
-	140, 144, 149, 153, 157, 161, 165
+	140, 144, 149, 153, 157, 161, 165, 169, 173, 177
 };
 
 int mtk_get_freqlist(const char *ifname, char *buf, int *len)
@@ -920,6 +934,7 @@ int mtk_get_freqlist(const char *ifname, char *buf, int *len)
 
 	if (is_5g(ifname)) {
 		for (i=0; i<ARRAY_SIZE(CH5G); ++i) {
+			entry.band = IWINFO_BAND_5;
 			entry.mhz = 5000 + 5 * CH5G[i];
 			entry.channel =  CH5G[i];
 			entry.restricted = 0;
@@ -929,6 +944,7 @@ int mtk_get_freqlist(const char *ifname, char *buf, int *len)
 		}
 	} else {
 		for (i = 0; i < MTK_MAX_CH_2G; i++) {
+			entry.band = IWINFO_BAND_24;
 			entry.mhz = 2412 + 5 * i;
 			entry.channel = i + 1;
 			entry.restricted = 0;
@@ -1041,19 +1057,53 @@ int mtk_get_mbssid_support(const char *ifname, int *buf)
 	return 0;
 }
 
+int mtk_get_hardware_id_from_l1profile(const char* chip, struct iwinfo_hardware_id *id)
+{
+	if (!strcmp(chip, "MT7615")) {
+		id->vendor_id = 0x14c3;
+		id->device_id = 0x7615;
+		id->subsystem_vendor_id = id->vendor_id;
+		id->subsystem_device_id = id->device_id;
+	} else if (!strcmp(chip, "MT7915")) {
+		id->vendor_id = 0x14c3;
+		id->device_id = 0x7915;
+		id->subsystem_vendor_id = id->vendor_id;
+		id->subsystem_device_id = id->device_id;
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int mtk_get_id_from_l1profile(struct iwinfo_hardware_id *id)
+{
+	char buf[16] = {0};
+
+	/* INDEX1 */
+	if (mtk_get_l1profile_attr("INDEX1", buf, sizeof(buf)) != 0)
+		return -1;
+
+	/* INDEX0 */
+	if (mtk_get_l1profile_attr("INDEX0", buf, sizeof(buf)) != 0)
+		return -1;
+
+	return (mtk_get_hardware_id_from_l1profile(buf, id));
+}
+
 int mtk_get_hardware_id(const char *ifname, char *buf)
 {
 	struct iwinfo_hardware_id *id = (struct iwinfo_hardware_id *)buf;
+	int ret = 0;
 
 	memset(id, 0, sizeof(*id));
 
-	/* Failed to obtain hardware PCI/USB IDs... */
-	if (id->vendor_id == 0 && id->device_id == 0 &&
-		id->subsystem_vendor_id == 0 && id->subsystem_device_id == 0)
-		/* ... then board config */
-		return iwinfo_hardware_id_from_mtd(id);
+	ret = iwinfo_hardware_id_from_mtd(id);
 
-	return 0;
+	if (ret != 0)
+		ret = mtk_get_id_from_l1profile(id);
+
+	return ret;
 }
 
 static const struct iwinfo_hardware_entry *
@@ -1072,7 +1122,7 @@ int mtk_get_hardware_name(const char *ifname, char *buf)
 	const struct iwinfo_hardware_entry *hw;
 
 	if (!(hw = mtk_get_hardware_entry(ifname)))
-		memcpy(buf, "MediaTek MT7615E", 16);
+		sprintf(buf, "%s", "MediaTek MT7615E");
 	else
 		sprintf(buf, "%s %s", hw->vendor_name, hw->device_name);
 
@@ -1081,9 +1131,13 @@ int mtk_get_hardware_name(const char *ifname, char *buf)
 
 int mtk_get_txpower_offset(const char *ifname, int *buf)
 {
-	/* Stub */
-	*buf = 0;
-	return -1;
+	const struct iwinfo_hardware_entry *hw;
+
+	if (!(hw = mtk_get_hardware_entry(ifname)))
+		return -1;
+
+	*buf = hw->txpower_offset;
+	return 0;
 }
 
 int mtk_get_frequency_offset(const char *ifname, int *buf)

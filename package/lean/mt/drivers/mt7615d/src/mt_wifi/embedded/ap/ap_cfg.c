@@ -6359,8 +6359,6 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	RTMP_STRING driverVersion[16];
 	UCHAR apidx = pObj->ioctl_if;
-	INT j;
-	CHAR country_num[4]={0};
 #ifdef CONFIG_MAP_SUPPORT
 	PUCHAR pStaMacAddr = NULL;
 #endif
@@ -6670,23 +6668,8 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			 ("Query::OID_802_11_AUTHENTICATION_MODE\n"));
 		wrq->u.data.length = sizeof(NDIS_802_11_AUTHENTICATION_MODE);
-#ifdef APCLI_SUPPORT
-		if (pObj->ioctl_if_type == INT_APCLI) {
-			AuthMode = SecAuthModeNewToOld(
-				pAd->ApCfg.ApCliTab[pObj->ioctl_if].wdev.SecConfig.AKMMap);
-		}
-#endif /* APCLI_SUPPORT */
-
-#ifdef WDS_SUPPORT
-		else if (pObj->ioctl_if_type == INT_WDS) {
-			AuthMode = SecAuthModeNewToOld(
-				pAd->WdsTab.WdsEntry[pObj->ioctl_if].wdev.SecConfig.AKMMap);
-		}
-#endif /* WDS_SUPPORT */
-		else {
-			AuthMode = SecAuthModeNewToOld(
-				pAd->ApCfg.MBSSID[pObj->ioctl_if].wdev.SecConfig.AKMMap);
-		}
+		AuthMode = SecAuthModeNewToOld(
+			pAd->ApCfg.MBSSID[pObj->ioctl_if].wdev.SecConfig.AKMMap);
 		Status = copy_to_user(wrq->u.data.pointer, &AuthMode,
 				      wrq->u.data.length);
 		break;
@@ -6950,6 +6933,8 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 		break;
 
 	case OID_802_11_GET_COUNTRY_CODE:
+		UINT j;
+		CHAR country_num[4]={0};
 		wrq->u.data.length = sizeof(UINT);
 		for(j=0; j < NUM_OF_COUNTRIES; j++)
 		{
@@ -8161,7 +8146,7 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 					      sizeof(RT_802_11_ACL));
 
 		break;
-#ifdef CONFIG_HOTSPOT
+//#ifdef CONFIG_HOTSPOT
 #ifdef CONFIG_DOT11V_WNM
 
 	case OID_802_11_WNM_IPV4_PROXY_ARP_LIST: {
@@ -8202,6 +8187,9 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 	case OID_802_11_SECURITY_TYPE: {
 		BSS_STRUCT *pMbss;
 		PAPCLI_STRUCT pApCliEntry;
+		PMAC_TABLE_ENTRY pEntry = NULL;
+		PRT_802_11_WDS_ENTRY wds_entry;
+		UCHAR wcid;
 		PUCHAR pType;
 		struct security_type_new *SecurityType;
 
@@ -8220,13 +8208,21 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 			SecurityType->encryp_type = pApCliEntry->wdev.SecConfig.PairwiseCipher;
 			wrq->u.data.length = sizeof(*SecurityType);
 			Status = copy_to_user(wrq->u.data.pointer, pType, sizeof(*SecurityType));
+		} else if (pObj->ioctl_if_type == INT_WDS) {
+			pEntry = &pAd->MacTab.Content[wcid];
+			wds_entry = &pAd->WdsTab.WdsEntry[pEntry->func_tb_idx];
+			SecurityType->ifindex = pEntry->func_tb_idx;
+			SecurityType->auth_mode = wds_entry->wdev.SecConfig.AKMMap;
+			SecurityType->encryp_type = wds_entry->wdev.SecConfig.PairwiseCipher;
+			wrq->u.data.length = sizeof(*SecurityType);
+			Status = copy_to_user(wrq->u.data.pointer, pType, sizeof(*SecurityType));
 		} else if(pObj->ioctl_if_type == INT_MAIN || pObj->ioctl_if_type == INT_MBSSID) {
-		pMbss = &pAd->ApCfg.MBSSID[pObj->ioctl_if];
-		SecurityType->ifindex = pObj->ioctl_if;
-		SecurityType->auth_mode = pMbss->wdev.SecConfig.AKMMap;
-		SecurityType->encryp_type = pMbss->wdev.SecConfig.PairwiseCipher;
-		wrq->u.data.length = sizeof(*SecurityType);
-		Status = copy_to_user(wrq->u.data.pointer, pType, sizeof(*SecurityType));
+			pMbss = &pAd->ApCfg.MBSSID[pObj->ioctl_if];
+			SecurityType->ifindex = pObj->ioctl_if;
+			SecurityType->auth_mode = pMbss->wdev.SecConfig.AKMMap;
+			SecurityType->encryp_type = pMbss->wdev.SecConfig.PairwiseCipher;
+			wrq->u.data.length = sizeof(*SecurityType);
+			Status = copy_to_user(wrq->u.data.pointer, pType, sizeof(*SecurityType));
 		}
 		os_free_mem(pType);
 	} break;
@@ -8261,7 +8257,7 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 		pAd->ApCfg.MBSSID[pObj->ioctl_if].GASCtrl.b11U_enable = FALSE;
 	} break;
 #endif /* CONFIG_HOTSPOT_R2 */
-#endif
+//#endif
 #ifdef WAPP_SUPPORT
 	case OID_802_11_WIFI_VER: {
 		wrq->u.data.length = strlen(AP_DRIVER_VERSION);
@@ -8569,6 +8565,66 @@ INT RTMPAPQueryInformation(IN RTMP_ADAPTER *pAd,
 		wrq->u.data.length = sizeof(wdev_vht_cap);
 		Status = copy_to_user(wrq->u.data.pointer, &vht_cap,
 				      wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_GET_CENTRAL_CHAN1:
+	{
+		struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+		UCHAR ext_cha = wlan_operate_get_ext_cha(wdev);
+		UCHAR bw = wlan_operate_get_bw(wdev);
+		UINT8 prim_ch = wdev->channel;
+		UINT8 cent_ch_1 = wlan_operate_get_cen_ch_1(wdev);
+		UINT8 CenCh1 = 0;
+
+		switch (bw) {
+		case BW_20:
+			CenCh1 = prim_ch;
+			break;
+		case BW_40:
+			if ((prim_ch > 2) && (ext_cha == EXTCHA_BELOW)) {
+				if (prim_ch == 14)
+					CenCh1 = prim_ch - 1;
+				else
+					CenCh1 = prim_ch - 2;
+			}
+			else if (ext_cha == EXTCHA_ABOVE)
+				CenCh1 = prim_ch + 2;
+			break;
+		case BW_80:
+		case BW_8080:
+			CenCh1 = cent_ch_1;
+			break;
+		case BW_160:
+			CenCh1 = GET_BW160_PRIM80_CENT(prim_ch, cent_ch_1);
+			break;
+		default:
+			CenCh1 = cent_ch_1;
+			break;
+		}
+
+		wrq->u.data.length = sizeof(CenCh1);
+		Status = copy_to_user(wrq->u.data.pointer, &CenCh1, wrq->u.data.length);
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 ("Query::OID_802_11_GET_CENTRAL_CHAN1 CentralCh1 = %d\n", CenCh1));
+		break;
+	}
+	case OID_802_11_GET_CENTRAL_CHAN2:
+	{
+		struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+		UCHAR bw = wlan_operate_get_bw(wdev);
+		UINT8 cent_ch_1 = wlan_operate_get_cen_ch_1(wdev);
+		UINT8 cent_ch_2 = wlan_operate_get_cen_ch_2(wdev);
+		UINT8 CenCh2 = 0;
+
+		if (bw == BW_160)
+			CenCh2 = cent_ch_1;
+		else
+			CenCh2 = cent_ch_2;
+
+		wrq->u.data.length = sizeof(CenCh2);
+		Status = copy_to_user(wrq->u.data.pointer, &CenCh2, wrq->u.data.length);
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 ("Query::OID_802_11_GET_CENTRAL_CHAN2 CentralCh2 = %d\n", CenCh2));
 		break;
 	}
 	case OID_GET_CHAN_LIST: {
@@ -11050,6 +11106,7 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UCHAR wmode;
 	POS_COOKIE pObj = NULL;
 	CHAR str[10] = "";
+  	UCHAR BandIdx;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		 ("show ap cfg info:\n"));
@@ -11092,7 +11149,8 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			  apcfg_for_peak.cfg_mode[0],
 			  apcfg_for_peak.cfg_mode[1]));
 
-	apcfg_para_setting.tx_power_percentage = 0;
+	BandIdx = HcGetBandByWdev(wdev);
+  	apcfg_para_setting.tx_power_percentage = pAd->CommonCfg.ucTxPowerPercentage[BandIdx];
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		 ("%-24s%-16lu%lu\n", "TxPower",
 		  apcfg_para_setting.tx_power_percentage,

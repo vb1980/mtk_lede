@@ -4744,6 +4744,7 @@ typedef struct _AP_ADMIN_CONFIG {
 	BOOLEAN fEpaReq;
 	BOOLEAN fgEPA[DBDC_BAND_NUM];
 	INT8 EpaGain[DBDC_BAND_NUM];
+	INT8 MgmtTxPwr[DBDC_BAND_NUM]; /* for 5G : 6M (OFDM) pwr  2.4G: 1M (CCK) pwr */
 #endif
 } AP_ADMIN_CONFIG;
 
@@ -8871,7 +8872,8 @@ VOID MlmeForceScanReqAction(IN RTMP_ADAPTER *pAd, IN MLME_QUEUE_ELEM *Elem);
 VOID ScanTimeoutAction(IN RTMP_ADAPTER *pAd, IN MLME_QUEUE_ELEM *Elem);
 
 #ifdef CUSTOMER_DCC_FEATURE
-VOID APChannelSwitch(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt);
+//VOID APChannelSwitch(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt);
+NTSTATUS APChannelSwitch(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt);
 #endif
 
 #ifdef VENDOR10_CUSTOM_RSSI_FEATURE

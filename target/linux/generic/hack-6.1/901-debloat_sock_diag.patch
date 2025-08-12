@@ -101,8 +101,8 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  #include <linux/inet_diag.h>
  #include <linux/sock_diag.h>
  
-@@ -21,20 +20,6 @@ static int (*inet_rcv_compat)(struct sk_
- static DEFINE_MUTEX(sock_diag_table_mutex);
+@@ -22,20 +21,6 @@ static const struct sock_diag_inet_compa
+ 
  static struct workqueue_struct *broadcast_wq;
  
 -DEFINE_COOKIE(sock_cookie);
@@ -162,3 +162,13 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  	default n
  	help
  	  Support for UNIX socket monitoring interface used by the ss tool.
+--- a/net/xdp/Kconfig
++++ b/net/xdp/Kconfig
+@@ -10,6 +10,7 @@ config XDP_SOCKETS
+ config XDP_SOCKETS_DIAG
+ 	tristate "XDP sockets: monitoring interface"
+ 	depends on XDP_SOCKETS
++	select SOCK_DIAG
+ 	default n
+ 	help
+ 	  Support for PF_XDP sockets monitoring interface used by the ss tool.

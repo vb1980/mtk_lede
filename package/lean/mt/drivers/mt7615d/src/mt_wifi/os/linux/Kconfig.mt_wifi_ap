@@ -382,3 +382,13 @@ config RCSA_SUPPORT
 	depends on MT_DFS_SUPPORT
 	depends on APCLI_SUPPORT
 	default n
+
+config CUSTOMER_DCC_FEATURE
+	bool "CUSTOMER_DCC_FEATURE Support"
+	depends on WIFI_DRIVER
+	default n
+
+config CUSTOMER_RSG_FEATURE
+	bool "CUSTOMER_RSG_FEATURE Support"
+	depends on WIFI_DRIVER
+	default n

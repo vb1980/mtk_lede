@@ -4,7 +4,7 @@ else
 ifeq ($(CONFIG_DEFAULTS_KERNEL_4_4),y)
 WIFI_DRV_PATH = drivers/net/wireless/mediatek
 else
-WIFI_DRV_PATH = drivers/net/wireless/mtk/mt7615e
+WIFI_DRV_PATH = drivers/net/wireless
 endif
 endif
 
@@ -12,8 +12,7 @@ GLOBAL_DEFINES = include/uapi/linux/wapp
 EXTRA_CFLAGS = -I$(WIFI_DRV_PATH)/mt_wifi/include \
 				-I$(WIFI_DRV_PATH)/mt_wifi/embedded/include \
 				-I$(WIFI_DRV_PATH)/mt_wifi/ate/include \
-				-I$(WIFI_DRV_PATH)/mt_wifi/include/mcu \
-				-I$(WIFI_DRV_PATH)/mt_wifi/embedded/plug_in
+				-I$(WIFI_DRV_PATH)/mt_wifi/include/mcu -I$(GLOBAL_DEFINES)
 
 DRV_NAME = mt_wifi
 ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
@@ -32,6 +31,16 @@ endif
 endif
 
 SRC_DIR = ../mt_wifi
+
+ifneq ($(CONFIG_GCC_VERSION), )
+ifeq ($(shell expr $(CONFIG_GCC_VERSION) \>= 8.4.0), 1)
+# this option only have after 8.x.x
+# workaround of bin compare on preflight will get the .rodata.str1.8 and it's abs path of __FILE__
+# will false the compare due to build server folder is not the same
+ccflags-y += -fmacro-prefix-map=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))=
+endif
+endif
+
 SRC_EMBEDDED_DIR = ../mt_wifi/embedded
 ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
 EXTRA_CFLAGS += -DCONFIG_SUPPORT_OPENWRT
@@ -577,7 +586,7 @@ ifeq ($(CONFIG_CFG80211_SUPPORT),y)
     EXTRA_CFLAGS += -DRT_CFG80211_SUPPORT -DEXT_BUILD_CHANNEL_LIST
     #WPA3 SUPPORT
 	ifneq ($(CONFIG_HOSTAPD_MAP_SUPPORT),y)
-		EXTRA_CFLAGS += -DHOSTAPD_SAE_SUPPORT -DHOSTAPD_OWE_SUPPORT -DHOSTAPD_SUITEB_SUPPORT
+		EXTRA_CFLAGS += -DHOSTAPD_SAE_SUPPORT -DHOSTAPD_OWE_SUPPORT -DHOSTAPD_SUITEB_SUPPORT -DHOSTAPD_MAP_SUPPORT
 	endif
 	ifeq ($(CONFIG_CUSTOMISED_HOSTAPD_SUPPORT),y)
 		EXTRA_CFLAGS += -DDISABLE_HOSTAPD_BEACON -DDISABLE_HOSTAPD_PROBE_RESP -DHOSTAPD_AUTO_CH_SUPPORT
@@ -794,6 +803,14 @@ endif
 
 ifeq ($(CONFIG_ATE_SUPPORT),y)
     EXTRA_CFLAGS += -DCONFIG_ATE -DCONFIG_QA -DCONFIG_RT2880_ATE_CMD_NEW -DCONFIG_HW_HAL_OFFLOAD  #-DCSD_VERIFICATION -DINTERNAL_CAPTURE_SUPPORT
+endif
+
+ifeq ($(CONFIG_CUSTOMER_DCC_FEATURE),y)
+    EXTRA_CFLAGS += -DCUSTOMER_DCC_FEATURE
+endif
+
+ifeq ($(CONFIG_CUSTOMER_RSG_FEATURE),y)
+    EXTRA_CFLAGS += -DCUSTOMER_RSG_FEATURE
 endif
 
 ifeq ($(CONFIG_ICAP_SUPPORT),y)
@@ -1038,6 +1055,7 @@ EXTRA_CFLAGS += -DUNIFY_FW_CMD
 EXTRA_CFLAGS += -DNEED_ROM_PATCH
 EXTRA_CFLAGS += -DTXPWRMANUAL
 EXTRA_CFLAGS += -DMAC_INIT_OFFLOAD
+EXTRA_CFLAGS += -DMT_DMAC
 EXTRA_CFLAGS += -DENHANCED_STAT_DISPLAY
 EXTRA_CFLAGS += -DCONFIG_FWOWN_SUPPORT
 EXTRA_CFLAGS += -DNEWSEC

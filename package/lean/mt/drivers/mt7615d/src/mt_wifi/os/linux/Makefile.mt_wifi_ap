@@ -4,7 +4,7 @@ else
 ifeq ($(CONFIG_DEFAULTS_KERNEL_4_4),y)
 WIFI_DRV_PATH = drivers/net/wireless/mediatek
 else
-WIFI_DRV_PATH = drivers/net/wireless/mtk/mt7615e
+WIFI_DRV_PATH = drivers/net/wireless
 endif
 endif
 
@@ -31,6 +31,16 @@ endif
 endif
 
 SRC_DIR = ../mt_wifi
+
+ifneq ($(CONFIG_GCC_VERSION), )
+ifeq ($(shell expr $(CONFIG_GCC_VERSION) \>= 8.4.0), 1)
+# this option only have after 8.x.x
+# workaround of bin compare on preflight will get the .rodata.str1.8 and it's abs path of __FILE__
+# will false the compare due to build server folder is not the same
+ccflags-y += -fmacro-prefix-map=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))=
+endif
+endif
+
 SRC_EMBEDDED_DIR = ../mt_wifi/embedded
 ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
 EXTRA_CFLAGS += -DCONFIG_SUPPORT_OPENWRT
@@ -116,7 +126,7 @@ endif
 endif
 
 #support built-in/ko for Openwrt/Linux SDK
-obj-$(CONFIG_MT_AP_SUPPORT) += $(DRV_NAME).o
+obj-m += $(DRV_NAME).o
 
 ifeq ($(CONFIG_MTK_EMI_7622),y)
 EXTRA_CFLAGS += -DCONFIG_ARCH_MT7622
@@ -576,7 +586,7 @@ ifeq ($(CONFIG_CFG80211_SUPPORT),y)
     EXTRA_CFLAGS += -DRT_CFG80211_SUPPORT -DEXT_BUILD_CHANNEL_LIST
     #WPA3 SUPPORT
 	ifneq ($(CONFIG_HOSTAPD_MAP_SUPPORT),y)
-		EXTRA_CFLAGS += -DHOSTAPD_SAE_SUPPORT -DHOSTAPD_OWE_SUPPORT -DHOSTAPD_SUITEB_SUPPORT
+		EXTRA_CFLAGS += -DHOSTAPD_SAE_SUPPORT -DHOSTAPD_OWE_SUPPORT -DHOSTAPD_SUITEB_SUPPORT -DHOSTAPD_MAP_SUPPORT
 	endif
 	ifeq ($(CONFIG_CUSTOMISED_HOSTAPD_SUPPORT),y)
 		EXTRA_CFLAGS += -DDISABLE_HOSTAPD_BEACON -DDISABLE_HOSTAPD_PROBE_RESP -DHOSTAPD_AUTO_CH_SUPPORT
@@ -795,6 +805,14 @@ ifeq ($(CONFIG_ATE_SUPPORT),y)
     EXTRA_CFLAGS += -DCONFIG_ATE -DCONFIG_QA -DCONFIG_RT2880_ATE_CMD_NEW -DCONFIG_HW_HAL_OFFLOAD  #-DCSD_VERIFICATION -DINTERNAL_CAPTURE_SUPPORT
 endif
 
+ifeq ($(CONFIG_CUSTOMER_DCC_FEATURE),y)
+    EXTRA_CFLAGS += -DCUSTOMER_DCC_FEATURE
+endif
+
+ifeq ($(CONFIG_CUSTOMER_RSG_FEATURE),y)
+    EXTRA_CFLAGS += -DCUSTOMER_RSG_FEATURE
+endif
+
 ifeq ($(CONFIG_ICAP_SUPPORT),y)
 		EXTRA_CFLAGS += -DINTERNAL_CAPTURE_SUPPORT
 endif
@@ -908,7 +926,8 @@ endif
 os_objs := $(SRC_DIR)/os/linux/rt_proc.o\
             $(SRC_DIR)/os/linux/rt_linux.o\
             $(SRC_DIR)/os/linux/rt_profile.o\
-            $(SRC_DIR)/os/linux/rt_main_dev.o
+            $(SRC_DIR)/os/linux/rt_main_dev.o\
+            $(SRC_DIR)/os/linux/mt_wifi_mtd.o
 
 ifeq ($(CONFIG_WLAN_HOOK),y)
 	EXTRA_CFLAGS +=-DRTMP_WLAN_HOOK_SUPPORT
@@ -1036,6 +1055,7 @@ EXTRA_CFLAGS += -DUNIFY_FW_CMD
 EXTRA_CFLAGS += -DNEED_ROM_PATCH
 EXTRA_CFLAGS += -DTXPWRMANUAL
 EXTRA_CFLAGS += -DMAC_INIT_OFFLOAD
+EXTRA_CFLAGS += -DMT_DMAC
 EXTRA_CFLAGS += -DENHANCED_STAT_DISPLAY
 EXTRA_CFLAGS += -DCONFIG_FWOWN_SUPPORT
 EXTRA_CFLAGS += -DNEWSEC
@@ -1467,10 +1487,10 @@ endif
 ifeq ($(CONFIG_FAST_NAT_SUPPORT),y)
 ifeq ($(CONFIG_WLAN_HOOK),y)
 ifeq ($(CONFIG_WHNAT_SUPPORT),y)
-EXTRA_CFLAGS += -DWHNAT_SUPPORT
+EXTRA_CFLAGS += -DWHNAT_SUPPORT -DCONFIG_ARCH_MT7622_WIFI_HW_NAT
 else
 ifeq ($(CONFIG_WHNAT_SUPPORT),m)
-EXTRA_CFLAGS += -DWHNAT_SUPPORT
+EXTRA_CFLAGS += -DWHNAT_SUPPORT -DCONFIG_ARCH_MT7622_WIFI_HW_NAT
 endif
 endif
 endif

@@ -13,6 +13,7 @@
 		led-boot = &led_usb;
 		led-failsafe = &led_usb;
 		led-upgrade = &led_usb;
+		label-mac-device = &gmac0;
 	};
 
 	chosen {
@@ -86,9 +87,9 @@
 		};
 
 		factory: partition@100000 {
-			label = "factory";
+			label = "Factory";
 			reg = <0x100000 0x40000>;
-			read-only;
+			//read-only;
 		};
 
 		partition@140000 {
@@ -118,7 +119,12 @@
 	};
 };
 
+&gmac0 {
+	mtd-mac-address = <&factory 0xe000>;
+};
+
 &gmac1 {
+	mtd-mac-address = <&factory 0xe006>;
 	status = "okay";
 };
 

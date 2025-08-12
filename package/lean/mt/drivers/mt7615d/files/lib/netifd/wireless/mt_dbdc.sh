@@ -72,8 +72,7 @@ drv_mt_dbdc_init_iface_config() {
 
 get_wep_key_type() {
 	local KeyLen=$(expr length "$1")
-	if [ $KeyLen -eq 10 ] || [ $KeyLen -eq 26 ]
-	then
+	if [ $KeyLen -eq 10 ] || [ $KeyLen -eq 26 ] || [ $KeyLen -eq 32 ]; then
 		echo 0
 	else
 		echo 1
@@ -150,13 +149,13 @@ mt_dbdc_ap_vif_pre_config() {
 			psk*)
 				enc=WPAPSK
 			;;
-			SAE*|psk3*|sae)
+			SAE*|psk3|sae)
 				enc=WPA3PSK
 			;;
-			SAE*|psk2+psk3|sae-mixed)
+			psk2+psk3|psk3-mixed|sae-mixed)
 				enc=WPA2PSKWPA3PSK
 			;;
-			8021x*|eap*|wpa)
+			8021x*|eap|wpa)
 				enc=WPA
 			;;
 			8021x*|eap2*|wpa2)
@@ -165,11 +164,11 @@ mt_dbdc_ap_vif_pre_config() {
 			8021x*|eap+eap2|wpa-mixed)
 				enc=WPA1WPA2
 			;;
-			8021x*|eap3*|wpa3)
+			8021x*|wpa3) #在mt_wifi驱动中，WPA3也就是SHA256的WPA2，所以加密模式实际为WPA2-EAP/SHA256。
 				enc=WPA3
 			;;
-			8021x*|eap2+eap3|wpa3-mixed)
-				enc=WPA2WPA3
+			8021x*|eap3-mixed|wpa3-mixed) #在mt_wifi驱动中，WPA3也就是SHA256的WPA2，所以选择WPA2MIX。
+				enc=WPA2MIX
 			;;
 			8021x*|eap192*|wpa3-192)
 				enc=WPA3-192
@@ -209,7 +208,7 @@ mt_dbdc_ap_vif_pre_config() {
 			fi
 			ApDefKId="${ApDefKId}2;"
 			echo "WPAPSK${ApBssidNum}=${key}" >> $MTWIFI_PROFILE_PATH
-			echo "RADIUS_Key${ApBssidNum}=${auth_secret}" >> $MTWIFI_PROFILE_PATH
+			echo "RADIUS_Key${ApBssidNum}=${auth_secret:-0}" >> $MTWIFI_PROFILE_PATH
 	;;
 	WEP|wep|wep-open|wep-shared)
 		if [ "$encryption" == "wep-shared" ]; then
@@ -244,16 +243,24 @@ mt_dbdc_ap_vif_pre_config() {
 	else
 		ApRekeyMethod="${ApRekeyMethod}TIME;"
 	fi
+
+	if [ "$encryption" == "wpa" -o "$encryption" == "wpa-mixed" -o "$encryption" == "wpa2" -o "$encryption" == "wpa3" -o "$encryption" == "wpa3-mixed" -o "$encryption" == "wpa3-192" ]; then
+		echo "NasId${ApBssidNum}=${nasid}" >> $MTWIFI_PROFILE_PATH
+	else
+		echo "FtR0khId${ApBssidNum}=${nasid}" >> $MTWIFI_PROFILE_PATH
+	fi
+
 	ApK1Tp="${ApK1Tp}${K1Tp:-0};"
 	ApK2Tp="${ApK2Tp}${K2Tp:-0};"
 	ApK3Tp="${ApK3Tp}${K3Tp:-0};"
 	ApK4Tp="${ApK4Tp}${K4Tp:-0};"
 	ApHideESSID="${ApHideESSID}${hidden:-0};"
-	ApRADIUSServer="${ApRADIUSServer}${auth_server};"
+	ApWmmCapable="${ApWmmCapable}${wmm};"
+	ApRADIUSServer="${ApRADIUSServer}${auth_server:-0};"
 	ApRADIUSPort="${ApRADIUSPort}${auth_port};"
 	ApRADIUSAcctServer="${ApRADIUSAcctServer}${acct_server};"
 	ApRADIUSAcctPort="${ApRADIUSAcctPort}${acct_port};"
-	ApRADIUSAcctKey="${ApRADIUSAcctKey}${acct_secret};"
+	ApRADIUSAcctKey="${ApRADIUSAcctKey}${acct_secret:-0};"
 	ApPreAuth="${ApPreAuth}${rsn_preauth:-0};"
 	ApRRMEnable="${ApRRMEnable}${ieee80211k};"
 	ApFtSupport="${ApFtSupport}${ieee80211r};"
@@ -263,7 +270,6 @@ mt_dbdc_ap_vif_pre_config() {
 	ApFtOnly="${ApFtOnly}${ft_psk_generate_local:-0};"
 	ApFtRic="${ApFtRic}${pmk_r1_push:-0};"
 	echo "FtMdId${ApBssidNum}=${mobility_domain}" >> $MTWIFI_PROFILE_PATH
-	echo "FtR0khId${ApBssidNum}=${nasid}" >> $MTWIFI_PROFILE_PATH
 	echo "FtR1khId${ApBssidNum}=${r1_key_holder}" >> $MTWIFI_PROFILE_PATH
 	echo "AssocDeadLine${ApBssidNum}=${reassociation_deadline}" >> $MTWIFI_PROFILE_PATH
 
@@ -305,9 +311,15 @@ mt_dbdc_ap_vif_pre_config() {
 		mt_cmd iwpriv $ifname set KickStaRssiLow=$kicklow
 		mt_cmd iwpriv $ifname set AssocReqRssiThres=$assocthres
 	}
+
+	# PMF(802.11W) should be disabled if you want your device to support both iPhone and Android STAs
+	[ -n "$ieee80211r" ]  && [ "$ieee80211r" != "0" ] && {
+		mt_cmd iwpriv $ifname set ftenable=1
+		mt_cmd iwpriv $ifname set PMFMFPC=0
+		mt_cmd iwpriv $ifname set PMFMFPR=0
+	}
 	[ -n "$ieee80211k" ] && [ "$ieee80211k" != "0" ] && mt_cmd iwpriv $ifname set rrmenable=1
 	# [ -n "$ieee80211v" ] && [ "$ieee80211v" != "0" ] && mt_cmd iwpriv $ifname set wnmenable=1
-	[ -n "$ieee80211r" ] && [ "$ieee80211r" != "0" ] && mt_cmd iwpriv $ifname set ftenable=1
 	# [ -n "$ieee80211w" ] && [ "$ieee80211w" != "0" ] && mt_cmd iwpriv $ifname set pmfenable=1
 }
 
@@ -316,8 +328,8 @@ mt_dbdc_wds_vif_pre_config() {
 
 	json_select config
 	json_get_vars disabled encryption key key1 key2 key3 key4 mode bssid wdsen wdsenctype wdskey wdswepid wdsphymode wdstxmcs
-	set_default wdsen 3
-	set_default wdsphymode "GREENFIELD"
+	set_default wdsen 0
+	set_default wdsphymode "VHT"
 	json_select ..
 
 	[[ "$disabled" = "1" ]] && return
@@ -516,6 +528,10 @@ mt_dbdc_sta_vif_pre_config() {
 		echo "ApCliOWETranIe=${ApCliOWETranIe:-1}" >> $MTWIFI_PROFILE_PATH
 	fi
 	[ -z "$bssid" ] || mt_cmd iwpriv $APCLI_IF set ApCliBssid=$(echo $bssid | tr 'A-Z' 'a-z')
+	[ -n "$bssid" ] && {
+		mt_cmd iwpriv ra${MTWIFI_IFPREFIX}0 set MACRepeaterEn=1
+		echo "MACRepeaterEn=1" >> $MTWIFI_PROFILE_PATH
+	}
 	mt_cmd iwpriv $APCLI_IF set ApCliSsid=${ssid}
 	mt_cmd iwpriv $APCLI_IF set ApCliDelPMKIDList=1
 	if [ "$wps_pushbutton" == "1" ] && [ "${ApCliAuthMode}" != "none" ]; then
@@ -523,8 +539,9 @@ mt_dbdc_sta_vif_pre_config() {
 		mt_cmd iwpriv $APCLI_IF set WscConfMode=1
 		mt_cmd iwpriv $APCLI_IF set WscMode=1
 		mt_cmd iwpriv $APCLI_IF show WscPin
-		# mt_cmd iwpriv $APCLI_IF set ApCliWscSsid=$ssid
+		[ -n "$ssid" ] && mt_cmd iwpriv $APCLI_IF set ApCliWscSsid="${ssid}"
 		mt_cmd iwpriv $APCLI_IF set WscGetConf=1
+		mt_cmd iwpriv $APCLI_IF set WscGenPinCode=1
 		mt_cmd iwpriv $APCLI_IF set WscPinCode=$pin
 		# echo "ApCliWscSsid=${ssid}" >> $MTWIFI_PROFILE_PATH
 	elif [ "$wps_pushbutton" == "2" ] && [ "${ApCliAuthMode}" != "none" ]; then
@@ -643,7 +660,7 @@ drv_mt_dbdc_setup() {
 			tx_stbc_2by1:1 \
 			su_beamformer:1 \
 			su_beamformee:1 \
-			mu_beamformer:0 \
+			mu_beamformer:1 \
 			mu_beamformee:1 \
 			vht_txop_ps:1 \
 			htc_vht:1 \
@@ -777,44 +794,153 @@ drv_mt_dbdc_setup() {
 		BGProtection=1
 	}
 
-#自动处理CountryRegion:指定信道的时候支持全频段
-#	[ "$channel" != "auto" -o "$channel" != "0" ] && {
-#		#Country US
-#		countryregion=5
-#		countryregion_a=7
-#		#AutoChannelSelect=0
-#	}
+#igmp_snooping功能设置
+	igmp_snooping="$(uci -q get network.@device[0].igmp_snooping)"
+
+#处理CountryRegion:指定信道
+	[ "${country}" == "DB" ] && countryregion_a=7 && countryregion=5
+	[ "${country}" == "AE" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "AL" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "DZ" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "AR" ] && countryregion_a=3 && countryregion=1
+	[ "${country}" == "AM" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "AU" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "AT" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "AZ" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "BH" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "BY" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "BE" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "BZ" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "BO" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "BR" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "BN" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "BG" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "CA" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "CL" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "CN" ] && countryregion_a=0 && countryregion=1 && RDRegion=CHN
+	[ "${country}" == "CO" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "CR" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "HR" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "CY" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "CZ" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "DK" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "DO" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "EC" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "EG" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "SV" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "EE" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "FI" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "FR" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "GE" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "DE" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "GR" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "GT" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "HN" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "HK" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "HU" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "IS" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "IN" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "ID" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "IR" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "IE" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "IL" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "IT" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "JP" ] && countryregion_a=9 && countryregion=1 && RDRegion=JAP
+	[ "${country}" == "JO" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "KZ" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "KP" ] && countryregion_a=5 && countryregion=1
+	[ "${country}" == "KR" ] && countryregion_a=5 && countryregion=1 && RDRegion=KR
+	[ "${country}" == "KW" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "LV" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "LB" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "LI" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "LT" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "LU" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "MO" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "MK" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "MY" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "MX" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "MC" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "MA" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "NL" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "NZ" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "NO" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "OM" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "PK" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "PA" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "PE" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "PH" ] && countryregion_a=4 && countryregion=1
+	[ "${country}" == "PL" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "PT" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "PR" ] && countryregion_a=0 && countryregion=0
+	[ "${country}" == "QA" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "RO" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "RU" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "SA" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "SG" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "SK" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "SI" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "ZA" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "ES" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "SE" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "CH" ] && countryregion_a=1 && countryregion=1
+	[ "${country}" == "SY" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "TW" ] && countryregion_a=3 && countryregion=0
+	[ "${country}" == "TH" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "TT" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "TN" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "TR" ] && countryregion_a=2 && countryregion=1
+	[ "${country}" == "UA" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "AE" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "GB" ] && countryregion_a=1 && countryregion=1
+	# [ "${country}" == "US" ] && countryregion_a=7 && countryregion=5 && RDRegion=FCC
+	[ "${country}" == "UY" ] && countryregion_a=5 && countryregion=1
+	[ "${country}" == "UZ" ] && countryregion_a=1 && countryregion=0
+	[ "${country}" == "VE" ] && countryregion_a=5 && countryregion=1
+	[ "${country}" == "VN" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "YE" ] && countryregion_a=0 && countryregion=1
+	[ "${country}" == "ZW" ] && countryregion_a=0 && countryregion=1
+	# [ "${country}" == "00" ] && countryregion_a=26 && countryregion=5 && RDRegion=CE
 
 #其它相关
 	case "$hwmode" in
 		a)
 			EXTCHA=1
-			[ "${channel}" != "auto" ] && [ "${channel}" != "0" ] && [ "$(( (${channel} / 4) % 2 ))" == "0" ] && EXTCHA=0
-			[ "${channel}" == "165" ] && EXTCHA=0
+			case "$channel" in
+				40|48|56|64|104|112|120|128| \
+				136|144|153|161|169|177) EXTCHA=0;;
+			esac
 			[ "${channel}" == "auto" -o "${channel}" == "0" ] && {
-				mt_cmd iwpriv ra${MTWIFI_IFPREFIX}0 set AutoChannelSel=3
+				AutoChannelSelect=3
 				channel=0
 			}
-			[ "${country}" == "CN" -o "${country}" != "US" ] && {
-				countryregion=1
+			[ "${country}" == "US" ] && {
+				countryregion_a=7 && RDRegion=FCC
+				ACSSKIP="100;104;108;112;116;120;124;128;132;136;140;144;169;173;177"
+			}
+			[ "${country}" == "CN" ] && {
 				countryregion_a=0
+				ACSSKIP="100;104;108;112;116;120;124;128;132;136;140;144;169;173;177"
 			}
-			[ "${country}" == "US" -a "${country}" != "CN" ] && {
-				countryregion=5
-				countryregion_a=7
-			}
-			ACSSKIP="52;56;60;64;100;104;108;112;116;120;124;128;132;136;140;165"
+			# ACSSKIP="100;104;108;112;116;120;124;128;132;136;140;144;169;173;177"
 		;;
 		g)
 			EXTCHA=0
 			[ "${channel}" != "auto" ] && [ "${channel}" != "0" ] && [ "${channel}" -lt "7" ] && EXTCHA=1
 			[ "${channel}" == "auto" -o "${channel}" == "0" ] && {
-				mt_cmd iwpriv ra${MTWIFI_IFPREFIX}0 set AutoChannelSel=3
+				AutoChannelSelect=3
 				channel=0
+				EXTCHA=1
 			}
-			[ "${country}" == "CN" -o "${country}" != "US" ] && countryregion=1
-			[ "${country}" == "US" -a "${country}" != "CN" ] && countryregion=5
-			ACSSKIP="14"
+			[ "${country}" == "US" ] && {
+				countryregion=5 && RDRegion=FCC
+				ACSSKIP="14"
+			}
+			[ "${country}" == "CN" ] && {
+				countryregion=1
+				ACSSKIP="14"
+			}
+			# ACSSKIP="14"
 		;;
 	esac
 
@@ -835,6 +961,7 @@ ApCliWirelessMode=
 APCwmax=6;10;4;3
 APCwmin=4;4;3;2
 ApMWDS=1
+ApCliMWDS=0
 ApProbeRspTimes=3
 APSDCapable=1
 APTxop=0;0;94;47
@@ -874,14 +1001,14 @@ BW_Priority=
 BW_Root=0
 CalCacheApply=0
 CarrierDetect=0
-Channel=${channel}
+Channel=${channel:-0}
 ChannelGrp=0:0:0:0
 CountryCode=${country:-CN}
 CountryRegion=${countryregion:-1}
 CountryRegionABand=${countryregion_a:-0}
 CP_SUPPORT=2
 CSPeriod=6
-DbdcBandSupport=0
+WirelessMode=${WirelessMode}
 DeauthFloodThreshold=64
 DebugFlags=0
 DfsApplyStopWifi=0
@@ -910,8 +1037,8 @@ DyncVgaEnable=1
 E2pAccessMode=2
 EAPifname=
 EapReqFloodThreshold=64
-EDCCAEnable=0
-EDCCAThreshold=3:0
+EDCCAEnable=1
+EDCCAThreshold=3:127
 EDCCACfgMode=0
 EnhanceMultiClient=1
 EthConvertMode=dongle
@@ -963,7 +1090,6 @@ IsICAPFW=0
 ITxBfEn=${ITxBfEn:-0}
 ITxBfTimeout=0
 LinkTestSupport=0
-MACRepeaterEn=${MACRepeaterEn:-0}
 MACRepeaterOuiMode=2
 MapEnable=1
 MapAccept3Addr=1
@@ -973,7 +1099,7 @@ MboSupport=1
 MaxStaNum=${maxassoc}
 MbssMaxStaNum=${maxassoc:-64}
 MBSSWirelessMode=
-MUTxRxEnable=${mu_beamformer:-0}
+MUTxRxEnable=${mu_beamformer:-1}
 NoForwardingBTNBSSID=0
 NoForwardingMBCast=0
 NonTxBSSIndex=0
@@ -985,7 +1111,7 @@ OCE_FILS_HLP=0
 OCE_FILS_REALMS=
 OCE_RNR_SUPPORT=
 OCE_SUPPORT=0
-OFDMA=0
+OFDMA=1
 PcieAspm=0
 PERCENTAGEenable=${PERCENTAGEenable:-0}
 PhyRateLimit=0
@@ -1005,13 +1131,14 @@ PreAuthifname=
 RadioLinkSelection=0
 ProbeReqFloodThreshold=64
 RadioOn=1
-RDRegion=CE
+RDRegion=${RDRegion}
 ReassocReqFloodThreshold=64
 RED_Enable=1
 RegDomain=Global
 ResetCounter=1
 RTSThreshold=${rts:-2347}
-ScsEnable=1
+ScsEnable=0
+SCSEnable=1
 session_timeout_interval=0
 quiet_interval=0
 radius_acct_authentic=1
@@ -1121,9 +1248,6 @@ WdsTxMcs=33
 WHNAT=${whnat:-1}
 WiFiTest=0
 WirelessEvent=1
-WirelessMode=${WirelessMode}
-WNMBTMEnable=1
-WpaMixPairCipher=
 WscConfMethods=238c
 WscConfMode=0
 WscConfStatus=2
@@ -1136,8 +1260,7 @@ WscSerialNumber=
 WscV2Support=0
 ApCliUAPSDCapable=1
 QuickChannelSwitch=1
-WDS_VLANID=0
-ApCliMWDS=1
+WDS_VLANID=
 SRMeshUlMode=1
 WdsMac=
 EOF
@@ -1161,6 +1284,7 @@ EOF
 	ApK3Tp=""
 	ApK4Tp=""
 	ApHideESSID=""
+	ApWmmCapable=""
 	ApRRMEnable=""
 	ApFtSupport=""
 	ApNoForwarding=""
@@ -1192,6 +1316,7 @@ EOF
 		ApK2Tp="${ApK2Tp}0;"
 		ApK3Tp="${ApK3Tp}0;"
 		ApK4Tp="${ApK4Tp}0;"
+		ApWmmCapable="${ApWmmCapable};"
 		ApNoForwarding="${ApNoForwarding};"
 		ApRekeyInterval="${ApRekeyInterval};"
 		ApPMFMFPC="${ApPMFMFPC};"
@@ -1207,7 +1332,7 @@ EOF
 	# eval sed -i 's/BssidNum=1/BssidNum=${BssidNum}/g' $MTWIFI_PROFILE_PATH
 	# echo "BssidNum=${ApBssidNum:-1}" >> $MTWIFI_PROFILE_PATH
 	echo "HideSSID=${ApHideESSID%?}" >> $MTWIFI_PROFILE_PATH
-	echo "WmmCapable=${wmm}" >> $MTWIFI_PROFILE_PATH
+	echo "WmmCapable=${ApWmmCapable%?}" >> $MTWIFI_PROFILE_PATH
 	echo "AuthMode=${ApAuthMode%?}" >> $MTWIFI_PROFILE_PATH
 	echo "EncrypType=${ApEncrypType%?}" >> $MTWIFI_PROFILE_PATH
 	echo "RADIUS_Server=${ApRADIUSServer%?}" >> $MTWIFI_PROFILE_PATH
@@ -1301,20 +1426,19 @@ EOF
 		sleep 2
 		drv_mt_dbdc_teardown $phy_name
 		mt_dbdc_vif_down $phy_name
+#Start root device
+		ifconfig ra0 up
+#restore interfaces
+		if [[ "$phy_name" = "ra0" ]]; then
+			sh $MTWIFI_CMD_OPATH
+			sh $MTWIFI_CMD_PATH
+		else
+			sh $MTWIFI_CMD_PATH
+			sh $MTWIFI_CMD_OPATH
+		fi
 	else
 		echo "Wait other process reload wifi"
 		lock $WIFI_OP_LOCK
-	fi
-
-#Start root device
-	ifconfig ra0 up
-#restore interfaces
-	if [[ "$phy_name" = "ra0" ]]; then
-		sh $MTWIFI_CMD_OPATH
-		sh $MTWIFI_CMD_PATH
-	else
-		sh $MTWIFI_CMD_PATH
-		sh $MTWIFI_CMD_OPATH
 	fi
 
 #AP模式

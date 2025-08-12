@@ -42,7 +42,7 @@ static const UCHAR Cfg80211_Chan[] = {
 	100, 104, 108, 112, 116, 120, 124, 128, 132, 136, //10
 
 	/* 802.11 UNII */
-	140, 144, 149, 153, 157, 161, 165, 169, 173, //9
+	140, 144, 149, 153, 157, 161, 165, 169, 173, 177, //10
 
 	/* Japan */
 	184, 188, 192, 196, 208, 212, 216, //7
@@ -55,14 +55,14 @@ struct iw_priv_args ap_privtab[] = {
 	  IW_PRIV_TYPE_CHAR | 1536, 0, "set" },
 	{ RTPRIV_IOCTL_SHOW, IW_PRIV_TYPE_CHAR | 1024, 0, "show" },
 	{ RTPRIV_IOCTL_GSITESURVEY, IW_PRIV_TYPE_CHAR | 1024,
-	  IW_PRIV_TYPE_CHAR | 1024, "get_site_survey" },
+	  IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "get_site_survey" },
 	{ RTPRIV_IOCTL_SET_WSCOOB, IW_PRIV_TYPE_CHAR | 1024,
 	  IW_PRIV_TYPE_CHAR | 1024, "set_wsc_oob" },
 	{ RTPRIV_IOCTL_GET_MAC_TABLE, IW_PRIV_TYPE_CHAR | 1024,
 	  IW_PRIV_TYPE_CHAR | 1024, "get_mac_table" },
 	{ RTPRIV_IOCTL_GET_DRIVER_INFO, IW_PRIV_TYPE_CHAR | 1024,
 	  IW_PRIV_TYPE_CHAR | 1024, "get_driverinfo" },
-	{ RTPRIV_IOCTL_E2P, IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
+	{ RTPRIV_IOCTL_E2P, IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 	  "e2p" },
 #if defined(DBG) || (defined(BB_SOC) && defined(CONFIG_ATE))
 	{ RTPRIV_IOCTL_BBP, IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
@@ -151,6 +151,7 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 	INT apidx = 0;
 	UINT32 org_len;
 	RT_CMD_AP_IOCTL_CONFIG IoctlConfig, *pIoctlConfig = &IoctlConfig;
+	struct wifi_dev *wdev = NULL;
 
 	GET_PAD_FROM_NET_DEV(pAd, net_dev);
 
@@ -169,7 +170,11 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 	pIoctlConfig->net_dev = net_dev;
 	pIoctlConfig->wdev = RTMP_OS_NETDEV_GET_WDEV(net_dev);
 	pIoctlConfig->priv_flags = RT_DEV_PRIV_FLAGS_GET(net_dev);
-	pIoctlConfig->pCmdData = wrqin->u.data.pointer;
+	if (wrqin->u.data.length)
+		pIoctlConfig->pCmdData = wrqin->u.data.pointer;
+	else
+		pIoctlConfig->pCmdData = NULL;
+	pIoctlConfig->cmd_data_len = wrqin->u.data.length;
 	pIoctlConfig->CmdId_RTPRIV_IOCTL_SET = RTPRIV_IOCTL_SET;
 	pIoctlConfig->name = net_dev->name;
 	pIoctlConfig->apidx = 0;
@@ -280,6 +285,7 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 		struct iw_point *erq = &wrqin->u.essid;
 		PCHAR pSsidStr = NULL;
 
+		os_zero_mem(pIoctlSSID, sizeof(*pIoctlSSID));
 		erq->flags = 1;
 		/*erq->length = pAd->ApCfg.MBSSID[pObj->ioctl_if].SsidLen; */
 		pIoctlSSID->priv_flags = RT_DEV_PRIV_FLAGS_GET(net_dev);
@@ -356,6 +362,8 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 	case SIOCGIWMODE: /*get operation mode */
 		if (RT_DEV_PRIV_FLAGS_GET(net_dev) == INT_APCLI)
 			wrqin->u.mode = IW_MODE_INFRA; /* ApCli Mode. */
+		else if (RT_DEV_PRIV_FLAGS_GET(net_dev) == INT_WDS)
+			wrqin->u.mode = IW_MODE_REPEAT;		/* Wds Mode. */
 		else
 			wrqin->u.mode = IW_MODE_MASTER; /* AP Mode. */
 		break;
@@ -371,7 +379,7 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 
 	case SIOCGIWTXPOW: /*get transmit power (dBm) */
 	{
-		UINT32 power;
+		UINT32 power = 0;
 
 	    wrqin->u.txpower.fixed = 1;
 	    wrqin->u.txpower.disabled = 0;
@@ -432,8 +440,8 @@ INT rt28xx_ap_ioctl(struct net_device *net_dev, struct ifreq *rq, int cmd)
 		/* txpower */
 		prange->num_txpower = 8;
 		prange->txpower_capa = IW_TXPOW_MWATT|IW_TXPOW_RANGE;
-		prange->txpower[1] = 1;
-		prange->txpower[8] = 100;
+		prange->txpower[0] = 1;
+		prange->txpower[7] = 100;
 
 		len = copy_to_user(wrq->u.data.pointer, prange,
 				   sizeof(struct iw_range));

@@ -402,6 +402,22 @@ define Device/c-life_xg1
 endef
 TARGET_DEVICES += c-life_xg1
 
+define Device/cmcc_mw1
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  IMAGE_SIZE := 129280k
+  UBINIZE_OPTS := -E 5
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  DEVICE_VENDOR := CMCC
+  DEVICE_MODEL := MW1
+  DEVICE_PACKAGES := -luci-newapi kmod-mt7615d_dbdc kmod-usb2 \
+        kmod-usb-ledtrig-usbport wireless-tools
+endef
+TARGET_DEVICES += cmcc_mw1
+
 define Device/cudy_wr1300
   $(Device/dsa-migration)
   IMAGE_SIZE := 15872k

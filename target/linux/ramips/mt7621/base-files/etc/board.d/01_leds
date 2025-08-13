@@ -113,6 +113,11 @@ raisecom,msg1500-x-00)
 	ucidef_set_led_netdev "wlan2g" "WiFi 2.4GHz" "blue:wlan2g" "ra0"
 	ucidef_set_led_netdev "wlan5g" "WiFi 5GHz" "blue:wlan5g"  "rax0"
 	;;
+skspruce,wia3300-10)
+        ucidef_set_led_netdev "wan" "INTERNET" "internet:green" "wan" "link tx rx"
+        ucidef_set_led_netdev "wifi5g" "5G" "wlan5g:blue" "phy1-ap0" "link tx rx"
+        ucidef_set_led_netdev "wifi2g" "2G" "wlan2g:green" "phy0-ap0" "link tx rx"
+        ;;
 tplink,archer-a6-v3|\
 tplink,archer-c6-v3|\
 tplink,archer-c6u-v1)

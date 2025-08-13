@@ -8,29 +8,43 @@
 	model = "Skspruce WIA3300-10";
 
 	aliases {
-		led-boot = &led_blue;
-		led-failsafe = &led_blue;
-		led-running = &led_blue;
-		led-upgrade = &led_blue;
+		led-boot = &led_power_boot;
+                led-failsafe = &led_power_boot;
+                led-running = &led_power_sys;
+                led-upgrade = &led_power_boot;
 	};
+
+	chosen {
+                bootargs = "console=ttyS0,115200";
+        };
 
 	leds {
 		compatible = "gpio-leds";
 
-		stat_r {
-			label = "red:status";
-			gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
-		};
+		led_power_boot: power-red {
+                        label = "power:red";
+                        gpios = <&gpio 23 GPIO_ACTIVE_LOW>;
+                };
 
-		stat_y {
-			label = "yellow:status";
-			gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
-		};
+                led_power_sys: power-green {
+                        label = "power:green";
+                        gpios = <&gpio 24 GPIO_ACTIVE_LOW>;
+                };
 
-		led_blue: stat_b {
-			label = "blue:status";
-			gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
-		};
+                internet-green {
+                        label = "internet:green";
+                        gpios = <&gpio 3 GPIO_ACTIVE_LOW>;
+                };
+
+                wlan2g {
+                        label = "wlan2g:green";
+                        gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+                };
+
+                wlan5g {
+                        label = "wlan5g:blue";
+                        gpios = <&gpio 22 GPIO_ACTIVE_LOW>;
+                };
 	};
 
 	keys {

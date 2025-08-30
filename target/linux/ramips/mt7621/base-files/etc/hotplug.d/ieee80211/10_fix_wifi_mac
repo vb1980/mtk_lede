@@ -58,6 +58,12 @@ case "$board" in
 		[ "$PHYNBR" -eq 0 ] && echo $label_mac > /sys${DEVPATH}/macaddress
 		[ "$PHYNBR" -eq 1 ] && macaddr_add $label_mac 0x800000 > /sys${DEVPATH}/macaddress
 		;;
+	maipu,mpax18)
+		if [ "$PHYNBR" = "1" ]; then
+			base_mac=$(macaddr_add "$(mtd_get_mac_binary factory 0x4)" 1)
+			macaddr_setbit_la "$base_mac" > /sys${DEVPATH}/macaddress
+		fi
+		;;
 	linksys,e5600|\
 	linksys,ea7300-v1|\
 	linksys,ea7300-v2|\

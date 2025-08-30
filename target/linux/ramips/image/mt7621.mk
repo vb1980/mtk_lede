@@ -1229,6 +1229,24 @@ define Device/linksys_re6500
 endef
 TARGET_DEVICES += linksys_re6500
 
+define Device/maipu_mpax18
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	  check-size
+  DEVICE_VENDOR := MAIPU
+  DEVICE_MODEL := MPAX18
+  DEVICE_PACKAGES += kmod-mt_wifi uboot-envtools luci-app-mtwifi
+endef
+TARGET_DEVICES += maipu_mpax18
+
 define Device/mediatek_ap-mt7621a-v60
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)

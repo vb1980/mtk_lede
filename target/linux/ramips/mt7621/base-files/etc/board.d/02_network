@@ -155,7 +155,7 @@ ramips_setup_interfaces()
 		;;
 	maipu,mpax18)
 		ucidef_add_switch "switch0" \
-                        "1:lan" "2:lan" "3:lan" "4:wan" "6u@eth0" "5u@eth1"
+                        "1:lan:3" "2:lan:2" "3:lan:1" "4:wan" "6u@eth0" "5u@eth1"
                 ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
                 ;;
 	*)

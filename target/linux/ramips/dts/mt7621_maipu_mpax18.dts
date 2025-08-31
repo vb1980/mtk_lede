@@ -68,7 +68,6 @@
 		partition@0 {
 			label = "Bootloader";
 			reg = <0x0 0x80000>;
-			read-only;
 		};
 
 		partition@80000 {
@@ -139,13 +138,12 @@
 };
 
 &gmac0 {
-	nvmem-cells = <&macaddr_factory_3fff4>;
-	nvmem-cell-names = "mac-address";
+	mtd-mac-address = <&factory 0x3fff4>;
 };
 
 &gmac1 {
-	nvmem-cells = <&macaddr_factory_3fffa>;
-	nvmem-cell-names = "mac-address";
+	mtd-mac-address = <&factory 0x3fffa>;
+	status = "okay";
 };
 
 &gsw {
@@ -153,6 +151,7 @@
 	mediatek,portmap = "wllll";
 	mediatek,mcm;
 	mt7530,direct-phy-access;
+	status = "okay";
 
 	resets = <&rstctrl 2>;
 	reset-names = "mcm";
@@ -183,39 +182,22 @@
 	};
 };
 
+&hnat {
+	mtketh-wan = "eth1";
+	mtketh-ppd = "eth0";
+	mtketh-lan = "eth0";
+	ext-devices = "wlan0","wlan1","rax0","ra0", "rai0","apclii0","apclix0", "apcli0";
+	mtketh-max-gmac = <2>;
+	/delete-property/ mtkdsa-wan-port;
+};
 
 &switch0 {
-	/* must delete compatible property */
-	/delete-property/ compatible;
+	status = "disabled";
 };
-
-&hnat {
-        mtketh-wan = "eth1";
-        mtketh-ppd = "eth0";
-        mtketh-lan = "eth0";
-	ext-devices = "wlan0","wlan1","rax0","ra0", "rai0","apclii0","apclix0", "apcli0";
-        mtketh-max-gmac = <2>;
-        status = "okay";
-};
-
 
 &state_default {
 	gpio {
 		groups = "i2c", "uart3", "wdt";
 		function = "gpio";
-	};
-};
-
-&factory {
-	compatible = "nvmem-cells";
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	macaddr_factory_3fff4: macaddr@3fff4 {
-		reg = <0x3fff4 0x6>;
-	};
-
-	macaddr_factory_3fffa: macaddr@3fffa {
-		reg = <0x3fffa 0x6>;
 	};
 };

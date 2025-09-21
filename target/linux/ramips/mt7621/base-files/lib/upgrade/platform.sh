@@ -118,7 +118,8 @@ platform_do_upgrade() {
 	xiaomi,mi-router-cr6608|\
 	xiaomi,mi-router-cr6609|\
 	xiaomi,redmi-router-ac2100|\
- 	zte,e8820s)
+ 	zte,e8820s|\
+ 	ztt,rx6000)
 		nand_do_upgrade "$1"
 		;;
 	hatlab,gateboard-one)

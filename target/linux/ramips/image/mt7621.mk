@@ -2172,3 +2172,21 @@ define Device/zte_e8820s
   DEVICE_PACKAGES := kmod-mt7603 kmod-mt76x2 kmod-usb3 kmod-usb-ledtrig-usbport
 endef
 TARGET_DEVICES += zte_e8820s
+
+define Device/ztt_rx6000
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	  check-size
+  DEVICE_VENDOR := ZTT
+  DEVICE_MODEL := RX6000
+  DEVICE_PACKAGES += kmod-mt_wifi uboot-envtools luci-app-mtwifi
+endef
+TARGET_DEVICES += ztt_rx6000

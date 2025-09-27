@@ -1,6 +1,7 @@
 #!/bin/bash
 . /lib/functions.sh
 . /usr/share/openclash/log.sh
+. /usr/share/openclash/uci.sh
 
 set_lock() {
    exec 876>"/tmp/lock/openclash_groups_get.lock" 2>/dev/null
@@ -14,11 +15,11 @@ del_lock() {
 
 CFG_FILE="/etc/config/openclash"
 other_group_file="/tmp/yaml_other_group.yaml"
-servers_update=$(uci -q get openclash.config.servers_update)
-servers_if_update=$(uci -q get openclash.config.servers_if_update)
-CONFIG_FILE=$(uci -q get openclash.config.config_path)
+servers_update=$(uci_get_config "servers_update")
+servers_if_update=$(uci_get_config "servers_if_update")
+CONFIG_FILE=$(uci_get_config "config_path")
 CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
-UPDATE_CONFIG_FILE=$(uci -q get openclash.config.config_update_path)
+UPDATE_CONFIG_FILE=$(uci_get_config "config_update_path")
 UPDATE_CONFIG_NAME=$(echo "$UPDATE_CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
 LOG_FILE="/tmp/openclash.log"
 set_lock
@@ -183,8 +184,36 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
 
          threads_g << Thread.new {
             #strategy
-            if x.key?('strategy') then
+            if x.key?('strategy') and x['type'] == 'load-balance' then
                uci_commands << uci_set + 'strategy=\"' + x['strategy'].to_s + '\"'
+            end;
+         };
+
+         threads_g << Thread.new {
+            #strategy-smart
+            if x.key?('strategy') and x['type'] == 'smart' then
+               uci_commands << uci_set + 'strategy_smart=\"' + x['strategy'].to_s + '\"'
+            end;
+         };
+
+         threads_g << Thread.new {
+            #uselightgbm
+            if x.key?('uselightgbm') and x['type'] == 'smart' then
+               uci_commands << uci_set + 'uselightgbm=\"' + x['uselightgbm'].to_s + '\"'
+            end;
+         };
+
+         threads_g << Thread.new {
+            #collectdata
+            if x.key?('collectdata') and x['type'] == 'smart' then
+               uci_commands << uci_set + 'collectdata=\"' + x['collectdata'].to_s + '\"'
+            end;
+         };
+
+         threads_g << Thread.new {
+            #policy_priority
+            if x.key?('policy-priority') and x['type'] == 'smart' then
+               uci_commands << uci_set + 'policy_priority=\"' + x['policy-priority'].to_s + '\"'
             end;
          };
 
@@ -196,7 +225,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
          };
 
          threads_g << Thread.new {
-            if x['type'] == 'url-test' or x['type'] == 'fallback' or x['type'] == 'load-balance' then
+            if x['type'] == 'url-test' or x['type'] == 'fallback' or x['type'] == 'load-balance' or x['type'] == 'smart' then
                #test_url
                if x.key?('url') then
                   uci_commands << uci_set + 'test_url=\"' + x['url'].to_s + '\"'

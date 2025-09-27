@@ -1,6 +1,7 @@
 #!/bin/bash
 . /lib/functions.sh
 . /usr/share/openclash/log.sh
+. /usr/share/openclash/uci.sh
 
 set_lock() {
    exec 887>"/tmp/lock/openclash_groups_set.lock" 2>/dev/null
@@ -15,10 +16,10 @@ del_lock() {
 set_lock
 GROUP_FILE="/tmp/yaml_groups.yaml"
 CFG_FILE="/etc/config/openclash"
-servers_update=$(uci -q get openclash.config.servers_update)
-CONFIG_FILE=$(uci -q get openclash.config.config_path)
+servers_update=$(uci_get_config "servers_update")
+CONFIG_FILE=$(uci_get_config "config_path")
 CONFIG_NAME=$(echo "$CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
-UPDATE_CONFIG_FILE=$(uci -q get openclash.config.config_update_path)
+UPDATE_CONFIG_FILE=$(uci_get_config "config_update_path")
 UPDATE_CONFIG_NAME=$(echo "$UPDATE_CONFIG_FILE" |awk -F '/' '{print $5}' 2>/dev/null)
 
 if [ -n "$UPDATE_CONFIG_FILE" ]; then
@@ -235,7 +236,7 @@ yml_groups_set()
 {
 
    local section="$1"
-   local enabled config type name disable_udp strategy old_name test_url test_interval tolerance policy_filter
+   local enabled config type name disable_udp strategy old_name test_url test_interval tolerance policy_filter strategy_smart uselightgbm collectdata policy_priority
    config_get_bool "enabled" "$section" "enabled" "1"
    config_get "config" "$section" "config" ""
    config_get "type" "$section" "type" ""
@@ -247,6 +248,10 @@ yml_groups_set()
    config_get "test_interval" "$section" "test_interval" ""
    config_get "tolerance" "$section" "tolerance" ""
    config_get "policy_filter" "$section" "policy_filter" ""
+   config_get "strategy_smart" "$section" "strategy_smart" ""
+   config_get "uselightgbm" "$section" "uselightgbm" ""
+   config_get "collectdata" "$section" "collectdata" ""
+   config_get "policy_priority" "$section" "policy_priority" ""
 
    if [ "$enabled" = "0" ]; then
       return
@@ -268,10 +273,6 @@ yml_groups_set()
       return
    fi
    
-   if [ -z "$test_url" ] || [ -z "$test_interval" ] && [ "$type" != "select" ] && [ "$type" != "relay" ]; then
-      return
-   fi
-   
    #游戏策略组存在时判断节点是否存在
    if [ -n "$if_game_group" ] && [ -n "$(grep "^$if_game_group$" /tmp/Proxy_Group)" ]; then
       config_foreach yml_servers_add "servers" "$name" "$type" "check" #加入服务器节点
@@ -283,14 +284,6 @@ yml_groups_set()
    
    echo "  - name: $name" >>$GROUP_FILE
    echo "    type: $type" >>$GROUP_FILE
-   if [ "$type" = "load-balance" ]; then
-      [ -n "$strategy" ] && {
-           echo "    strategy: $strategy" >>$GROUP_FILE
-      }
-   fi
-   [ -n "$disable_udp" ] && {
-      echo "    disable-udp: $disable_udp" >>$GROUP_FILE
-   }
 
    echo "    proxies: $name" >>$GROUP_FILE
    
@@ -338,6 +331,16 @@ yml_groups_set()
       echo "      - DIRECT" >>$GROUP_FILE
    fi
 
+   if [ "$type" = "load-balance" ]; then
+      [ -n "$strategy" ] && {
+           echo "    strategy: $strategy" >>$GROUP_FILE
+      }
+   fi
+
+   [ -n "$disable_udp" ] && {
+      echo "    disable-udp: $disable_udp" >>$GROUP_FILE
+   }
+
    [ -n "$test_url" ] && {
       echo "    url: $test_url" >>$GROUP_FILE
    }
@@ -356,10 +359,25 @@ yml_groups_set()
    [ -n "$routing_mark" ] && {
       echo "    routing-mark: \"$routing_mark\"" >>$GROUP_FILE
    }
+   
+   if [ "$type" = "smart" ]; then
+      [ -n "$strategy_smart" ] && {
+         echo "    strategy: $strategy_smart" >>$GROUP_FILE
+      }
+      [ -n "$uselightgbm" ] && {
+         echo "    uselightgbm: $uselightgbm" >>$GROUP_FILE
+      }
+      [ -n "$collectdata" ] && {
+         echo "    collectdata: $collectdata" >>$GROUP_FILE
+      }
+      [ -n "$policy_priority" ] && {
+         echo "    policy-priority: \"$policy_priority\"" >>$GROUP_FILE
+      }
+   fi
 }
 
-create_config=$(uci -q get openclash.config.create_config)
-servers_if_update=$(uci -q get openclash.config.servers_if_update)
+create_config=$(uci_get_config "create_config")
+servers_if_update=$(uci_get_config "servers_if_update")
 if_game_group="$1"
 if [ "$create_config" = "0" ] || [ "$servers_if_update" = "1" ] || [ -n "$if_game_group" ]; then
    /usr/share/openclash/yml_groups_name_get.sh

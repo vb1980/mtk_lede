@@ -87,6 +87,7 @@ platform_do_upgrade() {
 	h3c,tx1801-plus|\
 	h3c,tx1806|\
 	haier,har-20s2u1|\
+	hbd,wrl18m4gd|\
 	hiwifi,hc5962|\
 	jcg,q20|\
 	jcg,q10pro|\

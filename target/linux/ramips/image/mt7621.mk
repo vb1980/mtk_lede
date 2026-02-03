@@ -856,6 +856,24 @@ define Device/hatlab_gateboard-one
 endef
 TARGET_DEVICES += hatlab_gateboard-one
 
+define Device/hbd_wrl18m4gd
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+          check-size
+  DEVICE_VENDOR := HBD
+  DEVICE_MODEL := WRL18M4GD
+  DEVICE_PACKAGES += kmod-mt_wifi uboot-envtools luci-app-mtwifi
+endef
+TARGET_DEVICES += hbd_wrl18m4gd
+
 define Device/hilink_hlk-7621a
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := HiLink

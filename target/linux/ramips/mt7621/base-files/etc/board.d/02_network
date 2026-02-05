@@ -75,6 +75,13 @@ ramips_setup_interfaces()
 		ucidef_add_switch "switch0" \
 			"0:lan:4" "1:lan:3" "2:lan:2" "3:lan:1" "4:wan:5" "6@eth0"
 		;;
+	qihoo360,t6gs|\
+        qihoo360,t6m|\
+        qihoo360,t6u)
+		ucidef_add_switch "switch0" \
+                        "0:lan" "1:lan" "2:lan" "3:wan" "6u@eth0" "5u@eth1"
+		ucidef_set_interfaces_lan_wan "eth0 rax0 ra0" "eth1"
+                ;;
 	fcj,g-ax1800-f)
 		ucidef_add_switch "switch0" \
 			"0:lan" "1:lan" "2:lan" "3:wan" "6u@eth0" "5u@eth1"
@@ -220,6 +227,9 @@ ramips_setup_macs()
 		label_mac=$wan_mac
 		;;
 	fcj,g-ax1800-f|\
+	qihoo360,t6gs|\
+	qihoo360,t6m|\
+	qihoo360,t6u|\
 	xiaomi,mi-router-cr660x)
 		lan_mac=$(cat /sys/class/net/eth0/address)
 		wan_mac=$(macaddr_add "$lan_mac" -1)

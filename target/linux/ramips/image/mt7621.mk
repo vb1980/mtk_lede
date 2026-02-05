@@ -1566,6 +1566,40 @@ define Device/planex_vr500
 endef
 TARGET_DEVICES += planex_vr500
 
+define Device/qihoo360_t6x
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  UBINIZE_OPTS := -E 5
+  KERNEL_SIZE := 8192k
+  IMAGE_SIZE := 121344k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+        check-size
+  DEVICE_VENDOR := Qihoo360
+  DEVICE_PACKAGES := kmod-mt_wifi uboot-envtools luci-app-mtwifi
+endef
+
+define Device/qihoo360_t6gs
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6GS
+endef
+TARGET_DEVICES += qihoo360_t6gs
+
+define Device/qihoo360_t6m
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6M
+endef
+TARGET_DEVICES += qihoo360_t6m
+
+define Device/qihoo360_t6u
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6U
+endef
+TARGET_DEVICES += qihoo360_t6u
+
 define Device/raisecom_msg1500-x-00
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)

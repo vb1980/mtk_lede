@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "mt7621_qihoo360_t6x.dtsi"
+
+/ {
+	compatible = "qihoo360,t6m", "mediatek,mt7621-soc";
+	model = "Qihoo360 T6M";
+};

@@ -27,6 +27,12 @@ case "$board" in
 			macaddr_setbit_la "$base_mac" > /sys${DEVPATH}/macaddress
 		fi
 		;;
+	qihoo360,t6gs|\
+	qihoo360,t6m|\
+	qihoo360,t6u)
+		[ "$PHYNBR" = "1" ] && \
+			macaddr_add "$(mtd_get_mac_binary Factory 0x4)" 5 > /sys${DEVPATH}/macaddress
+		;;
 	fcj,g-ax1800-f)
 		[ "$PHYNBR" = "1" ] && \
 			macaddr_add "$(mtd_get_mac_binary Factory 0x4)" 5 > /sys${DEVPATH}/macaddress

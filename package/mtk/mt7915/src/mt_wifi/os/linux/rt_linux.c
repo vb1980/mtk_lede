@@ -938,10 +938,14 @@ static inline void __RtmpOSFSInfoChange(OS_FS_INFO *pOSFSInfo, BOOLEAN bSet)
 		/* pOSFSInfo->fsgid = (int)(current_fsgid()); */
 #endif
 #endif
+#if 0
 		pOSFSInfo->fs = get_fs();
 		set_fs(KERNEL_DS);
+#endif
 	} else {
+#if 0
 		set_fs(pOSFSInfo->fs);
+#endif
 #if (KERNEL_VERSION(2, 6, 29) > LINUX_VERSION_CODE)
 		current->fsuid = pOSFSInfo->fsuid;
 		current->fsgid = pOSFSInfo->fsgid;
@@ -2082,8 +2086,12 @@ VOID RtmpDrvAllMacPrint(
 	if (!msg)
 		return;
 
+#if 0
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
+
+
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2124,7 +2132,9 @@ VOID RtmpDrvAllMacPrint(
 		filp_close(file_w, NULL);
 	}
 
+#if 0
 	set_fs(orig_fs);
+#endif
 	os_free_mem(msg);
 }
 
@@ -2147,8 +2157,12 @@ VOID RtmpDrvAllE2PPrint(
 	if (!msg)
 		return;
 
+#if 0
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
+
+
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2189,8 +2203,9 @@ VOID RtmpDrvAllE2PPrint(
 
 		filp_close(file_w, NULL);
 	}
-
+#if 0
 	set_fs(orig_fs);
+#endif
 	os_free_mem(msg);
 }
 
@@ -2204,8 +2219,12 @@ VOID RtmpDrvAllRFPrint(
 	RTMP_STRING *fileName = "RFDump.txt";
 	mm_segment_t orig_fs;
 
+#if 0
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
+
+
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2235,8 +2254,9 @@ VOID RtmpDrvAllRFPrint(
 
 		filp_close(file_w, NULL);
 	}
-
+#if 0
 	set_fs(orig_fs);
+#endif
 }
 
 

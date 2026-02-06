@@ -403,7 +403,7 @@ config MTK_TXBF_SUPPORT
 config MTK_FAST_NAT_SUPPORT
        bool "Fast-NAT support"
 #       depends on RA_HW_NAT_WIFI
-       default n
+       default y
 
 config MTK_WHNAT_SUPPORT
 	tristate "Wifi Hardware NAT support"
@@ -1111,7 +1111,7 @@ config MTK_INTERWORKING
 
 config MTK_LINUX_NET_TXQ_SUPPORT
 	bool "NET TX Queue Support"
-	default y
+	default n
 
 config MTK_HWIFI_SUPPORT
 	bool "hardware wifi abstraction layer support"

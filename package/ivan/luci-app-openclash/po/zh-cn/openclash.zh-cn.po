@@ -293,8 +293,8 @@ msgstr "规则设置"
 msgid "Config Manage"
 msgstr "配置管理"
 
-msgid "Upload Config File"
-msgstr "上传配置文件"
+msgid "Add Config File"
+msgstr "添加配置文件"
 
 msgid "Upload File Type"
 msgstr "上传文件类型"
@@ -888,9 +888,6 @@ msgstr "Fallback【故障切换】"
 msgid "Load-Balance"
 msgstr "Load-Balance【负载均衡】"
 
-msgid "Relay-Traffic"
-msgstr "Relay【嵌套中转】"
-
 msgid "Other Group (Support Regex)"
 msgstr "包含其他策略组（请勿重复添加，支持正则匹配）"
 
@@ -908,6 +905,9 @@ msgstr "指定策略组"
 
 msgid "No Need Set when Config Create, The added Proxy Groups Must Exist"
 msgstr "注意：使用一键生成配置文件功能时无需设置此项，修改配置文件前添加的策略组必须已创建"
+
+msgid "The added Dialer Proxy or Group Must Exist"
+msgstr "注意：修改配置文件前添加的策略组或者节点必须已创建"
 
 msgid "Clean"
 msgstr "清理日志"
@@ -1113,8 +1113,11 @@ msgstr "不走代理的局域网设备 Mac"
 msgid "LAN Proxied Mac List"
 msgstr "走代理的局域网设备 Mac"
 
-msgid "In The Fake-IP Mode, Only Pure IP Requests Are Supported"
-msgstr "在 Fake-IP 模式下，只支持过滤纯 IP 类型的请求"
+msgid "In The Fake-IP Mode, Only Pure IP Requests Are Supported, Please Setting Fake-IP-Filter First If You Need Domain Type Requests"
+msgstr "在 Fake-IP 模式下，只支持过滤纯 IP 类型的请求, 如果涉及域名访问请提前设置 Fake-IP-Filter"
+
+msgid "Warning: iptables DSCP module not available, please try DCSP rule by core instead, skipping DSCP rule for"
+msgstr "警告：iptables 的 DSCP 模块不可用，请尝试改用内核的 DSCP 规则，来源流量访问控制跳过设置 DSCP 规则"
 
 msgid "Rule Match Proxy Mode"
 msgstr "仅代理命中规则流量"
@@ -1199,9 +1202,6 @@ msgstr "策略类型"
 
 msgid "Choose The Load-Balance's Strategy Type"
 msgstr "选择负载均衡的策略类型"
-
-msgid "Choose The Smart's Strategy Type"
-msgstr "选择 Smart 策略组的初始数据收集策略类型"
 
 msgid "Uselightgbm"
 msgstr "Uselightgbm(使用模型)"
@@ -1983,6 +1983,9 @@ msgstr "错误：丢失或未指定第三方规则中的部分策略组，停止
 msgid "Tip: Detected That The nameserver DNS Option Has No Server Set, Starting To Complete..."
 msgstr "提示：检测到 DNS 选项下的 Nameserver 未设置服务器，开始补全..."
 
+msgid "Tip: Detected That The default-nameserver DNS Option Has No Server Set, Starting To Complete..."
+msgstr "提示：检测到 DNS 选项下的 Default-nameserver 未设置服务器，开始补全..."
+
 msgid "Error: Nameserver Option Must Be Setted, Stop Customing DNS Servers"
 msgstr "错误：配置文件 DNS 选项下的 Nameserver 必须设置服务器，已停止设置自定义 DNS 服务器！"
 
@@ -2019,11 +2022,11 @@ msgstr "错误：OpenClash 启动失败，请到日志页面查看详细错误�
 msgid "Found 53 Port Hijacked, Clean Up Firewall Rules..."
 msgstr "发现 53 端口被劫持，清理防火墙规则..."
 
-msgid "OpenClash Start Running..."
-msgstr "OpenClash 开始启动..."
+msgid "Tip: OpenClash Start Running..."
+msgstr "提示：OpenClash 开始启动..."
 
-msgid "OpenClash Restart..."
-msgstr "OpenClash 重新启动中..."
+msgid "Tip: OpenClash Restart..."
+msgstr "提示：OpenClash 重新启动中..."
 
 msgid "Step 1: Get The Configuration..."
 msgstr "第一步: 获取配置..."
@@ -2040,23 +2043,23 @@ msgstr "第三步: 快速启动模式，跳过修改配置文件..."
 msgid "Step 4: Start Running The Clash Core..."
 msgstr "第四步: 启动主程序..."
 
-msgid "Step 5: Set Dnsmasq..."
-msgstr "第五步: 设置 Dnsmasq 程序..."
+msgid "Step 5: Add Cron Rules, Start Daemons..."
+msgstr "第五步: 添加计划任务,启动进程守护程序..."
 
-msgid "Step 6: Set Firewall Rules..."
-msgstr "第六步: 设置防火墙规则..."
+msgid "Step 6: Core Status Checking and Firewall Rules Setting..."
+msgstr "第六步: 内核状态检查及防火墙规则设置..."
 
-msgid "Step 7: Add Cron Rules, Start Daemons..."
-msgstr "第七步: 添加计划任务,启动进程守护程序..."
+msgid "Tip: OpenClash Start Successful!"
+msgstr "提示：OpenClash 启动成功，请等待服务器上线！"
 
-msgid "OpenClash Start Successful!"
-msgstr "OpenClash 启动成功，请等待服务器上线！"
+msgid "Tip: Firewall Reload Successful!"
+msgstr "提示：防火墙重置成功！"
 
-msgid "Warning: OpenClash Start Successful, Please Note That Network May Abnormal With IPv6's DHCP Server"
-msgstr "警告：OpenClash 启动成功，检测到您启用了 IPv6 的 DHCP 服务，可能会造成连接异常！"
+msgid "Warning: Please Note That Network May Abnormal With IPv6's DHCP Server"
+msgstr "警告：检测到您启用了 IPv6 的 DHCP 服务，可能会造成连接异常！"
 
-msgid "OpenClash Stoping..."
-msgstr "OpenClash 开始关闭..."
+msgid "Tip: OpenClash Stoping..."
+msgstr "提示：OpenClash 开始关闭..."
 
 msgid "Step 1: Backup The Current Groups State..."
 msgstr "第一步: 备份当前策略组状态..."
@@ -2076,8 +2079,8 @@ msgstr "第五步: 重启 Dnsmasq 程序..."
 msgid "Step 6: Delete OpenClash Residue File..."
 msgstr "第六步：删除 OpenClash 残留文件..."
 
-msgid "OpenClash Already Stop!"
-msgstr "OpenClash 关闭成功！"
+msgid "Tip: OpenClash Already Stop!"
+msgstr "提示：OpenClash 已关闭！"
 
 msgid "Skip Reload OpenClash Firewall Rules Until 5 Minutes Later..."
 msgstr "5 分钟内重置已超过限制次数，跳过本次 OpenClash 防火墙规则重置..."
@@ -2757,7 +2760,7 @@ msgstr "清理超时"
 msgid "Flush"
 msgstr "清理"
 
-msgid "Flush DNS Cache"
+msgid "Flush DNS"
 msgstr "清理 DNS 缓存"
 
 msgid "No Specify Upload File"
@@ -2813,6 +2816,9 @@ msgstr "*路由本机代理"
 
 msgid "Only Supported for Rule Mode"
 msgstr "仅支持规则（Rule）模式，其他模式默认分流"
+
+msgid "Rule Mode"
+msgstr "规则模式"
 
 msgid "ALL Functions In Stream Enhance Tag Will Not Work After Disable"
 msgstr "禁用后将无法使用流媒体增强标签中的所有功能"
@@ -3159,11 +3165,11 @@ msgstr "提示：DNS 劫持模式为防火墙转发..."
 msgid "Tip: DNS Hijacking is Disabled..."
 msgstr "提示：DNS 劫持未开启..."
 
-msgid "Fake-IP Range (IPv4 Cidr)"
-msgstr "Fake-IP 地址范围 (IPv4 Cidr)"
+msgid "Fake-IP Range"
+msgstr "Fake-IP 地址范围"
 
-msgid "Set Fake-IP Range (IPv4 Cidr)"
-msgstr "设置 Fake-IP 地址范围 (IPv4 Cidr)"
+msgid "Set Fake-IP Range"
+msgstr "设置 Fake-IP 地址范围"
 
 msgid "IPv6 Settings"
 msgstr "IPv6 设置"
@@ -3194,9 +3200,6 @@ msgstr "结果获取失败！"
 
 msgid "Client Fingerprint"
 msgstr "客户端指纹"
-
-msgid "Change The Client Fingerprint, Only Support TLS Transport in TCP/GRPC/WS/HTTP For Vless/Vmess and Trojan"
-msgstr "自动修改客户端 TLS 指纹，目前仅支持 Vless/Vmess(TCP/GRPC/WS/HTTP) 和 Trojan"
 
 msgid "Watchdog: Edit Client-fingerprint Failed,"
 msgstr "守护程序：修改 Client-fingerprint 失败，"
@@ -3399,8 +3402,8 @@ msgstr "ECS 区域地址覆盖"
 msgid "Override the ECS Subnet Address"
 msgstr "强制覆盖 DNS 查询的子网区域地址"
 
-msgid "Tip: Respect-rules Option Need Proxy-server-nameserver Option Must Be Setted, Auto Set to"
-msgstr "提示：使用 Respect-rules 功能时 Proxy-server-nameserver 必须配置，插件将默认将其设置为"
+msgid "Need Proxy-server-nameserver Option Must Be Setted, Auto Set to"
+msgstr "启用时 Proxy-server-nameserver 必须配置，插件将默认将其设置为"
 
 msgid "Tip: Nameserver Option Maybe All Setted The Proxy Option, Auto Set Proxy-server-nameserver Option to"
 msgstr "提示：Nameserver 选项可能全部设置了代理选项，插件已自动设置 Proxy-server-nameserver 选项为"
@@ -3702,11 +3705,20 @@ msgstr "取消"
 msgid "Add Config"
 msgstr "添加配置"
 
+msgid "Edit Config"
+msgstr "编辑配置"
+
+msgid "Edit Subscription"
+msgstr "编辑订阅"
+
 msgid "Ready to upload file"
 msgstr "准备上传文件"
 
 msgid "Ready to add subscription"
 msgstr "准备添加订阅"
+
+msgid "Ready to edit subscription"
+msgstr "准备编辑订阅"
 
 msgid "File selected:"
 msgstr "已选择文件："
@@ -3756,14 +3768,26 @@ msgstr "配置名称包含无效字符"
 msgid "Adding subscription..."
 msgstr "添加订阅中..."
 
+msgid "Updating subscription..."
+msgstr "修改订阅中..."
+
 msgid "Failed to download subscription config"
 msgstr "订阅配置下载失败"
 
 msgid "Failed to add subscription"
 msgstr "添加订阅失败"
 
+msgid "Failed to update subscription"
+msgstr "修改订阅失败"
+
 msgid "Subscription added successfully"
 msgstr "订阅添加成功"
+
+msgid "Subscription updated successfully"
+msgstr "订阅修改成功"
+
+msgid "Failed to get subscribe data"
+msgstr "获取订阅信息失败"
 
 msgid "Process failed"
 msgstr "处理失败"
@@ -3918,9 +3942,6 @@ msgstr "重启内核失败"
 msgid "Invalid config file selected"
 msgstr "选择的配置文件无效"
 
-msgid "Config uploader not ready, please try again"
-msgstr "配置上传未就绪，请重试"
-
 msgid "Config editor not ready, please try again"
 msgstr "配置编辑未就绪，请重试"
 
@@ -4056,12 +4077,6 @@ msgstr "数据收集采样率"
 msgid "Data Acquisition Rate, Desirable Values are 0-1, The Default is 1"
 msgstr "指定数据收集时的采样率，值为 0-1 之间的数字，默认为 1"
 
-msgid "Node Select Strategy"
-msgstr "节点选择策略"
-
-msgid "Before Node Data Collect Completely, The Default is Sticky-sessions"
-msgstr "在收集到足够数据并优选前，使用指定策略选择节点，默认为粘性会话（sticky-sessions）"
-
 msgid "Error: Setting Smart Auto Switch Failed,"
 msgstr "错误：Smart 策略组自动切换失败，"
 
@@ -4190,3 +4205,39 @@ msgstr "订阅"
 
 msgid "Overwrite Module"
 msgstr "覆写模块"
+
+msgid "module not found, please check your system depends if something abnormal!"
+msgstr "模块未找到，如遇到异常请检查您的固件依赖！"
+
+msgid "Select Nodes Force Lookup and Use Target ASN Info First For More Stable Experience"
+msgstr "选择节点时强制查找并优先使用目标的 ASN 信息，以获得更稳定的体验"
+
+msgid "Prefer-ASN"
+msgstr "ASN 优先"
+
+msgid "Light Theme"
+msgstr "浅色主题"
+
+msgid "Dark Theme"
+msgstr "暗色主题"
+
+msgid "Auto Theme"
+msgstr "自适应主题"
+
+msgid "Set Subscription Info URL"
+msgstr "设置订阅信息来源地址"
+
+msgid "Enter URLs, one per line, use #name=example end for specifing display name"
+msgstr "输入订阅信息来源地址，多个地址请每行一个，在最后可以使用 #name=example 指定名字"
+
+msgid "Set to Default"
+msgstr "设为默认"
+
+msgid "Are you sure you want to delete this panel?"
+msgstr "确定要删除此面板吗？"
+
+msgid "Default"
+msgstr "默认"
+
+msgid "Disable-Qtype"
+msgstr "禁用 Qtype"

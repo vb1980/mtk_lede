@@ -1,9 +1,9 @@
 #!/bin/bash
 . /lib/functions.sh
-. /usr/share/openclash/openclash_ps.sh
 . /usr/share/openclash/log.sh
-. /usr/share/openclash/openclash_curl.sh
 . /usr/share/openclash/uci.sh
+. /usr/share/openclash/openclash_curl.sh
+. /usr/share/openclash/openclash_ps.sh
 
 set_lock() {
    exec 872>"/tmp/lock/openclash_core.lock" 2>/dev/null
@@ -16,7 +16,9 @@ del_lock() {
 }
 
 set_lock
+inc_job_counter
 
+restart=0
 github_address_mod=$(uci_get_config "github_address_mod" || echo 0)
 if [ "$github_address_mod" = "0" ] && [ -z "$(echo $2 2>/dev/null |grep -E 'http|one_key_update')" ] && [ -z "$(echo $3 2>/dev/null |grep 'http')" ]; then
    LOG_OUT "Tip: If the download fails, try setting the CDN in Overwrite Settings - General Settings - Github Address Modify Options"
@@ -72,7 +74,7 @@ else
    CORE_LV=$(sed -n 1p /tmp/clash_last_version 2>/dev/null)
 fi
 
-[ "$C_CORE_TYPE" = "$CORE_TYPE" ] || [ -z "$C_CORE_TYPE" ] && if_restart=1
+[ "$C_CORE_TYPE" = "$CORE_TYPE" ] || [ -z "$C_CORE_TYPE" ] && restart=1
 
 if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
    if [ "$CPU_MODEL" != 0 ]; then
@@ -94,10 +96,10 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
          retry_count=$((retry_count + 1))
 
          rm -rf "$DOWNLOAD_FILE" "$TMP_FILE" >/dev/null 2>&1
-         
+
          SHOW_DOWNLOAD_PROGRESS=1 DOWNLOAD_FILE_CURL "$DOWNLOAD_URL" "$DOWNLOAD_FILE"
          download_result=$?
-         
+
          if [ "$download_result" -eq 0 ]; then
             gzip -t "$DOWNLOAD_FILE" >/dev/null 2>&1
 
@@ -111,7 +113,7 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
                   chmod 4755 "$TMP_FILE" >/dev/null 2>&1 || extract_success=false
                   "$TMP_FILE" -v >/dev/null 2>&1 || extract_success=false
                }
-                  
+
                if [ "$extract_success" != "true" ]; then
                   if [ "$retry_count" -lt "$max_retries" ]; then
                      LOG_OUT "Error:【$retry_count/$max_retries】【"$CORE_TYPE"】Core Update Failed..."
@@ -131,17 +133,8 @@ if [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
 
                if [ "$?" == "0" ]; then
                   LOG_OUT "Tip:【"$CORE_TYPE"】Core Update Successful!"
-                  if [ "$if_restart" -eq 1 ]; then
-                     uci -q set openclash.config.restart=1
-                     uci -q commit openclash
-                     if ([ -z "$2" ] || ([ -n "$2" ] && [ "$2" != "one_key_update" ])) && [ "$(unify_ps_prevent)" -eq 0 ]; then
-                        uci -q set openclash.config.restart=0
-                        uci -q commit openclash
-                        /etc/init.d/openclash restart >/dev/null 2>&1 &
-                     fi
-                  else
-                     SLOG_CLEAN
-                  fi
+                  SLOG_CLEAN
+                  restart=1
                   break
                else
                   if [ "$retry_count" -lt "$max_retries" ]; then
@@ -187,4 +180,5 @@ else
 fi
 
 rm -rf "$TMP_FILE" >/dev/null 2>&1
+dec_job_counter_and_restart "$restart"
 del_lock

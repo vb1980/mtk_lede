@@ -58,11 +58,11 @@ servers_if_update=$(uci_get_config "servers_if_update")
 
 cfg_new_servers_groups_check()
 {
-   
+
    if [ -z "$1" ]; then
       return
    fi
-   
+
    config_foreach cfg_group_name "groups" "$1"
 }
 
@@ -76,7 +76,7 @@ cfg_group_name()
    if [ -z "$config" ]; then
       return
    fi
-   
+
    if [ "$config" != "$CONFIG_NAME" ] && [ "$config" != "all" ]; then
       return
    fi
@@ -159,6 +159,8 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
    uci_commands = [];
    uci_name_tmp_prv = [];
    uci_name_tmp = [];
+   max_threads = 30
+   queue = SizedQueue.new(max_threads)
 
    if not Value.key?('proxy-providers') or Value['proxy-providers'].nil? then
       Value['proxy-providers'] = {};
@@ -170,6 +172,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
 
    Value['proxy-providers'].each_with_index do |(x,y), index|
       uci_name_tmp_prv << %x{uci -q add openclash proxy-provider 2>&1}.chomp;
+      queue.push(nil)
       threads_pr << Thread.new {
          begin
             YAML.LOG('Start Getting【${CONFIG_NAME} - ' + y['type'].to_s + ' - ' + x.to_s + '】Proxy-provider Setting...');
@@ -179,8 +182,8 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
             if not provider_nums.empty? then
                cmd = 'sed -i \"/^' + provider_nums + '\./c\\#match#\" $match_provider 2>/dev/null';
                system(cmd);
-               uci_set='uci -q set openclash.@proxy-provider[' + provider_nums + '].';
-               uci_add='uci -q add_list openclash.@proxy-provider[' + provider_nums + '].';
+               uci_set='set openclash.@proxy-provider[' + provider_nums + '].';
+               uci_add='add_list openclash.@proxy-provider[' + provider_nums + '].';
                uci_del='uci -q delete openclash.@proxy-provider[' + provider_nums + '].';
                if not provider_nums then
                   uci_commands << uci_set + 'manual=0';
@@ -189,10 +192,10 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                uci_name_tmp_prv[index] = 'uci -q delete openclash.' + uci_name_tmp_prv[index];
             else
                #代理集不存在时添加新代理集
-               uci_set='uci -q set openclash.' + uci_name_tmp_prv[index] + '.';
-               uci_add='uci -q add_list openclash.' + uci_name_tmp_prv[index] + '.';
+               uci_set='set openclash.' + uci_name_tmp_prv[index] + '.';
+               uci_add='add_list openclash.' + uci_name_tmp_prv[index] + '.';
                uci_del='uci -q delete openclash.' + uci_name_tmp_prv[index] + '.';
-               
+
                if '$new_server_add_group'.to_s.strip.empty? and '$servers_if_update' == '1' and '$servers_update' == 1 then
                   uci_commands << uci_set + 'enabled=0';
                else
@@ -204,7 +207,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                uci_commands << uci_set + 'name=\"' + x.to_s + '\"';
                uci_commands << uci_set + 'type=\"' + y['type'].to_s + '\"';
             end;
-            
+
             threads_prv << Thread.new{
                #path
                if y.key?('path') then
@@ -215,28 +218,28 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
             };
-            
+
             threads_prv << Thread.new{
                #gen_url
                if y.key?('url') then
                   uci_commands << uci_set + 'provider_url=\"' + y['url'].to_s + '\"'
                end
             };
-            
+
             threads_prv << Thread.new{
                #gen_interval
                if y.key?('interval') then
                   uci_commands << uci_set + 'provider_interval=\"' + y['interval'].to_s + '\"'
                end
             };
-            
+
             threads_prv << Thread.new{
                #filter
                if y.key?('filter') then
                   uci_commands << uci_set + 'provider_filter=\"' + y['filter'].to_s + '\"'
                end
             };
-            
+
             threads_prv << Thread.new{
                #che_enable
                if y.key?('health-check') then
@@ -245,7 +248,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
             };
-            
+
             threads_prv << Thread.new{
                #che_url
                if y.key?('health-check') then
@@ -254,7 +257,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
             };
-            
+
             threads_prv << Thread.new{
                #che_interval
                if y.key?('health-check') then
@@ -296,12 +299,15 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
             threads_prv.each(&:join);
          rescue Exception => e
             YAML.LOG('Error: Resolve Proxy-providers Failed,【${CONFIG_NAME} - ' + x + ': ' + e.message + '】');
+         ensure
+            queue.pop
          end;
       };
    end;
 
    Value['proxies'].each_with_index do |x, index|
       uci_name_tmp << %x{uci -q add openclash servers 2>&1}.chomp;
+      queue.push(nil)
       threads_pr << Thread.new {
          begin
             YAML.LOG('Start Getting【${CONFIG_NAME} - ' + x['type'].to_s + ' - ' + x['name'].to_s + '】Proxy Setting...');
@@ -312,8 +318,8 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                #更新已有节点
                cmd = 'sed -i \"/^' + server_num + '\./c\\#match#\" $match_servers 2>/dev/null';
                system(cmd);
-               uci_set='uci -q set openclash.@servers[' + server_num + '].';
-               uci_add='uci -q add_list openclash.@servers[' + server_num + '].';
+               uci_set='set openclash.@servers[' + server_num + '].';
+               uci_add='add_list openclash.@servers[' + server_num + '].';
                uci_del='uci -q delete openclash.@servers[' + server_num + '].';
                if not server_num then
                   uci_commands << uci_set + 'manual=0';
@@ -321,8 +327,8 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                uci_name_tmp[index] = 'uci -q delete openclash.' + uci_name_tmp[index];
             else
                #添加新节点
-               uci_set='uci -q set openclash.' + uci_name_tmp[index] + '.';
-               uci_add='uci -q add_list openclash.' + uci_name_tmp[index] + '.';
+               uci_set='set openclash.' + uci_name_tmp[index] + '.';
+               uci_add='add_list openclash.' + uci_name_tmp[index] + '.';
                uci_del='uci -q delete openclash.' + uci_name_tmp[index] + '.';
                if '$new_server_add_group'.to_s.strip.empty? and '$servers_if_update' == '1' and '$servers_update' == 1 then
                   uci_commands << uci_set + 'enabled=0';
@@ -364,14 +370,14 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'udp=\"' + x['udp'].to_s + '\"'
                end
             };
-            
+
             threads << Thread.new{
                #interface-name
                if x.key?('interface-name') then
                   uci_commands << uci_set + 'interface_name=\"' + x['interface-name'].to_s + '\"'
                end
             };
-            
+
             threads << Thread.new{
                #routing-mark
                if x.key?('routing-mark') then
@@ -390,6 +396,13 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                #TFO
                if x.key?('tfo') then
                   uci_commands << uci_set + 'tfo=\"' + x['tfo'].to_s + '\"'
+               end
+            };
+
+            threads << Thread.new{
+               #dialer-proxy
+               if x.key?('dialer-proxy') then
+                  uci_commands << uci_set + 'dialer_proxy=\"' + x['dialer-proxy'].to_s + '\"'
                end
             };
 
@@ -519,28 +532,28 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'cipher_ssr=\"' + x['cipher'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #obfs
                if x.key?('obfs') then
                   uci_commands << uci_set + 'obfs_ssr=\"' + x['obfs'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #protocol
                if x.key?('protocol') then
                   uci_commands << uci_set + 'protocol=\"' + x['protocol'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #obfs-param
                if x.key?('obfs-param') then
                   uci_commands << uci_set + 'obfs_param=\"' + x['obfs-param'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #protocol-param
                if x.key?('protocol-param') then
@@ -556,21 +569,21 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'uuid=\"' + x['uuid'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #alterId
                if x.key?('alterId') then
                   uci_commands << uci_set + 'alterId=\"' + x['alterId'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #cipher
                if x.key?('cipher') then
                   uci_commands << uci_set + 'securitys=\"' + x['cipher'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #xudp
                if x.key?('xudp') then
@@ -598,21 +611,21 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'authenticated_length=\"' + x['authenticated-length'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #tls
                if x.key?('tls') then
                   uci_commands << uci_set + 'tls=\"' + x['tls'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #skip-cert-verify
                if x.key?('skip-cert-verify') then
                   uci_commands << uci_set + 'skip_cert_verify=\"' + x['skip-cert-verify'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #servername
                if x.key?('servername') then
@@ -633,7 +646,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'client_fingerprint=\"' + x['client-fingerprint'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #network:
                if x.key?('network') then
@@ -764,7 +777,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'password=\"' + x['password'].to_s + '\"'
                end
                };
-               
+
                #idle-session-check-interval
                threads << Thread.new{
                if x.key?('idle-session-check-interval') then
@@ -833,6 +846,20 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                #tc_token
                if x.key?('token') then
                   uci_commands << uci_set + 'tc_token=\"' + x['token'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #tc_uuid
+               if x.key?('uuid') then
+                  uci_commands << uci_set + 'tc_uuid=\"' + x['uuid'].to_s + '\"'
+               end;
+               };
+
+               threads << Thread.new{
+               #tc_password
+               if x.key?('password') then
+                  uci_commands << uci_set + 'tc_password=\"' + x['password'].to_s + '\"'
                end
                };
 
@@ -1183,35 +1210,35 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'uuid=\"' + x['uuid'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #tls
                if x.key?('tls') then
                   uci_commands << uci_set + 'tls=\"' + x['tls'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #skip-cert-verify
                if x.key?('skip-cert-verify') then
                   uci_commands << uci_set + 'skip_cert_verify=\"' + x['skip-cert-verify'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #servername
                if x.key?('servername') then
                   uci_commands << uci_set + 'servername=\"' + x['servername'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #flow
                if x.key?('flow') then
                   uci_commands << uci_set + 'vless_flow=\"' + x['flow'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #network:
                if x.key?('network') then
@@ -1311,13 +1338,13 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
                };
-               
+
                threads << Thread.new{
                if x.key?('psk') then
                   uci_commands << uci_set + 'psk=\"' + x['psk'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                if x.key?('version') then
                   uci_commands << uci_set + 'snell_version=\"' + x['version'].to_s + '\"'
@@ -1331,7 +1358,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'auth_name=\"' + x['username'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                if x.key?('password') then
                   uci_commands << uci_set + 'auth_pass=\"' + x['password'].to_s + '\"'
@@ -1381,20 +1408,20 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   uci_commands << uci_set + 'auth_name=\"' + x['username'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                if x.key?('password') then
                   uci_commands << uci_set + 'auth_pass=\"' + x['password'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #tls
                if x.key?('tls') then
                   uci_commands << uci_set + 'tls=\"' + x['tls'].to_s + '\"'
                end
                };
-               
+
                threads << Thread.new{
                #skip-cert-verify
                if x.key?('skip-cert-verify') then
@@ -1448,7 +1475,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   }
                   end
                };
-               
+
                threads << Thread.new{
                #grpc-service-name
                if x.key?('grpc-opts') then
@@ -1458,7 +1485,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
                };
-               
+
                threads << Thread.new{
                if x.key?('ws-opts') then
                   uci_commands << uci_set + 'obfs_trojan=ws'
@@ -1477,7 +1504,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                   end
                end
                };
-               
+
                threads << Thread.new{
                #skip-cert-verify
                if x.key?('skip-cert-verify') then
@@ -1496,6 +1523,50 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                #client_fingerprint
                if x.key?('client-fingerprint') then
                   uci_commands << uci_set + 'client_fingerprint=\"' + x['client-fingerprint'].to_s + '\"'
+               end
+               };
+            end;
+
+            if x['type'] == 'sudoku' then
+               threads << Thread.new{
+               #key
+               if x.key?('key') then
+                  uci_commands << uci_set + 'sudoku_key=\"' + x['key'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #aead-method
+               if x.key?('aead-method') then
+                  uci_commands << uci_set + 'aead_method=\"' + x['aead-method'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #padding-min
+               if x.key?('padding-min') then
+                  uci_commands << uci_set + 'padding_min=\"' + x['padding-min'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #padding-max
+               if x.key?('padding-max') then
+                  uci_commands << uci_set + 'padding_max=\"' + x['padding-max'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #table-type
+               if x.key?('table-type') then
+                  uci_commands << uci_set + 'table_type=\"' + x['table-type'].to_s + '\"'
+               end
+               };
+
+               threads << Thread.new{
+               #http-mask
+               if x.key?('http-mask') then
+                  uci_commands << uci_set + 'http_mask=\"' + x['http-mask'].to_s + '\"'
                end
                };
             end;
@@ -1527,29 +1598,14 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
                         end;
                      };
                   };
-                  #relay
-                  cmd = uci_del + 'relay_groups >/dev/null 2>&1';
-                  system(cmd);
-                  Value['proxy-groups'].each{
-                  |z|
-                     threads_gr << Thread.new{
-                        if z['type'] == 'relay' and z.key?('proxies') then
-                           z['proxies'].each{
-                           |u|
-                           if u == x['name'] then
-                              uci_commands << uci_add + 'relay_groups=\"' + z['name'] + '#relay#' + z['proxies'].index(x['name']) + '\"'
-                              break
-                           end
-                           }
-                        end;
-                     };
-                  };
                   threads_gr.each(&:join);
                end;
             };
             threads.each(&:join);
          rescue Exception => e
             YAML.LOG('Error: Resolve Proxies Failed,【${CONFIG_NAME} - '+ x['type'] + ' - ' + x['name'] + ': ' + e.message + '】');
+         ensure
+            queue.pop
          end;
       };
    end;
@@ -1557,7 +1613,9 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
    batch_size = 30;
    (0...uci_commands.length).step(batch_size) do |i|
       threads_uci << Thread.new{
-         system(uci_commands[i, batch_size].join('; '));
+         IO.popen('uci -q batch', 'w') do |pipe|
+            uci_commands[i, batch_size].each { |cmd| pipe.puts(cmd) }
+         end
       };
    end;
    threads_uci.each(&:join);
@@ -1572,7 +1630,7 @@ ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "
       end;
    end;
    system('uci -q commit openclash');
-" 2>/dev/null >> $LOG_FILE
+" >> $LOG_FILE
 
 #删除订阅中已不存在的代理集
 if [ "$servers_if_update" = "1" ]; then

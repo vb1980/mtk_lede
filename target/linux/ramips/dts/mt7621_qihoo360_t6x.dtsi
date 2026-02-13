@@ -115,7 +115,7 @@
 
 &gsw {
 	mediatek,mdio = <&mdio>;
-	mediatek,portmap = "lllwl";
+	mediatek,portmap = "llllw";
 	mediatek,mcm;
 	mt7530,direct-phy-access;
 	status = "okay";

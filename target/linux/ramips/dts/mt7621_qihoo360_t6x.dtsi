@@ -24,12 +24,12 @@
 
 		led_sys_red: red {
 			label = "red:sys";
-			gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
 		};
 
 		led_sys_green: green {
 			label = "green:sys";
-			gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
 		};
 	};
 

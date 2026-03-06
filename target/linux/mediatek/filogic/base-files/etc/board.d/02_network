@@ -19,6 +19,7 @@ mediatek_setup_interfaces()
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" eth1
 		;;
 	asus,tuf-ax4200|\
+	huasifei,ws3009|\
 	jdcloud,re-cs-05|\
 	netcore,n60|\
 	netcore,n60-pro|\
@@ -44,6 +45,9 @@ mediatek_setup_interfaces()
 	bananapi,bpi-r4-2g5|\
 	bananapi,bpi-r4-poe)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 eth1" "wan eth2"
+		;;
+	bananapi,bpi-r4-lite)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4 sfp" "eth1"
 		;;
 	cetron,ct3003*|\
 	cmcc,a10*|\

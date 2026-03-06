@@ -478,18 +478,18 @@ $(eval $(call KernelPackage,drm-vram-helper))
 define KernelPackage/drm-amdgpu
   SUBMENU:=$(VIDEO_MENU)
   TITLE:=AMDGPU DRM support
-  DEPENDS:=@TARGET_x86 @DISPLAY_SUPPORT +kmod-backlight +kmod-drm-ttm \
-	+kmod-drm-ttm-helper +kmod-drm-kms-helper +kmod-i2c-algo-bit +amdgpu-firmware \
-	+kmod-drm-display-helper +kmod-drm-buddy +kmod-acpi-video \
-	+(LINUX_6_6||LINUX_6_12):kmod-drm-exec +(LINUX_6_6||LINUX_6_12):kmod-drm-suballoc-helper
+  DEPENDS:=@TARGET_x86 @DISPLAY_SUPPORT +amdgpu-firmware +kmod-acpi-video \
+	+kmod-backlight +kmod-drm-buddy +kmod-drm-display-helper \
+	+(LINUX_6_6||LINUX_6_12):kmod-drm-exec +kmod-drm-kms-helper \
+	+kmod-drm-sched +(LINUX_6_6||LINUX_6_12):kmod-drm-suballoc-helper \
+	+kmod-drm-ttm +kmod-drm-ttm-helper +kmod-i2c-algo-bit
   KCONFIG:=CONFIG_DRM_AMDGPU \
 	CONFIG_DRM_AMDGPU_SI=y \
 	CONFIG_DRM_AMDGPU_CIK=y \
 	CONFIG_DRM_AMD_DC=y \
 	CONFIG_DEBUG_KERNEL_DC=n
   FILES:=$(LINUX_DIR)/drivers/gpu/drm/amd/amdgpu/amdgpu.ko \
-	$(LINUX_DIR)/drivers/gpu/drm/amd/amdxcp/amdxcp.ko@ge6.5 \
-	$(LINUX_DIR)/drivers/gpu/drm/scheduler/gpu-sched.ko
+	$(LINUX_DIR)/drivers/gpu/drm/amd/amdxcp/amdxcp.ko@ge6.5
   AUTOLOAD:=$(call AutoProbe,amdgpu)
 endef
 
@@ -522,7 +522,8 @@ define KernelPackage/drm-i915
 	+kmod-drm-ttm-helper +kmod-drm-kms-helper +kmod-i2c-algo-bit \
 	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-display-helper \
 	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-acpi-video \
-	+kmod-drm-buddy +kmod-drm-exec +kmod-drm-suballoc-helper
+	+kmod-drm-buddy +(LINUX_6_6||LINUX_6_12):kmod-drm-exec \
+	+(LINUX_6_6||LINUX_6_12):kmod-drm-suballoc-helper
   KCONFIG:=CONFIG_DRM_I915 \
 	CONFIG_DRM_I915_CAPTURE_ERROR=y \
 	CONFIG_DRM_I915_COMPRESS_ERROR=y \
@@ -720,15 +721,29 @@ endef
 
 $(eval $(call KernelPackage,drm-radeon))
 
+define KernelPackage/drm-shmem-helper
+  SUBMENU:=$(VIDEO_MENU)
+  HIDDEN:=1
+  TITLE:=GEM SHMEM helper functions
+  DEPENDS:=+LINUX_6_12:kmod-drm-kms-helper
+  KCONFIG:=CONFIG_DRM_GEM_SHMEM_HELPER
+  FILES:=$(LINUX_DIR)/drivers/gpu/drm/drm_shmem_helper.ko@gt5.17
+  AUTOLOAD:=$(call AutoProbe,drm_shmem_helper)
+endef
+
+define KernelPackage/drm-shmem-helper/description
+  GEM SHMEM helper functions.
+endef
+
+$(eval $(call KernelPackage,drm-shmem-helper))
+
 define KernelPackage/drm-sched
   SUBMENU:=$(VIDEO_MENU)
   TITLE:=DRM helper for ARM GPUs
-  DEPENDS:=+kmod-drm +LINUX_6_12:kmod-drm-kms-helper
+  DEPENDS:=+kmod-drm
   HIDDEN:=1
   KCONFIG:=CONFIG_DRM_SCHED
-  FILES:= \
-	$(LINUX_DIR)/drivers/gpu/drm/drm_shmem_helper.ko@gt5.17 \
-	$(LINUX_DIR)/drivers/gpu/drm/scheduler/gpu-sched.ko
+  FILES:=$(LINUX_DIR)/drivers/gpu/drm/scheduler/gpu-sched.ko
   AUTOLOAD:=$(call AutoProbe,gpu-sched)
 endef
 
@@ -737,8 +752,12 @@ $(eval $(call KernelPackage,drm-sched))
 define KernelPackage/drm-nouveau
   SUBMENU:=$(VIDEO_MENU)
   TITLE:=nouveau DRM support
-  DEPENDS:=@TARGET_x86 @DISPLAY_SUPPORT +(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-display-helper +(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-exec +kmod-drm-kms-helper \
-  +(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-sched +(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-acpi-video +(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-gpuvm
+  DEPENDS:=@TARGET_x86 @DISPLAY_SUPPORT +kmod-drm-kms-helper \
+	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-acpi-video \
+	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-display-helper \
+	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-exec \
+	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-gpuvm \
+	+(LINUX_6_1||LINUX_6_6||LINUX_6_12):kmod-drm-sched
   KCONFIG:=CONFIG_DRM_NOUVEAU \
 	NOUVEAU_DEBUG=5 \
 	NOUVEAU_DEBUG_DEFAULT=3 \
@@ -753,6 +772,26 @@ define KernelPackage/drm-nouveau/description
 endef
 
 $(eval $(call KernelPackage,drm-nouveau))
+
+
+define KernelPackage/drm-xe
+  SUBMENU:=$(VIDEO_MENU)
+  TITLE:=Intel Xe GPU DRM support
+  DEPENDS:=@TARGET_x86 +kmod-acpi-video +kmod-drm-buddy +kmod-drm-display-helper \
+	+kmod-drm-exec +kmod-drm-gpuvm +kmod-drm-kms-helper +kmod-drm-sched \
+	+kmod-drm-suballoc-helper +kmod-drm-ttm @LINUX_6_12 # xe-firmware
+  KCONFIG:=CONFIG_DRM_XE
+  FILES:=$(LINUX_DIR)/drivers/gpu/drm/xe/xe.ko
+  AUTOLOAD:=$(call AutoProbe,xe)
+endef
+
+define KernelPackage/drm-xe/description
+  The drm/xe driver supports some future GFX cards with rendering, display,
+  compute and media. Support for currently available platforms like TGL, ADL,
+  DG2, etc is provided to prototype the driver.
+endef
+
+$(eval $(call KernelPackage,drm-xe))
 
 #
 # Video Capture

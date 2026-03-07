@@ -72,6 +72,7 @@ if next(diff) ~= nil then
                 <td>区域代码</td>
                 <td>
                     <select name="CountryCode" style="width:auto">
+                        <option value="CN" id="advCountryCodeCN" <% if cfgs.CountryCode == "CN" then %> selected="selected"<% end %>>CN (China)</option>
                         <option value="US" id="advCountryCodeUS" <% if cfgs.CountryCode == "US" then %> selected="selected"<% end %>>US (United States)</option>
                         <option value="JP" id="advCountryCodeJP" <% if cfgs.CountryCode == "JP" then %> selected="selected"<% end %>>JP (Japan)</option>
                         <option value="FR" id="advCountryCodeFR" <% if cfgs.CountryCode == "FR" then %> selected="selected"<% end %>>FR (France)</option>

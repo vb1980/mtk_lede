@@ -367,9 +367,7 @@
 #include "protocol/tmr.h"
 #endif
 
-#ifdef SNIFFER_SUPPORT
 #include "sniffer/sniffer.h"
-#endif /* SNIFFER_SUPPORT */
 
 #ifdef LINUX
 #ifdef RT_CFG80211_SUPPORT
@@ -484,5 +482,18 @@
 #include "mdvt.h"
 #endif
 
+
+#ifdef CONFIG_6G_SUPPORT
+#include "ap_bss_mnger.h"
+#endif
+#ifdef QOS_R1
+#include "qos.h"
+#endif
+#ifdef CFG_SUPPORT_CSI
+#include <net/netlink.h>
+#include <net/genetlink.h>
+#include <linux/netlink.h>
+#include <linux/socket.h>
+#endif
 
 #endif	/* __RT_CONFIG_H__ */

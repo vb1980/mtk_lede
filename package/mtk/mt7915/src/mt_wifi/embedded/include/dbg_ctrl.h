@@ -22,6 +22,11 @@
 #define DEFAULT_FW_LOG_DESTINATION "/media/sda1/fw_log.bin"
 
 #define FW_BIN_LOG_MAGIC_NUM    0x44E98CAF
+#ifdef DBG
+#ifdef DBG_ENHANCE
+#define DBG_PRINT_BUF_SIZE	160
+#endif /* DBG_ENHANCE */
+#endif /* DBG */
 
 enum {
 	FW_LOG_2_HOST_CTRL_OFF = 0,
@@ -109,5 +114,23 @@ dbg_log_wrapper(
 INT32 set_fwlog_serverip(struct _RTMP_ADAPTER *ad, RTMP_STRING *arg);
 INT32 set_fwlog_servermac(struct _RTMP_ADAPTER *ad, RTMP_STRING *arg);
 
+#ifdef DBG
+#ifdef DBG_ENHANCE
+void mtwf_dbg_option(
+	IN const BOOLEAN prtCatLvl,
+	IN const BOOLEAN prtIntfName,
+	IN const BOOLEAN prtThreadId,
+	IN const BOOLEAN prtFuncLine);
+
+void mtwf_dbg_prt(
+	IN RTMP_ADAPTER *pAd,
+	IN const UINT32 dbgCat,
+	IN const UINT32 dbgLvl,
+	IN const INT8   *pFunc,
+	IN const UINT32 line,
+	IN const INT8   *pFmt,
+	...);
+#endif /* DBG_ENHANCE */
+#endif /* DBG */
 #endif /* __DBG_CTRL_H__ */
 

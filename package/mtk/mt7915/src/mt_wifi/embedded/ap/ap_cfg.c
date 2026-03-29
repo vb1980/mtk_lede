@@ -8,7 +8,7 @@
  * Except as otherwise provided in the applicable licensing terms with
  * MediaTek Inc. and/or its licensors, any reproduction, modification, use or
  * disclosure of MediaTek Software, and information contained herein, in whole
- * or in part, shall be strictly prohibited.
+ * or in part, shall be strictly prohibited
 */
 /****************************************************************************
  ****************************************************************************
@@ -38,7 +38,12 @@
 #ifdef CONFIG_COLGIN_MT6890
 #include <linux/rtnetlink.h>
 #endif
-
+#ifdef TR181_SUPPORT
+#include "wlan_config/config_internal.h"
+#endif
+#ifdef VOW_SUPPORT
+#define VOW_CMD_STR_LEN 16
+#endif
 #define A_BAND_REGION_0				0
 #define A_BAND_REGION_1				1
 #define A_BAND_REGION_2				2
@@ -169,8 +174,8 @@ COUNTRY_CODE_TO_COUNTRY_REGION allCountry[] = {
 #define NUM_OF_COUNTRIES	(sizeof(allCountry)/sizeof(COUNTRY_CODE_TO_COUNTRY_REGION))
 
 static const struct apcfg_parameters apcfg_for_peak = {
-	.cfg_mode[0] = 9, /*WirelessMode*/
-	.cfg_mode[1] = 14,
+	.cfg_mode[0] = 16, /*WirelessMode*/
+	.cfg_mode[1] = 17,
 	.tx_power_percentage = 100, /*TxPower*/
 	.tx_preamble = 1, /*TxPreamble*/
 	.conf_len_thld = 2347, /*RTSThreshold*/
@@ -183,21 +188,21 @@ static const struct apcfg_parameters apcfg_for_peak = {
 	.conf_ht_bw = 1, /*HT_BW*/
 	.oper_ht_bw = 1,
 #ifdef DOT11N_DRAFT3
-	.bBssCoexEnable = 0, /*HT_BSSCoexistence*/
+	.bBssCoexEnable = 1, /*HT_BSSCoexistence*/
 #endif
 
 	.ht_tx_streams = 4, /*HT_TxStream*/
 	.ht_rx_streams = 4, /*HT_RxStream*/
 
 	.AmsduEnable = 1, /*HT_AMSDU*/
-	.ba_decline = 0, /*HT_BADecline*/
+	.ba_decline = 1, /*HT_BADecline*/
 	.ba_en = 1, /*HT_AutoBA*/
-	.ba_rx_wsize = BA_WIN_SZ_64, /*HT_BAWinSize*/
-	.ba_tx_wsize = BA_WIN_SZ_64, /*HT_BAWinSize*/
+	.ba_rx_wsize = BA_WIN_SZ_256, /*HT_BAWinSize*/
+	.ba_tx_wsize = BA_WIN_SZ_256, /*HT_BAWinSize*/
 	.ht_gi = 1, /*HT_GI*/
 	.ht_stbc = 1, /*HT_STBC*/
 	.ht_ldpc = 1, /*HT_LDPC*/
-	.bRdg = 0, /*HT_RDG*/
+	.bRdg = 1, /*HT_RDG*/
 #endif
 	.HT_DisallowTKIP = 1, /*HT_DisallowTKIP*/
 
@@ -214,29 +219,32 @@ static const struct apcfg_parameters apcfg_for_peak = {
 	.bIEEE80211H = 1, /*IEEE80211H*/
 
 #ifdef MT_DFS_SUPPORT
-	.bDfsEnable = 0, /*DfsEnable, 5G only*/
+	.bDfsEnable = 1, /*DfsEnable, 5G only*/
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+	.band4DfsEnable = 1,
+#endif
 #endif
 
 #ifdef BACKGROUND_SCAN_SUPPORT
 	.DfsZeroWaitSupport = 0, /*DfsZeroWait, Single band only*/
 #endif
 
-	.MuOfdmaDlEnable = 0, /* MuOfdmaDlEnable */
-	.MuOfdmaUlEnable = 0, /* MuOfdmaUlEnable */
-	.MuMimoDlEnable = 0, /* MuMimoDlEnable */
-	.MuMimoUlEnable = 0, /* MuMimoUlEnable */
+	.MuOfdmaDlEnable = 1, /* MuOfdmaDlEnable */
+	.MuOfdmaUlEnable = 1, /* MuOfdmaUlEnable */
+	.MuMimoDlEnable = 1, /* MuMimoDlEnable */
+	.MuMimoUlEnable = 1, /* MuMimoUlEnable */
 
 #ifdef DOT11_N_SUPPORT
 #ifdef TXBF_SUPPORT
-	.ETxBfEnCond = 0, /*ETxBfEnCond*/
+	.ETxBfEnCond = 1, /*ETxBfEnCond*/
 #endif
 #endif
 
-	.ITxBfEn = 0, /*ITxBfEn*/
+	.ITxBfEn = 1, /*ITxBfEn*/
 
 #ifdef DOT11_N_SUPPORT
 #ifdef TXBF_SUPPORT
-	.MUTxRxEnable = 0, /*MUTxRxEnable*/
+	.MUTxRxEnable = 1, /*MUTxRxEnable*/
 #endif
 #endif
 	.vht_1024_qam = 1, /* VHT 1024QAM Support */
@@ -308,13 +316,7 @@ INT SetMuGainThresholdProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetSecondaryAcPolicyProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetGroupTblDmcsMaskProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetMaxGroupSearchCntProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-
-#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-INT Set_Customer_Vie_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-INT show_Customer_Vie_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif
-
-#endif /* CFG_SUPPORT_MU_MIMO */
 
 #ifdef AIR_MONITOR
 INT Set_Enable_Air_Monitor_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
@@ -449,7 +451,13 @@ INT Set_VLANPriority_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_VLAN_TAG_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_VLAN_Policy_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Show_VLAN_Info_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Set_Vlan2Eth_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif /*VLAN_SUPPORT*/
+
+#ifdef PLE_MONITOR_SUPPORT
+INT Set_PleBufferMonitor_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Set_PleBufferFlush_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif
 
 INT Set_AccessPolicy_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
@@ -471,9 +479,9 @@ INT Set_Scan_SkipList_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_Scan_DwellTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_Scan_DFS_CH_Utilization_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT show_scan_info_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-INT Set_Scan_probe_max_cnt(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #ifdef AP_SCAN_SUPPORT
 INT Set_AutoChannelSelCheckTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Set_AutoChannelSelCheckMinTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_ClearSiteSurvey_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 #endif /* AP_SCAN_SUPPORT */
@@ -740,11 +748,6 @@ INT Set_AP2040ReScan_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 INT Set_EntryLifeCheck_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef LED_CONTROL_SUPPORT
-INT Set_WlanLed_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-#endif /* LED_CONTROL_SUPPORT */
-#endif /* RTMP_RBUS_SUPPORT */
 
 #ifdef AP_QLOAD_SUPPORT
 INT Set_QloadClr_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
@@ -937,10 +940,23 @@ INT set_resume_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT show_resume_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif
 
+#ifdef WIFI_MD_COEX_SUPPORT
+INT Set_CoexDebug_Level(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif
+
 INT32 show_wmm_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #ifdef DOT11_HE_AX
 UINT16 he_mcs_map(UINT8 nss, UINT8 he_mcs);
 #endif
+#ifdef CONFIG_6G_SUPPORT
+INT set_6g_ap_iob_discovery_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT set_6g_ap_oob_discovery_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT set_6g_ap_qos_injector_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif /* CONFIG_6G_SUPPORT */
+#ifdef LOW_POWER_SUPPORT
+INT set_ap_idle_timeout(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif
+BOOLEAN wdev_down_exec_ioctl(RTMP_IOCTL_INPUT_STRUCT          *wrq, USHORT subcmd);
 static struct {
 	RTMP_STRING *name;
 	INT (*set_proc)(PRTMP_ADAPTER pAdapter, RTMP_STRING *arg);
@@ -1011,15 +1027,19 @@ static struct {
 	{"ShortSlot",					Set_ShortSlot_Proc},
 	{"ProbeRspTimes",			Set_Probe_Rsp_Times_Proc},
 	{"Channel",					Set_Channel_Proc},
+	{"SeamlessCSA",				Set_SeamlessCSA_Proc},
 #ifdef CONVERTER_MODE_SWITCH_SUPPORT
 		{"V10Converter",				Set_V10ConverterMode_Proc},
 #endif /*CONVERTER_MODE_SWITCH_SUPPORT*/
 	{"PhyChannel",					set_phy_channel_proc},
 
 #ifdef WIFI_MD_COEX_SUPPORT
+	{"UnsafeState",					Set_UnsafeChannel_State},
 	{"UnsafeChList",				Set_UnsafeChannel_Proc},
+	{"TriggerUnsafe",				Trigger_UnsafeChannel_Event},
+	{"CoexDebug",					Set_CoexDebug_Level},
+	{"IdcState",					Set_Idc_State},
 #endif
-	{"LockWdevOp",					Lock_Wdev_Op},
 
 #ifdef REDUCE_TCP_ACK_SUPPORT
 	{"ReduceAckEnable",             Set_ReduceAckEnable_Proc},
@@ -1128,7 +1148,12 @@ static struct {
 	{"VLANPriority",				Set_VLANPriority_Proc},
 	{"VLANTag",				Set_VLAN_TAG_Proc},
 	{"VLANPolicy",				Set_VLAN_Policy_Proc},
+	{"v2e",					Set_Vlan2Eth_Proc},
 #endif /*VLAN_SUPPORT*/
+#ifdef PLE_MONITOR_SUPPORT
+	{"PleMonitorEn",			Set_PleBufferMonitor_Proc},
+	{"PleBufferFlush",			Set_PleBufferFlush_Proc},
+#endif
 	{"AuthMode",					Set_SecAuthMode_Proc},
 	{"EncrypType",					Set_SecEncrypType_Proc},
 	{"WpaMixPairCipher",			Set_AP_WpaMixPairCipher_Proc},
@@ -1152,6 +1177,7 @@ static struct {
 #endif /* SPECIFIC_TX_POWER_SUPPORT */
 	{"AssocReqRssiThres",           Set_AP_ASSOC_REQ_RSSI_THRESHOLD},
 	{"KickStaRssiLow",				Set_AP_KickStaRssiLow_Proc},
+	{"PtkRekey",					Set_PtkRekey_Proc},
 #ifdef OCE_SUPPORT
 	{"OceRssiThreshold",			Set_OceRssiThreshold_Proc},
 	{"OceAssocRetryDelay",			Set_OceAssocRetryDelay_Proc},
@@ -1167,14 +1193,27 @@ static struct {
 	{"AutoChannelSel",				Set_AutoChannelSel_Proc},
 	{"PartialScan",					Set_PartialScan_Proc},
 	{"ACSCheckTime",				Set_AutoChannelSelCheckTime_Proc},
+	{"ACSCheckMinTime",				Set_AutoChannelSelCheckMinTime_Proc},
 	{"ClearSiteSurvey",					Set_ClearSiteSurvey_Proc},
 	{"PartialScanTimerInterval",			Set_PartialScan_Timer_Interval_Proc},
 	{"PartialScanNumOfCh",			Set_PartialScan_Num_of_CH_Proc},
 	{"ScanSkipList",					Set_Scan_SkipList_Proc},
 	{"ScanDwellTime",				Set_Scan_DwellTime_Proc},
 	{"DfsUtilization",					Set_Scan_DFS_CH_Utilization_Proc},
-	{"probeReqCnt",					Set_Scan_probe_max_cnt},
 #endif /* AP_SCAN_SUPPORT */
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	{"WcidSkipTx",			Set_WcidSkipTx_Proc},
+	{"ApChannelList",			Set_APChannelList_Proc},
+	{"CSATriggerCount",		Set_CSATriggerCount_Proc},
+	{"ZeroLossEnable",			Set_ZeroPktLossEnable_Proc},
+	{"CsaActionFrameEnable",	Set_CsaActionFrameEnable_Proc},
+	{"PsQLimit",				Set_StaPsQLimit_Proc},
+	{"MacTxEnable",			Set_MacTxEnable_Proc},
+	{"CHSWPeriod",			Set_CHSWPeriod_Proc},
+	{"ZeroLossStaAdd",		Set_ZeroLossStaAdd_Proc},
+	{"ZeroLossStaRemove",		Set_ZeroLossStaRemove_Proc},
+	{"StaTimeout",			Set_STA_Tx_Unblock_Timeout_Proc},
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #ifdef TXRX_STAT_SUPPORT
 	{"enable_rssi", 		Set_Enable_RSSI_Stats},
 	{"enable_txrx_stat",	Set_Enable_Last_Sec_TXRX_Stats},
@@ -1202,6 +1241,9 @@ static struct {
 #ifdef DBG
 	{"Debug",						Set_Debug_Proc},
 	{"DebugCat",					Set_DebugCategory_Proc},
+#ifdef DBG_ENHANCE
+	{"DebugOption",					Set_DebugOption_Proc},
+#endif /* DBG_ENHANCE */
 #endif /* DBG */
 #ifdef ANTENNA_DIVERSITY_SUPPORT
 	{"dbg_tp_deg_th",				set_ant_diversity_dbg_tp_deg_th_proc},
@@ -1259,6 +1301,7 @@ static struct {
 	{"ShowDfsNOP",					Show_DfsNonOccupancy_Proc},
 	{"DfsNOPClean",					Set_DfsNOP_Proc},
 	{"RDDReport",					Set_RDDReport_Proc},
+	{"TriggerRdd",					Trigger_RDD_Event},
 
 	/* DFS zero wait */
 	{"DfsZeroWaitCacTime",          Set_DfsZeroWaitCacTime_Proc},
@@ -1267,6 +1310,13 @@ static struct {
 	{"DfsDynamicCtrl",				Set_DfsZeroWaitDynamicCtrl_Proc},
 	{"DfsForceNOP",					Set_DfsZeroWaitNOP_Proc},
 	{"DfsTargetCh",					Set_DfsTargetCh_Proc},
+	{"DfsZeroWaitEnable",		    Set_DfsZeroWaitEnable_Proc},
+	{"DfsChSelPrefer",		    Set_DfsChSelPrefer_Proc},
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+	{"ZWDfsCacStart",        Set_ZWDfsCacStart_Proc},
+	{"ZWDfsChannelSwitch",   Set_ZWDfsChannelSwitch_Proc},
+#endif
 
 #ifdef BACKGROUND_SCAN_SUPPORT
 	/* Dedicated RX */
@@ -1274,13 +1324,11 @@ static struct {
 	{"DfsRxHist", 			set_dedicated_rx_hist_proc},
 #endif
 
-#if !(defined(MT7615) || defined(MT7622))
 	{"RadarDbgLogConfig",			set_radar_dbg_log_config_proc},
 	{"RadarMinLPN",					set_radar_min_lpn_proc},
 	{"RadarThresholdParam",			set_radar_thres_param_proc},
 	{"RadarPulseThresholdParam",	set_radar_pls_thres_param_proc},
 	{"RadarPulsePattern",			set_radar_test_pls_pattern_proc},
-#endif
 #endif /* MT_DFS_SUPPORT */
 
 #if defined(BB_SOC) && defined(TCSUPPORT_WLAN_SW_RPS)
@@ -1445,6 +1493,8 @@ static struct {
 	{"ApCliTxMcs",					Set_ApCli_TxMcs_Proc},
 	{"ApCliPwr",					Set_ApCli_PwrSet_Proc},
 	{"ApCliSendPsPoll",					Set_ApCli_SendPsPoll_Proc},
+	{"ApCliTransDisableSupported",			Set_ApCli_Trans_Disable_Proc},
+	{"ApCliOCVSupport",                             Set_apcli_ocv_support_proc},
 #ifdef DOT11_HE_AX
 #ifdef WIFI_TWT_SUPPORT
 	{"ApCliTwtParams",				Set_ApCli_Twt_Proc},
@@ -1477,7 +1527,6 @@ static struct {
 	{"fhbss",						Set_Fh_Bss_Proc},
 	{"mapEnable",					Set_Map_Proc},
 	{"MapChannel",					Set_Map_Channel_Proc},
-	{"MapChannelEn",				Set_Map_Channel_En_Proc},
 #ifdef MAP_R2
 	{"mapR2Enable",					Set_MapR2_Proc},
 	{"ts_bh_primary_vid",			Set_Map_Bh_Primary_Vid_Proc},
@@ -1530,6 +1579,8 @@ static struct {
 #endif /* ROAMING_ENHANCE_SUPPORT */
 #ifdef DOT11_SAE_SUPPORT
 	{"ApCliSAEGroup",                                         set_apcli_sae_group_proc},
+	{"ApCliSAEPK",                                            Set_apcli_sae_pk_proc},
+	{"ApCliSAEPKOnly",                                        Set_apcli_sae_pk_only_proc},
 #endif /* DOT11_SAE_SUPPORT */
 #ifdef CONFIG_OWE_SUPPORT
 	{"ApCliOWEGroup",                                         set_apcli_owe_group_proc},
@@ -1584,6 +1635,7 @@ static struct {
 	{"IgmpSnEnable",				Set_IgmpSn_Enable_Proc},
 	{"IgmpAdd",					Set_IgmpSn_AddEntry_Proc},
 	{"IgmpDel",					Set_IgmpSn_DelEntry_Proc},
+	{"IgmpSnoopDeny",					Set_IgmpSn_Deny_Proc},
 #ifdef IGMP_TVM_SUPPORT
 	{"IgmpSnExemptIP",				Set_IgmpSn_BlackList_Proc},
 	{"IgmpSnAgeOut",				Set_IgmpSn_AgeOut_Proc},
@@ -1722,6 +1774,9 @@ static struct {
 #ifdef MT_MAC
 	{"hera",                    Set_Hera_Proc}, /* HERA general purpose */
 	{"PtecPerPpduDis",          SetHeraProtectionPerPpduDis},
+	{"MuInitRateIntv",          SetHeraMuInitRateInterval},
+	{"MuDisSwitchSu",           SetHeraMuDisableSwitchSu},
+	{"SingleNssTxEn",           SetHeraSingleNssTxEnable},
 #ifdef DBG
 	{"FixedRate",				Set_Fixed_Rate_Proc},
 	{"FixedRateWoSTA",          Set_Fixed_Rate_WO_STA_Proc},
@@ -1778,6 +1833,7 @@ static struct {
 	{"LinkReq",						Set_LinkMeasureReq_Proc},
 	{"RrmEnable",					Set_Dot11kRRM_Enable_Proc},
 	{"TxReq",						Set_TxStreamMeasureReq_Proc},
+	{"LastBeaconRptIndication",                     Set_BeaconReq_LastBcnRptInd_Proc},
 
 
 	/* only for selftesting and debugging. */
@@ -1828,11 +1884,6 @@ static struct {
 	{"CalFreeApply",                SetCalFreeApply},
 	{"WriteEffuseRFpara",           SetWriteEffuseRFpara},
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef LED_CONTROL_SUPPORT
-	{"WlanLed",					    Set_WlanLed_Proc},
-#endif /* LED_CONTROL_SUPPORT */
-#endif /* RTMP_RBUS_SUPPORT */
 
 #ifdef AP_QLOAD_SUPPORT
 	{"qloadclr",					Set_QloadClr_Proc},
@@ -1931,6 +1982,9 @@ static struct {
 	{"MonitorMacFilterOff",			Set_MonitorMacFilterOff_Proc},
 #endif /* SNIFFER_SUPPORT */
 
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+	{"SnifferBox",				Set_SnifferBox_Proc},
+#endif
 
 
 #ifdef SINGLE_SKU
@@ -2076,6 +2130,10 @@ static struct {
 	{"config_muru_stat",                SetMuruStatisticConfig},
 	{"set_muru_txc_tx_stats",            SetMuruTxcTxStats},
 	{"set_muru_dlul",                   SetMuruCfgDlUlVal},
+	{"muru_dl_enable",			SetMuOfdmaDlEnableProc},
+	{"muru_ul_enable",			SetMuOfdmaUlEnableProc},
+	{"mu_dl_enable",			SetMuMimoDlEnableProc},
+	{"mu_ul_enable",			SetMuMimoUlEnableProc},
 #ifdef DABS_QOS
 	{"set_muru_qos",			SetMuruQoSCfg},
 #endif
@@ -2260,10 +2318,6 @@ static struct {
 #ifdef PKTLOSS_CHK
 	{"pktloss",                                       set_pktloss_chk},
 #endif
-#if defined(MT7615) || defined(MT7622) || defined(MT7663)
-	{"RxvRecordEn",					SetRxvRecordEn},
-	{"RxRateRecordEn",				SetRxRateRecordEn},
-#endif /* #if defined(MT7615) || defined(MT7622) || defined(MT7663)  */
 #ifdef CFG_SUPPORT_MU_MIMO_RA
 	{"mura_periodic_sounding",      SetMuraPeriodicSndProc},         /* set trigger MURGA Algorithm sounding */
 	{"mura_algorithm_test",         SetMuraTestAlgorithmProc},
@@ -2315,6 +2369,9 @@ static struct {
 	{"BndStrgMntAddr",	Set_BndStrg_MonitorAddr},
 #endif /* BND_STRG_DBG */
 #endif /* BAND_STEERING */
+#ifdef GPIO_5GL_5GH_SWITCH
+	{"GpioSwitch",	set_gpio_5G_switch},
+#endif
 	{"LegFreqDupEn",	SetHeraOptionFrequecyDup_Proc},
 	{"IARaEn",	SetHeraIara_Proc},
 	{"TxPwrManualSet",  SetTxPwrManualCtrl},
@@ -2363,6 +2420,13 @@ static struct {
 	{"AGG_MPDU_Count",      Set_AMPDU_MPDU_Count},
 	{"AMPDUretrycount", 	Set_AMPDU_Retry_Count},
 #endif
+#ifdef WIFI_EAP_FEATURE
+	{"InitIPICtrl",         SetInitIPICtrl},
+	{"data_txpwr_offset",   set_data_txpwr_offset},
+	{"fw_ratbl",            set_fw_ratbl_ctrl},
+#endif
+	{"EDCCAThreshold",      SetEDCCAThresholdCtrl},
+	{"EDCCAEnable",		SetEDCCAEnableCtrl},
 #ifdef WIFI_GPIO_CTRL
 	{"GPOEn",               set_gpio_ctrl},
 	{"GPOVal",              set_gpio_value},
@@ -2528,6 +2592,10 @@ static struct {
 	{"srcfgsrsdobss", SetSrCfgSrSdObssRatio},
 	{"srcfgsrprofile", SetSrCfgProfile},
 	{"srcfgdpden", SetSrCfgDPDEnable},
+	{"srcfgsrtxalignen", SetSrCfgSrTxAlignEnable},
+	{"srcfgsrtxalignrssi", SetSrCfgSrTxAlignRssiThr},
+	{"srcfgsrtxen", SetSrCfgSrTxEnable},
+	{"srcfgomen", SetSrCfgObssMonitorEnable},
 	{"srsrgbm", SetSrSrgBitmap},
 	{"srsrgbmrefresh", SetSrSrgBitmapRefresh},
 #endif /* CFG_SUPPORT_FALCON_SR */
@@ -2544,6 +2612,9 @@ static struct {
 	{"BlackListTimeout", Set_BlackListTimeout_Proc},
 #endif /*RATE_PRIOR_SUPPORT*/
 	{"ap_rfeatures", set_ap_rfeatures},
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+	{"fgi_per_bss", set_fgi_and_ltf_proc},
+#endif
 #if defined(APCLI_SUPPORT) || defined(CONFIG_STA_SUPPORT)
 	{"sta_wireless", set_sta_wireless},
 	{"sta_rfeatures", set_sta_rfeatures},
@@ -2564,6 +2635,10 @@ static struct {
 #endif /* CFG_SUPPORT_FALCON_PP */
 	{"idlepwr", set_idle_pwr_test},
 	{"set_enable_nf", SetEnableNf},
+#ifdef ENHANCE_STAT_SUPPORT
+	{"set_periodic_nf", SetPeriodicNf},
+	{"set_ampdu_stat", SetAmpduStat},
+#endif
 #ifdef MGMT_TXPWR_CTRL
 		{"mgmt_frame_pwr",	set_mgmt_frame_power},
 #endif
@@ -2595,14 +2670,19 @@ static struct {
 #ifdef CFG_SUPPORT_CSI
 	{"csi",	Set_CSI_Ctrl_Proc},
 #endif
+#ifdef CONFIG_6G_SUPPORT
+	{"6giob", set_6g_ap_iob_discovery_proc},
+	{"6goob", set_6g_ap_oob_discovery_proc},
+	{"6gqos", set_6g_ap_qos_injector_proc},
+#endif /* CONFIG_6G_SUPPORT */
 	{"dev_send_frame", dev_send_frame},
-#ifdef CONFIG_COLGIN_MT6890
-    {"suspend", set_suspend_proc},
-    {"resume", set_resume_proc},
+#ifdef LOW_POWER_SUPPORT
+	{"ApIdleTimeout", set_ap_idle_timeout},
 #endif
-#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-	{"vie",			Set_Customer_Vie_Proc},
-#endif /*CUSTOMER_VENDOR_IE_SUPPORT*/
+	{"rts2cts", SetRtsThenCtsRetryCnt},
+#ifdef CONFIG_COLGIN_MT6890
+	{"WoRxCntEnable", SetWoRXCounterEnable},
+#endif
 	{NULL,}
 };
 
@@ -2614,7 +2694,18 @@ static struct {
 	{"ACLRejectCount",				Show_ACLRejectCount_Proc},
 #endif/*ACL_BLK_COUNT_SUPPORT*/
 	{"stainfo",			Show_MacTable_Proc},
+#ifdef MWDS
+	{"mwdsinfo",			Show_MWDS_Proc},
+#endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	{"ChannelSwitchTime",	Show_ChannelSwitchTime_Proc},
+	{"PerSTATxStop",		Show_PerSTA_StopTx_Proc},
+	{"ZeroLossStaList",	Show_ZeroLossStaList_Proc},
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	{"partial_mib_info",		Show_Mib_Info_Proc},
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+	{"fgi_info",		show_fgi_and_ltf_proc},
+#endif
 #ifdef TXRX_STAT_SUPPORT
 	{"sta_stat",			Show_Sta_Stat_Proc},
 	{"mbss_stat",			Show_Bss_Stat_Proc},
@@ -2689,6 +2780,7 @@ static struct {
 	{"sysinfo",			show_sysinfo_proc},
 	{"trinfo",	show_trinfo_proc},
 	{"tpinfo",	            show_tpinfo_proc},
+	{"mlmeinfo",	        show_mlmeinfo_proc},
 #ifdef CONFIG_TP_DBG
 	{"tpdbginfo",			show_TPDbg_info_proc},
 #endif /* CONFIG_TP_DBG */
@@ -2743,11 +2835,9 @@ static struct {
 	{"DfsNOPOfChList",		Show_NOP_Of_ChList},
 	{"DfsTargetInfo",		Show_Target_Ch_Info},
 	{"DfsChInfo",			show_dfs_ch_info_proc},
-#if !(defined(MT7615) || defined(MT7622) || defined(MT7663))
 	{"RadarThresholdParam",	show_radar_threshold_param_proc},
 	/* DFS radar pulse dump */
 	{"DfsDebug",			show_dfs_debug_proc},
-#endif
 #endif
 #ifdef DOT11R_FT_SUPPORT
 	{"ftinfo",				Show_FTConfig_Proc},
@@ -2787,8 +2877,8 @@ static struct {
 #endif /*VLAN_SUPPORT*/
 #ifdef WIFI_MD_COEX_SUPPORT
 	{"unsafeinfo", Show_UnsafeChannel_Info},
+	{"idcinfo", Show_Idc_Info},
 #endif
-	{"LockWdevOp", Show_Lock_Wdev_Op},
 	{"rfinfo", ShowRFInfo},
 	{"bbpinfo", ShowBBPInfo},
 	{"wfintcnt", ShowWifiInterruptCntProc},
@@ -2969,6 +3059,12 @@ static struct {
 #ifdef ANTENNA_CONTROL_SUPPORT
 	{"AntCtrl",		Show_Antenna_Control_info},
 #endif
+#ifdef WIFI_EAP_FEATURE
+	{"IPIValue",            ShowIPIValue},
+	{"RATblInfo",           show_ratbl_info},
+#endif
+	{"EDCCAThreshold",      ShowEDCCAThreshold},
+	{"EDCCAEnable",		ShowEDCCAEnable},
 	{"RuRainfo",   ShowHeraRuRaInfoProc},
 	{"MuRainfo",   ShowHeraMuRaInfoProc},
 	{"HeraRelatedinfo",   ShowHeraRelatedInfoProc},
@@ -3002,6 +3098,10 @@ static struct {
 	{"srcfgsrsdobss", ShowSrCfgSrSdObssRatio},
 	{"srcfgsrprofile", ShowSrCfgProfile},
 	{"srcfgdpden", ShowSrCfgDPDEnable},
+	{"srcfgsrtxalignen", ShowSrCfgSrTxAlignEnable},
+	{"srcfgsrtxalignrssi", ShowSrCfgSrTxAlignRssiThr},
+	{"srcfgsrtxen", ShowSrCfgSrTxEnable},
+	{"srcfgomen", ShowSrCfgObssMonitorEnable},
 	{"srcnt", ShowSrCnt},
 	{"srsd", ShowSrSd},
 	{"srsrgbm", ShowSrSrgBitmap},
@@ -3029,11 +3129,8 @@ static struct {
 #ifdef AMPDU_CONF_SUPPORT
 	{"AMPDUretrycount", Show_AMPDU_Retry_Count},
 #endif
-#ifdef CONFIG_COLGIN_MT6890
-    {"resume_status", show_resume_info},
-#endif
-#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-	{"vie", show_Customer_Vie_Proc},
+#ifdef CONFIG_6G_SUPPORT
+	{"bssmgmt", show_bss_mgmt_info},
 #endif
 	{NULL,}
 };
@@ -3062,6 +3159,18 @@ static struct {
 	{NULL,}
 };
 
+#ifdef CONFIG_COLGIN_MT6890
+static struct {
+	RTMP_STRING *name;
+	INT (*low_power_proc)(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+} *PRTMP_PRIVATE_LOW_POWER_PROC, RTMP_PRIVATE_LOW_POWER_SUPPORT_PROC[] = {
+	{"suspend",         set_suspend_proc},
+	{"resume",          set_resume_proc},
+	{"resume_status",   show_resume_info},
+	{NULL,}
+};
+#endif
+
 /* sync with iwpriv source codes */
 #define IWPRIV_HELP_MSG_SIZE 10240
 #define IWPRIV_HELP_MSG_LINE_SIZE 100
@@ -3071,6 +3180,7 @@ UINT16 iwprivPhyStatHelp(char *src, UINT16 limitLen)
 {
 	UINT16 totalLen = 0, tmpLen = 0;
 	char line[IWPRIV_HELP_MSG_LINE_SIZE] = {0};
+	int ret, left_buf_size;
 
 	totalLen += snprintf(src, limitLen, " available commands:\n");
 	for (PRTMP_PRIVATE_PHT_STATE = PRTMP_PRIVATE_PHT_STATE_SUPPORT_PROC;
@@ -3079,7 +3189,12 @@ UINT16 iwprivPhyStatHelp(char *src, UINT16 limitLen)
 			"\t%d  %s\n", PRTMP_PRIVATE_PHT_STATE->idx, PRTMP_PRIVATE_PHT_STATE->name);
 		if (totalLen + tmpLen < limitLen) {
 			totalLen += tmpLen;
-			snprintf(src + strlen(src), limitLen - strlen(src), "%s", line);
+			left_buf_size = limitLen - strlen(src);
+			ret = snprintf(src + strlen(src), left_buf_size, "%s", line);
+			if (os_snprintf_error(left_buf_size, ret)) {
+				MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+				return 1;
+			}
 		} else {
 			return 0;
 		}
@@ -3137,7 +3252,38 @@ INT RTMPAPPrivIoctlSet(
 	while ((this_char = strsep((char **)&tmp, "\0")) != NULL) {
 		if (!*this_char)
 			continue;
+#ifdef DBG
+#ifdef DBG_ENHANCE
+		{
+			struct wifi_dev *wdev = NULL;
+			INT ifIndex, ifType;
+			struct net_device *netDev = NULL;
+			POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 
+			ifIndex = pObj->ioctl_if;
+			ifType = pObj->ioctl_if_type;
+
+			if (ifType == INT_MAIN || ifType == INT_MBSSID) {
+				if (VALID_MBSS(pAd, ifIndex))
+					wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+			} else if (ifType == INT_APCLI) {
+				if (ifIndex < MAX_MULTI_STA)
+					wdev = &pAd->StaCfg[ifIndex].wdev;
+			} else if (ifType == INT_WDS) {
+				if (ifIndex < MAX_WDS_ENTRY)
+					wdev = &pAd->WdsTab.WdsEntry[ifIndex].wdev;
+			} else {
+			}
+
+			if (wdev) {
+				netDev = (struct net_device *) wdev->if_dev;
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"CFG: iwpriv set %s %s\n",
+					(netDev && netDev->name)?netDev->name:"N/A", this_char);
+			}
+		}
+#endif /* DBG_ENHANCE */
+#endif /* DBG */
 		value = strchr(this_char, '=');
 
 		if (value != NULL)
@@ -3162,6 +3308,9 @@ INT RTMPAPPrivIoctlSet(
 
 		for (PRTMP_PRIVATE_SET_PROC = RTMP_PRIVATE_SUPPORT_PROC; PRTMP_PRIVATE_SET_PROC->name; PRTMP_PRIVATE_SET_PROC++) {
 			if (rtstrcasecmp(this_char, PRTMP_PRIVATE_SET_PROC->name) == TRUE) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "=======================================================\n");
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "[Iwpriv Set Command]: (%s)=(%s)\n", this_char, value);
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "=======================================================\n");
 				if (!PRTMP_PRIVATE_SET_PROC->set_proc(pAd, value)) {
 					/*FALSE:Set private failed then return Invalid argument */
 					Status = -EINVAL;
@@ -3241,14 +3390,6 @@ INT RTMPAPPrivIoctlShow(
 		if (PRTMP_PRIVATE_SHOW_PROC->name == NULL) {
 			/*Not found argument */
 			Status = -EINVAL;
-#ifdef RTMP_RBUS_SUPPORT
-
-			if (pAd->infType == RTMP_DEV_INF_RBUS) {
-				for (PRTMP_PRIVATE_SHOW_PROC = RTMP_PRIVATE_SHOW_SUPPORT_PROC; PRTMP_PRIVATE_SHOW_PROC->name; PRTMP_PRIVATE_SHOW_PROC++)
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s\n", PRTMP_PRIVATE_SHOW_PROC->name));
-			}
-
-#endif /* RTMP_RBUS_SUPPORT */
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::(iwpriv) Command not Support [%s=%s]\n", this_char,
 					 value));
 			break;
@@ -3259,8 +3400,13 @@ INT RTMPAPPrivIoctlShow(
 	return Status;
 }
 
-#ifdef VENDOR_FEATURE6_SUPPORT
+#if defined (VENDOR_FEATURE6_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
+#ifdef ENHANCE_STAT_SUPPORT
+#define	ASSO_MAC_LINE_LEN	(1+10+19+4+4+4+4+8+7+7+7+7+10+6+6+6+6+7+7+7+11+11+1)
+#define	NF_LINE_LEN		(4+4+4+4+1)	/*NF will be same across all stationa*/
+#else
 #define	ASSO_MAC_LINE_LEN	(1+19+4+4+4+4+8+7+7+7+7+10+6+6+6+6+7+7+7+1)
+#endif
 VOID RTMPAPGetAssoMacTable(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_IOCTL_INPUT_STRUCT * wrq)
@@ -3269,7 +3415,17 @@ VOID RTMPAPGetAssoMacTable(
 	INT i;
 	char *msg;
 	UINT16 wtbl_max_num = WTBL_MAX_NUM(pAd);
+#ifdef ENHANCE_STAT_SUPPORT
+	UINT msg_len = (wtbl_max_num * ASSO_MAC_LINE_LEN) + NF_LINE_LEN;
+	ULONG DataRate_Tx;
+	ULONG DataRate_Rx;
+	UCHAR bandIdx = 0;
+#ifdef RACTRL_FW_OFFLOAD_SUPPORT
+	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+#endif
+#else
 	UINT msg_len = wtbl_max_num * ASSO_MAC_LINE_LEN;
+#endif
 
 	os_alloc_mem(NULL, (UCHAR **)&msg, msg_len);
 
@@ -3279,19 +3435,37 @@ VOID RTMPAPGetAssoMacTable(
 	}
 
 	memset(msg, 0, msg_len);
+#ifdef ENHANCE_STAT_SUPPORT
+	snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n%-10s%-19s%-4s%-4s%-4s%-4s%-8s",
+			"ENT_TYPE", "MAC", "AID", "BSS", "PSM", "WMM", "MIMOPS");
+#else
 	snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n%-19s%-4s%-4s%-4s%-4s%-8s",
 			"MAC", "AID", "BSS", "PSM", "WMM", "MIMOPS");
+#endif /* ENHANCE_STAT_SUPPORT */
 	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7s%-7s%-7s%-7s", "RSSI0", "RSSI1", "RSSI2", "RSSI3");
+#ifdef ENHANCE_STAT_SUPPORT
+	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s%-6s%-6s%-6s%-6s%-7s%-7s%-7s", "PhMd", "BW", "MCS", "SGI", "STBC", "Idle", "Rate", "TIME");
+	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-11s%-11s\n", "LastTxRate", "LastRxRate");
+#else
 	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s%-6s%-6s%-6s%-6s%-7s%-7s%-7s\n", "PhMd", "BW", "MCS", "SGI", "STBC", "Idle", "Rate", "TIME");
+#endif /* ENHANCE_STAT_SUPPORT */
 
 	for (i = 0; i < wtbl_max_num; i++) {
 		PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
 
+#ifdef ENHANCE_STAT_SUPPORT
+		if ((IS_ENTRY_CLIENT(pEntry) || (IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_REPEATER(pEntry) || IS_ENTRY_A4(pEntry)))
+			&& (pEntry->Sst == SST_ASSOC)) {
+#else
 		if ((IS_ENTRY_CLIENT(pEntry) || (IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_REPEATER(pEntry)))
 			&& (pEntry->Sst == SST_ASSOC)) {
+#endif /* ENHANCE_STAT_SUPPORT */
 			if ((strlen(msg) + ASSO_MAC_LINE_LEN) >= msg_len)
 				break;
 
+#ifdef ENHANCE_STAT_SUPPORT
+			bandIdx = HcGetBandByWdev(pEntry->wdev);
+#endif /* ENHANCE_STAT_SUPPORT */
 			DataRate = 0;
 			DataRate = 0;
 			/* getRate(pEntry->HTPhyMode, &DataRate); */
@@ -3299,6 +3473,150 @@ VOID RTMPAPGetAssoMacTable(
 							  pEntry->HTPhyMode.field.BW, pEntry->HTPhyMode.field.MCS,
 							  (pEntry->MaxHTPhyMode.field.MCS >> 4) + 1, (UINT32 *)&DataRate);
 			DataRate /= 500000;
+			/* Calculate Last Tx Rate and Last Rx Rate*/
+			/* Calling this OID frequently is not recommended since it sends event to FW to get TXRx stats for calculating Last TX/RX rate fot each station*/
+#ifdef ENHANCE_STAT_SUPPORT
+#ifdef RACTRL_FW_OFFLOAD_SUPPORT
+				if (cap->fgRateAdaptFWOffload == TRUE/*&& (pEntry->bAutoTxRateSwitch == TRUE)*/) {
+					UCHAR phy_mode, rate, bw, sgi, stbc;
+					UCHAR phy_mode_r, rate_r, bw_r, sgi_r, stbc_r;
+					UCHAR nss, nss_r;
+					UINT32 RawData;
+					UINT32 lastTxRate = pEntry->LastTxRate;
+					UINT32 lastRxRate = pEntry->LastRxRate;
+					UCHAR ucBand = HcGetBandByWdev(pEntry->wdev);
+					EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
+					EXT_EVENT_PHY_STATE_RX_RATE rRxStatResult = {0, 0, 0, 0, 0, 0, 0, 0};
+					HTTRANSMIT_SETTING LastTxRate;
+					HTTRANSMIT_SETTING LastRxRate;
+
+					MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, pEntry->wcid, &rTxStatResult);
+					LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
+					LastTxRate.field.BW = rTxStatResult.rEntryTxRate.BW;
+					LastTxRate.field.ldpc = rTxStatResult.rEntryTxRate.ldpc ? 1 : 0;
+					LastTxRate.field.ShortGI = rTxStatResult.rEntryTxRate.ShortGI ? 1 : 0;
+					LastTxRate.field.STBC = rTxStatResult.rEntryTxRate.STBC;
+					if (LastTxRate.field.MODE >= MODE_VHT)
+						LastTxRate.field.MCS = (((rTxStatResult.rEntryTxRate.VhtNss - 1) & 0x3) << 4) + rTxStatResult.rEntryTxRate.MCS;
+					else if (LastTxRate.field.MODE == MODE_OFDM)
+						LastTxRate.field.MCS = getLegacyOFDMMCSIndex(rTxStatResult.rEntryTxRate.MCS) & 0x0000003F;
+					else
+						LastTxRate.field.MCS = rTxStatResult.rEntryTxRate.MCS;
+
+					lastTxRate = (UINT32)(LastTxRate.word);
+					LastRxRate.word = (USHORT)lastRxRate;
+					RawData = lastTxRate;
+					phy_mode = rTxStatResult.rEntryTxRate.MODE;
+					if (phy_mode >> 3)
+						phy_mode >>= 3;
+
+					rate = RawData & 0x3F;
+					bw = (RawData >> 7) & 0x3;
+					sgi = rTxStatResult.rEntryTxRate.ShortGI;
+					stbc = ((RawData >> 10) & 0x1);
+					nss = rTxStatResult.rEntryTxRate.VhtNss;
+					MtCmdPhyGetRxRate(pAd, CMD_PHY_STATE_CONTENTION_RX_PHYRATE, ucBand, pEntry->wcid, &rRxStatResult);
+					LastRxRate.field.MODE = rRxStatResult.u1RxMode;
+					LastRxRate.field.BW = rRxStatResult.u1BW;
+					LastRxRate.field.ldpc = rRxStatResult.u1Coding;
+					LastRxRate.field.ShortGI = rRxStatResult.u1Gi ? 1 : 0;
+					LastRxRate.field.STBC = rRxStatResult.u1Stbc;
+					if (LastRxRate.field.MODE >= MODE_VHT)
+						LastRxRate.field.MCS = ((rRxStatResult.u1RxNsts & 0x3) << 4) + rRxStatResult.u1RxRate;
+					else if (LastRxRate.field.MODE == MODE_OFDM)
+						LastRxRate.field.MCS = getLegacyOFDMMCSIndex(rRxStatResult.u1RxRate & 0xF);
+					else
+						LastRxRate.field.MCS = rRxStatResult.u1RxRate;
+
+					phy_mode_r = rRxStatResult.u1RxMode;
+					rate_r = rRxStatResult.u1RxRate & 0x3F;
+					bw_r = rRxStatResult.u1BW;
+					sgi_r = rRxStatResult.u1Gi;
+					stbc_r = rRxStatResult.u1Stbc;
+#ifdef DOT11_VHT_AC
+					if (phy_mode >= MODE_VHT) {
+						rate = rate & 0xF;
+					}
+#endif /* DOT11_VHT_AC */
+#ifdef DOT11_VHT_AC
+					if (phy_mode_r >= MODE_VHT) {
+						nss_r = (rRxStatResult.u1RxNsts + 1) / (rRxStatResult.u1Stbc + 1);
+						rate_r = rate_r & 0xF;
+					}
+#endif /* DOT11_VHT_AC */
+					if (phy_mode_r == MODE_OFDM) {
+						rate_r = rate_r & 0xF;
+						if (rate_r == TMI_TX_RATE_OFDM_6M)
+							LastRxRate.field.MCS = 0;
+						else if (rate_r == TMI_TX_RATE_OFDM_9M)
+							LastRxRate.field.MCS = 1;
+						else if (rate_r == TMI_TX_RATE_OFDM_12M)
+							LastRxRate.field.MCS = 2;
+						else if (rate_r == TMI_TX_RATE_OFDM_18M)
+							LastRxRate.field.MCS = 3;
+						else if (rate_r == TMI_TX_RATE_OFDM_24M)
+							LastRxRate.field.MCS = 4;
+						else if (rate_r == TMI_TX_RATE_OFDM_36M)
+							LastRxRate.field.MCS = 5;
+						else if (rate_r == TMI_TX_RATE_OFDM_48M)
+							LastRxRate.field.MCS = 6;
+						else if (rate_r == TMI_TX_RATE_OFDM_54M)
+							LastRxRate.field.MCS = 7;
+						else
+							LastRxRate.field.MCS = 0;
+					} else if (phy_mode_r == MODE_CCK) {
+						rate_r = rate_r & 0x7;
+						if (rate_r == TMI_TX_RATE_CCK_1M_LP)
+							LastRxRate.field.MCS = 0;
+						else if (rate_r == TMI_TX_RATE_CCK_2M_LP)
+							LastRxRate.field.MCS = 1;
+						else if (rate_r == TMI_TX_RATE_CCK_5M_LP)
+							LastRxRate.field.MCS = 2;
+						else if (rate_r == TMI_TX_RATE_CCK_11M_LP)
+							LastRxRate.field.MCS = 3;
+						else if (rate_r == TMI_TX_RATE_CCK_2M_SP)
+							LastRxRate.field.MCS = 1;
+						else if (rate_r == TMI_TX_RATE_CCK_5M_SP)
+							LastRxRate.field.MCS = 2;
+						else if (rate_r == TMI_TX_RATE_CCK_11M_SP)
+							LastRxRate.field.MCS = 3;
+						else
+							LastRxRate.field.MCS = 0;
+					}
+
+					if (phy_mode >= MODE_HE) {
+						get_rate_he((rate & 0xf), bw, nss, 0, &DataRate_Tx);
+						if (sgi == 1)
+							DataRate_Tx = (DataRate_Tx * 967) >> 10;
+						if (sgi == 2)
+							DataRate_Tx = (DataRate_Tx * 870) >> 10;
+					} else {
+							getRate(LastTxRate, &DataRate_Tx);
+					}
+
+					if (phy_mode_r >= MODE_HE) {
+						get_rate_he((rate_r & 0xf), bw_r, nss_r, 0, &DataRate_Rx);
+						if (sgi_r == 1)
+							DataRate_Rx = (DataRate_Rx * 967) >> 10;
+						if (sgi_r == 2)
+							DataRate_Rx = (DataRate_Rx * 870) >> 10;
+					} else {
+							getRate(LastRxRate, &DataRate_Rx);
+					}
+				}
+#endif /* RACTRL_FW_OFFLOAD_SUPPORT */
+
+			if (IS_ENTRY_CLIENT(pEntry) && !IS_ENTRY_A4(pEntry))						/*Station Entry*/
+				snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s", "STA");
+			else if (IS_ENTRY_CLIENT(pEntry) && IS_ENTRY_A4(pEntry))					/*WDS Entry*/
+				snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s", "WDS");
+			else if (IS_ENTRY_PEER_AP(pEntry))										/*Peer AP Entry*/
+				snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s", "AP");
+			else if (IS_ENTRY_REPEATER(pEntry))										/*Repeater Entry*/
+				snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s", "REPT");
+			else																	/*Invalid Entry*/
+				snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10s", "N/A");
+#endif /* ENHANCE_STAT_SUPPORT */
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(pEntry->Addr));
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-4d", (int)pEntry->Aid);
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-4d", (int)pEntry->apidx);
@@ -3320,12 +3638,22 @@ VOID RTMPAPGetAssoMacTable(
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7d", (int)(pEntry->StaIdleTimeout - pEntry->NoDataIdleCount));
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7d", (int)DataRate);
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7d", (int)pEntry->StaConnectTime);
+#ifdef ENHANCE_STAT_SUPPORT
+			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7d", (int)DataRate_Tx);
+			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-7d", (int)DataRate_Rx);
+#endif /* ENHANCE_STAT_SUPPORT */
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-10d, %d, %d%%\n", pEntry->DebugFIFOCount, pEntry->DebugTxCount,
 					(pEntry->DebugTxCount) ? ((pEntry->DebugTxCount - pEntry->DebugFIFOCount) * 100 / pEntry->DebugTxCount) : 0);
 			snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n");
 		}
 	}
 
+#ifdef ENHANCE_STAT_SUPPORT
+#ifdef NF_SUPPORT_V2
+	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-4s%-4s%-4s%-4s\n", "NF0", "NF1", "NF2", "NF3");
+	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-4d%-4d%-4d%-4d\n", pAd->NF[0], pAd->NF[1], pAd->NF[2], pAd->NF[3]);
+#endif
+#endif /* ENHANCE_STAT_SUPPORT */
 	/* for compatible with old API just do the printk to console*/
 	wrq->u.data.length = strlen(msg);
 
@@ -3334,7 +3662,56 @@ VOID RTMPAPGetAssoMacTable(
 
 	os_free_mem(msg);
 }
-#endif /* VENDOR_FEATURE6_SUPPORT */
+#endif /* VENDOR_FEATURE6_SUPPORT || ENHANCE_STAT_SUPPORT */
+
+#ifdef ENHANCE_STAT_SUPPORT
+VOID RTMPAPGetStaAssocCap(
+	IN PRTMP_ADAPTER        pAd,
+	IN RTMP_IOCTL_INPUT_STRUCT * wrq)
+{
+	int i;
+	PMAC_TABLE_ENTRY pEntry = NULL;
+	RT_STA_MAX_CAP_TABLE *sta_cap = NULL;
+	UINT16 wtbl_max_num = WTBL_MAX_NUM(pAd);
+
+	os_alloc_mem(NULL, (UCHAR **)&sta_cap, sizeof(RT_STA_MAX_CAP_TABLE));
+	if (sta_cap == NULL) {
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Allocate memory fail!!!\n", __FUNCTION__));
+		return;
+	}
+
+	NdisZeroMemory(sta_cap, sizeof(RT_STA_MAX_CAP_TABLE));
+	for (i = 0; i < wtbl_max_num; i++) {
+		pEntry = &pAd->MacTab.Content[i];
+		if (pEntry && IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
+			COPY_MAC_ADDR(sta_cap->STACap[sta_cap->Num].Addr, pEntry->Addr);
+			sta_cap->STACap[sta_cap->Num].NSS          = (pEntry->MaxHTPhyMode.field.MCS/8)+1;
+			sta_cap->STACap[sta_cap->Num].MODE         = pEntry->MaxHTPhyMode.field.MODE;
+			sta_cap->STACap[sta_cap->Num].BW           = pEntry->MaxHTPhyMode.field.BW;
+			sta_cap->STACap[sta_cap->Num].MCS          = pEntry->MaxHTPhyMode.field.MCS;
+			sta_cap->STACap[sta_cap->Num].ShortGI      = pEntry->MaxHTPhyMode.field.ShortGI;
+#ifdef DOT11_VHT_AC
+			if (pEntry->MaxHTPhyMode.field.MODE >= MODE_VHT) {
+				sta_cap->STACap[sta_cap->Num].NSS = ((pEntry->MaxHTPhyMode.field.MCS >> 4)+1);
+				sta_cap->STACap[sta_cap->Num].MCS = (pEntry->MaxHTPhyMode.field.MCS & 0xf);
+			}
+#endif
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Mac Address = %x:%x:%x:%x:%x:%x\n", PRINT_MAC(sta_cap->STACap[sta_cap->Num].Addr)));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("NSS = %d, Mode = %d, BW = %d, MCS = %d, Short GI = %d\n",
+				sta_cap->STACap[sta_cap->Num].NSS, sta_cap->STACap[sta_cap->Num].MODE, sta_cap->STACap[sta_cap->Num].BW,
+				sta_cap->STACap[sta_cap->Num].MCS, sta_cap->STACap[sta_cap->Num].ShortGI));
+			sta_cap->Num++;
+		}
+	}
+
+	wrq->u.data.length = sizeof(RT_STA_MAX_CAP_TABLE);
+	if (copy_to_user(wrq->u.data.pointer, sta_cap, wrq->u.data.length)) {
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: copy_to_user() fail\n", __FUNCTION__));
+	}
+	if (sta_cap != NULL)
+		os_free_mem(sta_cap);
+}
+#endif /* ENHANCE_STAT_SUPPORT */
 
 #if defined(INF_AR9) || defined(BB_SOC)
 #if defined(AR9_MAPI_SUPPORT) || defined(BB_SOC)
@@ -3429,7 +3806,7 @@ INT RTMPAPSetInformation(
 	ULONG						ShortRetryLimit, LongRetryLimit;
 	UCHAR						ctmp;
 #endif /* SNMP_SUPPORT */
-	NDIS_802_11_WEP_STATUS              WepStatus;
+	NDIS_802_11_WEP_STATUS              WepStatus = Ndis802_11WEPDisabled;
 	NDIS_802_11_AUTHENTICATION_MODE     AuthMode = Ndis802_11AuthModeMax;
 	NDIS_802_11_SSID                    Ssid;
 	UINT ifIndex;
@@ -3453,6 +3830,15 @@ INT RTMPAPSetInformation(
 #endif/*WPA_SUPPLICANT_SUPPORT*/
 #endif/*APCLI_SUPPORT*/
 	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	INT32 Ret = 0;
+
+
+#ifdef DBG
+#ifdef DBG_ENHANCE
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"CFG: IOCTL cmd:0x%X\n", cmd);
+#endif /* DBG_ENHANCE */
+#endif /* DBG */
 
 	switch (cmd & 0x7FFF) {
 #ifdef NF_SUPPORT_V2
@@ -3506,7 +3892,7 @@ INT RTMPAPSetInformation(
 			PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
 
 			if (IS_VALID_ENTRY(pEntry)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02X:%02X:%02X:%02X:%02X:%02X ", PRINT_MAC(pEntry->Addr)));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, (MACSTR" ", MAC2STR(pEntry->Addr)));
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%d\n", pEntry->CurRssi));
 
 				Rsp.CurRssi = pEntry->CurRssi;
@@ -3569,7 +3955,125 @@ INT RTMPAPSetInformation(
 	break;
 #endif
 
+#ifdef ENHANCE_STAT_SUPPORT
+#ifdef AP_SCAN_SUPPORT
+	case OID_SET_SITE_SURVEY:
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set::OID_SET_SITE_SURVEY\n"));
+		if (wrq->u.data.length > 0) {
+			UCHAR *SsidStr = NULL;
+			os_alloc_mem(NULL, (PUCHAR *)&SsidStr, wrq->u.data.length+1);
+			if (SsidStr == NULL) {
+				Status = -ENOMEM;
+				break;
+			}
+
+			NdisZeroMemory(SsidStr, wrq->u.data.length+1);
+			Status = copy_from_user(SsidStr, wrq->u.data.pointer, wrq->u.data.length);
+			if (Status != NDIS_STATUS_SUCCESS) {
+				Status  = EFAULT;
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Set::OID_SET_SITE_SURVEY failed, Error in copy_from_user!!\n"));
+			} else {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SSID = %s\n", SsidStr));
+				Status = Set_SiteSurvey_Proc(pAd, SsidStr);
+			}
+			if (SsidStr)
+				os_free_mem(SsidStr);
+		} else {
+			Status = Set_SiteSurvey_Proc(pAd, "");
+		}
+		break;
+#endif
+#endif /* ENHANCE_STAT_SUPPORT */
 #ifdef OFFCHANNEL_SCAN_FEATURE
+#ifdef ENHANCE_STAT_SUPPORT
+	case OID_SET_AP_SCAN_CHANNEL:
+	{
+		PSCAN_CHANNEL_INFO scan_info;
+		RTMP_STRING *arg_str;
+
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set::OID_SET_AP_SCAN_CHANNEL \n"));
+
+		os_alloc_mem(NULL, (UCHAR **)&scan_info, sizeof(SCAN_CHANNEL_INFO));
+		if (scan_info == NULL) {
+			Status = -ENOMEM;
+			break;
+		}
+
+		NdisZeroMemory(scan_info, sizeof(SCAN_CHANNEL_INFO));
+		Status = copy_from_user(scan_info, wrq->u.data.pointer, wrq->u.data.length);
+		if (Status != NDIS_STATUS_SUCCESS) {
+			if (scan_info)
+				os_free_mem(scan_info);
+
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("[%s] Failed in copy_from_user", __func__));
+
+			Status = EFAULT;
+			break;
+		}
+
+		os_alloc_mem(NULL, (UCHAR **)&arg_str, 25);
+		if (arg_str == NULL) {
+			if (scan_info)
+				os_free_mem(scan_info);
+
+			Status = -ENOMEM;
+			break;
+		}
+
+		NdisZeroMemory(arg_str, 25);
+		if (scan_info->is_active)
+			snprintf(arg_str, 24, "%s:%d:%d", "active", scan_info->channel, scan_info->timeout);
+		else
+			snprintf(arg_str, 24, "%s:%d:%d", "passive", scan_info->channel, scan_info->timeout);
+
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Args = %s\n", arg_str));
+		/*Run Scan*/
+		Status = Set_ApScan_Proc(pAd, arg_str);
+
+		if (arg_str)
+			os_free_mem(arg_str);
+		if (scan_info)
+			os_free_mem(scan_info);
+
+		break;
+	}
+#endif /* ENHANCE_STAT_SUPPORT */
+	case OID_OFF_SCAN_RESULT:
+	{
+		CHANNEL_INFO Rsp;
+		INT32 ifIndex = pObj->ioctl_if;
+		UINT32 ch_index = 0;
+		SCAN_CTRL *ScanCtrl = NULL;
+		struct wifi_dev *wdev;
+		UCHAR BandIdx = DBDC_BAND0;
+
+		if (pObj->ioctl_if_type == INT_MBSSID)
+			wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+		else
+			wdev = &pAd->ApCfg.MBSSID[0].wdev;
+		BandIdx = HcGetBandByWdev(wdev);
+		ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
+		ch_index = Channel2Index(pAd, pAd->ChannelInfo.ChannelNo[BandIdx], BandIdx);
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			("Channel : %d NF value : %ddb \tBusyTime : %dusec\n",
+			pAd->ChannelInfo.ChannelNo[BandIdx], pAd->ChannelInfo.AvgNF[BandIdx],
+			pAd->ChannelInfo.chanbusytime[ch_index]));
+		Rsp.channel_busy_time = pAd->ChannelInfo.chanbusytime[ch_index];
+		Rsp.NF = pAd->ChannelInfo.AvgNF[BandIdx];
+		Rsp.channel = pAd->ChannelInfo.ChannelNo[BandIdx];
+		Rsp.tx_time = pAd->ChannelInfo.ChStats[BandIdx].Tx_Time;
+		Rsp.rx_time = pAd->ChannelInfo.ChStats[BandIdx].Rx_Time;
+		Rsp.obss_time = pAd->ChannelInfo.ChStats[BandIdx].Obss_Time;
+		Rsp.channel_idx = Channel2Index(pAd, pAd->ChannelInfo.ChannelNo[BandIdx], BandIdx);
+		/* This value to be used by application to calculate  channel busy percentage */
+		Rsp.actual_measured_time = ScanCtrl->ScanTimeActualDiff;
+		Status = copy_to_user(wrq->u.data.pointer, &Rsp, wrq->u.data.length);
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("[%d][%s] OID_OFF_SCAN_RESULT: IOCTL_Call_Status:%d!!\n",
+			__LINE__, __func__, Status));
+	}
+	break;
 	case OID_802_11_CHANNELINFO:
 	{
 		int i = 0;
@@ -3683,9 +4187,28 @@ INT RTMPAPSetInformation(
 		("[%d][%s] : (sync) Msg received for current channel info!! \n", __LINE__, __func__));
 		Info.cfg_ht_bw = wlan_config_get_ht_bw(wdev);
 		Info.cfg_vht_bw = wlan_config_get_vht_bw(wdev);
+#ifdef ENHANCE_STAT_SUPPORT
+		Info.oper_ht_bw = wlan_operate_get_ht_bw(wdev);
+		Info.oper_vht_bw = wlan_operate_get_vht_bw(wdev);
+#endif /* ENHANCE_STAT_SUPPORT */
 		Info.RDDurRegion = pAd->CommonCfg.RDDurRegion;
 		Info.region = GetCountryRegionFromCountryCode(pAd->CommonCfg.CountryCode);
+#ifdef ENHANCE_STAT_SUPPORT
+		Info.channel = wdev->channel;
+		Info.band = HcGetBandByWdev(wdev);
+		Info.cent_ch1 = wlan_operate_get_cen_ch_1(wdev);
+		Info.vht_cent_ch2 = wlan_operate_get_cen_ch_2(wdev);
+#ifdef CONFIG_AP_SUPPORT
+		NdisZeroMemory(&Info.ssid[0], MAX_LEN_OF_SSID+1);
+		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
+		{
+			NdisMoveMemory(&Info.ssid[0], pAd->ApCfg.MBSSID[pObj->ioctl_if].Ssid,
+				pAd->ApCfg.MBSSID[pObj->ioctl_if].SsidLen);
+		}
+#endif /* CONFIG_AP_SUPPORT */
+#else
 		Info.channel = HcGetChannelByRf(pAd, RfIC);
+#endif /* ENHANCE_STAT_SUPPORT */
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("[%d][%s] : Channel: %d Info.cfg_ht_bw : %d Info.cfg_vht_bw : %d !! \n",
 				 __LINE__, __func__, Info.channel, Info.cfg_ht_bw, Info.cfg_vht_bw));
@@ -4151,7 +4674,8 @@ INT RTMPAPSetInformation(
 				if ((!P2P_CLI_ON(pAd)) || (P2P_CLI_ON(pAd))) {
 					P2PCfgInit(pAd);
 					P2P_CliStartUp(pAd);
-					AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_AP);
+					AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
+						HW_BSSID_0, OPMODE_AP);
 				}
 			} else {
 				if (P2P_CLI_ON(pAd))
@@ -4160,7 +4684,8 @@ INT RTMPAPSetInformation(
 					P2P_GoStop(pAd);
 
 					if (INFRA_ON(pAd))
-						AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_STA +);
+						AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
+							HW_BSSID_0, OPMODE_STA);
 				}
 
 				P2PCfgInit(pAd);
@@ -4587,7 +5112,7 @@ INT RTMPAPSetInformation(
 			Status  = -EINVAL;
 		else {
 			UCHAR apidx = pObj->ioctl_if;
-			ULONG value;
+			ULONG value = 0;
 
 			Status = copy_from_user(&value, wrq->u.data.pointer, wrq->u.data.length);
 			pAd->ApCfg.MBSSID[apidx].wdev.FtCfg.FtCapFlag.Dot11rFtEnable = (value == 0 ? FALSE : TRUE);
@@ -4634,7 +5159,7 @@ INT RTMPAPSetInformation(
 			Status  = -EINVAL;
 		else {
 			UCHAR apidx = pObj->ioctl_if;
-			ULONG value;
+			ULONG value = 0;
 
 			Status = copy_from_user(&value, wrq->u.data.pointer, wrq->u.data.length);
 			pAd->ApCfg.MBSSID[apidx].wdev.FtCfg.FtCapFlag.RsrReqCap = (value == 0 ? FALSE : TRUE);
@@ -4649,7 +5174,7 @@ INT RTMPAPSetInformation(
 			Status  = -EINVAL;
 		else {
 			UCHAR apidx = pObj->ioctl_if;
-			ULONG value;
+			ULONG value = 0;
 
 			Status = copy_from_user(&value, wrq->u.data.pointer, wrq->u.data.length);
 			pAd->ApCfg.MBSSID[apidx].wdev.FtCfg.FtCapFlag.FtOverDs = (value == 0 ? FALSE : TRUE);
@@ -4689,8 +5214,8 @@ INT RTMPAPSetInformation(
 		else {
 			MAC_TABLE_ENTRY *pEntry = NULL;
 
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("RT_SET_DEL_MAC_ENTRY::(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-					 Addr[0], Addr[1], Addr[2], Addr[3], Addr[4], Addr[5]));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("RT_SET_DEL_MAC_ENTRY::("MACSTR")\n",
+					 MAC2STR(Addr)));
 
 			if ((pObj->ioctl_if_type == INT_MAIN) || (pObj->ioctl_if_type == INT_MBSSID)) {
 				struct wifi_dev *wdev = NULL;
@@ -4718,8 +5243,8 @@ INT RTMPAPSetInformation(
 
 					pReptEntry = RTMPLookupRepeaterCliEntry(pAd, TRUE, pEntry->Addr, TRUE);
 					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-							 ("Delete (%02x:%02x:%02x:%02x:%02x:%02x) mac repeater entry\n",
-							  Addr[0], Addr[1], Addr[2], Addr[3], Addr[4], Addr[5]));
+							 ("Delete ("MACSTR") mac repeater entry\n",
+							  MAC2STR(Addr)));
 					RepeaterDisconnectRootAP(pAd, pReptEntry, APCLI_DISCONNECT_SUB_REASON_APCFG_DEL_MAC_ENTRY);
 				}
 #endif /* MAC_REPEATER_SUPPORT */
@@ -4820,6 +5345,11 @@ INT RTMPAPSetInformation(
 						/* 2mins time-out timer */
 						RTMPSetTimer(&pAd->ApCfg.MBSSID[apidx].wdev.WscControl.Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 						pAd->ApCfg.MBSSID[apidx].wdev.WscControl.Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+						wapp_send_wsc_status_start_notif(pAd, &pAd->ApCfg.MBSSID[apidx].wdev);
+#endif
+#endif
 					}
 				}
 
@@ -4852,13 +5382,22 @@ INT RTMPAPSetInformation(
 
 				NdisZeroMemory(pUPnPMsg, msgLen);
 				retVal = copy_from_user(pUPnPMsg, wrq->u.data.pointer, msgLen);
+
+				if (retVal) {
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							 ("%s: copy from user error!\n", __func__));
+					os_free_mem(pUPnPMsg);
+					Status = -EINVAL;
+					break;
+				}
+
 				msgHdr = (RTMP_WSC_U2KMSG_HDR *)pUPnPMsg;
 				wdev = wdev_search_by_address(pAd, &msgHdr->Addr1[0]);
 
 				if (!wdev) {
 					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-							 ("%s:: cannot find wdev by addr(%02x:%02x:%02x:%02x:%02x:%02x).\n",
-							  __func__, PRINT_MAC(msgHdr->Addr1)));
+							 ("%s:: cannot find wdev by addr("MACSTR").\n",
+							  __func__, MAC2STR(msgHdr->Addr1)));
 					os_free_mem(pUPnPMsg);
 					Status = -EINVAL;
 					break;
@@ -5044,7 +5583,6 @@ INT RTMPAPSetInformation(
 				}
 
 				pApCliEntry = &pAd->StaCfg[ifIndex];
-				wdev = &pApCliEntry->wdev;
 				/* bring apcli interface down first */
 				apcliEn = pApCliEntry->ApcliInfStat.Enable;
 
@@ -5096,6 +5634,7 @@ INT RTMPAPSetInformation(
 				} else
 #endif /* P2P_SUPPORT */
 				{
+					OPSTATUS_CLEAR_FLAG_WDEV(wdev, fOP_AP_STATUS_MEDIA_STATE_CONNECTED);
 					ap_send_broadcast_deauth(pAd, wdev);
 					if (IS_SECURITY(&wdev->SecConfig))
 						pMbss->CapabilityInfo |= 0x0010;
@@ -5103,6 +5642,13 @@ INT RTMPAPSetInformation(
 						pMbss->CapabilityInfo &= ~(0x0010);
 					APSecInit(pAd, wdev);
 					restart_ap(&pMbss->wdev);
+					OPSTATUS_SET_FLAG_WDEV(wdev, fOP_AP_STATUS_MEDIA_STATE_CONNECTED);
+					if (pAd->CommonCfg.need_fallback == 1 && pMbss->wdev.channel < 15) {
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						("[%s] Need fallback to 20 MHz: pMbss->wdev.channel:%d\n",
+						__func__, pMbss->wdev.channel));
+						wlan_operate_set_ht_bw(&pMbss->wdev, HT_BW_20, EXTCHA_NONE);
+					}
 					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("I/F(ra%d) Set_SSID::(Len=%d,Ssid=%s)\n",
 						ifIndex, pMbss->SsidLen, pMbss->Ssid));
@@ -5117,6 +5663,9 @@ INT RTMPAPSetInformation(
 		{
 			struct _SECURITY_CONFIG *pSecConfig = pObj->pSecConfig;
 
+			BSS_STRUCT *pMbss = &pAd->ApCfg.MBSSID[pObj->ioctl_if];
+			INT i;
+
 			if (pSecConfig == NULL) {
 				MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					("%s:: pSecConfig == NULL \n", __func__));
@@ -5124,6 +5673,18 @@ INT RTMPAPSetInformation(
 			}
 
 			if (wrq->u.data.length < 65) {
+				if (wrq->u.data.length != strlen(pSecConfig->PSK)
+					|| !RTMPEqualMemory(wrq->u.data.pointer, pSecConfig->PSK, wrq->u.data.length)) {
+					for (i = 0; i < MAX_PMKID_COUNT; i++) {
+						if ((pAd->ApCfg.PMKIDCache.BSSIDInfo[i].Valid == TRUE)
+						&& (pAd->ApCfg.PMKIDCache.BSSIDInfo[i].Mbssidx == pMbss->mbss_idx)) {
+							pAd->ApCfg.PMKIDCache.BSSIDInfo[i].Valid = FALSE;
+							MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+									"%s():Modify PSK and clear PMKID (idx %d)from (mbssidx %d)\n",
+									i, pMbss->mbss_idx);
+						}
+					}
+				}
 				Status = copy_from_user(pSecConfig->PSK,
 							wrq->u.data.pointer,
 							wrq->u.data.length);
@@ -5157,9 +5718,11 @@ INT RTMPAPSetInformation(
 					NdisZeroMemory(pWscControl->WpaPsk, 64);
 					pWscControl->WpaPskLen = 0;
 					pWscControl->WpaPskLen = wrq->u.data.length;
-					Status = copy_from_user(pWscControl->WpaPsk,
-								wrq->u.data.pointer,
-								wrq->u.data.length);
+					if (wrq->u.data.length < 65) {
+						Status = copy_from_user(pWscControl->WpaPsk,
+									wrq->u.data.pointer,
+									wrq->u.data.length);
+					}
 					MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: PSK = %s\n",
 						__func__, pWscControl->WpaPsk));
 				}
@@ -5525,6 +6088,7 @@ INT RTMPAPSetInformation(
 		break;
 
 	case OID_802_11_SSID:
+		os_zero_mem(&Ssid, sizeof(NDIS_802_11_SSID));
 		if (wrq->u.data.length != sizeof(NDIS_802_11_SSID))
 			Status = -EINVAL;
 		else {
@@ -5645,7 +6209,7 @@ INT RTMPAPSetInformation(
 	break;
 #ifdef CONFIG_HOTSPOT_R2
 	case OID_802_11_HS_ONOFF: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		struct hs_onoff *onoff;
 
 		os_alloc_mem(NULL, (UCHAR **)&Buf, wrq->u.data.length);
@@ -5663,7 +6227,7 @@ INT RTMPAPSetInformation(
 		break;
 
 	case OID_802_11_HS_SASN_ENABLE: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		PHOTSPOT_CTRL pHSCtrl = NULL;
 		struct wifi_dev *wdev = NULL;
 
@@ -5703,7 +6267,7 @@ INT RTMPAPSetInformation(
 	break;
 
 	case OID_802_11_BSS_LOAD: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		PHOTSPOT_CTRL pHSCtrl;
 
 		ifIndex = pObj->ioctl_if;
@@ -5727,7 +6291,7 @@ INT RTMPAPSetInformation(
 #endif
 #ifdef CONFIG_DOT11V_WNM
 	case OID_802_11_WNM_COMMAND: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		struct wnm_command *cmd_data;
 
 		os_alloc_mem(Buf, (UCHAR **)&Buf, wrq->u.data.length);
@@ -5742,7 +6306,7 @@ INT RTMPAPSetInformation(
 	break;
 #ifdef WAPP_SUPPORT
 	case OID_802_11_WAPP_IE: {
-		UCHAR *IE;
+		UCHAR *IE = NULL;
 
 		os_alloc_mem(NULL, (UCHAR **)&IE, wrq->u.data.length);
 		Status = copy_from_user(IE, wrq->u.data.pointer, wrq->u.data.length);
@@ -5751,7 +6315,7 @@ INT RTMPAPSetInformation(
 	}
 	break;
 	case OID_802_11_WAPP_PARAM_SETTING: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		struct wapp_param_setting *param_setting;
 
 		os_alloc_mem(NULL, (UCHAR **)&Buf, wrq->u.data.length);
@@ -5762,7 +6326,7 @@ INT RTMPAPSetInformation(
 	}
 	break;
 	case OID_802_11_INTERWORKING_ENABLE: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		PGAS_CTRL pGASCtrl;
 
 		ifIndex = pObj->ioctl_if;
@@ -5784,7 +6348,7 @@ INT RTMPAPSetInformation(
 	break;
 
 	case OID_802_11_WNM_BTM_REQ: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		MAC_TABLE_ENTRY *pEntry = NULL;
 		struct btm_req_data *req_data;
 
@@ -5811,13 +6375,8 @@ INT RTMPAPSetInformation(
 					(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED))) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("btm1\n"));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("peer_mac_addr=%02x:%02x:%02x:%02x:%02x:%02x\n",
-					  req_data->peer_mac_addr[0],
-					  req_data->peer_mac_addr[1],
-					  req_data->peer_mac_addr[2],
-					  req_data->peer_mac_addr[3],
-					  req_data->peer_mac_addr[4],
-					  req_data->peer_mac_addr[5]));
+					 ("peer_mac_addr="MACSTR"\n",
+					  MAC2STR(req_data->peer_mac_addr)));
 			Send_BTM_Req(pAd,
 						 req_data->peer_mac_addr,
 						 req_data->btm_req,
@@ -5835,7 +6394,7 @@ INT RTMPAPSetInformation(
 
 #ifdef CONFIG_STA_SUPPORT
 	case OID_802_11_WNM_BTM_RSP: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		MAC_TABLE_ENTRY *pEntry = NULL;
 		struct btm_rsp_data *rsp_data;
 		os_alloc_mem(Buf, (UCHAR **)&Buf, wrq->u.data.length);
@@ -5847,13 +6406,8 @@ INT RTMPAPSetInformation(
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s : NO ENTRY!!!!!!\n", __func__));
 		} else {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("peer_mac_addr=%02x:%02x:%02x:%02x:%02x:%02x\n",
-					 rsp_data->peer_mac_addr[0],
-					 rsp_data->peer_mac_addr[1],
-					 rsp_data->peer_mac_addr[2],
-					 rsp_data->peer_mac_addr[3],
-					 rsp_data->peer_mac_addr[4],
-					 rsp_data->peer_mac_addr[5]));
+					("peer_mac_addr="MACSTR"\n",
+					 MAC2STR(rsp_data->peer_mac_addr)));
 			Send_BTM_Rsp(pAd,
 					rsp_data->peer_mac_addr,
 					rsp_data->btm_rsp,
@@ -5897,7 +6451,7 @@ INT RTMPAPSetInformation(
 #endif /*OCE_SUPPORT*/
 
 	case OID_802_11_WNM_NOTIFY_REQ: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		MAC_TABLE_ENTRY *pEntry;
 		struct wnm_req_data *req_data;
 
@@ -5940,7 +6494,7 @@ INT RTMPAPSetInformation(
 
 #ifdef CONFIG_HOTSPOT_R2
 	case OID_802_11_QOSMAP_CONFIGURE: {
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		MAC_TABLE_ENTRY *pEntry;
 		struct qosmap_data *req_data;
 		unsigned int i;
@@ -6025,7 +6579,7 @@ INT RTMPAPSetInformation(
 #ifdef MBO_SUPPORT
 	case OID_802_11_MBO_MSG:
 	{
-		UCHAR *Buf;
+		UCHAR *Buf = NULL;
 		struct wapp_param_setting *param_setting;
 
 		os_alloc_mem(NULL, (UCHAR **)&Buf, wrq->u.data.length);
@@ -6041,10 +6595,28 @@ INT RTMPAPSetInformation(
 	}
 		break;
 #endif /* MBO_SUPPORT */
+#if defined(CONFIG_6G_SUPPORT) && defined(BSSMGR_CROSS_MODULE_SUPPORT)
+	case OID_BSS_MGMT_SET_EVENT:
+	{
+		UCHAR *Buf = NULL;
+		struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+
+		os_alloc_mem(NULL, (UCHAR **)&Buf, wrq->u.data.length);
+		Status = copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length);
+		if (Status) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"copy_from_user return status received = failure\n");
+			Status = -NDIS_STATUS_FAILURE;
+		}
+		bssmnger_set_event_handle(pAd, wdev, Buf);
+		os_free_mem(Buf);
+	}
+	break;
+#endif /* CONFIG_6G_SUPPORT && BSSMGR_CROSS_MODULE_SUPPORT */
 #ifdef WAPP_SUPPORT
 	case OID_WAPP_EVENT:
 	{
-		UCHAR *buf;
+		UCHAR *buf = NULL;
 		struct wapp_req *req;
 
 		os_alloc_mem(NULL, (UCHAR **)&buf, wrq->u.data.length);
@@ -6063,7 +6635,7 @@ INT RTMPAPSetInformation(
 #ifdef CONFIG_COLGIN_MT6890
 	case OID_LPPE_EVENT:
 	{
-		UCHAR *buf;
+		UCHAR *buf = NULL;
 		struct wapp_req *req;
 
 		os_alloc_mem(NULL, (UCHAR **)&buf, wrq->u.data.length);
@@ -6099,8 +6671,6 @@ INT RTMPAPSetInformation(
 		break;
 #endif
 #ifdef VOW_SUPPORT
-#define VOW_CMD_STR_LEN 16
-
 	case OID_802_11_VOW_BW_EN:
 		/* not used now */
 		break;
@@ -6121,8 +6691,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_airtime_ctrl_en(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"buf snprintf error!\n");
+					Status = -EFAULT;
+				} else
+					set_vow_airtime_ctrl_en(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_BW_AT_EN(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6149,8 +6724,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_bw_ctrl_en(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"buf snprintf error!\n");
+					Status = -EFAULT;
+				} else
+					set_vow_bw_ctrl_en(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_BW_TPUT_EN(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6174,8 +6754,13 @@ INT RTMPAPSetInformation(
 		Status = copy_from_user(val, wrq->u.data.pointer, wrq->u.data.length);
 
 		if (Status == NDIS_STATUS_SUCCESS) {
-			snprintf(buf, sizeof(buf), "%d", val[0]);
-			set_vow_airtime_fairness_en(pAd, buf);
+			Ret = snprintf(buf, sizeof(buf), "%d", val[0]);
+			if (os_snprintf_error(sizeof(buf), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"buf snprintf error!\n");
+				Status = -EFAULT;
+			} else
+				set_vow_airtime_fairness_en(pAd, buf);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_ATF_EN(0x%08x) -> val %d\n", cmd, val[0]));
 		} else
 			Status = -EFAULT;
@@ -6197,8 +6782,13 @@ INT RTMPAPSetInformation(
 		Status = copy_from_user(val, wrq->u.data.pointer, wrq->u.data.length);
 
 		if (Status == NDIS_STATUS_SUCCESS) {
-			snprintf(buf, sizeof(buf), "%d", val[0]);
-			set_vow_rx_airtime_en(pAd, buf);
+			Ret = snprintf(buf, sizeof(buf), "%d", val[0]);
+			if (os_snprintf_error(sizeof(buf), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"buf snprintf error!\n");
+				Status = -EFAULT;
+			} else
+				set_vow_rx_airtime_en(pAd, buf);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_RX_EN(0x%08x) -> val %d\n", cmd, val[0]));
 		} else
 			Status = -EFAULT;
@@ -6223,8 +6813,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_max_rate(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("buf snprintf error.\n"));
+					Status = -EFAULT;
+				} else
+					set_vow_max_rate(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_GROUP_MAX_RATE(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6251,8 +6846,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_min_rate(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("buf snprintf error.\n"));
+					Status = -EFAULT;
+				} else
+					set_vow_min_rate(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_GROUP_MIN_RATE(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6279,8 +6879,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_max_ratio(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("buf snprintf error.\n"));
+					Status = -EFAULT;
+				} else
+					set_vow_max_ratio(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_GROUP_MAX_RATIO(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6307,8 +6912,13 @@ INT RTMPAPSetInformation(
 
 		if (Status == NDIS_STATUS_SUCCESS) {
 			for (group = 0; group < cfg->ssid_num; group++) {
-				snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
-				set_vow_min_ratio(pAd, buf);
+				Ret = snprintf(buf, sizeof(buf), "%d-%d", group, cfg->val[group]);
+				if (os_snprintf_error(sizeof(buf), Ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("buf snprintf error.\n"));
+					Status = -EFAULT;
+				} else
+					set_vow_min_ratio(pAd, buf);
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("OID_802_11_VOW_GROUP_MIN_RATIO(0x%08x) -> val %d\n", cmd,
 						 cfg->val[group]));
 			}
@@ -6395,6 +7005,14 @@ INT RTMPAPSetInformation(
 	case OID_DFS_ZERO_WAIT:
 		Status = ZeroWaitDfsCmdHandler(pAd, wrq);
 		break;
+#ifdef DFS_ZEROWAIT_SUPPORT
+	case OID_DFS_CAC_START:
+		Status = ZeroWaitDfsCacStartHandler(pAd, wrq);
+		break;
+	case OID_DFS_CHANNEL_SWITCH:
+		Status = ZeroWaitDfsChannelSwitch(pAd, wrq);
+		break;
+#endif
 #endif
 
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
@@ -6656,7 +7274,6 @@ INT RTMPAPSetInformation(
 		UCHAR *vendor_ie_temp_header;
 		struct wifi_dev *wdev;
 		CUSTOMER_PROBE_RSP_VENDOR_IE *ap_probe_rsp_vendor_ie = NULL;
-		//UCHAR stamac_temp[MAC_ADDR_LEN];
 		BSS_STRUCT *mbss = NULL;
 		PDL_LIST ap_probe_rsp_vendor_ie_list = NULL;
 		BOOLEAN found = FALSE;
@@ -6725,8 +7342,8 @@ INT RTMPAPSetInformation(
 			ap_probe_rsp_vendor_ie->pointer = vendor_ie_temp;
 			ap_probe_rsp_vendor_ie->length = wrq->u.data.length - 7;
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("found STA MAC[%02x:%02x:%02x:%02x:%02x:%02x], replace probe response VIE!!!\n",
-					PRINT_MAC(vendor_ie_temp_header)));
+					("found STA MAC["MACSTR"], replace probe response VIE!!!\n",
+					MAC2STR(vendor_ie_temp_header)));
 		} else {
 			if(pAd->ApCfg.ap_probe_rsp_vendor_ie_count < pAd->ApCfg.ap_probe_rsp_vendor_ie_max_count) {
 				ret = os_alloc_mem(pAd, (UCHAR **)&ap_probe_rsp_vendor_ie,
@@ -6749,8 +7366,8 @@ INT RTMPAPSetInformation(
 				DlListAddTail(&mbss->ap_probe_rsp_vendor_ie_list, &ap_probe_rsp_vendor_ie->List);
 				pAd->ApCfg.ap_probe_rsp_vendor_ie_count++;
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("Add new STA MAC[%02x:%02x:%02x:%02x:%02x:%02x]!!!\n",
-					PRINT_MAC(ap_probe_rsp_vendor_ie->stamac)));
+					("Add new STA MAC["MACSTR"]!!!\n",
+					MAC2STR(ap_probe_rsp_vendor_ie->stamac)));
 				hex_dump_with_lvl("Probe rsp IE: ",ap_probe_rsp_vendor_ie->pointer ,
 					ap_probe_rsp_vendor_ie->length ,DBG_LVL_INFO);
 			} else {
@@ -6831,12 +7448,12 @@ INT RTMPAPSetInformation(
 		}
 		if (found)
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("Free STA MAC[%02x:%02x:%02x:%02x:%02x:%02x]!!!\n",
-				PRINT_MAC(ap_probe_rsp_vendor_ie->stamac)));
+				("Free STA MAC["MACSTR"]!!!\n",
+				MAC2STR(ap_probe_rsp_vendor_ie->stamac)));
 		else
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("Free STA MAC[%02x:%02x:%02x:%02x:%02x:%02x] not found!!!\n",
-			PRINT_MAC(vendor_ie_temp_header)));
+			("Free STA MAC["MACSTR"] not found!!!\n",
+			MAC2STR(vendor_ie_temp_header)));
 
 		RTMP_SPIN_UNLOCK(&mbss->probe_rsp_vendor_ie_lock);
 		os_free_mem(vendor_ie_temp_header);
@@ -6989,7 +7606,8 @@ INT RTMPAPSetInformation(
 #endif
 				pDot11hTest->RDCount = 0;
 				MlmeEnqueue(pAd, DFS_STATE_MACHINE, DFS_CAC_END, 0, NULL, HcGetBandByWdev(wdev));
-				AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0,  OPMODE_AP);
+				AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
+					HW_BSSID_0,  OPMODE_AP);
 				pDot11hTest->RDMode = RD_NORMAL_MODE;
 			}
 		}
@@ -7023,7 +7641,7 @@ INT RTMPAPSetInformation(
 				break;
 			}
 
-			if (wrq->u.data.length > sizeof(struct qos_param_rec_add) || wrq->u.data.length < 0) {
+			if (wrq->u.data.length > sizeof(struct qos_param_rec_add)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("data len[%d] is invalid, return!!!\n", wrq->u.data.length));
 				break;
@@ -7044,11 +7662,11 @@ INT RTMPAPSetInformation(
 						wrq->u.data.pointer, sizeof(struct qos_param_rec_add));
 
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("%s Set ip_src %x, ip_dest %x, dest_mac[%02x:%02x:%02x:%02x:%02x:%02x],\n\
+			("%s Set ip_src %x, ip_dest %x, dest_mac["MACSTR"],\n\
 				protocol = %u, sport = %u, dport = %u, priority = %u, delay_bound = %u, delay_weight = %u\n\
 				delay_req = %u, data_rate = %u, bw_req = %u, dir = %u, drop_thres = %u, app_type = %u\n",
 				__func__, qos_param_rec_add->ip_src, qos_param_rec_add->ip_dest,
-				PRINT_MAC(qos_param_rec_add->dest_mac),
+				MAC2STR(qos_param_rec_add->dest_mac),
 				qos_param_rec_add->protocol, qos_param_rec_add->sport, qos_param_rec_add->dport,
 				qos_param_rec_add->priority, qos_param_rec_add->delay_bound, qos_param_rec_add->delay_weight,
 				qos_param_rec_add->delay_req, qos_param_rec_add->data_rate, qos_param_rec_add->bw_req,
@@ -7101,7 +7719,7 @@ INT RTMPAPSetInformation(
 				break;
 			}
 
-			if (wrq->u.data.length > sizeof(struct qos_param_rec_del) || wrq->u.data.length < 0) {
+			if (wrq->u.data.length > sizeof(struct qos_param_rec_del)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("data len[%d] is invalid, return!!!\n", wrq->u.data.length));
 				break;
@@ -7207,7 +7825,17 @@ INT Channel_Info_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, POS_
 	struct wifi_dev *wdev = NULL;
 	INT i = 0;
 	UINT ifIndex = pObj->ioctl_if;
-	INT Status = CHANNEL_MONITOR_STRG_SUCCESS;
+	INT Status;
+#ifdef CONFIG_MAP_SUPPORT
+	struct DOT11_H *pDot11h = NULL;
+	UCHAR index;
+	STA_ADMIN_CONFIG *pApCliEntry;
+	UCHAR BandIdx = 255;/*initializing to a non-valid value*/
+	UCHAR BandIdx_AP = 255;/*initializing to a non-valid value*/
+#endif
+
+
+	os_zero_mem(&msg, sizeof(OFFCHANNEL_SCAN_MSG));
 
 	if (pObj->ioctl_if_type  == INT_MBSSID) {
 		if (!VALID_MBSS(pAd, ifIndex)) {
@@ -7232,14 +7860,24 @@ INT Channel_Info_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, POS_
 		switch (msg.Action) {
 		case GET_OFFCHANNEL_INFO:
 		{
+
+			/*To do OffChannelScan, need TakeChannelOpCharge first*/
+			if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN, TRUE)) {
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_SCAN, DBG_LVL_ERROR,
+					"TakeChannelOpCharge fail for Off-Channel SCAN!!\n");
+				return CHANNEL_MONITOR_STRG_FAILURE;
+			}
+
 			if (scan_in_run_state(pAd, wdev) == TRUE) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Scan in running State\n"));
+				ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN);
 				return CHANNEL_MONITOR_STRG_FAILURE;
 			}
 
 			if (ScanCtrl->state != OFFCHANNEL_SCAN_INVALID) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("%s:failed because offchannel scan is still ongoing\n", __func__));
+				ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN);
 				Status = CHANNEL_MONITOR_STRG_FAILURE;
 			} else {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -7248,9 +7886,9 @@ INT Channel_Info_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, POS_
 
 				if (msg.data.offchannel_param.Num_of_Away_Channel > MAX_AWAY_CHANNEL) {
 					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Invalid Argument\n"));
+					ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN);
 					return CHANNEL_MONITOR_STRG_INVALID_ARG;
 				}
-
 				ScanCtrl->Num_Of_Channels = msg.data.offchannel_param.Num_of_Away_Channel;
 				ScanCtrl->Off_Ch_Scan_BW = msg.data.offchannel_param.bw;
 				/* Fillup the paramters received for all channels */
@@ -7264,6 +7902,31 @@ INT Channel_Info_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, POS_
 							 __func__, ScanCtrl->ScanGivenChannel[i],
 							 ScanCtrl->Offchan_Scan_Type[i], ScanCtrl->ScanTime[i]));
 				}
+#ifdef CONFIG_MAP_SUPPORT
+				if (IS_MAP_ENABLE(pAd)) {
+					if (wdev) {
+						BandIdx_AP = HcGetBandByWdev(wdev);
+					}
+					for (index = 0; index < MAX_APCLI_NUM; index++) {
+						pApCliEntry = &pAd->StaCfg[index];
+						if (pApCliEntry->ApcliInfStat.Valid == TRUE) {
+								BandIdx = HcGetBandByWdev(&pApCliEntry->wdev);
+								break;
+							}
+					}
+					/*if off channel scan req received at BandIdx_AP matches
+					with the BandIdx of APCLI which is connected to a
+					controller , then only there is need to set the ChChangeCSA
+					flag as true in MAP case This flag is used to prevent apcli
+					disconnect due to beacon loss during off channel scan*/
+					if ((BandIdx == BandIdx_AP) && wdev) {
+						pDot11h = wdev->pDot11_H;
+						if (pDot11h) {
+							pDot11h->ChChangeCSA = TRUE;
+						}
+					}
+				}
+#endif
 				Status = ApSiteSurveyNew_by_wdev(pAd, msg.data.offchannel_param.channel[0],
 							msg.data.offchannel_param.scan_time[0],
 							msg.data.offchannel_param.scan_type[0], FALSE, wdev);
@@ -7393,8 +8056,8 @@ INT andlink_get_stainfos (
 
 		if (pEnt->Sst == SST_ASSOC) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					("\nassoc(2):%d Addr %02x:%02x:%02x:%02x:%02x:%02x;inf_wdev=%p,  pEnt->wdev=%p\n",
-					pEnt->Sst, PRINT_MAC(pEnt->Addr), inf_wdev, pEnt->wdev));
+					("\nassoc(2):%d Addr "MACSTR";inf_wdev=%p,  pEnt->wdev=%p\n",
+					pEnt->Sst, MAC2STR(pEnt->Addr), inf_wdev, pEnt->wdev));
 #ifdef MAC_REPEATER_SUPPORT
 				if (pAd->ApCfg.bMACRepeaterEn && pEnt &&
 					(IS_ENTRY_PEER_AP(pEnt) || IS_ENTRY_APCLI(pEnt)) &&
@@ -7436,7 +8099,7 @@ INT andlink_get_stainfos (
 						NdisMoveMemory(dst_ptr, src_ptr, MAC_ADDR_LEN);
 
 						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-							("\nRmac %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(dst_ptr)));
+							("\nRmac "MACSTR"\n", MAC2STR(dst_ptr)));
 #ifdef MAC_REPEATER_SUPPORT
 						pRepEnt = RTMPLookupRepeaterCliEntry(pAd, TRUE, pEnt->Addr, TRUE);
 						if (pRepEnt != NULL && pAd->ApCfg.bMACRepeaterEn) {
@@ -7452,8 +8115,8 @@ INT andlink_get_stainfos (
 							NdisMoveMemory(dst_ptr, src_ptr, MAC_ADDR_LEN);
 						}
 
-						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nVmac %02x:%02x:%02x:%02x:%02x:%02x\n",
-							PRINT_MAC(dst_ptr)));
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nVmac "MACSTR"\n",
+							MAC2STR(dst_ptr)));
 						/* RSSI */
 						sta_info.item[sta_info.sta_cnt].RSSI = RTMPMaxRssi(pAd, pEnt->RssiSample.AvgRssi[0],
 							pEnt->RssiSample.AvgRssi[1],pEnt->RssiSample.AvgRssi[2]);
@@ -7602,6 +8265,682 @@ INT andlink_get_sta_hostname_ip
 
 #endif/*ANDLINK_FEATURE_SUPPORT*/
 
+#ifdef TR181_SUPPORT
+void Get_Sta_Info (
+	IN RTMP_ADAPTER *pAd,
+	IN OUT WIFI_STATION *sta_info)
+{
+	PMAC_TABLE_ENTRY pEntry = NULL;
+	mtk_rate_info_t tx_rate, rx_rate;
+	UCHAR bandIdx = BAND0;
+	SHORT NF = -92; /* default value */
+
+	sta_info->valid = FALSE;
+
+	pEntry = MacTableLookup(pAd, sta_info->MacAddr);
+	if (!(IS_VALID_ENTRY(pEntry)) || (pEntry->Sst != SST_ASSOC))
+		return;
+
+	if (pEntry->wdev) {
+		sta_info->PhyMode = pEntry->wdev->PhyMode;
+		bandIdx = HcGetBandByWdev(pEntry->wdev);
+	}
+
+	sta_info->LastConnectTime = pEntry->StaConnectTime;
+	if (pEntry->wcid < MAX_LEN_OF_TR_TABLE)
+		sta_info->AuthenticationState =
+			(pAd->tr_ctl.tr_entry[pEntry->tr_tb_idx].PortSecured == WPA_802_1X_PORT_SECURED) ? TRUE : FALSE;
+
+	sta_info->SignalStrength = rtmp_avg_rssi(pAd, &pEntry->RssiSample);
+#ifdef NF_SUPPORT_V2
+	/* need run iwpriv set set_enable_nf command to get valid noise floor */
+	NF = pAd->Avg_NF[bandIdx];
+#endif
+	sta_info->Noise = NF;
+
+	sta_info->Retransmissions = 0; /* not support */
+	sta_info->UtilizationReceive = pEntry->TxRxTime[0][0] +
+									pEntry->TxRxTime[1][0] +
+									pEntry->TxRxTime[2][0] +
+									pEntry->TxRxTime[3][0];
+	sta_info->UtilizationTransmit =	pEntry->TxRxTime[0][1] +
+									pEntry->TxRxTime[1][1] +
+									pEntry->TxRxTime[2][1] +
+									pEntry->TxRxTime[3][1];
+#ifdef MAC_REPEATER_SUPPORT
+	if (pAd->ApCfg.bMACRepeaterEn && (IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_APCLI(pEntry)) &&
+		IS_REPT_LINK_UP(pEntry->pReptCli)) {
+		NdisCopyMemory(sta_info->VMacAddr, pEntry->pReptCli->CurrentAddress,
+			MAC_ADDR_LEN);
+		sta_info->repeater = TRUE;
+	}
+#endif/*MAC_REPEATER_SUPPORT*/
+	sta_info->valid = TRUE;
+
+	/* STATS */
+	sta_info->stats.BytesReceived = pEntry->RxBytes;
+	sta_info->stats.BytesSent = pEntry->TxBytes;
+	sta_info->stats.PacketsReceived = pEntry->RxPackets.QuadPart;
+	sta_info->stats.PacketsSent = pEntry->TxPackets.QuadPart;
+	sta_info->stats.ErrorsSent = 0;
+	sta_info->stats.ErrorsReceived = 0;
+	sta_info->stats.RetransCount = 0;
+	sta_info->stats.FailedRetransCount = 0;
+	sta_info->stats.RetryCount = 0;
+	sta_info->stats.MultipleRetryCount = 0;
+
+	/* RATE */
+	os_zero_mem(&tx_rate, sizeof(mtk_rate_info_t));
+	os_zero_mem(&rx_rate, sizeof(mtk_rate_info_t));
+	if (pEntry->wdev && (TRUE == get_sta_rate_info(pAd, pEntry, &tx_rate, &rx_rate))) {
+		sta_info->rates.TxRate = tx_rate.legacy;
+		sta_info->rates.RxRate = rx_rate.legacy;
+	}
+	/* Mbps = (n Bytes x 8) / (1024 * 1024) = (n >> 17) */;
+	sta_info->rates.TxRate_rt = pEntry->AvgTxBytes >> 17;
+	sta_info->rates.RxRate_rt = pEntry->AvgRxBytes >> 17;
+	sta_info->rates.avg_tx_rate = 0; /* not support */
+	sta_info->rates.avg_rx_rate = 0; /* not support */
+}
+
+static void Get_Sta_Stats (
+	IN RTMP_ADAPTER *pAd,
+	IN OUT WIFI_STA_STATS *staStats)
+{
+	PMAC_TABLE_ENTRY pEntry = NULL;
+
+	staStats->valid = FALSE;
+
+	pEntry = MacTableLookup(pAd, staStats->MacAddr);
+	if (!(IS_VALID_ENTRY(pEntry)) || (pEntry->Sst != SST_ASSOC))
+		return;
+
+	staStats->stats.BytesReceived = pEntry->RxBytes;
+	staStats->stats.BytesSent = pEntry->TxBytes;
+	staStats->stats.PacketsReceived = pEntry->RxPackets.QuadPart;
+	staStats->stats.PacketsSent = pEntry->TxPackets.QuadPart;
+	staStats->stats.ErrorsSent = 0;
+	staStats->stats.ErrorsReceived = 0;
+	staStats->stats.RetransCount = 0;
+	staStats->stats.FailedRetransCount = 0;
+	staStats->stats.RetryCount = 0;
+	staStats->stats.MultipleRetryCount = 0;
+	staStats->valid = TRUE;
+}
+
+static void Get_Sta_Rates (
+	IN RTMP_ADAPTER *pAd,
+	IN OUT WIFI_STA_RATES *staRates)
+{
+	PMAC_TABLE_ENTRY pEntry = NULL;
+	mtk_rate_info_t tx_rate, rx_rate;
+
+	staRates->valid = FALSE;
+
+	pEntry = MacTableLookup(pAd, staRates->MacAddr);
+	if (!(IS_VALID_ENTRY(pEntry)) || (pEntry->Sst != SST_ASSOC))
+		return;
+
+	/* RATE */
+	os_zero_mem(&tx_rate, sizeof(mtk_rate_info_t));
+	os_zero_mem(&rx_rate, sizeof(mtk_rate_info_t));
+	if (pEntry->wdev && (TRUE == get_sta_rate_info(pAd, pEntry, &tx_rate, &rx_rate))) {
+		staRates->rates.TxRate = tx_rate.legacy;
+		staRates->rates.RxRate = rx_rate.legacy;
+	}
+	/* Mbps = (n Bytes x 8) / (1024 * 1024) = (n >> 17) */;
+	staRates->rates.TxRate_rt = pEntry->AvgTxBytes >> 17;
+	staRates->rates.RxRate_rt = pEntry->AvgRxBytes >> 17;
+	staRates->rates.avg_tx_rate = 0; /* not support */
+	staRates->rates.avg_rx_rate = 0; /* not support */
+	staRates->valid = TRUE;
+}
+
+static INT Get_Radio_Channel_Change_Info (
+	IN RTMP_ADAPTER *pAd,
+	OUT UCHAR band_idx,
+	OUT RTMP_IOCTL_INPUT_STRUCT *wrq)
+{
+	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)pAd->hdev_ctrl;
+	ULONG TNow;
+	UINT32	Time, TimeDelta;
+	INT	Status = NDIS_STATUS_SUCCESS;
+
+	NdisGetSystemUpTime(&TNow);
+	Time = jiffies_to_usecs(TNow);
+	TimeDelta = Time - ctrl->rdev[band_idx].pRadioCtrl->CurChannelUpTime;
+
+	wrq->u.data.length = sizeof(UINT32);
+	Status = copy_to_user(wrq->u.data.pointer, &TimeDelta, wrq->u.data.length);
+
+	return Status;
+}
+
+static INT Get_Dev_Ac (
+	IN RTMP_ADAPTER *pAd,
+	IN UINT ap_idx,
+	OUT WIFI_DEV_AC *ac)
+{
+	int i;
+	struct wifi_dev *wdev = NULL;
+	struct _EDCA_PARM *pBssEdca = NULL;
+	struct wlan_config *cfg = NULL;
+
+	wdev = &pAd->ApCfg.MBSSID[ap_idx].wdev;
+
+	pBssEdca = wlan_config_get_ht_edca(wdev);
+	if (pBssEdca == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pBssEdca is NULL\n");
+		return NDIS_STATUS_FAILURE;
+	}
+
+	cfg = (struct wlan_config*)wdev->wpf_cfg;
+	if (!cfg) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wpf_cfg NULL\n");
+		return NDIS_STATUS_FAILURE;
+	}
+	for (i = 0; i < WMM_NUM_OF_AC; i++) {
+		ac[i].AccessCategory = i;
+		ac[i].AIFSN = pBssEdca->Aifsn[i];
+		ac[i].ECWMin = pBssEdca->Cwmin[i];
+		ac[i].ECWMax = pBssEdca->Cwmax[i];
+		ac[i].TxOpMax = pBssEdca->Txop[i];
+		ac[i].AckPolicy = cfg->phy_conf.ack_policy[i];
+	}
+	return NDIS_STATUS_SUCCESS;
+}
+
+#ifdef STAT_ENHANCE_SUPPORT
+static INT Get_BSS_AC_Statistics (
+	IN RTMP_ADAPTER *pAd,
+	IN UINT ap_idx,
+	OUT WIFI_DEV_AC_STATS *pStat)
+{
+	BSS_STRUCT *pMbss;
+	INT i;
+	if (!VALID_MBSS(pAd, ap_idx)) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Error AP index \n");
+		return EINVAL;
+	}
+
+	pMbss = &pAd->ApCfg.MBSSID[ap_idx];
+
+	for (i = 0; i < WMM_NUM_OF_AC; i++) {
+		pStat[i].AccessCategory = i;
+		pStat[i].PacketsReceived =  pMbss->RxCountPerAC[i];
+		pStat[i].BytesReceived = pMbss->ReceivedByteCountPerAC[i];
+		pStat[i].ErrorsReceived =  pMbss->RxErrorCountPerAC[i];
+		pStat[i].DiscardPacketsReceived =  pMbss->RxDropCountPerAC[i];
+		pStat[i].PacketsSent = 0; /* Not Support */
+		pStat[i].BytesSent = 0; /* Not Support */
+		pStat[i].ErrorsSent =  0; /* Not Support */
+		pStat[i].DiscardPacketsSent = 0; /* Not Support */
+		pStat[i].RetransCount = 0; /* Not Support */
+	}
+	return NDIS_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef RADIUS_ACCOUNTING_SUPPORT
+static void Get_Accounting_Server (
+	IN RTMP_ADAPTER *pAd,
+	IN UINT ap_idx,
+	OUT WIFI_ACCOUNTING_SERVER *accounting_server)
+{
+	os_zero_mem(accounting_server, sizeof(WIFI_ACCOUNTING_SERVER));
+	accounting_server->ServerIPAddr[0] = pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[0].radius_ip;
+	accounting_server->ServerIPAddr[1] = pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[1].radius_ip;
+	accounting_server->ServerPort[0] = pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[0].radius_port;
+	accounting_server->ServerPort[1] =  pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[1].radius_port;
+	NdisCopyMemory(accounting_server->Secret[0],
+		pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[0].radius_key,
+		pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[0].radius_key_len);
+	NdisCopyMemory(accounting_server->Secret[1],
+		pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[1].radius_key,
+		pAd->ApCfg.MBSSID[ap_idx].wdev.SecConfig.radius_acct_srv_info[1].radius_key_len);
+}
+#endif
+
+UCHAR Get_ScanSecurityMode(
+	IN UINT32 authMode)
+{
+	/*	0: None
+		1: WEP
+		2: WPA
+		3: WPA2
+		4: WPA-WPA2
+		5: WPA-Enterprise
+		6: WPA2-Enterprise
+		7: WPA-WPA2-Enterprise
+		8: WPA3-SAE
+		9: WPA2-PSK-WPA3-SAE
+		10: WPA3-Enterprise */
+
+	if (IS_AKM_OPEN(authMode))
+		return 0;
+	else if (IS_AKM_AUTOSWITCH(authMode))
+		return 1;
+	else if (IS_AKM_WPA1PSK(authMode))
+		return 2;
+	else if (IS_AKM_WPA2PSK(authMode))
+		return 3;
+	else if (IS_AKM_FT_WPA2PSK(authMode) && IS_AKM_WPA1PSK(authMode))
+		return 4;
+	else if (IS_AKM_WPA1(authMode))
+		return 5;
+	else if (IS_AKM_WPA2(authMode))
+		return 6;
+	else if (IS_AKM_WPA1(authMode) && IS_AKM_WPA2(authMode))
+		return 7;
+	else if (IS_AKM_FT_SAE_SHA256(authMode) && IS_AKM_WPA3PSK(authMode))
+		return 8;
+	else if (IS_AKM_WPA2PSK(authMode) && IS_AKM_WPA3PSK(authMode) && IS_AKM_FT_SAE_SHA256(authMode))
+		return 9;
+	else if (IS_AKM_WPA3(authMode))
+		return 10;
+	else
+		return 0;
+ }
+
+UCHAR Get_ScanEncryMode(
+	IN UINT32 encryMode)
+{
+	/*0: TKIP
+	  1: AES
+	  2: TKIP AES Mix
+	  3: WEP
+	  4: None*/
+	if (IS_CIPHER_TKIP(encryMode))
+		return 0;
+	else if (IS_CIPHER_CCMP128(encryMode))
+		return 1;
+	else if (IS_CIPHER_TKIP(encryMode) && IS_CIPHER_CCMP128(encryMode))
+		return 2;
+	else if (IS_CIPHER_WEP(encryMode))
+		return 3;
+	else
+		return 4;
+}
+
+static void Get_80211_Standard (
+	IN BSS_ENTRY *pBss,
+	OUT UCHAR *SupportedStandards)
+{
+	NDIS_802_11_NETWORK_TYPE wireless_mode = NetworkTypeInUseSanity(pBss);
+	int ret;
+
+	if (wireless_mode == Ndis802_11FH ||
+		wireless_mode == Ndis802_11DS) {
+		ret = snprintf(SupportedStandards, 2, "%s", "b");
+		if (os_snprintf_error(2, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM5) {
+		ret = snprintf(SupportedStandards, 2, "%s", "a");
+		if (os_snprintf_error(2, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM5_N) {
+		ret = snprintf(SupportedStandards, 4, "%s", "a/n");
+		if (os_snprintf_error(4, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM5_AC) {
+		ret = snprintf(SupportedStandards, 7, "%s", "a/n/ac");
+		if (os_snprintf_error(7, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM24) {
+		ret = snprintf(SupportedStandards, 4, "%s", "b/g");
+		if (os_snprintf_error(4, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM24_N) {
+		ret = snprintf(SupportedStandards, 6, "%s", "b/g/n");
+		if (os_snprintf_error(6, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM24_HE) {
+		ret = snprintf(SupportedStandards, 9, "%s", "b/g/n/ax");
+		if (os_snprintf_error(9, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else if (wireless_mode == Ndis802_11OFDM5_HE) {
+		ret = snprintf(SupportedStandards, 10, "%s", "a/n/ac/ax");
+		if (os_snprintf_error(10, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	} else {
+		ret = snprintf(SupportedStandards, 8, "%s", "unknown");
+		if (os_snprintf_error(8, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+	}
+}
+
+static INT Get_Nbr_Diag_Result(
+	IN RTMP_ADAPTER *pAd,
+	IN NBR_DIAG_RESULT	*result)
+{
+	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
+	UINT32 IfIdx = pObj->ioctl_if;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd,
+		pObj->ioctl_if, pObj->ioctl_if_type);
+	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
+	BSS_ENTRY *pBss;
+	UINT8 len;
+
+	if (wdev == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"wdev is null! IfIdx: %d.\n", IfIdx);
+		return EINVAL;
+	}
+
+	if (scan_in_run_state(pAd, wdev)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"\n\n\n SCANNING, CANNOT GET SCAN RESULT NOW!\n\n\n");
+		/*#define	EBUSY		16*/
+		/* Device or resource busy */
+		return (-EBUSY);
+	}
+
+	if (ScanTab->BssNr == 0) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "No Scan result.\n");
+		return EINVAL;
+	}
+
+	if(result->index >= ScanTab->BssNr) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Index %d more than BssNr %d.\n",
+				 result->index, ScanTab->BssNr);
+		return EINVAL;
+	}
+
+	pBss = &ScanTab->BssEntry[result->index];
+	result->Channel = pBss->Channel;
+	NdisCopyMemory(result->ssid, pBss->Ssid, MAX_LEN_OF_SSID);
+	NdisCopyMemory(result->bssid, pBss->Bssid, MAC_ADDR_LEN);
+
+	if(wdev->if_dev) {
+		len = (sizeof(wdev->if_dev->name)>15) ? 15 : sizeof(wdev->if_dev->name);
+		strncpy(result->radio_name, wdev->if_dev->name, len);
+	}
+
+	result->radio_mode = pBss->BssType;
+	result->SignalStrength = pBss->Rssi;
+	result->SecurityModeEnabled = Get_ScanSecurityMode(pBss->AKMMap);
+	result->BeaconPeriod = pBss->BeaconPeriod;
+	result->EncryptionMode = Get_ScanEncryMode(pBss->PairwiseCipher);
+	result->DTIMPeriod = pBss->DtimPeriod;
+
+	if (WMODE_CAP_2G(wdev->PhyMode))
+		result->OperatingFrequencyBand = 0;  /* 2G */
+	else if (WMODE_CAP_5G(wdev->PhyMode))
+		result->OperatingFrequencyBand = 1;  /* 5G */
+	else if (WMODE_CAP_6G(wdev->PhyMode))
+		result->OperatingFrequencyBand = 2;  /* 6G */
+
+	Get_80211_Standard(pBss, result->SupportedStandards);
+	NdisCopyMemory(result->OperatingStandards, result->SupportedStandards,
+		sizeof(result->SupportedStandards));
+	result->OperatingChannelBandwidth = 0;  /* Not Support */
+	result->Noise = 0; /* Not support */
+	NdisCopyMemory(result->SupRate, pBss->SupRate, pBss->SupRateLen);
+	NdisCopyMemory(result->ExtRate, pBss->ExtRate, pBss->ExtRateLen);
+	return NDIS_STATUS_SUCCESS;
+}
+
+static INT Get_Radio_Statistics (
+	IN RTMP_ADAPTER *pAd,
+	OUT WIFI_RADIO_STATS *pStat)
+{
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+	UINT8 ucBand = BAND0;
+	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+	ULONG txCount = 0, rxCount = 0, txBytes = 0, rxBytes = 0;
+	INT ifIndex = pObj->ioctl_if;
+	BSS_STRUCT *pMbss;
+	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)pAd->hdev_ctrl;
+
+	if (!VALID_MBSS(pAd, ifIndex)) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Error AP index \n");
+		return EINVAL;
+	}
+
+	pMbss = &pAd->ApCfg.MBSSID[ifIndex];
+	if(wdev)
+		ucBand = HcGetBandByWdev(wdev);
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ra offload=%d\n", cap->fgRateAdaptFWOffload);
+#ifdef RACTRL_FW_OFFLOAD_SUPPORT
+	if (cap->fgRateAdaptFWOffload == TRUE) {
+		EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
+		os_zero_mem(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
+		MtCmdGetTxStatistic(pAd, GET_TX_STAT_TOTAL_TX_CNT, ucBand, 0, &rTxStatResult);
+		pAd->WlanCounters[ucBand].TransmittedFragmentCount.u.LowPart += (rTxStatResult.u4TotalTxCount -
+				rTxStatResult.u4TotalTxFailCount);
+		pAd->WlanCounters[ucBand].FailedCount.u.LowPart += rTxStatResult.u4TotalTxFailCount;
+		pAd->WlanCounters[ucBand].CurrentBwTxCount.u.LowPart += rTxStatResult.u4CurrBwTxCnt;
+		pAd->WlanCounters[ucBand].OtherBwTxCount.u.LowPart += rTxStatResult.u4OtherBwTxCnt;
+	}
+#endif /* RACTRL_FW_OFFLOAD_SUPPORT */
+
+#ifdef CONFIG_ATE
+	if (ATE_ON(pAd)) {
+		struct _ATE_CTRL *ATECtrl = &(pAd->ATECtrl);
+		txCount = TESTMODE_GET_PARAM(pAd, ucBand, ATE_TXDONE_CNT);
+		rxCount = ATECtrl->rx_stat.RxTotalCnt[ucBand];
+	} else
+#endif	/* CONFIG_ATE */
+	{
+		txCount = pAd->WlanCounters[ucBand].TransmittedFragmentCount.u.LowPart;
+#if defined(MT7915)
+		if (IS_MT7915(pAd))
+			rxCount = (ULONG)pAd->WlanCounters[ucBand].RxMpduCount.QuadPart;
+		else
+#endif
+			rxCount = pAd->WlanCounters[ucBand].ReceivedFragmentCount.QuadPart;
+	}
+
+	txBytes = pAd->WlanCounters[ucBand].TxTotByteCount.QuadPart;
+	rxBytes = pAd->WlanCounters[ucBand].RxTotByteCount.QuadPart;
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"txBytes:%ld, rxBytes:%ld, TxCount raw:%lld, RxCount raw:%lld\n",
+		txBytes, rxBytes, pAd->WlanCounters[ucBand].TxTotByteCount.QuadPart,
+		pAd->WlanCounters[ucBand].RxTotByteCount.QuadPart);
+
+#ifdef CONFIG_QA
+	if (ATE_ON(pAd)) {
+		pStat->DiscardPacketsReceived =	pAd->WlanCounters[0].RxFifoFullCount.u.LowPart;
+		pStat->ErrorsReceived = pAd->WlanCounters[0].FCSErrorCount.u.LowPart;
+		} else
+#endif /* CONFIG_QA */
+
+#if defined(MT7915)
+	if (IS_MT7915(pAd)) {
+		pStat->DiscardPacketsReceived = pAd->WlanCounters[ucBand].RxFifoFullCount.u.LowPart;
+		pStat->ErrorsReceived = pAd->WlanCounters[ucBand].RxFcsErrorCount.u.LowPart;
+	} else
+#endif
+	{
+		pStat->DiscardPacketsReceived = pAd->Counters8023.RxNoBuffer;
+		pStat->ErrorsReceived = pAd->WlanCounters[ucBand].FCSErrorCount.u.LowPart;
+	}
+
+	pStat->PacketsSent = txCount;
+	pStat->PacketsReceived = rxCount;
+	pStat->BytesSent = txBytes;
+	pStat->BytesReceived = rxBytes;
+	pStat->MulticastPacketsSent = pAd->WlanCounters[ucBand].mcPktsTx.QuadPart;
+	pStat->MulticastPacketsReceived = pAd->WlanCounters[ucBand].mcPktsRx.QuadPart;
+	pStat->BroadcastPacketsSent = pAd->WlanCounters[ucBand].bcPktsTx.QuadPart;
+	pStat->BroadcastPacketsReceived = pAd->WlanCounters[ucBand].bcPktsRx.QuadPart;
+	pStat->UnicastPacketsSent = pStat->PacketsSent - pStat->MulticastPacketsSent
+									- pStat->BroadcastPacketsSent;
+	pStat->UnicastPacketsReceived = pStat->PacketsReceived - pStat->MulticastPacketsReceived
+									- pStat->BroadcastPacketsReceived;
+	pStat->ErrorsSent = pAd->WlanCounters[ucBand].FailedCount.QuadPart;
+	pStat->DiscardPacketsSent = pAd->WlanCounters[ucBand].FailedCount.QuadPart;
+
+	pStat->TotalChannelChangeCount =
+		(ctrl->rdev[ucBand].pRadioCtrl->TotalChannelChangeCount +
+		pAd->ApBootACSChannelChangePerBandCount[ucBand]);
+	pStat->ManualChannelChangeCount =
+		ctrl->rdev[ucBand].pRadioCtrl->ManualChannelChangeCount;
+	pStat->AutoStartupChannelChangeCount =
+		pAd->ApBootACSChannelChangePerBandCount[ucBand];
+	pStat->AutoUserChannelChangeCount =
+		ctrl->rdev[ucBand].pRadioCtrl->ForceACSChannelChangeCount;
+	pStat->AutoRefreshChannelChangeCount =
+		ctrl->rdev[ucBand].pRadioCtrl->RefreshACSChannelChangeCount;
+	pStat->AutoDynamicChannelChangeCount = 0; /* no support */
+	pStat->AutoDFSChannelChangeCount =
+		ctrl->rdev[ucBand].pRadioCtrl->DFSTriggeredChannelChangeCount;
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"PacketsSent=%ld, PacketsReceived=%ld\n", pStat->PacketsSent, pStat->PacketsReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"TransmittedByteCount=%ld, ReceivedByteCount=%ld\n",
+		pStat->BytesSent, pStat->BytesReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"ErrorsReceived=%ld, DiscardPacketsReceived=%ld\n",
+		pStat->ErrorsReceived, pStat->DiscardPacketsReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"ErrorsSent=%ld, DiscardPacketsSent=%ld\n",
+		pStat->ErrorsSent, pStat->DiscardPacketsSent);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"ucPktsTx=%ld, ucPktsRx=%ld\n", pStat->UnicastPacketsSent, pStat->UnicastPacketsReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"mcPktsTx=%ld, mcPktsRx=%ld\n", pStat->MulticastPacketsSent, pStat->MulticastPacketsReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"bcPktsTx=%ld, bcPktsRx=%ld\n", pStat->BroadcastPacketsSent, pStat->BroadcastPacketsReceived);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"TotalChannelChangeCount=%d, ManualChannelChangeCount=%d\n",
+		pStat->TotalChannelChangeCount, pStat->ManualChannelChangeCount);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"AutoStartupChannelChangeCount=%d, AutoUserChannelChangeCount=%d\n",
+		pStat->AutoStartupChannelChangeCount, pStat->AutoUserChannelChangeCount);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"AutoRefreshChannelChangeCount=%d, AutoDynamicChannelChangeCount=%d\n",
+		pStat->AutoRefreshChannelChangeCount, pStat->AutoDynamicChannelChangeCount);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"AutoDFSChannelChangeCount=%d\n", pStat->AutoDFSChannelChangeCount);
+
+	return NDIS_STATUS_SUCCESS;
+}
+
+static INT Get_BSS_Statistics (
+	IN RTMP_ADAPTER *pAd,
+	OUT WIFI_BSS_STATS *pStat)
+{
+	BSS_STRUCT *pMbss;
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	INT ifIndex = pObj->ioctl_if;
+
+	if (!VALID_MBSS(pAd, ifIndex)) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Error AP index \n");
+		return EINVAL;
+	}
+
+	pMbss = &pAd->ApCfg.MBSSID[ifIndex];
+
+	pStat->PacketsSent =  pMbss->TxCount;
+	pStat->PacketsReceived =  pMbss->RxCount;
+	pStat->BytesSent = pMbss->TransmittedByteCount;
+	pStat->BytesReceived = pMbss->ReceivedByteCount;
+	pStat->ErrorsReceived =  pMbss->RxErrorCount;
+	pStat->DiscardPacketsReceived =  pMbss->RxDropCount;
+	pStat->ErrorsSent =  pMbss->TxErrorCount;
+	pStat->DiscardPacketsSent =  pMbss->TxDropCount;
+	pStat->UnicastPacketsSent =  pMbss->ucPktsTx;
+	pStat->UnicastPacketsReceived =  pMbss->ucPktsRx;
+	pStat->MulticastPacketsSent =  pMbss->mcPktsTx;
+	pStat->MulticastPacketsReceived =  pMbss->mcPktsRx;
+	pStat->BroadcastPacketsSent = pMbss->bcPktsTx;
+	pStat->BroadcastPacketsReceived = pMbss->bcPktsRx;
+	return NDIS_STATUS_SUCCESS;
+}
+
+#ifdef WSC_AP_SUPPORT
+PWSC_CTRL Get_WscControl (
+	IN RTMP_ADAPTER *pAd)
+{
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	UCHAR apidx = 0;
+
+	if(pObj)
+		apidx = pObj->ioctl_if;
+	else
+		return NULL;
+
+#ifdef APCLI_SUPPORT
+	if (pObj->ioctl_if_type == INT_APCLI) {
+		return (&pAd->StaCfg[apidx].wdev.WscControl);
+	} else
+#endif /* APCLI_SUPPORT */
+#ifdef P2P_SUPPORT
+	if (pObj->ioctl_if_type == INT_P2P) {
+		if (P2P_CLI_ON(pAd))
+			return (&pAd->StaCfg[apidx].wdev.WscControl);
+		else
+			return (&pAd->ApCfg.MBSSID[apidx].wdev.WscControl);
+	} else
+#endif /* P2P_SUPPORT */
+		return (&pAd->ApCfg.MBSSID[apidx].wdev.WscControl);
+}
+#endif
+#endif
+
+#ifdef PLE_MONITOR_SUPPORT
+INT Set_PleBufferMonitor_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UINT8 Enable = os_str_tol(arg, 0, 10);
+	PCI_HIF_T *hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
+
+	hif->PleBufferMonitorEn = Enable >= 1 ? TRUE : FALSE;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s(): PleBufferMonitorEn = %d\n", __func__, hif->PleBufferMonitorEn));
+
+	return TRUE;
+}
+
+INT Set_PleBufferFlush_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	char *pWcid, *pPktNum, *pCheckPs;
+	UINT32 wcid, PktCnt;
+	BOOLEAN check_ps;
+
+	pWcid = strsep(&arg, ":");
+	pPktNum = strsep(&arg, ":");
+	pCheckPs = strsep(&arg, ":");
+
+	wcid = os_str_tol(pWcid, 0, 10);
+	PktCnt = os_str_tol(pPktNum, 0, 10);
+	check_ps = (os_str_tol(pCheckPs, 0, 10)) ? TRUE : FALSE;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s(): flush wicd(%d), pktcnt = %d, ps_check = %d\n", __func__, wcid, PktCnt, check_ps));
+
+	asic_flush_ac_queue(pAd, wcid, PktCnt, check_ps);
+
+	return TRUE;
+}
+#endif
+
 INT RTMPAPQueryInformation(
 	IN RTMP_ADAPTER *pAd,
 	IN OUT RTMP_IOCTL_INPUT_STRUCT *rq,
@@ -7620,9 +8959,9 @@ INT RTMPAPQueryInformation(
 	PWSC_PROFILE pProfile;
 	PWSC_CTRL pWscControl;
 #endif /* WSC_AP_SUPPORT */
-#if defined(SNMP_SUPPORT) || defined(VENDOR_FEATURE6_SUPPORT)
-	ULONG ulInfo;
-#endif /*  defined(SNMP_SUPPORT) || defined(VENDOR_FEATURE6_SUPPORT) */
+#if defined(SNMP_SUPPORT) || defined(VENDOR_FEATURE6_SUPPORT) || defined(TR181_SUPPORT)
+	ULONG ulInfo = 0;
+#endif /*  defined(SNMP_SUPPORT) || defined(VENDOR_FEATURE6_SUPPORT) || defined(TR181_SUPPORT) */
 #ifdef SNMP_SUPPORT
 	DefaultKeyIdxValue *pKeyIdxValue;
 	INT valueLen;
@@ -7729,6 +9068,63 @@ INT RTMPAPQueryInformation(
 			break;
 		}
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+	case OID_802_11_GET_CURRENT_CHANNEL_STATS:
+		if (pAd->MsMibBucket.Enabled) {
+			UCHAR band_idx = 0;
+			CURRENT_CHANNEL_STATS *ChannelStats;
+
+			band_idx = HcGetBandByWdev(wdev);
+			os_alloc_mem(pAd, (UCHAR **)&ChannelStats, sizeof(CURRENT_CHANNEL_STATS));
+			ChannelStats->SamplePeriod = pAd->ChannelStats.SampleDuration[band_idx];
+			ChannelStats->ObssTime = pAd->ChannelStats.OBSSAirtime[band_idx];
+			ChannelStats->EdCcaBusyTime = pAd->ChannelStats.EDCCAtime[band_idx];
+
+			/* Channel busy = (MyTxTime - TxOpInitTime) + MyRxTime + OBSSTime + EDCCA Time*/
+			ChannelStats->ChannelBusyTime = (pAd->ChannelStats.MyTxAirtime[band_idx] - pAd->ChannelStats.TxOpInitTime[band_idx]) +
+											pAd->ChannelStats.MyRxAirtime[band_idx] + pAd->ChannelStats.OBSSAirtime[band_idx] +
+											pAd->ChannelStats.EDCCAtime[band_idx];
+
+			/*ApActivity = ChannelBusyTime - OBSSTime - EDCCA Time*/
+			ChannelStats->ChannelApActivity = ChannelStats->ChannelBusyTime - ChannelStats->ObssTime - ChannelStats->EdCcaBusyTime;
+
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SamplePeriod = %llu, ObssTime = %llu, EdCcaTime = %llu, BusyTime = %llu\n",
+				ChannelStats->SamplePeriod, ChannelStats->ObssTime, ChannelStats->EdCcaBusyTime, ChannelStats->ChannelBusyTime));
+
+			wrq->u.data.length = sizeof(CURRENT_CHANNEL_STATS);
+			Status = copy_to_user(wrq->u.data.pointer, ChannelStats, wrq->u.data.length);
+
+			pAd->ChannelStats.SampleDuration[band_idx] = 0;
+			pAd->ChannelStats.OBSSAirtime[band_idx] = 0;
+			pAd->ChannelStats.EDCCAtime[band_idx] = 0;
+			pAd->ChannelStats.MyTxAirtime[band_idx] = 0;
+			pAd->ChannelStats.MyRxAirtime[band_idx] = 0;
+			pAd->ChannelStats.TxOpInitTime[band_idx] = 0;
+
+			if (ChannelStats)
+				os_free_mem(ChannelStats);
+		} else {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Radio Channel Stats monitoring is not enabled \n", __FUNCTION__));
+			Status = RTMP_IO_EFAULT;
+		}
+	break;
+
+	case OID_802_11_STA_STATISTICS:
+		RTMPIoctlQuerySTAStat(pAd, wrq);
+		break;
+	case OID_802_11_STA_LIST:
+		RTMPIoctlQuerySTAList(pAd, wrq);
+		break;
+	case OID_GET_SCAN_CHANNEL_STATS:
+		if (wdev) {
+			UCHAR band_idx = HcGetBandByWdev(wdev);
+			RTMPIoctlQueryScanChannelStat(pAd, wrq, band_idx);
+		}
+		break;
+	case OID_GET_SITE_SURVEY:
+		RTMPIoctlGetSiteSurvey (pAd, wrq);
+		break;
+#endif /* ENHANCE_STAT_SUPPORT */
 #ifdef AIR_MONITOR
 	case OID_GET_AIR_MONITOR_RESULT:
 		{
@@ -7737,27 +9133,31 @@ INT RTMPAPQueryInformation(
 			MNT_STA_ENTRY *pTmpEntry = NULL;
 			UINT32 pEntryLen = 0;
 			UCHAR i;
-
-			os_alloc_mem(NULL, (UCHAR **)&pEntry, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
-			if (pEntry == NULL) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Query::OID_GET_AIR_MONITOR_RESULT alloc memory failed!\n"));
-				return -EFAULT;
-			}
-			pEntryStart = pEntry;
-			NdisZeroMemory(pEntry, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
-
-			for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
-				pTmpEntry = &pAd->MntTable[i];
-
-				if (pTmpEntry->bValid) {
-					NdisCopyMemory(pEntry + pEntryLen, pTmpEntry, sizeof(MNT_STA_ENTRY));
-					pEntryLen += 1;
+			UCHAR band_idx = 0;
+			if (wdev) {
+				band_idx = HcGetBandByWdev(wdev);
+				os_alloc_mem(NULL, (UCHAR **)&pEntry, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
+				if (pEntry == NULL) {
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Query::OID_GET_AIR_MONITOR_RESULT alloc memory failed!\n"));
+					return -EFAULT;
 				}
-			}
+				pEntryStart = pEntry;
+				NdisZeroMemory(pEntry, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
 
-			Status = copy_to_user(wrq->u.data.pointer, pEntryStart, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_GET_AIR_MONITOR_RESULT success!\n"));
-			os_free_mem(pEntry);
+				for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
+					pTmpEntry = &pAd->MntTable[band_idx][i];
+
+					if (pTmpEntry->bValid) {
+						NdisCopyMemory(pEntry + pEntryLen, pTmpEntry, sizeof(MNT_STA_ENTRY));
+						pEntryLen += 1;
+					}
+				}
+
+				Status = copy_to_user(wrq->u.data.pointer, pEntryStart, MAX_NUM_OF_MONITOR_STA * sizeof(MNT_STA_ENTRY));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_GET_AIR_MONITOR_RESULT success!\n"));
+				os_free_mem(pEntry);
+			} else
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "OID_GET_AIR_MONITOR_RESULT get null wdev!\n");
 		}
 		break;
 #endif
@@ -7809,6 +9209,12 @@ INT RTMPAPQueryInformation(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Driver Version = %s\n", AP_DRIVER_VERSION));
 		wrq->u.data.length = strlen(AP_DRIVER_VERSION) + 1;
 		Status = copy_to_user(wrq->u.data.pointer, AP_DRIVER_VERSION, wrq->u.data.length);
+		break;
+
+	case OID_MAX_NUM_OF_STA:
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Driver MaxStaNum = %d\n", pAd->ApCfg.MaxStaNum));
+		wrq->u.data.length = sizeof(UINT16);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->ApCfg.MaxStaNum, wrq->u.data.length);
 		break;
 
 #ifdef APCLI_SUPPORT
@@ -8007,7 +9413,7 @@ INT RTMPAPQueryInformation(
 				return FALSE;
 
 			Status = copy_to_user(wrq->u.data.pointer, pApCliEntry->MlmeAux.Bssid, sizeof(NDIS_802_11_MAC_ADDRESS));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("IOCTL::SIOCGIWAP(=%02x:%02x:%02x:%02x:%02x:%02x)\n", PRINT_MAC(pApCliEntry->MlmeAux.Bssid)));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("IOCTL::SIOCGIWAP(="MACSTR")\n", MAC2STR(pApCliEntry->MlmeAux.Bssid)));
 		}
 
 #ifdef VENDOR_FEATURE6_SUPPORT
@@ -8015,7 +9421,7 @@ INT RTMPAPQueryInformation(
 			if (wdev) {
 				wrq->u.data.length = MAC_ADDR_LEN;
 				Status = copy_to_user(wrq->u.data.pointer, &wdev->bssid[0], wrq->u.data.length);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_BSSID (%02x:%02x:%02x:%02x:%02x:%02x)\n", PRINT_MAC(wdev->bssid)));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_BSSID ("MACSTR")\n", MAC2STR(wdev->bssid)));
 			}
 		}
 
@@ -8060,7 +9466,7 @@ INT RTMPAPQueryInformation(
 		BSS_TABLE *ScanTab = NULL;
 		NDIS_802_11_GET_SSID_BSSID scan_result = {0};
 		PSSID_BSSID scan_entry = NULL;
-		UINT8 i = 0;
+		UINT i = 0;
 
 		if (pObj->ioctl_if_type == INT_APCLI) {
 			wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
@@ -8254,18 +9660,24 @@ INT RTMPAPQueryInformation(
 			break;
 #endif/*ANDLINK_FEATURE_SUPPORT*/
 
-	case RT_OID_VERSION_INFO:
+	case RT_OID_VERSION_INFO: {
+		int ret;
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_VERSION_INFO\n"));
 		wrq->u.data.length = strlen(AP_DRIVER_VERSION);
-		snprintf(&driverVersion[0], sizeof(driverVersion), "%s", AP_DRIVER_VERSION);
+		ret = snprintf(&driverVersion[0], sizeof(driverVersion), "%s", AP_DRIVER_VERSION);
+		if (os_snprintf_error(sizeof(driverVersion), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			break;
+		}
+
 		driverVersion[wrq->u.data.length] = '\0';
 
 		if (copy_to_user(wrq->u.data.pointer, &driverVersion, wrq->u.data.length))
 			Status = -EFAULT;
-
+	}
 		break;
-#ifdef VENDOR_FEATURE6_SUPPORT
-
+#if defined(VENDOR_FEATURE6_SUPPORT) || defined(TR181_SUPPORT)
 	case RT_OID_802_11_PHY_MODE: {
 		UCHAR *temp_wmode = NULL;
 
@@ -8279,12 +9691,12 @@ INT RTMPAPQueryInformation(
 		if (temp_wmode != NULL) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_802_11_PHY_MODE (=%lu), %s\n", ulInfo, temp_wmode));
 			os_free_mem(temp_wmode);
-			temp_wmode = NULL;
 		} else
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_802_11_PHY_MODE (=%lu), Null\n", ulInfo));
 	}
 	break;
-
+#endif
+#ifdef VENDOR_FEATURE6_SUPPORT
 	case OID_802_11_CHANNEL_WIDTH: {
 		if (wdev) {
 			wrq->u.data.length = sizeof(UCHAR);
@@ -8311,7 +9723,7 @@ INT RTMPAPQueryInformation(
 
 	case OID_802_11_BEACON_PERIOD:
 		wrq->u.data.length = sizeof(ulInfo);
-		ulInfo = pAd->CommonCfg.BeaconPeriod;
+		ulInfo = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 
 		if (copy_to_user(wrq->u.data.pointer, &ulInfo, wrq->u.data.length))
 			Status = -EFAULT;
@@ -8396,10 +9808,6 @@ INT RTMPAPQueryInformation(
 		}
 		break;
 
-	case OID_802_11_ASSOLIST:
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_ASSOLIST\n"));
-		RTMPAPGetAssoMacTable(pAd, wrq);
-		break;
 #ifdef WSC_AP_SUPPORT
 
 	case OID_802_11_CURRENT_CRED:
@@ -8408,6 +9816,17 @@ INT RTMPAPQueryInformation(
 		break;
 #endif /* WSC_AP_SUPPORT */
 #endif /* VENDOR_FEATURE6_SUPPORT */
+#if defined (VENDOR_FEATURE6_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
+	case OID_802_11_ASSOLIST:
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_ASSOLIST\n"));
+		RTMPAPGetAssoMacTable(pAd, wrq);
+		break;
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+	case OID_802_11_ASSOC_STA_MAX_CAP_LIST:
+		RTMPAPGetStaAssocCap(pAd, wrq);
+		break;
+#endif
 
 	case OID_802_11_NETWORK_TYPES_SUPPORTED:
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_NETWORK_TYPES_SUPPORTED\n"));
@@ -8501,8 +9920,8 @@ INT RTMPAPQueryInformation(
 				(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 				Status = -ENOTCONN;
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("RT_QUERY_80211H_CAPABILITY STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with Ap\n",
-					PRINT_MAC(Capability.StaMac)));
+					("RT_QUERY_80211H_CAPABILITY STA("MACSTR") not associates with Ap\n",
+					MAC2STR(Capability.StaMac)));
 				break;
 			}
 
@@ -8551,8 +9970,8 @@ INT RTMPAPQueryInformation(
 				(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 				Status = -ENOTCONN;
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("RT_QUERY_KVR_CAPABILITY STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with Ap\n",
-					PRINT_MAC(Capability.StaMac)));
+					("RT_QUERY_KVR_CAPABILITY STA("MACSTR") not associates with Ap\n",
+					MAC2STR(Capability.StaMac)));
 				break;
 			}
 
@@ -8711,8 +10130,8 @@ INT RTMPAPQueryInformation(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-					("RT_QUERY_WNM_CAPABILITY: STA(%02x:%02x:%02x:%02x:%02x:%02x)not associates with AP!\n",
-					PRINT_MAC(p_wnm_query_data)));
+					("RT_QUERY_WNM_CAPABILITY: STA("MACSTR") not associates with AP!\n",
+					MAC2STR(p_wnm_query_data)));
 				Status = EINVAL;
 				os_free_mem(p_wnm_command);
 				break;
@@ -8795,8 +10214,8 @@ INT RTMPAPQueryInformation(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-				("RT_QUERY_RRM_CAPABILITY: STA(%02x:%02x:%02x:%02x:%02x:%02x)not associates with AP!\n",
-				PRINT_MAC(p_rrm_query_data)));
+				("RT_QUERY_RRM_CAPABILITY: STA("MACSTR") not associates with AP!\n",
+				MAC2STR(p_rrm_query_data)));
 			Status = EINVAL;
 			os_free_mem(p_rrm_command);
 			break;
@@ -9221,7 +10640,7 @@ INT RTMPAPQueryInformation(
 		Status = copy_to_user(wrq->u.data.pointer, ManufacturerNAME, wrq->u.data.length);
 		break;
 #endif /* SNMP_SUPPORT */
-#if (defined(SNMP_SUPPORT) || defined(WH_EZ_SETUP) || defined(VENDOR_FEATURE6_SUPPORT))
+#if (defined(SNMP_SUPPORT) || defined(WH_EZ_SETUP) || defined(VENDOR_FEATURE6_SUPPORT) || defined(TR181_SUPPORT))
 
 	case OID_802_11_CURRENTCHANNEL:
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_CURRENTCHANNEL\n"));
@@ -9398,36 +10817,6 @@ INT RTMPAPQueryInformation(
 		break;
 #endif /* REPEATER_TX_RX_STATISTIC */
 #endif /* APCLI_SUPPORT */
-#ifdef RTMP_RBUS_SUPPORT
-
-	case RT_OID_802_11_SNR_0:
-		if (wdev && wdev->LastSNR0 > 0) {
-			ULONG ulInfo;
-
-			ulInfo = ConvertToSnr(pAd, wdev->LastSNR0);
-			wrq->u.data.length = sizeof(ulInfo);
-			Status = copy_to_user(wrq->u.data.pointer, &ulInfo, wrq->u.data.length);
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_802_11_SNR_0(0x=%lx)\n", ulInfo));
-		} else
-			Status = -EFAULT;
-
-		break;
-
-	case RT_OID_802_11_SNR_1:
-		if (wdev && (pAd->Antenna.field.RxPath > 1) && (wdev->LastSNR1 > 0)) {
-			ULONG ulInfo;
-
-			ulInfo = ConvertToSnr(pAd, wdev->LastSNR1);
-			wrq->u.data.length = sizeof(ulInfo);
-			Status = copy_to_user(wrq->u.data.pointer, &ulInfo,	wrq->u.data.length);
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_802_11_SNR_1(%lx, LastSNR1=%d)\n", ulInfo,
-					 wdev->LastSNR1));
-		} else
-			Status = -EFAULT;
-
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_802_11_SNR_1, Status=%d\n", Status));
-		break;
-#endif /* RTMP_RBUS_SUPPORT */
 
 	case OID_802_11_ACL_LIST:
 		if (wrq->u.data.length < sizeof(RT_802_11_ACL))
@@ -9547,8 +10936,15 @@ INT RTMPAPQueryInformation(
 #endif
 #ifdef WAPP_SUPPORT
 	case OID_802_11_WIFI_VER: {
+		int ret;
 		wrq->u.data.length = strlen(AP_DRIVER_VERSION);
-		snprintf(&driverVersion[0], sizeof(driverVersion), "%s", AP_DRIVER_VERSION);
+		ret = snprintf(&driverVersion[0], sizeof(driverVersion), "%s", AP_DRIVER_VERSION);
+		if (os_snprintf_error(sizeof(driverVersion), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			break;
+		}
+
 		driverVersion[wrq->u.data.length] = '\0';
 
 		Status = copy_to_user(wrq->u.data.pointer, driverVersion, wrq->u.data.length);
@@ -9556,9 +10952,16 @@ INT RTMPAPQueryInformation(
 	break;
 	case OID_802_11_WAPP_SUPPORT_VER: {
 		RTMP_STRING wapp_support_ver[16];
+		int ret;
 
 		wrq->u.data.length = strlen(WAPP_SUPPORT_VERSION);
-		snprintf(&wapp_support_ver[0], sizeof(wapp_support_ver), "%s", WAPP_SUPPORT_VERSION);
+		ret = snprintf(&wapp_support_ver[0], sizeof(wapp_support_ver), "%s", WAPP_SUPPORT_VERSION);
+		if (os_snprintf_error(sizeof(driverVersion), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			break;
+		}
+
 		wapp_support_ver[wrq->u.data.length] = '\0';
 
 		Status = copy_to_user(wrq->u.data.pointer, wapp_support_ver, wrq->u.data.length);
@@ -9640,6 +11043,25 @@ INT RTMPAPQueryInformation(
 	case OID_QUERY_FEATURE_SUP_LIST:
 		Status = copy_to_user(wrq->u.data.pointer, &pAd->wifi_cap_list, wrq->u.data.length);
 		break;
+#if defined(CONFIG_6G_SUPPORT) && defined(BSSMGR_CROSS_MODULE_SUPPORT)
+	case OID_BSS_MGMT_GET_EVENT:
+	{
+		UCHAR *Buf = NULL;
+		int ret;
+		struct bmg_entry bmgentry;
+
+		Status = copy_from_user(&bmgentry, wrq->u.data.pointer, sizeof(bmgentry));
+
+		ret = bssmnger_get_event_handle(pAd, &Buf, bmgentry.devinfo.ifname);
+
+		if (ret == NDIS_STATUS_SUCCESS && Buf)
+			Status = copy_to_user(wrq->u.data.pointer, Buf, wrq->u.data.length);
+		else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					"OID_BSS_MGMT_GET_EVENT bss entry Not Found\n");
+	}
+	break;
+#endif /* CONFIG_6G_SUPPORT && BSSMGR_CROSS_MODULE_SUPPORT */
 #if defined(CONFIG_BS_SUPPORT) || defined(CONFIG_MAP_SUPPORT)
 	case OID_GET_WSC_PROFILES:
 		{
@@ -9706,7 +11128,19 @@ INT RTMPAPQueryInformation(
 			break;
 		}
 #endif
+	case OID_GET_WIRELESS_BAND:
+	{
+		UCHAR wireless_band;
 
+		if (wdev) {
+			wireless_band = wlan_operate_get_ch_band(wdev);
+			wrq->u.data.length = sizeof(wireless_band);
+			Status = copy_to_user(wrq->u.data.pointer, &wireless_band, wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Shivam::: OID_GET_WIRELESS_BAND, intf %s wireless_band=%d\n", wdev->if_dev->name, wireless_band);
+		}
+		break;
+	}
 	case OID_GET_MISC_CAP:
 		{
 			wdev_misc_cap misc_cap;
@@ -9763,10 +11197,13 @@ INT RTMPAPQueryInformation(
 			switch	(wlan_operate_get_rx_stream(wdev)) {
 			case 4:
 				drv_vht_op.basic_mcs_set.mcs_ss4 = cap->mcs_nss.max_vht_mcs;
+				/* fall through */
 			case 3:
 				drv_vht_op.basic_mcs_set.mcs_ss3 = cap->mcs_nss.max_vht_mcs;
+				/* fall through */
 			case 2:
 				drv_vht_op.basic_mcs_set.mcs_ss2 = cap->mcs_nss.max_vht_mcs;
+				/* fall through */
 			case 1:
 				drv_vht_op.basic_mcs_set.mcs_ss1 = cap->mcs_nss.max_vht_mcs;
 				break;
@@ -9831,12 +11268,50 @@ INT RTMPAPQueryInformation(
 							chn_list->non_op_ch_list,
 							chn_list->op_class,
 							chn_list->non_op_chn_num);
+			chn_list->AutoChannelSkipListNum =
+				getAutoChannelSkipListNum(pAd, wdev);
+
+			setAutoChannelSkipList(pAd, wdev, chn_list);
 #endif /* CONFIG_MAP_SUPPORT */
 			wrq->u.data.length = sizeof(wdev_chn_info);
 			Status = copy_to_user(wrq->u.data.pointer, chn_list, wrq->u.data.length);
 			os_free_mem(chn_list);
 			break;
 		}
+#ifdef CONFIG_TXPWR_LIMIT_SUPPORT
+	case OID_GET_TX_PWR_LIMIT:
+		{
+			UCHAR BandIdx = 0, i = 0;
+			struct wifi_dev *wdev;
+			wdev_tx_power_limit *ptxpwrinfo;
+
+			os_alloc_mem(pAd, (UCHAR **)&ptxpwrinfo, sizeof(wdev_tx_power_limit));
+			NdisZeroMemory(ptxpwrinfo, sizeof(wdev_tx_power_limit));
+
+			wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+			if (wdev->wdev_type != WDEV_TYPE_AP) {
+				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					("%s():wdev is not an AP\n", __func__));
+				os_free_mem(ptxpwrinfo);
+				break;
+			}
+			BandIdx = HcGetBandByWdev(wdev);
+			MtGetMaxTxPwrLimit(pAd, BandIdx, ptxpwrinfo, POWER_LIMIT_TABLE_TYPE_SKU);
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("channel_num:%d\n", ptxpwrinfo->ch_num));
+			for (i = 0; i < ptxpwrinfo->ch_num; i++) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("ch:%d pwr:%d/%d/%d\n", ptxpwrinfo->tx_pwr[i].channel,
+				 ptxpwrinfo->tx_pwr[i].pwrlimit[0], ptxpwrinfo->tx_pwr[i].pwrlimit[1],
+				 ptxpwrinfo->tx_pwr[i].pwrlimit[2]));
+			}
+			wrq->u.data.length = sizeof(wdev_tx_power_limit);
+			Status = copy_to_user(wrq->u.data.pointer, ptxpwrinfo, wrq->u.data.length);
+			os_free_mem(ptxpwrinfo);
+			break;
+		}
+#endif
+#ifndef MAP_6E_SUPPORT
 	case OID_GET_OP_CLASS:
 		{
 			wdev_op_class_info *op_class;
@@ -9861,6 +11336,34 @@ INT RTMPAPQueryInformation(
 			os_free_mem(op_class);
 			break;
 		}
+#else
+	case OID_GET_OP_CLASS:
+		{
+			wdev_op_class_info_ext *op_class;
+
+			os_alloc_mem(pAd, (UCHAR **)&op_class, sizeof(wdev_op_class_info_ext));
+			if (op_class == NULL)
+				break;
+			NdisZeroMemory(op_class, sizeof(wdev_op_class_info_ext));
+
+			wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+			if (wdev->wdev_type != WDEV_TYPE_AP) {
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wdev is not an AP\n");
+				os_free_mem(op_class);
+				break;
+			}
+#ifdef CONFIG_MAP_SUPPORT
+			if (WMODE_CAP(wdev->PhyMode, WMODE_AX_6G)) {
+				op_class->num_of_op_class = map_set_op_class_info_6g(pAd, wdev, op_class);
+			} else
+				op_class->num_of_op_class = map_set_op_class_info(pAd, wdev, op_class);
+#endif /* CONFIG_MAP_SUPPORT */
+			wrq->u.data.length = sizeof(wdev_op_class_info_ext);
+			Status = copy_to_user(wrq->u.data.pointer, op_class, wrq->u.data.length);
+			os_free_mem(op_class);
+			break;
+		}
+#endif
 	case OID_GET_BSS_INFO:
 		{
 			wdev_bss_info *bss_info;
@@ -9946,7 +11449,224 @@ INT RTMPAPQueryInformation(
 			os_free_mem(nop_channels);
 			break;
 		}
-#ifdef DOT11_HE_AX
+
+#ifdef MAP_WF6
+	case OID_WF6_CAPABILITY:
+		{
+			wdev_wf6_cap_roles wf6_cap;
+
+			UINT16 i = 0;
+
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "WF6:Driver: OID_WF6_CAPABILITY is called from WAPP in driver\n");
+			wrq->u.data.length = sizeof(wdev_wf6_cap_roles);
+			NdisZeroMemory(&wf6_cap, sizeof(wdev_wf6_cap_roles));
+			if (IF_COMBO_HAVE_AP_STA(pAd))
+				wf6_cap.role_supp = 2;
+			else
+				wf6_cap.role_supp = 1;
+#define WF6_AP_INFO 0
+#define WF6_APCLI_INFO 1
+			/* Role supported as 1 when previously used*/
+
+			for (i = 0; i < wf6_cap.role_supp; i++) {
+				UINT16 he_max_mcs_nss = 0, *he_mcs_pos = NULL, he_mcs_len = 0;
+				struct mcs_nss_caps *mcs_nss = NULL;
+				UINT8 he_bw = 0;
+				struct he_bf_info he_bf_struct;
+				UCHAR band_idx = 0;
+#ifdef APCLI_SUPPORT
+				UCHAR b_idx = 0;
+#endif
+				wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+				if (!wdev) {
+					wf6_cap.role_supp = 1;
+					continue;
+				}
+				if (!wdev->pHObj) {
+					wf6_cap.role_supp = 1;
+					continue;
+				}
+#ifdef APCLI_SUPPORT
+				b_idx = HcGetBandByWdev(wdev);
+				if ((i == 1) && (pAd->ApCfg.ApCliInfRunned))
+					wdev = &pAd->StaCfg[b_idx].wdev;
+				else if (i == 1) {
+					wf6_cap.role_supp = 1;
+					continue;
+				}
+				if (!wdev) {
+					wf6_cap.role_supp = 1;
+					continue;
+				}
+				if (!wdev->pHObj) {
+					wf6_cap.role_supp = 1;
+					continue;
+				}
+#endif
+				mcs_nss = wlan_config_get_mcs_nss_caps(wdev);
+				he_bw = wlan_config_get_he_bw(wdev);
+
+				wf6_cap.wf6_role[i].tx_stream = wlan_config_get_tx_stream(wdev);
+				wf6_cap.wf6_role[i].rx_stream = wlan_config_get_rx_stream(wdev);
+
+				he_mcs_pos = (UINT16 *)wf6_cap.wf6_role[i].he_mcs;
+
+				he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].tx_stream, HE_MCS_0_11);
+				NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+				he_mcs_pos++;
+
+				he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].rx_stream, HE_MCS_0_11);
+				NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+				he_mcs_pos++;
+
+				he_mcs_len += 4;
+
+					if (he_bw > HE_BW_80
+						|| ((IS_MAP_ENABLE(pAd)
+							&& IS_MAP_CERT_ENABLE(pAd))
+					)) {
+					if (wf6_cap.wf6_role[i].tx_stream > mcs_nss->bw160_max_nss)
+						wf6_cap.wf6_role[i].tx_stream = mcs_nss->bw160_max_nss;
+					if (wf6_cap.wf6_role[i].rx_stream > mcs_nss->bw160_max_nss)
+						wf6_cap.wf6_role[i].rx_stream = mcs_nss->bw160_max_nss;
+
+					he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].tx_stream, HE_MCS_0_11);
+					NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+					he_mcs_pos++;
+
+					he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].rx_stream, HE_MCS_0_11);
+					NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+					he_mcs_pos++;
+
+					he_mcs_len += 4;
+					wf6_cap.wf6_role[i].he_160 = 1;
+
+					if (he_bw > HE_BW_160
+						|| ((IS_MAP_ENABLE(pAd)
+						&& IS_MAP_CERT_ENABLE(pAd)
+						 ))
+					) {
+						he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].tx_stream, HE_MCS_0_11);
+						NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+						he_mcs_pos++;
+
+						he_max_mcs_nss = he_mcs_map(wf6_cap.wf6_role[i].rx_stream, HE_MCS_0_11);
+						NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
+						he_mcs_pos++;
+
+						he_mcs_len += 4;
+						wf6_cap.wf6_role[i].he_8080 = 1;
+					 }
+				 }
+
+				wf6_cap.wf6_role[i].he_mcs_len = he_mcs_len;
+
+				NdisZeroMemory(&he_bf_struct, sizeof(struct he_bf_info));
+				mt_wrap_get_he_bf_cap(wdev, &he_bf_struct);
+
+				if (he_bf_struct.bf_cap & HE_SU_BFER)
+					wf6_cap.wf6_role[i].su_bf_cap = 1;
+				if (he_bf_struct.bf_cap & HE_MU_BFER)
+					wf6_cap.wf6_role[i].mu_bf_cap = 1;
+				if (wlan_config_get_mu_dl_mimo(wdev)) {
+					if (wdev->wdev_type == WDEV_TYPE_AP)
+						wf6_cap.wf6_role[i].dl_mu_mimo_ofdma_cap = 1;
+				}
+				if (wlan_config_get_mu_ul_mimo(wdev)) {
+					if (wdev->wdev_type == WDEV_TYPE_AP) {
+						wf6_cap.wf6_role[i].ul_mu_mimo_ofdma_cap = 1;
+						wf6_cap.wf6_role[i].ul_mu_mimo_cap = 1;
+					}
+				}
+				/* agent_role = 0 for AP, agent_role = 1 for APCLI */
+				wf6_cap.wf6_role[i].agent_role = i;
+				wf6_cap.wf6_role[i].su_beamformee_status = 0;
+				wf6_cap.wf6_role[i].beamformee_sts_less80 = 0;
+				wf6_cap.wf6_role[i].beamformee_sts_more80 = 0;
+				wf6_cap.wf6_role[i].max_user_dl_tx_mu_mimo = 0;
+				wf6_cap.wf6_role[i].max_user_ul_rx_mu_mimo = 0;
+				wf6_cap.wf6_role[i].max_user_dl_tx_ofdma = 0;
+				wf6_cap.wf6_role[i].max_user_ul_rx_ofdma = 0;
+				wf6_cap.wf6_role[i].rts_status = 0;
+				wf6_cap.wf6_role[i].mu_rts_status = 0; /* Not Supported */
+				wf6_cap.wf6_role[i].m_bssid_status = 0;
+				wf6_cap.wf6_role[i].mu_edca_status = 0;
+				wf6_cap.wf6_role[i].twt_requester_status = 0;
+				wf6_cap.wf6_role[i].twt_responder_status = 0;
+				wf6_cap.wf6_role[i].ul_ofdma_cap = 0;
+				wf6_cap.wf6_role[i].dl_ofdma_cap = 0;
+#ifdef HE_TXBF_SUPPORT
+				if (he_bf_struct.bf_cap & HE_SU_BFEE)
+					wf6_cap.wf6_role[i].su_beamformee_status = 1;
+
+				if (he_bf_struct.bfee_sts_le_eq_bw80)
+					wf6_cap.wf6_role[i].beamformee_sts_less80 = 1;
+
+				if (he_bf_struct.bfee_sts_gt_bw80)
+					wf6_cap.wf6_role[i].beamformee_sts_more80 = 1;
+#endif /*HE_TXBF_SUPPORT*/
+#ifdef WIFI_TWT_SUPPORT
+				if (wlan_config_get_asic_twt_caps(wdev) &&
+						(TWT_SUPPORT_ITWT(wlan_config_get_he_twt_support(wdev)))) {
+					if (i == WF6_AP_INFO) {
+						wf6_cap.wf6_role[i].twt_requester_status = 0;
+						wf6_cap.wf6_role[i].twt_responder_status = 1;
+					} else {
+						wf6_cap.wf6_role[i].twt_requester_status = 1;
+						wf6_cap.wf6_role[i].twt_responder_status = 0;
+					}
+				}
+#endif /*WIFI_TWT_SUPPORT*/
+
+				if (wlan_config_get_he_mu_edca(wdev))
+					wf6_cap.wf6_role[i].mu_edca_status = 1;
+
+				if (wlan_config_get_mu_dl_ofdma(wdev) &&
+					wdev->wdev_type == WDEV_TYPE_AP) {
+					wf6_cap.wf6_role[i].dl_ofdma_cap = 1;
+					wf6_cap.wf6_role[i].max_user_dl_tx_ofdma = wlan_config_get_ofdma_user_cnt(wdev);
+#ifdef CFG_SUPPORT_FALCON_MURU
+					if (!wf6_cap.wf6_role[i].max_user_dl_tx_ofdma) {
+					/*iwpriv ra0 set set_muru_manual_config=ul_comm_user_cnt:*/
+						wf6_cap.wf6_role[i].max_user_dl_tx_ofdma = (UINT8)(pAd->CommonCfg.HE_OfdmaUserNum);
+					}
+#endif
+				}
+
+				if (wlan_config_get_mu_ul_ofdma(wdev) &&
+						wdev->wdev_type == WDEV_TYPE_AP) {
+					wf6_cap.wf6_role[i].ul_ofdma_cap = 1;
+					wf6_cap.wf6_role[i].max_user_ul_rx_ofdma = wlan_config_get_ofdma_user_cnt(wdev);
+#ifdef CFG_SUPPORT_FALCON_MURU
+					if (!wf6_cap.wf6_role[i].max_user_ul_rx_ofdma) {
+						wf6_cap.wf6_role[i].max_user_ul_rx_ofdma = (UINT8)(pAd->CommonCfg.HE_OfdmaUserNum);
+					}
+#endif
+				}
+
+#ifdef MBSS_SUPPORT
+				if (MAX_MBSSID_NUM(pAd) > 1)
+					wf6_cap.wf6_role[i].m_bssid_status = 1;
+#endif /*MBSS_SUPPORT*/
+
+				band_idx = HcGetBandByChannelRange(pAd, wdev->channel);
+				if (pAd->mcli_ctl[band_idx].c2s_only == TRUE)
+					wf6_cap.wf6_role[i].rts_status = 1;
+
+				if (wlan_config_get_mu_dl_mimo(wdev)) {
+					if (wdev->wdev_type == WDEV_TYPE_AP)
+						wf6_cap.wf6_role[i].max_user_dl_tx_mu_mimo = wf6_cap.wf6_role[i].max_user_dl_tx_ofdma;
+				}
+				if (wlan_config_get_mu_ul_mimo(wdev)) {
+					if (wdev->wdev_type == WDEV_TYPE_AP)
+						wf6_cap.wf6_role[i].max_user_ul_rx_mu_mimo = wf6_cap.wf6_role[i].max_user_ul_rx_ofdma;
+				}
+			}
+
+			Status = copy_to_user(wrq->u.data.pointer, &wf6_cap, wrq->u.data.length);
+			break;
+		}
+#endif
 	case OID_GET_HE_CAP:
 		{
 			wdev_he_cap he_cap;
@@ -9970,7 +11690,7 @@ INT RTMPAPQueryInformation(
 				he_max_mcs_nss = he_mcs_map(he_cap.rx_stream, HE_MCS_0_11);
 				NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
 				he_mcs_pos++;
-				he_mcs_len += 2;
+				he_mcs_len += 4;
 				if (he_bw > HE_BW_80) {
 					if (he_cap.tx_stream > mcs_nss->bw160_max_nss)
 						he_cap.tx_stream = mcs_nss->bw160_max_nss;
@@ -9982,7 +11702,7 @@ INT RTMPAPQueryInformation(
 					he_max_mcs_nss = he_mcs_map(he_cap.rx_stream, HE_MCS_0_11);
 					NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
 					he_mcs_pos++;
-					he_mcs_len += 2;
+					he_mcs_len += 4;
 					he_cap.he_160 = 1;
 					if (he_bw > HE_BW_160) {
 						he_max_mcs_nss = he_mcs_map(he_cap.tx_stream, HE_MCS_0_11);
@@ -9991,7 +11711,7 @@ INT RTMPAPQueryInformation(
 						he_max_mcs_nss = he_mcs_map(he_cap.rx_stream, HE_MCS_0_11);
 						NdisMoveMemory(he_mcs_pos, &he_max_mcs_nss, sizeof(UINT16));
 						he_mcs_pos++;
-						he_mcs_len += 2;
+						he_mcs_len += 4;
 						he_cap.he_8080 = 1;
 					}
 				}
@@ -10017,13 +11737,13 @@ INT RTMPAPQueryInformation(
 						he_cap.ul_ofdma_cap = 1; /*To see*/
 					}
 				}
+				he_cap.gi = wlan_config_get_he_gi(wdev);
 				Status = copy_to_user(wrq->u.data.pointer, &he_cap, wrq->u.data.length);
 			} else {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): invalid wdev for cmd %d\n", __func__, cmd));
 			}
 			break;
 		}
-#endif /*DOT11_HE_AX*/
 #endif
 #ifdef CONFIG_MAP_SUPPORT
 	case OID_GET_ASSOC_REQ_FRAME:
@@ -10037,13 +11757,8 @@ INT RTMPAPQueryInformation(
 					PMAC_TABLE_ENTRY        pEntry = NULL;
 
 					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("GET::(ASSOC REQ STA - %02X:%02X:%02X:%02X:%02X:%02X)\n",
-							pStaMacAddr[0],
-							pStaMacAddr[1],
-							pStaMacAddr[2],
-							pStaMacAddr[3],
-							pStaMacAddr[4],
-							pStaMacAddr[5]));
+						("GET::(ASSOC REQ STA - "MACSTR")\n",
+							MAC2STR(pStaMacAddr)));
 					pEntry = MacTableLookup(pAd, pStaMacAddr);
 
 					if (pEntry) {
@@ -10058,6 +11773,412 @@ INT RTMPAPQueryInformation(
 			}
 			break;
 		}
+#endif
+#ifdef MAP_R4_SPT
+	case  OID_GET_SPATIAL_REUSE:
+		{
+			wdev_spc_reuse_req spt_reuse_req;
+
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("SPT:Driver: OID_GET_SPATIAL_REUSE is called from WAPP in driver\n"));
+			wrq->u.data.length = sizeof(wdev_spc_reuse_req);
+			NdisZeroMemory(&spt_reuse_req, sizeof(wdev_spc_reuse_req));
+			spt_reuse_req.bss_color = 7;
+			spt_reuse_req.partial_bss_color = 1;
+			spt_reuse_req.hesiga_spa_reuse_val_allowed = 0;
+			spt_reuse_req.srg_info_valid = 1;
+			spt_reuse_req.nonsrg_offset_valid = 0;
+			spt_reuse_req.psr_disallowed = 0;
+			spt_reuse_req.nonsrg_obsspd_max_offset = 10;
+			spt_reuse_req.srg_obsspd_min_offset = 1;
+			spt_reuse_req.srg_obsspd_max_offset = 11;
+			spt_reuse_req.srg_bss_color_bitmap[7] = 0x80;
+			spt_reuse_req.srg_bss_color_bitmap[6] = 0x01;
+
+			/* Need to be updated*/
+			NdisMoveMemory(spt_reuse_req.srg_partial_bssid_bitmap, "67812345", 8);
+			NdisMoveMemory(spt_reuse_req.neigh_bssColor_bitmap, "87654321", 8);
+
+			Status = copy_to_user(wrq->u.data.pointer, &spt_reuse_req, wrq->u.data.length);
+			break;
+		}
+#endif
+
+#ifdef TR181_SUPPORT
+#ifdef VOW_SUPPORT
+	case OID_802_11_VOW_ATF_EN:
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Get OID_802_11_VOW_ATF_EN\n");
+		wrq->u.data.length = sizeof(pAd->vow_cfg.en_airtime_fairness);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->vow_cfg.en_airtime_fairness, wrq->u.data.length);
+		break;
+	case OID_802_11_VOW_GROUP_MAX_RATIO:
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Get OID_802_11_VOW_GROUP_MAX_RATIO, ifIndex=%d,max_airtime_ratio=%d\n",
+			ifIndex, pAd->vow_bss_cfg[ifIndex].max_airtime_ratio);
+		wrq->u.data.length = sizeof(pAd->vow_bss_cfg[ifIndex].max_airtime_ratio);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->vow_bss_cfg[ifIndex].max_airtime_ratio, wrq->u.data.length);
+		break;
+	case OID_802_11_VOW_GROUP_MIN_RATIO:
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Get OID_802_11_VOW_GROUP_MIN_RATIO,ifIndex=%d,min_airtime_ratio=%d\n",
+			ifIndex, pAd->vow_bss_cfg[ifIndex].min_airtime_ratio);
+		wrq->u.data.length = sizeof(pAd->vow_bss_cfg[ifIndex].min_airtime_ratio);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->vow_bss_cfg[ifIndex].min_airtime_ratio, wrq->u.data.length);
+		break;
+#endif
+#ifdef AP_SCAN_SUPPORT
+	case OID_802_11_ACS_REFRESH_PERIOD:
+	{
+		UCHAR band_idx = 0;
+		if (wdev) {
+			band_idx = HcGetBandByWdev(wdev);
+			wrq->u.data.length = sizeof(pAd->ApCfg.ACSCheckTime[band_idx]);
+			Status = copy_to_user(wrq->u.data.pointer, &pAd->ApCfg.ACSCheckTime[band_idx], wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Band[%d] ACS_REFRESH_PERIOD = %d\n",
+				band_idx, pAd->ApCfg.ACSCheckTime[band_idx]);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	}
+#endif
+	case OID_802_11_MAX_NUM_OF_SSID:
+	{
+		UINT8 max_bss_num = MAX_MBSSID_NUM(pAd);
+		if (wdev) {
+			wrq->u.data.length = sizeof(max_bss_num);
+			Status = copy_to_user(wrq->u.data.pointer, &max_bss_num, wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "max_bss_num = %d\n", max_bss_num);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	}
+	case OID_802_11_BW:
+	{
+		UCHAR bw;
+		if (wdev) {
+			bw = wlan_operate_get_bw(wdev);
+			wrq->u.data.length = sizeof(bw);
+			Status = copy_to_user(wrq->u.data.pointer, &bw, wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "bw = %d\n", bw);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	}
+	case OID_802_11_EXTENSION_CHANNEL:
+	{
+		UCHAR ext_cha;
+		if (wdev) {
+			/*  EXTCHA_NONE	 0
+				EXTCHA_ABOVE 1
+				EXTCHA_BELOW 3 */
+			ext_cha = wlan_config_get_ext_cha(wdev);
+			wrq->u.data.length = sizeof(ext_cha);
+			Status = copy_to_user(wrq->u.data.pointer, &ext_cha, wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ext_cha = %d\n", ext_cha);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	}
+	case OID_802_11_IEEE80211H:
+		wrq->u.data.length = sizeof(pAd->CommonCfg.bIEEE80211H);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->CommonCfg.bIEEE80211H, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "bIEEE80211H = %d\n",
+			pAd->CommonCfg.bIEEE80211H);
+		break;
+	case OID_802_11_COUNTRYCODE:
+		wrq->u.data.length = sizeof(pAd->CommonCfg.CountryCode);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->CommonCfg.CountryCode, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "CountryCode = %s\n",
+			pAd->CommonCfg.CountryCode);
+		break;
+	case OID_802_11_DTIMPERIOD:
+		wrq->u.data.length = sizeof(pAd->ApCfg.MBSSID[ifIndex].DtimPeriod);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->ApCfg.MBSSID[ifIndex].DtimPeriod, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "DtimPeriod[%d] = %d\n", ifIndex,
+			pAd->ApCfg.MBSSID[ifIndex].DtimPeriod);
+		break;
+	case OID_802_11_TXPREAMBLE:
+		wrq->u.data.length = sizeof(pAd->CommonCfg.TxPreamble);
+		/* Rt802_11PreambleLong = 1, Rt802_11PreambleShort = 0, Rt802_11PreambleAuto = 2 */
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->CommonCfg.TxPreamble, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TxPreamble = %ld\n",
+			pAd->CommonCfg.TxPreamble);
+		break;
+	case OID_802_11_BASICRATE:
+		wrq->u.data.length = sizeof(pAd->CommonCfg.BasicRateBitmap);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->CommonCfg.BasicRateBitmap, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "BasicRateBitmap = %lx\n",
+			pAd->CommonCfg.BasicRateBitmap);
+		break;
+	case OID_802_11_SUPPRATE:
+	{
+		int j;
+		if (wdev) {
+			wrq->u.data.length = sizeof(wdev->rate.legacy_rate.sup_rate);
+			Status = copy_to_user(wrq->u.data.pointer, &wdev->rate.legacy_rate.sup_rate, wdev->rate.legacy_rate.sup_rate_len);
+			for (j = 0; j < wdev->rate.legacy_rate.sup_rate_len; j++)
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "sup_rate[%d] = %x\n", j,
+					wdev->rate.legacy_rate.sup_rate[j]);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	}
+	case OID_802_11_RRM:
+		if (wdev) {
+			wrq->u.data.length = sizeof(wdev->RrmCfg.bDot11kRRMEnable);
+			Status = copy_to_user(wrq->u.data.pointer, &wdev->RrmCfg.bDot11kRRMEnable, wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "bDot11kRRMEnable = %d\n",
+				wdev->RrmCfg.bDot11kRRMEnable);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	case OID_802_11_RADIO_STATS:
+	{
+		WIFI_RADIO_STATS Stats;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_RADIO_STATS\n");
+		NdisZeroMemory(&Stats, sizeof(Stats));
+		Status = Get_Radio_Statistics(pAd, &Stats);
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"OID_802_11_RADIO_STATS error. %d\n", Status);
+			break;
+		}
+		wrq->u.data.length = sizeof(Stats);
+		Status = copy_to_user(wrq->u.data.pointer, &Stats, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_RADIO_CHANNEL_LAST_CHANGE:
+	{
+		UCHAR bandIdx = BAND0;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_RADIO_CHANNEL_CHANGE_STATS\n");
+		if (wdev)
+			bandIdx = HcGetBandByWdev(wdev);
+		Status = Get_Radio_Channel_Change_Info(pAd, bandIdx, wrq);
+		break;
+	}
+	case OID_802_11_WIFI_DIAG_RESULT:
+	{
+		NBR_DIAG_RESULT result;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_WIFI_DIAG_RESULT\n");
+		NdisZeroMemory(&result, sizeof(result));
+		Status = copy_from_user(&result, wrq->u.data.pointer, sizeof(result));
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"OID_802_11_WIFI_DIAG_RESULT error. %d\n", Status);
+			break;
+		}
+		Status = Get_Nbr_Diag_Result(pAd, &result);
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"OID_802_11_WIFI_DIAG_RESULT error. %d\n", Status);
+			break;
+		}
+		wrq->u.data.length = sizeof(result);
+		Status = copy_to_user(wrq->u.data.pointer, &result, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_WIFI_DIAG_RESULT_NUM:
+	{
+		BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
+		if(!ScanTab) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"OID_802_11_WIFI_DIAG_RESULT_NUM get scan table error.\n");
+			Status = NDIS_STATUS_FAILURE;
+			break;
+		}
+		wrq->u.data.length = sizeof(ScanTab->BssNr);
+		Status = copy_to_user(wrq->u.data.pointer, &ScanTab->BssNr, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"OID_802_11_WIFI_DIAG_RESULT_NUM=%d\n", ScanTab->BssNr);
+		break;
+	}
+	case OID_802_11_STA:
+	{
+		WIFI_STATION sta;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_STA\n");
+		NdisZeroMemory(&sta, sizeof(sta));
+		Status = copy_from_user(&sta, wrq->u.data.pointer, sizeof(sta));
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "OID_802_11_STA copy_from_user error.\n");
+			break;
+		}
+		if (Status == NDIS_STATUS_SUCCESS) {
+			Get_Sta_Info(pAd, &sta);
+			wrq->u.data.length = sizeof(sta);
+			Status = copy_to_user(wrq->u.data.pointer, &sta, wrq->u.data.length);
+		}
+		break;
+	}
+	case OID_802_11_STA_STATS:
+	{
+		WIFI_STA_STATS staStats;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_STA_STATS\n");
+		NdisZeroMemory(&staStats, sizeof(staStats));
+		Status = copy_from_user(&staStats, wrq->u.data.pointer, sizeof(staStats));
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "OID_802_11_STA_STATS copy_from_user error.\n");
+			break;
+		}
+		Get_Sta_Stats(pAd, &staStats);
+		wrq->u.data.length = sizeof(staStats);
+		Status = copy_to_user(wrq->u.data.pointer, &staStats, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_STA_RATES:
+	{
+		WIFI_STA_RATES staRates;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_STA_RATES\n");
+		NdisZeroMemory(&staRates, sizeof(staRates));
+		Status = copy_from_user(&staRates, wrq->u.data.pointer, sizeof(staRates));
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "OID_802_11_STA_RATES copy_from_user error.\n");
+			break;
+		}
+		Get_Sta_Rates(pAd, &staRates);
+		wrq->u.data.length = sizeof(staRates);
+		Status = copy_to_user(wrq->u.data.pointer, &staRates, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_AP:
+	{
+		WIFI_AP ap_info;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP\n");
+		NdisZeroMemory(&ap_info, sizeof(ap_info));
+		ap_info.SSIDAdvertisementEnabled = pAd->ApCfg.MBSSID[ifIndex].bHideSsid ? FALSE : TRUE;
+		ap_info.AssociatedDeviceNumberOfEntries = 0; /* not support */
+		ap_info.IsolationEnable = pAd->ApCfg.MBSSID[ifIndex].IsolateInterStaTraffic;
+		ap_info.MACAddressControlEnabled = pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Policy ? TRUE : FALSE;
+		ap_info.MaxAllowedAssociations = pAd->ApCfg.MBSSID[ifIndex].MaxStaNum;
+		ap_info.MaxAssociatedDevices = pAd->ApCfg.MBSSID[ifIndex].MaxStaNum;
+		if (wdev) {
+			ap_info.WMMCapability = wdev->bWmmCapable;
+			ap_info.UAPSDCapability = wdev->UapsdInfo.bAPSDCapable;
+		}
+		wrq->u.data.length = sizeof(ap_info);
+		Status = copy_to_user(wrq->u.data.pointer, &ap_info, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_AP_ACLLIST:
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP_ACLLIST\n");
+		wrq->u.data.length = sizeof(pAd->ApCfg.MBSSID[apidx].AccessControlList);
+		Status = copy_to_user(wrq->u.data.pointer,
+					&pAd->ApCfg.MBSSID[apidx].AccessControlList,
+					wrq->u.data.length);
+		break;
+	case OID_802_11_SEC_REKEYING_INTERVAL:
+		if (wdev) {
+			wrq->u.data.length = sizeof(wdev->SecConfig.GroupReKeyInterval);
+			Status = copy_to_user(wrq->u.data.pointer,
+						&wdev->SecConfig.GroupReKeyInterval,
+						wrq->u.data.length);
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_SEC_REKEYING_INTERVAL=%ld\n",
+				wdev->SecConfig.GroupReKeyInterval);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid wdev for cmd %d\n", cmd);
+		break;
+	case OID_802_11_SEC_MFP_CFG:
+		wrq->u.data.length = sizeof(pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PmfCfg.Desired_MFPR);
+		Status = copy_to_user(wrq->u.data.pointer,
+					&pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PmfCfg.Desired_MFPR,
+					wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_SEC_MFP_CFG=%d\n",
+			pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PmfCfg.Desired_MFPR);
+		break;
+#ifdef WSC_AP_SUPPORT
+	case OID_802_11_AP_WSCCONFMODE:
+		pWscControl = Get_WscControl(pAd);
+		if(!pWscControl) {
+			Status = NDIS_STATUS_FAILURE;
+			break;
+		}
+		wrq->u.data.length = sizeof(pWscControl->WscConfMode);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP_WSCMODE=%d\n",
+			pWscControl->WscConfMode);
+		Status = copy_to_user(wrq->u.data.pointer, &pWscControl->WscConfMode,
+					wrq->u.data.length);
+		break;
+	case OID_802_11_AP_WSCMODE:
+		pWscControl = Get_WscControl(pAd);
+		if(!pWscControl) {
+			Status = NDIS_STATUS_FAILURE;
+			break;
+		}
+		wrq->u.data.length = sizeof(pWscControl->WscMode);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP_WSCMODE=%d\n",
+			pWscControl->WscMode);
+		Status = copy_to_user(wrq->u.data.pointer, &pWscControl->WscMode,
+					wrq->u.data.length);
+		break;
+#endif
+	case OID_802_11_AP_AC:
+	{
+		WIFI_DEV_AC ac[WMM_NUM_OF_AC];
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP_AC\n");
+		wrq->u.data.length = sizeof(ac);
+		NdisZeroMemory(&ac, sizeof(ac));
+		Status = Get_Dev_Ac(pAd, apidx, (WIFI_DEV_AC *)&ac);
+		if(Status != NDIS_STATUS_SUCCESS)
+			break;
+		Status = copy_to_user(wrq->u.data.pointer, &ac,	wrq->u.data.length);
+		break;
+	}
+#ifdef STAT_ENHANCE_SUPPORT
+	case OID_802_11_AP_AC_STATS:
+	{
+		WIFI_DEV_AC_STATS ac_stats[WMM_NUM_OF_AC];
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_AP_AC_STATS\n");
+		NdisZeroMemory(&ac_stats, sizeof(ac_stats));
+		Status = Get_BSS_AC_Statistics(pAd, apidx, (WIFI_DEV_AC_STATS *)&ac_stats);
+		if (Status != NDIS_STATUS_SUCCESS) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "OID_802_11_STA_STATS error.\n");
+			break;
+		}
+		wrq->u.data.length = sizeof(ac_stats);
+		Status = copy_to_user(wrq->u.data.pointer, &ac_stats, wrq->u.data.length);
+		break;
+	}
+#endif
+	case OID_802_11_WIFI_SSID_STATS:
+	{
+		WIFI_BSS_STATS stats;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_WIFI_SSID_STATS\n");
+		NdisZeroMemory(&stats, sizeof(stats));
+		wrq->u.data.length = sizeof(stats);
+		Status = Get_BSS_Statistics(pAd, &stats);
+		if(Status != NDIS_STATUS_SUCCESS)
+			break;
+		Status = copy_to_user(wrq->u.data.pointer, &stats,	wrq->u.data.length);
+		break;
+	}
+#ifdef RADIUS_ACCOUNTING_SUPPORT
+	case OID_802_11_ACCOUNTING_SERVER:
+	{
+		WIFI_ACCOUNTING_SERVER accounting_server;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_ACCOUNTING\n");
+		wrq->u.data.length = sizeof(accounting_server);
+		Get_Accounting_Server(pAd, apidx, &accounting_server);
+		Status = copy_to_user(wrq->u.data.pointer, &accounting_server, wrq->u.data.length);
+		break;
+	}
+	case OID_802_11_ACCOUNTING_INTERIMINTERVAL:
+		wrq->u.data.length = sizeof(pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.acct_interim_interval);
+		Status = copy_to_user(wrq->u.data.pointer,
+			&pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.acct_interim_interval,	wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_ACCOUNTING_INTERIMINTERVAL=%d\n",
+			pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.acct_interim_interval);
+		break;
+#endif
+#endif /* TR181_SUPPORT */
+#ifndef AX8400_COMPATIBLE
+	case OID_802_11_BCN_TX_CNT:
+	{
+		UCHAR bandIdx = BAND0;
+		if (wdev)
+			bandIdx = HcGetBandByWdev(wdev);
+		wrq->u.data.length = sizeof(pAd->BcnCheckInfo[bandIdx].totalbcncnt);
+		Status = copy_to_user(wrq->u.data.pointer, &pAd->BcnCheckInfo[bandIdx].totalbcncnt, wrq->u.data.length);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OID_802_11_BCN_TX_CNT %d\n",
+			pAd->BcnCheckInfo[bandIdx].totalbcncnt);
+	}
+		break;
 #endif
 	default:
 		Status = -EOPNOTSUPP;
@@ -10217,6 +12338,7 @@ INT Set_CountryString_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	RTMP_STRING name_buffer[40] = {0};
 	BOOLEAN IsSupport5G = HcIsRfSupport(pAd, RFIC_5GHZ);
 	BOOLEAN IsSupport2G = HcIsRfSupport(pAd, RFIC_24GHZ);
+	int ret;
 #ifdef EXT_BUILD_CHANNEL_LIST
 	return -EOPNOTSUPP;
 #endif /* EXT_BUILD_CHANNEL_LIST */
@@ -10235,7 +12357,12 @@ INT Set_CountryString_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 		for (index = 0; index < NUM_OF_COUNTRIES; index++) {
 			NdisZeroMemory(name_buffer, sizeof(name_buffer));
-			snprintf(name_buffer, sizeof(name_buffer), "\"%s\"", (RTMP_STRING *) allCountry[index].pCountryName);
+			ret = snprintf(name_buffer, sizeof(name_buffer), "\"%s\"", (RTMP_STRING *) allCountry[index].pCountryName);
+			if (os_snprintf_error(sizeof(name_buffer), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+				return FALSE;
+			}
 
 			if (strncmp((RTMP_STRING *) allCountry[index].pCountryName, arg, strlen(arg)) == 0)
 				break;
@@ -10359,6 +12486,7 @@ INT	Set_AP_SSID_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		} else
 #endif /* P2P_SUPPORT */
 		{
+			OPSTATUS_CLEAR_FLAG_WDEV(wdev, fOP_AP_STATUS_MEDIA_STATE_CONNECTED);
 			ap_send_broadcast_deauth(pAd, wdev);
 			if (IS_SECURITY(&wdev->SecConfig))
 				pMbss->CapabilityInfo |= 0x0010;
@@ -10366,6 +12494,7 @@ INT	Set_AP_SSID_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				pMbss->CapabilityInfo &= ~(0x0010);
 			APSecInit(pAd, wdev);
 			restart_ap(&pMbss->wdev);
+			OPSTATUS_SET_FLAG_WDEV(wdev, fOP_AP_STATUS_MEDIA_STATE_CONNECTED);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("I/F(ra%d) Set_SSID_Proc::(Len=%d,Ssid=%s)\n",
 				pObj->ioctl_if,
@@ -10459,19 +12588,15 @@ INT	Set_BeaconPeriod_Proc(
 		return FALSE;
 
 	BeaconPeriod = (USHORT) os_str_tol(arg, 0, 10);
-
-	if ((BeaconPeriod >= 20) && (BeaconPeriod < 1024)) {
-		/* TBD: new chips have the capability to support separate Beacon Period for 2G/5G band */
-		pAd->CommonCfg.BeaconPeriod = BeaconPeriod;
+	if ((BeaconPeriod >= 20) && (BeaconPeriod < 1024) && wdev) {
+	    /* TBD: new chips have the capability to support separate Beacon Period for 2G/5G band */
+		pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)] = BeaconPeriod;
 		success = TRUE;
 #ifdef AP_QLOAD_SUPPORT
 		/* re-calculate QloadBusyTimeThreshold */
 		QBSS_LoadAlarmReset(pAd);
 #endif /* AP_QLOAD_SUPPORT */
-		UpdateBeaconHandler(
-			pAd,
-			wdev,
-			BCN_UPDATE_ALL_AP_RENEW);
+		UpdateBeaconHandler(pAd, wdev, BCN_UPDATE_ALL_AP_RENEW);
 
 		for (i = 0; i < WDEV_NUM_MAX; i++) {
 			tdev = pAd->wdev_list[i];
@@ -10479,7 +12604,7 @@ INT	Set_BeaconPeriod_Proc(
 				/* For global setting, syc change to each MBSS */
 				MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("sync for : %s\n", (char *)tdev->if_dev->name));
-				tdev->bss_info_argument.bcn_period = pAd->CommonCfg.BeaconPeriod;
+				tdev->bss_info_argument.bcn_period = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(tdev)];
 				tdev->bss_info_argument.u4BssInfoFeature = BSS_INFO_BASIC_FEATURE;
 				if (AsicBssInfoUpdate(pAd, &tdev->bss_info_argument) != NDIS_STATUS_SUCCESS)
 					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -10487,11 +12612,9 @@ INT	Set_BeaconPeriod_Proc(
 				}
 			}
 
-	} else
-		success = FALSE;
-
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set_BeaconPeriod_Proc::(BeaconPeriod=%d)\n",
-			 pAd->CommonCfg.BeaconPeriod));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set_BeaconPeriod_Proc::(BeaconPeriod=%d)\n",
+				 pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)]));
+	}
 	return success;
 }
 
@@ -11022,85 +13145,18 @@ INT	Set_VLAN_TAG_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Unexpected if_type\n"));
 		return FALSE;
 	}
-
 	if (!wdev)
 		return FALSE;
+	if (wdev->if_up_down_state == 0)
+		return FALSE;
 
-	wdev->bVLAN_Tag = bVLAN_Tag;
-
-	if (IS_ASIC_CAP(pAd, fASIC_CAP_MCU_OFFLOAD)) {
-		CHAR BssIdx, WlanIdx;
-		PMAC_TABLE_ENTRY pEntry;
-		STA_REC_CFG_T StaCfg;
-		PSTA_ADMIN_CONFIG pApCliEntry = NULL;
-		RT_802_11_WDS_ENTRY *wds_entry = NULL;
-		struct _RTMP_ARCH_OP *arch_ops = NULL;
-		INT32 ret = 0;
-
-		arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
-
-		if (if_type == INT_MAIN || if_type == INT_MBSSID) {
-			/* Update BC's StaRec of CR4 */
-			os_zero_mem(&StaCfg, sizeof(STA_REC_CFG_T));
-			pEntry = &pAd->MacTab.Content[wdev->tr_tb_idx];
-			StaCfg.MuarIdx = 0xe;
-			StaCfg.ConnectionState = STATE_PORT_SECURE;
-			StaCfg.ConnectionType = CONNECTION_INFRA_BC;
-			StaCfg.u4EnableFeature = (1 << STA_REC_TX_PROC);
-			StaCfg.ucBssIndex = wdev->bss_info_argument.ucBssIndex;
-			StaCfg.u2WlanIdx = wdev->tr_tb_idx;
-			StaCfg.pEntry = pEntry;
-
-			if (arch_ops->archSetStaRec) {
-				ret = arch_ops->archSetStaRec(pAd, StaCfg);
-				return ret;
-			}
-
-		} else if (if_type == INT_APCLI) {
-			pApCliEntry = &pAd->StaCfg[ifIndex];
-			WlanIdx = pApCliEntry->MacTabWCID;
-			BssIdx = wdev->BssIdx;
-			pEntry = &pAd->MacTab.Content[WlanIdx];
-
-			os_zero_mem(&StaCfg, sizeof(STA_REC_CFG_T));
-			StaCfg.MuarIdx = wdev->OmacIdx;
-			StaCfg.ConnectionState = pAd->StaCfg[ifIndex].ApcliInfStat.Valid;
-			StaCfg.ConnectionType = pEntry->ConnectionType;
-			StaCfg.u4EnableFeature = (1 << STA_REC_TX_PROC);
-			StaCfg.ucBssIndex = BssIdx;
-			StaCfg.u2WlanIdx = WlanIdx;
-			StaCfg.pEntry = pEntry;
-
-			if (arch_ops->archSetStaRec) {
-				ret = arch_ops->archSetStaRec(pAd, StaCfg);
-				return ret;
-			}
-		} else if (if_type == INT_WDS) {
-			wds_entry = &pAd->WdsTab.WdsEntry[ifIndex];
-			BssIdx = wdev->BssIdx;
-			pEntry = WdsTableLookup(pAd, wds_entry->PeerWdsAddr, TRUE);
-			if (!pEntry) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): invalid pEntry\n", __func__));
-				return FALSE;
-			}
-
-			WlanIdx = pEntry->wcid;
-			os_zero_mem(&StaCfg, sizeof(STA_REC_CFG_T));
-			StaCfg.MuarIdx = wdev->OmacIdx;
-			StaCfg.ConnectionState = STATE_PORT_SECURE;
-			StaCfg.ConnectionType = pEntry->ConnectionType;
-			StaCfg.u4EnableFeature = (1 << STA_REC_TX_PROC);
-			StaCfg.ucBssIndex = BssIdx;
-			StaCfg.u2WlanIdx = WlanIdx;
-			StaCfg.pEntry = pEntry;
-
-			if (arch_ops->archSetStaRec) {
-				ret = arch_ops->archSetStaRec(pAd, StaCfg);
-				return ret;
-			}
-		}
+	if (wlan_operate_get_state(wdev) == WLAN_OPER_STATE_INVALID) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"Interface WLAN_OPER_STATE_INVALID, Skip VLAN Tag setting\n");
+		return FALSE;
 	}
 
+	wdev->bVLAN_Tag = bVLAN_Tag;
 	return TRUE;
 }
 
@@ -11151,6 +13207,12 @@ INT Set_VLAN_Policy_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	if (!wdev || !direction || !policy)
 		return FALSE;
+
+	if (wlan_operate_get_state(wdev) == WLAN_OPER_STATE_INVALID) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"Interface WLAN_OPER_STATE_INVALID, Skip VLAN Policy setting\n");
+		return FALSE;
+	}
 
 	dir = (os_str_tol(direction, 0, 10) == TX_VLAN) ? TX_VLAN : RX_VLAN;
 	vlan_policy = os_str_tol(policy, 0, 10);
@@ -11259,7 +13321,10 @@ INT Show_VLAN_Info_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		 ("VLANPolicy(Tx)=%d\n", wdev->VLAN_Policy[TX_VLAN]));
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		 ("VLANPolicy(Rx)=%d\n", wdev->VLAN_Policy[RX_VLAN]));
-
+	MTWF_PRINT("VLANTxdrop=%d\n", wdev->VLANTxdrop);
+	MTWF_PRINT("VLANRxdrop=%d\n", wdev->VLANRxdrop);
+	wdev->VLANTxdrop = 0;
+	wdev->VLANRxdrop = 0;
 	return TRUE;
 }
 #endif /*VLAN_SUPPORT*/
@@ -11610,8 +13675,8 @@ INT	Set_ACLAddEntry_Proc(
 			if (memcmp(pacl->Entry[j].Addr, &macAddr, 6) == 0) {
 				isDuplicate = TRUE;
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("You have added an entry before :\n"));
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("The duplicate entry is %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("The duplicate entry is "MACSTR"\n",
+						 MAC2STR(macAddr)));
 			}
 		}
 
@@ -11621,8 +13686,8 @@ INT	Set_ACLAddEntry_Proc(
 		if (pacl->Num == MAX_NUM_OF_ACL_LIST) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
 					 ("The AccessControlList is full, and no more entry can join the list!\n"));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("The last entry of ACL is %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("The last entry of ACL is "MACSTR"\n",
+					 MAC2STR(macAddr)));
 			break;
 		}
 	}
@@ -11643,11 +13708,8 @@ INT	Set_ACLAddEntry_Proc(
 	for (i = 0; i < pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Num; i++) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Entry #%02d: ", i + 1));
 
-		for (j = 0; j < MAC_ADDR_LEN; j++)
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%02X ", pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Entry[i].Addr[j]));
-
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 (MACSTR"\n", MAC2STR(pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Entry[i].Addr)));
 	}
 
 #endif
@@ -11734,14 +13796,14 @@ INT	Set_ACLDelEntry_Proc(
 				pacl->Entry[j].Reject_Count = 0;
 #endif
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						 ("The entry %02x:%02x:%02x:%02x:%02x:%02x founded will be deleted!\n",
-						  macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+						 ("The entry "MACSTR" founded will be deleted!\n",
+						  MAC2STR(macAddr)));
 			}
 		}
 
 		if (!isFound) {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("The entry %02x:%02x:%02x:%02x:%02x:%02x is not in the list!\n",
-					 macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("The entry "MACSTR" is not in the list!\n",
+					 MAC2STR(macAddr)));
 		}
 	}
 
@@ -11771,11 +13833,8 @@ INT	Set_ACLDelEntry_Proc(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				 ("Entry #%02d: ", i + 1));
 
-		for (j = 0; j < MAC_ADDR_LEN; j++)
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%02X ", pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Entry[i].Addr[j]));
-
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 (MACSTR"\n", MAC2STR(pAd->ApCfg.MBSSID[ifIndex].AccessControlList.Entry[i].Addr)));
 	}
 
 #endif
@@ -11809,7 +13868,7 @@ INT	Set_ACLShowAll_Proc(
 	RT_802_11_ACL			*pacl = NULL;
 	BOOLEAN					bDumpAll = FALSE;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
-	INT						i, j;
+	INT						i;
 	UINT 					ifIndex = pObj->ioctl_if;
 
 	bDumpAll = os_str_tol(arg, 0, 10);
@@ -11864,11 +13923,8 @@ INT	Set_ACLShowAll_Proc(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				 ("Entry #%02d: ", i + 1));
 
-		for (j = 0; j < MAC_ADDR_LEN; j++)
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%02X ", pacl->Entry[i].Addr[j]));
-
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 (MACSTR"\n", MAC2STR(pacl->Entry[i].Addr)));
 	}
 
 	os_free_mem(pacl);
@@ -12089,13 +14145,13 @@ INT Set_AutoChannelSel_Proc(
 #ifdef ACS_CTCC_SUPPORT
 	else if (strcmp(arg, "5") == 0) {
 		pAd->ApCfg.AutoChannelAlg[band_idx] = ChannelAlgApCnt;
-		pAd->ApCfg.auto_ch_score_flag = TRUE;
+		pAd->ApCfg.auto_ch_score_flag[band_idx] = TRUE;
 	 } else if (strcmp(arg, "6") == 0) {
 		pAd->ApCfg.AutoChannelAlg[band_idx] = ChannelAlgCCA;
-		pAd->ApCfg.auto_ch_score_flag = TRUE;
+		pAd->ApCfg.auto_ch_score_flag[band_idx] = TRUE;
 	 } else if (strcmp(arg, "7") == 0) {
 		pAd->ApCfg.AutoChannelAlg[band_idx] = ChannelAlgBusyTime;
-		pAd->ApCfg.auto_ch_score_flag = TRUE;
+		pAd->ApCfg.auto_ch_score_flag[band_idx] = TRUE;
 	 }
 #endif
 
@@ -12108,6 +14164,15 @@ INT Set_AutoChannelSel_Proc(
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("\x1b[42m%s: Alg = %d \x1b[m\n", __func__, pAd->ApCfg.AutoChannelAlg[band_idx]));
 
+		/*if scan is running, ACS will not be triggered*/
+#ifdef SCAN_SUPPORT
+	if (scan_in_run_state(pAd, pwdev)) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s::Failed!!!Scan is running, please try again after scan done!\n", __func__));
+		return FALSE;
+	}
+#endif
+
 	if (pAd->ApCfg.AutoChannelAlg[band_idx] == ChannelAlgBusyTime) {
 #ifdef TR181_SUPPORT
 		{
@@ -12117,6 +14182,12 @@ INT Set_AutoChannelSel_Proc(
 			hdev->rdev->pRadioCtrl->ACSTriggerFlag = 2;
 		}
 #endif /*TR181_SUPPORT*/
+		/*To do ACS, need TakeChannelOpCharge first*/
+		if (!TakeChannelOpCharge(pAd, pwdev, CH_OP_OWNER_ACS, TRUE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: TakeChannelOpCharge fail for ACS!!\n", __func__));
+			return FALSE;
+		}
+
 		pAd->ApCfg.iwpriv_event_flag = TRUE;
 		AutoChSelScanStart(pAd, pwdev);
 		ret = RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(&pAd->ApCfg.set_ch_aync_done, ((120*100*OS_HZ)/1000));/* Wait 12s.*/
@@ -12130,6 +14201,8 @@ INT Set_AutoChannelSel_Proc(
 				pAutoChCtrl->AutoChSelCtrl.AutoChScanStatMachine.CurrState = AUTO_CH_SEL_SCAN_IDLE;
 		}
 		pAd->ApCfg.iwpriv_event_flag = FALSE;
+		/*When ACS is done, release ChannelOpCharge here*/
+		ReleaseChannelOpCharge(pAd, pwdev, CH_OP_OWNER_ACS);
 	} else if (Ssid.SsidLength == 0)
 		ApSiteSurvey_by_wdev(pAd, &Ssid, SCAN_PASSIVE, TRUE, pwdev);
 	else
@@ -12144,7 +14217,6 @@ INT Set_PartialScan_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT8       bPartialScanning;
 	struct wifi_dev *wdev = NULL;
 	SCAN_CTRL *ScanCtrl;
-	BSS_TABLE *ScanTab = NULL;
 	UCHAR mbss_idx = 0;
 
 	if ((pObj->ioctl_if_type != INT_APCLI) &&
@@ -12202,19 +14274,18 @@ INT Set_PartialScan_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			" cannot trigger new partial scan\n", __func__));
 			return FALSE;
 		}
+		/*To set ParitalScan flag TRUE, need TakeChannelOpCharge first*/
+		if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_PARTIAL_SCAN, TRUE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: TakeChannelOpCharge fail for PARTIAL SCAN!!\n", __func__));
+			return FALSE;
+		}
 		ScanCtrl->PartialScan.pwdev = wdev;
 		wdev->ScanInfo.LastScanChannel = 0;
-		ScanTab = get_scan_tab_by_wdev(pAd, wdev);
-		if(ScanTab) {
-			BssTableInit(ScanTab);  ////jiangdingyong 2020.07.07
-		}
 	}
 	ScanCtrl->PartialScan.bScanning = bPartialScanning ? TRUE : FALSE;
-	if (!ScanCtrl->PartialScan.bScanning)
-		ScanCtrl->ScanType = SCAN_ACTIVE;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("%s(): bScanning = %u, caller: %pS \n", __func__, ScanCtrl->PartialScan.bScanning, OS_TRACE));
+			("%s(): bScanning = %u\n", __func__, ScanCtrl->PartialScan.bScanning));
 	return TRUE;
 }
 
@@ -12278,50 +14349,6 @@ INT Set_PartialScan_Timer_Interval_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	return TRUE;
 }
-
-INT Set_Scan_probe_max_cnt(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
-{
-	UINT32 MaxProbeReqCnt;
-	POS_COOKIE  pObj = (POS_COOKIE) pAd->OS_Cookie;
-	UCHAR		ifIndex;
-	struct wifi_dev *wdev = NULL;
-	SCAN_CTRL *ScanCtrl = NULL;
-	INT32 MaxNumBss;
-
-	/* max bss number */
-	MaxNumBss = pAd->ApCfg.BssidNum;
-	if (!VALID_MBSS(pAd, MaxNumBss))
-		MaxNumBss = MAX_MBSSID_NUM(pAd);
-
-	if ((pObj->ioctl_if_type != INT_APCLI) &&
-		(pObj->ioctl_if_type != INT_MAIN) &&
-		(pObj->ioctl_if_type != INT_MBSSID))
-		return FALSE;
-
-	ifIndex = pObj->ioctl_if;
-	MaxProbeReqCnt = os_str_tol(arg, 0, 10);
-
-	if (((pObj->ioctl_if_type == INT_MAIN) || (pObj->ioctl_if_type == INT_MBSSID)) &&
-		(ifIndex < MaxNumBss)) {
-		wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
-		ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
-		ScanCtrl->MaxProbeReqCnt = MaxProbeReqCnt;
-	}
-
-#ifdef APCLI_SUPPORT
-	else if ((pObj->ioctl_if_type == INT_APCLI) && (ifIndex < MAX_APCLI_NUM)) {
-		wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
-		ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
-		ScanCtrl->MaxProbeReqCnt = MaxProbeReqCnt;
-	}
-#endif /* APCLI_SUPPORT */
-
-	if (ScanCtrl)
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Set MaxProbeReqCnt = %d \n", ScanCtrl->MaxProbeReqCnt));
-
-	return TRUE;
-}
-
 
 INT Set_PartialScan_Num_of_CH_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
@@ -12557,7 +14584,6 @@ INT show_scan_info_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UCHAR		ifIndex;
 	struct wifi_dev *wdev = NULL;
 	SCAN_CTRL *ScanCtrl = NULL;
-	UINT32 MaxProbeReqCnt;
 
 	if ((pObj->ioctl_if_type != INT_APCLI) &&
 		(pObj->ioctl_if_type != INT_MAIN) &&
@@ -12582,7 +14608,6 @@ INT show_scan_info_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	TimerInterval = ScanCtrl->PartialScan.TimerInterval;
 	partial_scan_num = ScanCtrl->PartialScan.NumOfChannels;
 	dfs_ch_utilization = ScanCtrl->dfs_ch_utilization;
-	MaxProbeReqCnt = ScanCtrl->MaxProbeReqCnt;
 	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("===== Scan Information =====\n"));
 	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -12593,8 +14618,6 @@ INT show_scan_info_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 					("Number of channels to scan = %d\n", partial_scan_num));
 	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("= DFS Channel utilization =\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("Max Probe Req Cnt = %d\n", MaxProbeReqCnt));
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("Using DFS channel is allowed = %d\n", dfs_ch_utilization));
 
@@ -12649,7 +14672,7 @@ INT Set_AutoChannelSelCheckTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		pwdev = &pAd->ApCfg.MBSSID[IfIdx].wdev;
 		BandIdx = HcGetBandByWdev(pwdev);
 		time = simple_strtol(arg, 0, 10);
-#ifndef ACS_CTCC_SUPPORT
+#if !defined(ACS_CTCC_SUPPORT)
 		time = time * 3600;/* Hour to second */
 #endif
 		pAd->ApCfg.ACSCheckTime[BandIdx] = time;
@@ -12665,6 +14688,50 @@ INT Set_AutoChannelSelCheckTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	return TRUE;
 }
+/*
+    ==========================================================================
+    Description:
+	Set a periodic check time for auto channel selection (unit: min)
+   Arguments:
+       pAdapter                    Pointer to our adapter
+
+    Return Value:
+	TRUE if success, FALSE otherwise
+
+    Note:
+	Usage:
+		iwpriv ra0 set ACSCheckTimeMin=Minute
+
+    ==========================================================================
+*/
+INT Set_AutoChannelSelCheckMinTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UINT8 BandIdx;
+	UINT32 time;
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	UCHAR IfIdx;
+	struct wifi_dev *pwdev = NULL;
+
+	if ((pObj->ioctl_if_type == INT_MBSSID) || (pObj->ioctl_if_type == INT_MAIN)) {
+		IfIdx = pObj->ioctl_if;
+		pwdev = &pAd->ApCfg.MBSSID[IfIdx].wdev;
+		BandIdx = HcGetBandByWdev(pwdev);
+		time = simple_strtol(arg, 0, 10);
+		time = time * 60;/* Minute to second */
+		pAd->ApCfg.ACSCheckTime[BandIdx] = time;
+		pAd->ApCfg.ACSCheckCount[BandIdx] = 0;/* Reset counter */
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				 ("\x1b[42m%s(): ACSCheckTime[%d]=%u seconds\x1b[m\n",
+				  __func__, BandIdx, pAd->ApCfg.ACSCheckTime[BandIdx]));
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 ("\x1b[41m%s(): Not support current interface type = %u!!\x1b[m\n",
+				  __func__, pObj->ioctl_if_type));
+	}
+
+	return TRUE;
+}
+
 #endif /* AP_SCAN_SUPPORT */
 
 static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
@@ -12676,6 +14743,8 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	POS_COOKIE pObj = NULL;
 	CHAR str[10] = "";
 	UINT ifIndex;
+  	UCHAR BandIdx;
+	int ret;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("show ap cfg info:\n"));
@@ -12712,11 +14781,11 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	else if (WMODE_CAP_5G(wmode))
 		apcfg_para_setting.cfg_mode[1] = cfg_mode;
 
-	if (cfg_mode == 9)
+	if (cfg_mode == 16)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				 ("%-24s%-16ld%ld\n", "WirelessMode", cfg_mode,
 				  apcfg_for_peak.cfg_mode[0]));
-	else if (cfg_mode == 14)
+	else if (cfg_mode == 17)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				 ("%-24s%-16ld%ld\n", "WirelessMode", cfg_mode,
 				  apcfg_for_peak.cfg_mode[1]));
@@ -12725,7 +14794,8 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				 ("%-24s%-16ld%ld/%ld\n", "WirelessMode", cfg_mode,
 				  apcfg_for_peak.cfg_mode[0], apcfg_for_peak.cfg_mode[1]));
 
-	apcfg_para_setting.tx_power_percentage = 0;
+	BandIdx = HcGetBandByWdev(wdev);
+  	apcfg_para_setting.tx_power_percentage = pAd->CommonCfg.ucTxPowerPercentage[BandIdx];
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("%-24s%-16lu%lu\n", "TxPower",
 			  apcfg_para_setting.tx_power_percentage,
@@ -12815,7 +14885,7 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			  apcfg_para_setting.ba_en,
 			  apcfg_for_peak.ba_en));
 	/*HT_AMSDU*/
-	apcfg_para_setting.AmsduEnable = pAd->CommonCfg.BACapability.field.AmsduEnable;
+	apcfg_para_setting.AmsduEnable = wlan_config_get_amsdu_en(wdev);
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("%-24s%-16d%d\n", "HT_AMSDU",
 			  apcfg_para_setting.AmsduEnable,
@@ -12827,7 +14897,7 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			  apcfg_para_setting.ba_rx_wsize,
 			  apcfg_for_peak.ba_rx_wsize));
 	/*HT_GI*/
-	apcfg_para_setting.ht_gi = pAd->CommonCfg.RegTransmitSetting.field.ShortGI;
+	apcfg_para_setting.ht_gi = wlan_config_get_ht_gi(wdev);
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("%-24s%-16d%d\n", "HT_GI",
 			  apcfg_para_setting.ht_gi,
@@ -12929,7 +14999,15 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				  apcfg_para_setting.bDfsEnable,
 				  apcfg_for_peak.bDfsEnable));
 	}
-
+#ifdef MT_BAND4_DFS_SUPPORT
+	/*Band4DfsEnable*/
+	if (WMODE_CAP_5G(wmode)) {
+		apcfg_para_setting.band4DfsEnable = pAd->CommonCfg.DfsParameter.band4DfsEnable;
+		MTWF_PRINT("%-24s%-16d%d\n", "Band4DfsEnable",
+				apcfg_para_setting.band4DfsEnable,
+				apcfg_for_peak.band4DfsEnable);
+		}
+#endif
 #endif
 #ifdef BACKGROUND_SCAN_SUPPORT
 
@@ -13018,12 +15096,29 @@ static INT show_apcfg_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			  apcfg_para_setting.channel));
 	apcfg_para_setting.ext_channel = wlan_operate_get_ext_cha(wdev);
 
-	if (apcfg_para_setting.ext_channel == EXTCHA_ABOVE)
-		snprintf(str, sizeof(str), "ABOVE");
-	else if (apcfg_para_setting.ext_channel == EXTCHA_BELOW)
-		snprintf(str, sizeof(str), "BELOW");
-	else
-		snprintf(str, sizeof(str), "NONE");
+	if (apcfg_para_setting.ext_channel == EXTCHA_ABOVE) {
+		ret = snprintf(str, sizeof(str), "ABOVE");
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			return FALSE;
+		}
+	} else if (apcfg_para_setting.ext_channel == EXTCHA_BELOW) {
+		ret = snprintf(str, sizeof(str), "BELOW");
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+
+			return FALSE;
+		}
+	} else {
+		ret = snprintf(str, sizeof(str), "NONE");
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			return FALSE;
+		}
+	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("%-24s%-16s\n", "extension channel", str));
@@ -13080,6 +15175,7 @@ INT Show_Radio_Stat_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			ctrl->rdev[0].pRadioCtrl->LastDataPktRssi[2],
 			ctrl->rdev[0].pRadioCtrl->LastDataPktRssi[3]);
 	printk("----------------------------------------------\n");
+#ifdef DBDC_MODE
 	if (pAd->CommonCfg.dbdc_mode) {
 		printk("------------------BAND:1-----------------------\n");
 		printk("TxDataPacketCnt     = %lld\n", ctrl->rdev[1].pRadioCtrl->TxDataPacketCount.QuadPart);
@@ -13122,6 +15218,7 @@ INT Show_Radio_Stat_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 					ctrl->rdev[1].pRadioCtrl->LastDataPktRssi[3]);
 		printk("----------------------------------------------\n");
 	}
+#endif
 	return TRUE;
 }
 
@@ -13289,7 +15386,7 @@ INT Show_Sta_Stat_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			getRate(LastTxRate, &DataRate_Tx);
 			getRate(LastRxRate, &DataRate_Rx);
 			printk("-----------------WCID:%d-----------------------\n", i);
-			printk("MAC                 = %02X:%02X:%02X:%02X:%02X:%02X\n", pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2], pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]);
+			printk("MAC                 = "MACSTR"\n", MAC2STR(pEntry->Addr));
 			printk("TxDataPacketCnt     = %lld\n", pEntry->TxDataPacketCount.QuadPart);
 			printk("TxDataPacketByte    = %lld\n", pEntry->TxDataPacketByte.QuadPart);
 			printk("TxSuccessCount      = %u\n", pEntry->TxSuccessByWtbl);
@@ -13401,8 +15498,8 @@ INT Show_Eap_Stats_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 					("WCID\tMAC Address\t\tmpdu_attempts\tmpdu_retries\tmpdu_dropped(HW)\t"
 					  "minimum latency(TU)\tmaximum latency(TU)\taverage latency(TU) \n"));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("%d\t%02X:%02X:%02X:%02X:%02X:%02X\t",
-					  pEntry->wcid, PRINT_MAC(pEntry->Addr)));
+					 ("%d\t"MACSTR"\t",
+					  pEntry->wcid, MAC2STR(pEntry->Addr)));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				("%10lld\t%10lld\t%10lld\t", pEntry->mpdu_attempts.QuadPart, pEntry->mpdu_retries.QuadPart, pEntry->mpdu_xretries.QuadPart));
 
@@ -13442,9 +15539,7 @@ INT Show_StaCount_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		if (((IS_ENTRY_CLIENT(pEntry) || IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_REPEATER(pEntry))
 			&& (pEntry->Sst == SST_ASSOC)) || IS_ENTRY_WDS(pEntry)) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%02X:%02X:%02X:%02X:%02X:%02X  ",
-					  pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
-					  pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]));
+					 (MACSTR"  ", MAC2STR(pEntry->Addr)));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					 ("%-4d", (int)pEntry->Aid));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -14177,7 +16272,7 @@ INT Show_Sat_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 			if (IS_ENTRY_CLIENT(pEntry) && (pEntry->Sst == SST_ASSOC)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						 ("\n%02x:%02x:%02x:%02x:%02x:%02x - ", PRINT_MAC(pEntry->Addr)));
+						 ("\n"MACSTR" - ", MAC2STR(pEntry->Addr)));
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						 ("%-4d\n", (int)pEntry->Aid));
 
@@ -14333,16 +16428,27 @@ INT Show_SimSectionUlm_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT32 startaddr,  endaddr, addr;
 	UINT32 macVal = 0;
 	UINT Idx;/* enable load from bin */
+	int ret;
 
 	Idx = os_str_tol(arg, 0, 10);
 
 	NdisZeroMemory(fileName, 64);
 
-	if (Idx == 0 || Idx == 2 || Idx == 3)
-		snprintf(fileName, sizeof(fileName), "/etc/mem_dump_ulm%d.txt", Idx);
-	else if (Idx == 4)
-		snprintf(fileName, sizeof(fileName), "/etc/mem_dump_cache_sram.txt");
-	else
+	if (Idx == 0 || Idx == 2 || Idx == 3) {
+		ret = snprintf(fileName, sizeof(fileName), "/etc/mem_dump_ulm%d.txt", Idx);
+		if (os_snprintf_error(sizeof(fileName), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			return FALSE;
+		}
+	} else if (Idx == 4) {
+		ret = snprintf(fileName, sizeof(fileName), "/etc/mem_dump_cache_sram.txt");
+		if (os_snprintf_error(sizeof(fileName), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			return FALSE;
+		}
+	} else
 		return FALSE;
 
 	if (Idx == 0) {
@@ -14512,9 +16618,7 @@ INT Show_Sat_Reset_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 			if (IS_ENTRY_CLIENT(pEntry) && (pEntry->Sst == SST_ASSOC)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						 ("\n%02X:%02X:%02X:%02X:%02X:%02X - ",
-						  pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
-						  pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]));
+						 ("\n"MACSTR" - ", MAC2STR(pEntry->Addr)));
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						 ("%-4d\n", (int)pEntry->Aid));
 
@@ -14608,7 +16712,7 @@ VOID RTMPIoctlAddPMKIDCache(
 	if (IS_AKM_WPA2(pSecConfig->AKMMap)
 		|| IS_AKM_WPA3_192BIT(pSecConfig->AKMMap)) {
 		if (pKey->KeyLength == 32) {
-			UCHAR	digest[80], PMK_key[20], macaddr[MAC_ADDR_LEN];
+			UCHAR	digest[80] = {0}, PMK_key[20], macaddr[MAC_ADDR_LEN];
 
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_WARN,
 				("%s: pKey->KeyLength = %d\n", __func__, pKey->KeyLength));
@@ -14635,8 +16739,8 @@ VOID RTMPIoctlAddPMKIDCache(
 					  FALSE,
 					  pKey->KeyLength);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("WPA2(pre-auth):(%02x:%02x:%02x:%02x:%02x:%02x)Calc PMKID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-					  pKey->addr[0], pKey->addr[1], pKey->addr[2], pKey->addr[3], pKey->addr[4], pKey->addr[5], digest[0], digest[1],
+					 ("WPA2(pre-auth):("MACSTR")Calc PMKID=%02x:%02x:%02x:%02x:%02x:%02x\n",
+					  MAC2STR(pKey->addr), digest[0], digest[1],
 					  digest[2], digest[3], digest[4], digest[5]));
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("PMK =%02x:%02x:%02x:%02x-%02x:%02x:%02x:%02x\n",
 					 pKey->KeyMaterial[0], pKey->KeyMaterial[1],
@@ -14664,7 +16768,7 @@ VOID RTMPIoctlStaticWepCopy(
 	IN	RTMP_IOCTL_INPUT_STRUCT	 *wrq)
 {
 	MAC_TABLE_ENTRY *pEntry;
-	UCHAR	MacAddr[MAC_ADDR_LEN];
+	UCHAR	MacAddr[MAC_ADDR_LEN] = {0};
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	UCHAR	apidx = (UCHAR) pObj->ioctl_if;
 	ASIC_SEC_INFO Info = {0};
@@ -14805,8 +16909,8 @@ VOID RTMPIoctlAddRadiusMacAuthCache(
 	if (pAclEntry) {
 		/* Replace the Cache if exist */
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("[%d] Found %02x:%02x:%02x:%02x:%02x:%02x in Cache And Update Result to %d.\n",
-				  apidx, PRINT_MAC(newCache.Addr), newCache.Rsv));
+				 ("[%d] Found "MACSTR" in Cache And Update Result to %d.\n",
+				  apidx, MAC2STR(newCache.Addr), newCache.Rsv));
 		pAclEntry->result = newCache.Rsv;
 		return;
 	}
@@ -14821,9 +16925,9 @@ VOID RTMPIoctlAddRadiusMacAuthCache(
 		pAclEntry->result = newCache.Rsv;
 		insertTailList(&pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.RadiusMacAuthCache.cacheList, (RT_LIST_ENTRY *)pAclEntry);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("[%d] New %02x:%02x:%02x:%02x:%02x:%02x res(%d) in Cache(%d).\n",
+				 ("[%d] New "MACSTR" res(%d) in Cache(%d).\n",
 				  apidx,
-				  PRINT_MAC(pAclEntry->Addr), pAclEntry->result,
+				  MAC2STR(pAclEntry->Addr), pAclEntry->result,
 				  pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.RadiusMacAuthCache.cacheList.size));
 	} else
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Error in alloc mem in New Radius ACL Function.\n"));
@@ -14850,13 +16954,13 @@ VOID RTMPIoctlDelRadiusMacAuthCache(
 				 macBuf);
 
 	if (pListEntry) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%d]Del %02x:%02x:%02x:%02x:%02x:%02x in Cache(%d).\n", apidx,
-				 PRINT_MAC(macBuf), pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.RadiusMacAuthCache.cacheList.size));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%d]Del "MACSTR" in Cache(%d).\n", apidx,
+				 MAC2STR(macBuf), pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.RadiusMacAuthCache.cacheList.size));
 		delEntryList(&pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.RadiusMacAuthCache.cacheList, pListEntry);
 		os_free_mem(pListEntry);
 	} else {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%d]STA %02x:%02x:%02x:%02x:%02x:%02x not in Cache.\n",
-				 apidx, PRINT_MAC(macBuf)));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%d]STA "MACSTR" not in Cache.\n",
+				 apidx, MAC2STR(macBuf)));
 	}
 }
 
@@ -14915,12 +17019,12 @@ VOID RTMPIoctlQueryStaAid(
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: copy_to_user() fail\n", __func__));
 
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("Query::OID_802_DOT1X_QUERY_STA_AID(%02x:%02x:%02x:%02x:%02x:%02x, AID=%d)\n",
-				  PRINT_MAC(macBuf.StaAddr), macBuf.aid));
+				 ("Query::OID_802_DOT1X_QUERY_STA_AID("MACSTR", AID=%d)\n",
+				  MAC2STR(macBuf.StaAddr), macBuf.aid));
 	} else {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("Query::OID_802_DOT1X_QUERY_STA_AID(%02x:%02x:%02x:%02x:%02x:%02x, Not Found)\n",
-				  PRINT_MAC(macBuf.StaAddr)));
+				 ("Query::OID_802_DOT1X_QUERY_STA_AID("MACSTR", Not Found)\n",
+				  MAC2STR(macBuf.StaAddr)));
 	}
 }
 
@@ -14958,15 +17062,15 @@ VOID RTMPIoctlQueryStaRsn(
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_SUITEB, DBG_LVL_ERROR, ("%s: copy_to_user() fail\n", __func__));
 
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SUITEB, DBG_LVL_TRACE,
-				 ("Query::OID_802_DOT1X_QUERY_STA_RSN(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				  PRINT_MAC(sta_rsn.sta_addr)));
+				 ("Query::OID_802_DOT1X_QUERY_STA_RSN("MACSTR")\n",
+				  MAC2STR(sta_rsn.sta_addr)));
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SUITEB, DBG_LVL_TRACE,
 				("%s: AKM=%x, pairwise=%x, group_cipher=%x, group_mgmt_cipher=%x\n",
 				__func__, sta_rsn.akm, sta_rsn.pairwise_cipher, sta_rsn.group_cipher, sta_rsn.group_mgmt_cipher));
 	} else {
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SUITEB, DBG_LVL_TRACE,
-				 ("Query::OID_802_DOT1X_QUERY_STA_RSN(%02x:%02x:%02x:%02x:%02x:%02x, Not Found)\n",
-				  PRINT_MAC(sta_rsn.sta_addr)));
+				 ("Query::OID_802_DOT1X_QUERY_STA_RSN("MACSTR", Not Found)\n",
+				  MAC2STR(sta_rsn.sta_addr)));
 	}
 }
 
@@ -14998,8 +17102,8 @@ VOID RTMPIoctlQueryStaData(
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: copy_to_user() fail\n", __func__));
 	} else {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("Query::OID_802_DOT1X_QUERY_STA_AID(%02x:%02x:%02x:%02x:%02x:%02x, Not Found)\n",
-				  PRINT_MAC(macBuf.StaAddr)));
+				 ("Query::OID_802_DOT1X_QUERY_STA_AID("MACSTR", Not Found)\n",
+				  MAC2STR(macBuf.StaAddr)));
 	}
 }
 #endif /*RADIUS_ACCOUNTING_SUPPORT*/
@@ -15101,6 +17205,7 @@ VOID RTMPAPIoctlE2PROM(
 	BOOLEAN				bIsPrintAllE2PROM = FALSE;
 	UINT_32 start = 0;
 	UINT_32 end = 0;
+	int ret, left_buf_size;
 
 	/* Count maximum allocation size (Show all e2p data) */
 
@@ -15108,6 +17213,8 @@ VOID RTMPAPIoctlE2PROM(
 	new_line_size = EEPROM_SIZE / 8 + 1;
 	string_size += new_line_size;
 
+	/*for snpritf terminal, string_size++*/
+	string_size = string_size + 1;
 	os_alloc_mem(NULL, (UCHAR **)&mpool, sizeof(CHAR) * (string_size + 256 + 12));
 
 	if (mpool == NULL)
@@ -15275,7 +17382,12 @@ VOID RTMPAPIoctlE2PROM(
 
 	if (bIsPrintAllE2PROM) {
 #if defined(LINUX)
-		snprintf(msg, string_size, "\n");
+		ret = snprintf(msg, string_size, "\n");
+
+		if (os_snprintf_error(string_size, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			goto done;
+		}
 
 		if ((start + end) == 0) {
 			start = 0;
@@ -15285,16 +17397,33 @@ VOID RTMPAPIoctlE2PROM(
 		/* E2PROM Registers */
 		for (eepAddr = start; eepAddr < end; eepAddr += 2) {
 			RT28xx_EEPROM_READ16(pAdapter, eepAddr, eepValue);
-			snprintf(msg + strlen(msg), string_size - strlen(msg), "[0x%04X]:%04X  ", eepAddr, eepValue);
+			left_buf_size = string_size - strlen(msg);
+			ret = snprintf(msg + strlen(msg), left_buf_size, "[0x%04X]:%04X  ", eepAddr, eepValue);
+			if (os_snprintf_error(left_buf_size, ret)) {
+				MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+				goto done;
+			}
 
-			if ((eepAddr & 0x6) == 0x6)
-				snprintf(msg + strlen(msg), string_size - strlen(msg), "\n");
+			if ((eepAddr & 0x6) == 0x6) {
+				left_buf_size = string_size - strlen(msg);
+				ret = snprintf(msg + strlen(msg), left_buf_size, "\n");
+				if (os_snprintf_error(left_buf_size, ret)) {
+					MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+					goto done;
+				}
+			}
 		}
 #endif	/*  LINUX */
 	}
 
-	if (strlen(msg) == 1)
-		snprintf(msg + strlen(msg), string_size - strlen(msg), "===>Error command format!");
+	if (strlen(msg) == 1) {
+		left_buf_size = string_size - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "===>Error command format!");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			goto done;
+		}
+	}
 
 	/* Copy the information into the user buffer */
 	AP_E2PROM_IOCTL_PostCtrl(wrq, msg);
@@ -15325,9 +17454,6 @@ Arguments:
 */
 VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 {
-    UCHAR max_mode,max_bw , max_mcs,max_nss ,max_sgi,min_mode ,min_bw ,min_mcs,min_nss,min_sgi;
-    CHAR avgRssi;
-
 	INT Status;
 	RTMP_STRING *msg;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
@@ -15351,35 +17477,29 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 #endif
 	BOOLEAN isfound = FALSE;
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
-    ULONG DataRate_Tx = 0;
-    ULONG DataRate_Rx = 0;
-    HTTRANSMIT_SETTING lastTxRate1;
-    HTTRANSMIT_SETTING lastRxRate1;
-
-    UCHAR hw_oper = 0;
-    UCHAR vhw_oper = 0;
-    UCHAR ext_channel = EXTCHA_NONE;
-    int bw_value = 0;
-    UCHAR extchannel = 0x00;
-
 	CHAR rssi[4] = {0};
 	UINT8 len = 0, path_idx = 0;
 	UINT16 u2CnInfo = 0;
 	UINT msg_len = 2048;
+	int ret, left_buf_size;
+	if (wdev == NULL)
+		return;
 
 	os_alloc_mem(pAd, (UCHAR **)&msg, msg_len);
 
 	if (msg == NULL)
 		return;
 
-	if (wdev == NULL)
-		return;
-
 	ucBand = HcGetBandByWdev(wdev);
 
 	memset(msg, 0x00, msg_len);
-	snprintf(msg, msg_len, "\n");
+	ret = snprintf(msg, msg_len, "\n");
+
+	if (os_snprintf_error(msg_len, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_LOUD, ("ra offload=%d\n", cap->fgRateAdaptFWOffload));
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 
@@ -15436,21 +17556,55 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	}
 
 	RTMP_GET_TEMPERATURE(pAd, ucBand, &pAd->temperature);
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "CurrentTemperature              = %d\n", pAd->temperature);
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "Tx success                      = %ld\n", txCount);
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "CurrentTemperature              = %d\n", pAd->temperature);
+	if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
+	ret = snprintf(msg + strlen(msg), msg_len - strlen(msg), "Tx success                      = %lu\n", txCount);
+	if (os_snprintf_error(msg_len - strlen(msg), ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 #ifdef ENHANCED_STAT_DISPLAY
 
 	if (IS_HIF_TYPE(pAd, HIF_MT)) {
 		per = txCount == 0 ? 0 : 1000 * (pAd->WlanCounters[ucBand].FailedCount.u.LowPart) /
 			  (pAd->WlanCounters[ucBand].FailedCount.u.LowPart + txCount);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "Tx fail count                   = %ld, PER=%ld.%1ld%%\n",
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "Tx fail count                   = %lu, PER=%ld.%1ld%%\n",
 				(ULONG)pAd->WlanCounters[ucBand].FailedCount.u.LowPart,
 				per / 10, per % 10);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "Current BW Tx count             = %ld\n", (ULONG)pAd->WlanCounters[ucBand].CurrentBwTxCount.u.LowPart);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "Other BW Tx count               = %ld\n", (ULONG)pAd->WlanCounters[ucBand].OtherBwTxCount.u.LowPart);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "Current BW Tx count             = %lu\n", (ULONG)pAd->WlanCounters[ucBand].CurrentBwTxCount.u.LowPart);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "Other BW Tx count               = %lu\n", (ULONG)pAd->WlanCounters[ucBand].OtherBwTxCount.u.LowPart);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
 	}
-
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "Rx success                      = %lu\n", rxCount);
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "Rx success                      = %lu\n", rxCount);
+	if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 #ifdef CONFIG_QA
 
 	if (ATE_ON(pAd)) {
@@ -15465,10 +17619,22 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 			(pAd->WlanCounters[ucBand].RxFcsErrorCount.u.LowPart) /
 			(pAd->WlanCounters[ucBand].RxFcsErrorCount.u.LowPart + rxCount);
 
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "Rx with CRC                     = %ld, PER=%ld.%1ld%%\n",
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "Rx with CRC                     = %lu, PER=%ld.%1ld%%\n",
 			(ULONG)pAd->WlanCounters[ucBand].RxFcsErrorCount.u.LowPart, per / 10, per % 10);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "Rx drop due to out of resource  = %ld\n",
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "Rx drop due to out of resource  = %lu\n",
 			(ULONG)pAd->WlanCounters[ucBand].RxFifoFullCount.u.LowPart);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
 	} else
 #endif
 	{
@@ -15500,13 +17666,43 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 		PhyStatGetRssi(pAd, ucBand, rssi, &len);
 	PhyStatGetCnInfo(pAd, ucBand, &u2CnInfo);
 
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "RSSI                            = ");
-	for (path_idx = 0; path_idx < len; path_idx++)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%d ", rssi[path_idx]);
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n");
-
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "CN Info                         = %d", u2CnInfo);
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n");
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "Rssi: ");
+	if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
+	for (path_idx = 0; path_idx < len; path_idx++) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%d ", rssi[path_idx]);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "\n");
+	if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "CN Info:				= %d", u2CnInfo);
+	if (os_snprintf_error(msg_len - strlen(msg), ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "\n");
+	if (os_snprintf_error(msg_len - strlen(msg), ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 
 	{
 #ifdef ENHANCED_STAT_DISPLAY
@@ -15521,12 +17717,7 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 				if ((pEntry->wdev == NULL) || HcGetBandByWdev(pEntry->wdev) != ucBand)
 					continue;
 
-                if (0 != memcmp(pEntry->wdev->if_addr, wdev->if_addr, 6))
-                {
-                    continue;
-                }
-
-				if ((IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) || IS_ENTRY_WDS(pEntry) || IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_APCLI(pEntry)) {
+				if ((IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) || IS_ENTRY_WDS(pEntry) || IS_ENTRY_PEER_AP(pEntry)) {
 					/* sprintf(msg+strlen(msg), "sta mac: %02x:%02x:%02x:%02x:%02x:%02x\n", pEntry->wdev->if_addr[0], pEntry->wdev->if_addr[1],  pEntry->wdev->if_addr[2],  pEntry->wdev->if_addr[3],  pEntry->wdev->if_addr[4],  pEntry->wdev->if_addr[5]); */
 					UINT32 lastRxRate = pEntry->LastRxRate;
 					UINT32 lastTxRate = pEntry->LastTxRate;
@@ -15538,9 +17729,9 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 						if (1) {
 							EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
 							HTTRANSMIT_SETTING LastTxRate;
-							UCHAR phy_mode, rate, bw, sgi;
-							UCHAR nss;
-							UINT32 RawData;
+
+							os_zero_mem(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
+							os_zero_mem(&LastTxRate, sizeof(HTTRANSMIT_SETTING));
 
 							MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, pEntry->wcid, &rTxStatResult);
 							LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
@@ -15551,106 +17742,23 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 
 							if (LastTxRate.field.MODE >= MODE_VHT)
 								LastTxRate.field.MCS = (((rTxStatResult.rEntryTxRate.VhtNss - 1) & 0x3) << 4) + rTxStatResult.rEntryTxRate.MCS;
-							else
+							else if (LastTxRate.field.MODE == MODE_OFDM)
+								LastTxRate.field.MCS = getLegacyOFDMMCSIndex(rTxStatResult.rEntryTxRate.MCS) & 0x0000003F;
+							else {
 								LastTxRate.field.MCS = rTxStatResult.rEntryTxRate.MCS;
-
-#if 1	//mtk patch 20201211
-                             max_mode = pEntry->MaxHTPhyMode.field.MODE;
-                             max_bw =   pEntry->MaxHTPhyMode.field.BW;
-                             max_mcs =  pEntry->MaxHTPhyMode.field.MCS;
-                             max_nss = ((pEntry->MaxHTPhyMode.field.MCS & (0x3 << 4)) >> 4) + 1;
-                             max_sgi = pEntry->MaxHTPhyMode.field.ShortGI;
-            
-                             min_mode = pEntry->MinHTPhyMode.field.MODE;
-                             min_bw =   pEntry->MinHTPhyMode.field.BW;
-                             min_mcs =  pEntry->MinHTPhyMode.field.MCS;
-                             min_nss = ((pEntry->MinHTPhyMode.field.MCS & (0x3 << 4)) >> 4) + 1;
-                             min_sgi = pEntry->MinHTPhyMode.field.ShortGI;
-                            
-                             avgRssi = RTMPAvgRssi(pAd, &pEntry->RssiSample);
-                            if (pEntry->AvgTxBytes < 500) {  //Low T-Put 500Bps
-                                phy_mode = max_mode;
-                                bw = max_bw;
-                                nss = max_nss;
-                                sgi = max_sgi;
-                                
-                                LastTxRate.field.BW = max_bw;
-                                LastTxRate.field.MODE = max_mode;
-                                LastTxRate.field.ShortGI = max_sgi;
-                
-                                if (avgRssi > -65) {
-                                    rate = max_mcs;
-                                    LastTxRate.field.MCS = max_mcs;
-                                } else if (avgRssi > -67) {
-                                    rate = (max_mcs - 1 > 0) ? max_mcs - 1 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 1 > 0) ? max_mcs - 1 : 0;
-                                } else if (avgRssi > -69) {
-                                    rate = (max_mcs - 2 > 0) ? max_mcs - 2 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 2 > 0) ? max_mcs - 2 : 0;
-                                } else if (avgRssi > -71) {
-                                    rate = (max_mcs - 3 > 0) ? max_mcs - 3 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 3 > 0) ? max_mcs - 3 : 0;
-                                } else if (avgRssi > -73) {
-                                    rate = (max_mcs - 4 > 0) ? max_mcs - 4 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 4 > 0) ? max_mcs - 4 : 0;
-                                } else if (avgRssi > -75) {
-                                    rate = (max_mcs - 5 > 0) ? max_mcs - 5 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 5 > 0) ? max_mcs - 5 : 0;
-                                } else if (avgRssi > -77) {
-                                    rate = (max_mcs - 6 > 0) ? max_mcs - 6 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 5 > 0) ? max_mcs - 5 : 0;
-                                } else if (avgRssi > -79) {
-                                    rate = (max_mcs - 7 > 0) ? max_mcs - 7 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 6 > 0) ? max_mcs - 6 : 0;
-                                } else if (avgRssi > -81) {
-                                    rate = (max_mcs - 8 > 0) ? max_mcs - 8 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 7 > 0) ? max_mcs - 7 : 0;
-                                } else if (avgRssi > -83) {
-                                    rate = (max_mcs - 9 > 0) ? max_mcs - 9 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 8 > 0) ? max_mcs - 8 : 0;
-                                } else if (avgRssi > -85) {
-                                    rate = (max_mcs - 10 > 0) ? max_mcs - 10 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 8 > 0) ? max_mcs - 8 : 0;
-                                } else if (avgRssi > -87) {
-                                    rate = (max_mcs - 11 > 0) ? max_mcs - 11 : 0;
-                                    LastTxRate.field.MCS = (max_mcs - 9 > 0) ? max_mcs - 9 : 0;
-                                } else {
-                                    phy_mode = min_mode;
-                                    bw = min_bw;
-                                    nss = min_nss;
-                                    sgi = min_sgi;
-                                    LastTxRate.field.BW = min_bw;
-                                    LastTxRate.field.MODE = min_mode;
-                                    LastTxRate.field.MCS = 0;
-                                    LastTxRate.field.ShortGI = min_sgi;
-                                }
-                                //MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,("min_mode MODE [%d] max_mode[%d]\n", ((lastTxRate >> 13) & 0x7), LastTxRate.field.MODE));
-                            }   
-#endif
+							}
 
 							lastTxRate = (UINT32)(LastTxRate.word);
-							lastTxRate1 = LastTxRate;
 
-							RawData = lastTxRate;
-							phy_mode = (RawData >> 13) & 0x7;
-							rate = RawData & 0x3F;
-							bw = (RawData >> 7) & 0x3;
-							sgi = rTxStatResult.rEntryTxRate.ShortGI;
-							nss = rTxStatResult.rEntryTxRate.VhtNss;
-
-							if (phy_mode >= MODE_HE)
-							{
-								get_rate_he((rate & 0xf), bw, nss, 0, &DataRate_Tx);
-								if (sgi == 1)
-									DataRate_Tx = (DataRate_Tx * 967) >> 10;
-								if (sgi == 2)
-									DataRate_Tx = (DataRate_Tx * 870) >> 10;
-							}
-							else
-							{
-								lastTxRate1.word = (USHORT)lastTxRate;
-								getRate(lastTxRate1, &DataRate_Tx);
-							}
+							/*
+							 * if MODE or GI is extended, append them to target:
+							 *   MODE bit[7:3] -> lastTxRate bit[20:16]
+							 *   ShortGI bit[1:0] -> lastTxRate bit[22:21]
+							 */
+							if (rTxStatResult.rEntryTxRate.MODE >> 3)
+								lastTxRate |= ((rTxStatResult.rEntryTxRate.MODE >> 3) & 0x1f) << 16;
+							if (rTxStatResult.rEntryTxRate.ShortGI >> 1)
+								lastTxRate |= (rTxStatResult.rEntryTxRate.ShortGI & 0x3) << (16 + 5);
 						}
 					}
 
@@ -15661,50 +17769,6 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 						StatRateToString(pAd, msg, 0, lastTxRate);
 #ifdef MT7915
 						if (IS_MT7915(pAd)) {
-#ifdef RACTRL_FW_OFFLOAD_SUPPORT
-							HTTRANSMIT_SETTING LastRxRate;
-							EXT_EVENT_PHY_STATE_RX_RATE rRxStatResult;
-							UCHAR phy_mode_r, rate_r, bw_r, sgi_r;
-							UCHAR nss_r;
-							MtCmdPhyGetRxRate(pAd, CMD_PHY_STATE_CONTENTION_RX_PHYRATE, ucBand, pEntry->wcid, &rRxStatResult);
-							LastRxRate.field.MODE = rRxStatResult.u1RxMode;
-							LastRxRate.field.BW = rRxStatResult.u1BW;
-							LastRxRate.field.ldpc = rRxStatResult.u1Coding;
-							LastRxRate.field.ShortGI = rRxStatResult.u1Gi ? 1 : 0;
-							LastRxRate.field.STBC = rRxStatResult.u1Stbc;
-
-							if (LastRxRate.field.MODE >= MODE_VHT)
-								LastRxRate.field.MCS = ((rRxStatResult.u1RxNsts & 0x3) << 4) + rRxStatResult.u1RxRate;
-							else if (LastRxRate.field.MODE == MODE_OFDM)
-								LastRxRate.field.MCS = getLegacyOFDMMCSIndex(rRxStatResult.u1RxRate & 0xF);
-							else
-								LastRxRate.field.MCS = rRxStatResult.u1RxRate;
-
-							lastRxRate = (UINT32)(LastRxRate.word);
-							lastRxRate1 = LastRxRate;
-
-							phy_mode_r = rRxStatResult.u1RxMode;
-							rate_r = rRxStatResult.u1RxRate & 0x3F;
-							bw_r = rRxStatResult.u1BW;
-							sgi_r = rRxStatResult.u1Gi;
-#ifdef DOT11_VHT_AC
-							if (phy_mode_r >= MODE_VHT) {
-								nss_r = (rRxStatResult.u1RxNsts + 1) / (rRxStatResult.u1Stbc + 1);
-							}
-#endif
-							if (phy_mode_r >= MODE_HE) {
-								get_rate_he((rate_r & 0xf), bw_r, nss_r, 0, &DataRate_Rx);
-								if (sgi_r == 1)
-									DataRate_Rx = (DataRate_Rx * 967) >> 10;
-								if (sgi_r == 2)
-									DataRate_Rx = (DataRate_Rx * 870) >> 10;
-							}
-							else
-							{
-								lastRxRate1.word = (USHORT)lastRxRate;
-								getRate(lastRxRate1, &DataRate_Rx);
-							}
-#endif/* RACTRL_FW_OFFLOAD_SUPPORT */
 							ShowLastRxPhyRate(pAd, ucBand, pEntry->wcid, &rx_rate);
 							StatMt7915RxRateToString(pAd, msg, rx_rate);
 						} else
@@ -15713,30 +17777,29 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 					} else
 #endif /* MT_MAC */
 					{
-						snprintf(msg + strlen(msg), msg_len - strlen(msg), "Last TX Rate                    = MCS%d, %2dM, %cGI, %s%s\n",
+						left_buf_size = msg_len - strlen(msg);
+						ret = snprintf(msg + strlen(msg), left_buf_size, "Last TX Rate                    = MCS%d, %2dM, %cGI, %s%s\n",
 								lastTxRate & 0x7F,  ((lastTxRate >> 7) & 0x1) ? 40 : 20,
 								((lastTxRate >> 8) & 0x1) ? 'S' : 'L',
 								phyMode[(lastTxRate >> 14) & 0x3],
 								((lastTxRate >> 9) & 0x3) ? ", STBC" : " ");
-						snprintf(msg + strlen(msg), msg_len - strlen(msg), "Last RX Rate                    = MCS%d, %2dM, %cGI, %s%s\n",
+						if (os_snprintf_error(left_buf_size, ret)) {
+							MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+								("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+							goto done;
+						}
+						left_buf_size = msg_len - strlen(msg);
+						ret = snprintf(msg + strlen(msg), left_buf_size, "Last RX Rate                    = MCS%d, %2dM, %cGI, %s%s\n",
 								lastRxRate & 0x7F,  ((lastRxRate >> 7) & 0x1) ? 40 : 20,
 								((lastRxRate >> 8) & 0x1) ? 'S' : 'L',
 								phyMode[(lastRxRate >> 14) & 0x3],
 								((lastRxRate >> 9) & 0x3) ? ", STBC" : " ");
+						if (os_snprintf_error(left_buf_size, ret)) {
+							MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+								("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+							goto done;
+						}
 					}
-                    /*add for T&W by shidong 20200610*/
-                    if (DataRate_Tx == 0)
-                    {
-                        lastTxRate1.word = (USHORT)lastTxRate;
-                        getRate(lastTxRate1, &DataRate_Tx);
-                    }
-                    if (DataRate_Rx == 0)
-                    {
-                        lastRxRate1.word = (USHORT)lastRxRate;
-                        getRate(lastRxRate1, &DataRate_Rx);
-                    }
-
-                    sprintf(msg + strlen(msg), "Last Rate                       = [%ld %ld]\n", DataRate_Tx, DataRate_Rx);
 
 					break;
 				}
@@ -15823,78 +17886,74 @@ VOID RTMPIoctlStatistics(RTMP_ADAPTER *pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 		pHSCtrl = &pAd->ApCfg.MBSSID[apidx].HotSpotCtrl;
 		snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n");
 		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot enable                    = %d\n", pHSCtrl->HotSpotEnable);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "daemon ready                 .... = %d\n", pHSCtrl->HSDaemonReady);
+		snprintf(msg + strlen(msg), msg_len - strlen(msg), "daemon ready                  = %d\n", pHSCtrl->HSDaemonReady);
 		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot DGAFDisable               = %d\n", pHSCtrl->DGAFDisable);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot L2Filter              ....= %d\n", pHSCtrl->L2Filter);
+		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot L2Filter              = %d\n", pHSCtrl->L2Filter);
 		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot ICMPv4Deny                = %d\n", pHSCtrl->ICMPv4Deny);
 		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot QosMapEnable              = %d\n", pHSCtrl->QosMapEnable);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot OSEN enable               = %d\n", pHSCtrl->bASANEnable);
+		snprintf(msg + strlen(msg), msg_len - strlen(msg), "hotspot OSEN enable                   = %d\n", pHSCtrl->bASANEnable);
 #endif /* CONFIG_HOTSPOT */
 
 #ifdef CONFIG_DOT11V_WNM
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "proxy arp enable            ....  = %d\n", pWNMCtrl->ProxyARPEnable);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "WNMNotify enable            ....  = %d\n", pWNMCtrl->WNMNotifyEnable);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "WNM BSS Transition Management enable = %d\n", pWNMCtrl->WNMBTMEnable);
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "proxy arp enable              = %d\n", pWNMCtrl->ProxyARPEnable);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "WNMNotify enable              = %d\n", pWNMCtrl->WNMNotifyEnable);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "WNM BSS Transition Management enable = %d\n", pWNMCtrl->WNMBTMEnable);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
 #endif
 
 #ifdef CONFIG_DOT11U_INTERWORKING
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "GAS come back delay                       = %d\n", pGASCtrl->cb_delay);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "GAS MMPDU size                            = %d\n", pGASCtrl->MMPDUSize);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "GAS enable				= %d\n", pGASCtrl->b11U_enable);
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "GAS come back delay                       = %d\n", pGASCtrl->cb_delay);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "GAS MMPDU size                            = %d\n", pGASCtrl->MMPDUSize);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "GAS enable				= %d\n", pGASCtrl->b11U_enable);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
 #endif /* CONFIG_DOT11U_INTERWORKING */
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "\n");
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "\n");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
 	}
-
-    hw_oper = wlan_operate_get_ht_bw(wdev);
-    vhw_oper = wlan_operate_get_vht_bw(wdev); 
-    ext_channel = wlan_operate_get_ext_cha(wdev);
-    if (hw_oper == 0 && vhw_oper == 0)
-    {
-        bw_value = 20;
-    }
-    else if (hw_oper == 1 && vhw_oper == 0)
-    {
-        bw_value = 40;
-    }
-    if (hw_oper == 1 && vhw_oper == 1)
-    {
-        bw_value = 80;    
-    }
-
-    if (ext_channel == EXTCHA_ABOVE)
-    {
-        extchannel = 'l';
-    }
-    else if (ext_channel == EXTCHA_BELOW)
-    {
-        extchannel = 'u';
-    }
-
-    if (bw_value == 80)
-    {
-        sprintf(msg+strlen(msg), "CurrChannel = %d/80 , %d\n", wdev->channel, bw_value);
-    }
-    else if (bw_value == 40)
-    {
-        if (extchannel)
-        {
-            sprintf(msg+strlen(msg), "CurrChannel = %d%c , %d\n", wdev->channel, extchannel, bw_value);
-        }
-        else
-        {
-            sprintf(msg+strlen(msg), "CurrChannel = %d , %d\n", wdev->channel, bw_value);
-        }
-    }
-    else
-    {
-        sprintf(msg+strlen(msg), "CurrChannel = %d , %d\n", wdev->channel, bw_value);
-    }
-
-    sprintf(msg+strlen(msg), "driver_version  %s\n", AP_DRIVER_VERSION);
 
 	/* Copy the information into the user buffer */
 	wrq->u.data.length = strlen(msg);
 	Status = copy_to_user(wrq->u.data.pointer, msg, wrq->u.data.length);
+done:
 	os_free_mem(msg);
 #if defined(TXBF_SUPPORT) && defined(ENHANCED_STAT_DISPLAY)
 #endif /* defined(TXBF_SUPPORT) && defined(ENHANCED_STAT_DISPLAY) */
@@ -15957,6 +18016,78 @@ INT RTMPIoctlRXStatistics(
 	os_free_mem(this_char);
 	return Status;
 }
+
+#ifdef CONFIG_COLGIN_MT6890
+INT RTMPAPPrivIoctlLowPower(
+	IN RTMP_ADAPTER *pAd,
+	IN RTMP_IOCTL_INPUT_STRUCT *pIoctlCmdStr)
+{
+	RTMP_STRING *this_char, *value;
+	INT Status = NDIS_STATUS_SUCCESS;
+	UCHAR *tmp = NULL, *buf = NULL;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s----------------->\n", __func__));
+#ifdef TP_VXWORKS
+#ifdef IWPRIVHELP
+	/* iwpriv cmd set u.data.length=1,u.data.pointer="\0" when user does not assign input param */
+	if (pIoctlCmdStr->u.data.length == 1 && *pIoctlCmdStr->u.data.pointer == '\0')
+	{
+		showHelpMsg(pIoctlCmdStr, iwprivLowPowerCmdHelp);
+		return Status;
+	}
+#endif
+#endif
+
+	os_alloc_mem(NULL, (UCHAR **)&buf, pIoctlCmdStr->u.data.length + 1);
+
+	if (!buf)
+		return -ENOMEM;
+
+	if (copy_from_user(buf, pIoctlCmdStr->u.data.pointer, pIoctlCmdStr->u.data.length)) {
+		os_free_mem(buf);
+		return -EFAULT;
+	}
+
+	/* Play safe - take care of a situation in which user-space didn't NULL terminate */
+	buf[pIoctlCmdStr->u.data.length] = 0;
+	/* Use tmp to parse string, because strsep() would change it */
+	tmp = buf;
+
+	while ((this_char = strsep((char **)&tmp, "\0")) != NULL) {
+		if (!*this_char)
+			continue;
+
+		value = strchr(this_char, '=');
+
+		if (value != NULL)
+			*value++ = 0;
+
+		for (PRTMP_PRIVATE_LOW_POWER_PROC = RTMP_PRIVATE_LOW_POWER_SUPPORT_PROC;
+                PRTMP_PRIVATE_LOW_POWER_PROC->name; PRTMP_PRIVATE_LOW_POWER_PROC++) {
+			if (rtstrcasecmp(this_char, PRTMP_PRIVATE_LOW_POWER_PROC->name) == TRUE) {
+				if (!PRTMP_PRIVATE_LOW_POWER_PROC->low_power_proc(pAd, value)) {
+					/*FALSE:Set private failed then return Invalid argument */
+					Status = -EINVAL;
+				}
+
+				break;  /*Exit for loop. */
+			}
+		}
+
+		if (PRTMP_PRIVATE_LOW_POWER_PROC->name == NULL) {
+			/*Not found argument */
+			Status = -EINVAL;
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::(iwpriv) Command not Support [%s=%s]\n", this_char,
+					 value));
+			break;
+		}
+	}
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s<-----------------\n", __func__));
+	os_free_mem(buf);
+	return Status;
+}
+#endif
 
 #ifdef DOT11_N_SUPPORT
 /*
@@ -16119,69 +18250,95 @@ INT Set_ApCli_PwrSet_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 }
 #endif
 #if defined(APCLI_SUPPORT) || defined(CONFIG_STA_SUPPORT)
-INT Set_ApCli_Enable_Proc(
-	IN  PRTMP_ADAPTER pAd,
-	IN  RTMP_STRING *arg)
+INT SetApCliEnableByWdev(
+	IN	PRTMP_ADAPTER pAd,
+	IN	struct wifi_dev *wdev,
+	IN	BOOLEAN flag)
 {
-	UINT Enable;
-	POS_COOKIE pObj;
 	UCHAR ifIndex;
-	struct wifi_dev *wdev = NULL;
 #ifdef CONFIG_MAP_SUPPORT
 	struct DOT11_H *pDot11h = NULL;
 #endif
-	pObj = (POS_COOKIE) pAd->OS_Cookie;
-	ifIndex = pObj->ioctl_if;
-	wdev = &pAd->StaCfg[ifIndex].wdev;
+
+	if (!wdev) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wdev is null!\n");
+		return FALSE;
+	}
+
+	ifIndex = wdev->func_idx;
 #ifdef CONFIG_MAP_SUPPORT
 	pDot11h = wdev->pDot11_H;
 #endif
-#ifndef APCLI_CFG80211_SUPPORT
-	if (pObj->ioctl_if_type != INT_APCLI)
+
+	if (ifIndex >= MAX_APCLI_NUM) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error ifIdx = %d\n", ifIndex);
 		return FALSE;
-#endif
+	}
 
 	if (APCLI_IF_UP_CHECK(pAd, ifIndex) != TRUE) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("%s : interface is not up, please do ifconfig %s up first\n", __func__, wdev->if_dev->name));
-		return TRUE;
+		MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"interface is not up, please do ifconfig %s up first\n", wdev->if_dev->name);
+		return FALSE;
 	}
 
 #ifdef CONFIG_OWE_SUPPORT
 	sta_reset_owe_parameters(pAd, ifIndex);
 #endif
 
-	Enable = os_str_tol(arg, 0, 16);
-	pAd->StaCfg[ifIndex].ApcliInfStat.Enable = (Enable > 0) ? TRUE : FALSE;
+	pAd->StaCfg[ifIndex].ApcliInfStat.Enable = flag;
+
 #ifdef CONFIG_MAP_SUPPORT
 	if (IS_MAP_TURNKEY_ENABLE(pAd)) {
-		if (pAd->StaCfg[ifIndex].ApcliInfStat.Enable && pDot11h->RDMode == RD_SILENCE_MODE) {
+		if (pAd->StaCfg[ifIndex].ApcliInfStat.Enable
+			&& (pDot11h && pDot11h->RDMode == RD_SILENCE_MODE)) {
 			pDot11h->RDCount = pDot11h->cac_time;
 		}
 	}
 #endif
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("I/F(apcli%d) Set_ApCli_Enable_Proc::(enable = %d, caller: %pS)\n",
-			  ifIndex,
-			  pAd->StaCfg[ifIndex].ApcliInfStat.Enable, OS_TRACE));
-	wdev = &pAd->StaCfg[ifIndex].wdev;
-	//WCNCR00212336 当apcli enable=0之后， 需要将apcli的状态全部reset到idle状态
-	if(Enable == FALSE)
-	{
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF,  ("I/F(apcli%d) Set_ApCli_Enable_Proc:CNTL reset! \n", ifIndex));
-		auth_fsm_reset(wdev);
-		assoc_fsm_reset(wdev);
-		sync_fsm_reset(pAd, wdev);
-		cntl_fsm_reset(wdev);
-	}
-#ifdef APCLI_CONNECTION_TRIAL
+	MTWF_PRINT("%s: I/F(apcli%d) (enable = %d)\n", __func__,
+		ifIndex, pAd->StaCfg[ifIndex].ApcliInfStat.Enable);
 
+#ifdef APCLI_CONNECTION_TRIAL
 	if (pAd->StaCfg[ifIndex].TrialCh == 0)
 #endif /* APCLI_CONNECTION_TRIAL */
 		ApCliIfDown(pAd);
 
+#ifdef APCLI_CERT_SUPPORT
 	/*Fix for TGac 5.2.57*/
-	wlan_operate_set_prim_ch(wdev, wdev->channel);
+	if (pAd->bApCliCertTest)
+		wlan_operate_set_prim_ch(wdev, wdev->channel);
+#endif
+	if (pAd->StaCfg[ifIndex].ApcliInfStat.Enable == FALSE
+		&& !cntl_idle(wdev))
+		RTMP_MLME_RESET_STATE_MACHINE(pAd, wdev);
+
+	return TRUE;
+}
+
+INT Set_ApCli_Enable_Proc(
+	IN  PRTMP_ADAPTER pAd,
+	IN  RTMP_STRING *arg)
+{
+	UINT Enable;
+	BOOLEAN flag;
+	POS_COOKIE pObj;
+	UCHAR ifIndex;
+	struct wifi_dev *wdev = NULL;
+
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	ifIndex = pObj->ioctl_if;
+	wdev = &pAd->StaCfg[ifIndex].wdev;
+
+#ifndef APCLI_CFG80211_SUPPORT
+	if (pObj->ioctl_if_type != INT_APCLI)
+		return FALSE;
+#endif
+
+	Enable = os_str_tol(arg, 0, 16);
+	flag = (Enable > 0) ? TRUE : FALSE;
+
+	SetApCliEnableByWdev(pAd, wdev, flag);
+
 	return TRUE;
 }
 #endif
@@ -16366,8 +18523,11 @@ INT Set_ApCli_Enable(
 #endif /* APCLI_CONNECTION_TRIAL */
 		ApCliIfDown(pAd);
 
+#ifdef APCLI_CERT_SUPPORT
 	/*Fix for TGac 5.2.57*/
-	wlan_operate_set_prim_ch(wdev, wdev->channel);
+	if (pAd->bApCliCertTest)
+		wlan_operate_set_prim_ch(wdev, wdev->channel);
+#endif
 	return TRUE;
 }
 
@@ -16475,6 +18635,13 @@ INT Set_ApCli_WirelessMode_Proc(
 	if (!APCLI_IF_UP_CHECK(pAd, ifIndex))
 		return FALSE;
 
+	if (WMODE_CAP_5G(PhyMode) != WMODE_CAP_5G(wdev->PhyMode)) {
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
+			("%s():phymode changed from %d to %d fail! cant be changed to different band!!\n",
+			__func__, wdev->PhyMode, PhyMode));
+		return FALSE;
+	}
+
 	/* apcli always follow per band's channel */
 	if (WMODE_CAP_5G(PhyMode))
 		wdev->channel = HcGetChannelByRf(pAd, RFIC_5GHZ);
@@ -16502,13 +18669,15 @@ INT Set_ApCli_WirelessMode_Proc(
 #else
 	BuildChannelList(pAd, wdev);
 #endif
-	RTMPSetPhyMode(pAd, wdev, PhyMode);
+
 	/*update rate info for wdev*/
 	RTMPUpdateRateInfo(wdev->PhyMode, rate);
 
 #ifdef CONFIG_RA_PHY_RATE_SUPPORT
 	rtmpeapupdaterateinfo(wdev->PhyMode, rate, &wdev->eap);
 #endif /* CONFIG_RA_PHY_RATE_SUPPORT */
+
+	RTMPSetPhyMode(pAd, wdev, PhyMode);
 
 	/* sync bw ext ch from mbss wdev */
 	{
@@ -16906,7 +19075,7 @@ INT Set_ReptMode_Enable_Proc(
 	case INT_MBSSID:
 		if (VALID_MBSS(pAd, ifIndex)){
 			wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
-			band_idx = HcGetBandInfoByChannel(pAd, wdev->channel);
+			band_idx = HcGetBandByWdev(wdev);
 		} else {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s(): error AP index \n", __func__));
@@ -16917,7 +19086,7 @@ INT Set_ReptMode_Enable_Proc(
 	case INT_APCLI:
 		if (ifIndex < MAX_MULTI_STA) {
 			wdev = &pAd->StaCfg[ifIndex].wdev;
-			band_idx = HcGetBandInfoByChannel(pAd, wdev->channel);
+			band_idx = HcGetBandByWdev(wdev);
 		} else {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s(): error station index \n", __func__));
@@ -16925,7 +19094,8 @@ INT Set_ReptMode_Enable_Proc(
 		}
 		break;
 	default:
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("(%s)No Support This Type\n", __func__));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("(%s)No Support This Type\n", __func__));
 		return FALSE;
 
 	}
@@ -16979,9 +19149,17 @@ INT Set_ApCli_AutoConnect_Proc(
 	NdisZeroMemory(&Ssid, sizeof(NDIS_802_11_SSID));
 
 	ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
+
+	/*Before doing ApCli_Auto_connect, need check CH_OP_OWNER_SCAN first*/
+	if (GetCurrentChannelOpOwner(pAd, wdev) == CH_OP_OWNER_SCAN) {
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s :Current scan is ongoing, just return and try ApCliAutoConnect next time\n", __func__));
+		return TRUE;
+	}
+
 	if (cntl_idle(wdev) == FALSE) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("CNTL in reset SYNC\n"));
-		Set_ApCli_Enable_Proc(pAd, "0");
+		SetApCliEnableByWdev(pAd, wdev, FALSE);
 		sync_fsm_reset(pAd, wdev);
 		cntl_fsm_reset(wdev);
 	}
@@ -17011,21 +19189,15 @@ INT Set_ApCli_AutoConnect_Proc(
 
 	pAd->StaCfg[ifIndex].ApcliInfStat.AutoConnectFlag = TRUE;
 	if ((scan_mode != 4) && !is_sta_connected)
-		Set_ApCli_Enable_Proc(pAd, "0");
+		SetApCliEnableByWdev(pAd, wdev, FALSE);
 	apcli_entry->ApCliAutoConnectRunning = TRUE;
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("I/F(apcli%d) Set_ApCli_AutoConnect_Proc::(Len=%d,Ssid=%s, scan_mode=%ld, caller: %pS)\n",
-			 ifIndex, pAd->StaCfg[ifIndex].CfgSsidLen, pAd->StaCfg[ifIndex].CfgSsid, scan_mode, OS_TRACE));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("I/F(apcli%d) Set_ApCli_AutoConnect_Proc::(Len=%d,Ssid=%s)\n",
+			 ifIndex, pAd->StaCfg[ifIndex].CfgSsidLen, pAd->StaCfg[ifIndex].CfgSsid));
 
 	/*
 		use site survey function to trigger auto connecting (when pAd->ApCfg.ApAutoConnectRunning == TRUE)
 	*/
 	switch (scan_mode) {
-
-	case 5:
-		apcli_entry->ApCliAutoConnectType = TRIGGER_SCAN_BY_DRIVER;
-		printk("ApCliAutoConnectType=%d, ApCliAutoConnectRunning=%d \n", apcli_entry->ApCliAutoConnectType, apcli_entry->ApCliAutoConnectRunning);
-		break;
-
 	case 4:
 		apcli_entry->ApcliInfStat.AutoConnectFlag = FALSE;
 		apcli_entry->ApCliAutoConnectRunning = FALSE;
@@ -17263,6 +19435,11 @@ static  INT WscPushConcurrentPBCAction(
 		RTMPSetTimer(&pWscControl->Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 		pWscControl->conWscStatus = CON_WPS_STATUS_AP_RUNNING;
 		pWscControl->Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+		wapp_send_wsc_status_start_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 		pWscControl->WscStatus = STATUS_WSC_LINK_UP;
 		pWscControl->bWscTrigger = TRUE;
 		RTMP_SEM_LOCK(&pWscControl->WscPeerListSemLock);
@@ -17509,7 +19686,8 @@ INT	 Set_AP_WscConfMode_Proc(
 	if ((ConfModeIdx & WSC_ENROLLEE_PROXY_REGISTRAR) == WSC_DISABLE) {
 		pWscControl->WscConfMode = WSC_DISABLE;
 		pWscControl->WscStatus = STATUS_WSC_NOTUSED;
-
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pWscControl->WscConfMode=(%d)\n", pWscControl->WscConfMode);
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pWscControl->WscStatus=(%d)\n", pWscControl->WscStatus);
 		if (bFromApCli)
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IF(apcli%d) Set_WscConfMode_Proc:: WPS is disabled.\n",
 					 apidx));
@@ -17520,6 +19698,8 @@ INT	 Set_AP_WscConfMode_Proc(
 			/* Clear WPS IE in Beacon and ProbeResp */
 			wdev->WscIEBeacon.ValueLen = 0;
 			wdev->WscIEProbeResp.ValueLen = 0;
+
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Clear WPS IE in Beacon and ProbeResp \n");
 			UpdateBeaconHandler(
 				pAd,
 				wdev,
@@ -17559,8 +19739,8 @@ INT	 Set_AP_WscConfMode_Proc(
 	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("IF(%02X:%02X:%02X:%02X:%02X:%02X) Set_WscConfMode_Proc::(WscConfMode(0~7)=%d)\n",
-			  PRINT_MAC(mac_addr), pWscControl->WscConfMode));
+			 ("IF("MACSTR") Set_WscConfMode_Proc::(WscConfMode(0~7)=%d)\n",
+			  MAC2STR(mac_addr), pWscControl->WscConfMode));
 	return TRUE;
 }
 
@@ -17639,8 +19819,8 @@ INT	Set_AP_WscConfStatus_Proc(
 	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("IF(%02X:%02X:%02X:%02X:%02X:%02X) Set_WscConfStatus_Proc::(WscConfStatus=%d)\n",
-			  PRINT_MAC(pAd->ApCfg.MBSSID[apidx].wdev.bssid),
+			 ("IF("MACSTR") Set_WscConfStatus_Proc::(WscConfStatus=%d)\n",
+			  MAC2STR(pAd->ApCfg.MBSSID[apidx].wdev.bssid),
 			  pAd->ApCfg.MBSSID[apidx].wdev.WscControl.WscConfStatus));
 	return TRUE;
 }
@@ -17715,8 +19895,8 @@ INT	Set_AP_WscMode_Proc(
 	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("IF(%02X:%02X:%02X:%02X:%02X:%02X) Set_WscMode_Proc::(WscMode=%d)\n",
-			  PRINT_MAC(mac_addr), pWscControl->WscMode));
+			 ("IF("MACSTR") Set_WscMode_Proc::(WscMode=%d)\n",
+			  MAC2STR(mac_addr), pWscControl->WscMode));
 	return TRUE;
 }
 
@@ -17880,6 +20060,11 @@ INT	Set_AP_WscGetConf_Proc(
 		/* 2mins time-out timer */
 		RTMPSetTimer(&pWscControl->Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 		pWscControl->Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+		wapp_send_wsc_status_start_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 		pWscControl->WscStatus = STATUS_WSC_LINK_UP;
 /* WPS_BandSteering Support */
 #ifdef BAND_STEERING
@@ -17920,8 +20105,8 @@ INT	Set_AP_WscGetConf_Proc(
 	RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
 #endif /* WSC_LED_SUPPORT */
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("IF(%02X:%02X:%02X:%02X:%02X:%02X) Set_WscGetConf_Proc trigger WSC state machine, wscGetConfMode=%d\n",
-			  PRINT_MAC(mac_addr), wscGetConfMode));
+			 ("IF("MACSTR") Set_WscGetConf_Proc trigger WSC state machine, wscGetConfMode=%d\n",
+			  MAC2STR(mac_addr), wscGetConfMode));
 	return TRUE;
 }
 
@@ -18014,8 +20199,8 @@ INT	Set_AP_WscPinCode_Proc(
 	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("IF(%02X:%02X:%02X:%02X:%02X:%02X) Set_WscPinCode_Proc::(PinCode=%d)\n",
-			  PRINT_MAC(mac_addr), pWscControl->WscPinCode));
+			 ("IF("MACSTR") Set_WscPinCode_Proc::(PinCode=%d)\n",
+			  MAC2STR(mac_addr), pWscControl->WscPinCode));
 	return TRUE;
 }
 
@@ -18026,6 +20211,7 @@ INT	Set_WscOOB_Proc(
 	char        *pTempSsid = NULL;
 	POS_COOKIE  pObj = (POS_COOKIE) pAd->OS_Cookie;
 	UCHAR       apidx = pObj->ioctl_if;
+	int ret;
 #ifdef APCLI_SUPPORT
 
 	if (pObj->ioctl_if_type == INT_APCLI) {
@@ -18045,10 +20231,17 @@ INT	Set_WscOOB_Proc(
 
 	if (pTempSsid) {
 		memset(pTempSsid, 0, 33);
-		snprintf(pTempSsid, 33, "RalinkInitialAP%02X%02X%02X",
+		ret = snprintf(pTempSsid, 33, "RalinkInitialAP%02X%02X%02X",
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[3],
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[4],
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[5]);
+		if (os_snprintf_error(33, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			vfree(pTempSsid);
+			return FALSE;
+		}
+
 		Set_AP_SSID_Proc(pAd, pTempSsid);
 		vfree(pTempSsid);
 	}
@@ -18066,7 +20259,6 @@ INT	Set_WscStop_Proc(
 	UCHAR	    apidx = pObj->ioctl_if;
 	PWSC_CTRL   pWscControl;
 	BOOLEAN     bFromApCli = FALSE;
-	UCHAR LinkStatus;
 #ifdef APCLI_SUPPORT
 
 	if (pObj->ioctl_if_type == INT_APCLI) {
@@ -18102,18 +20294,6 @@ INT	Set_WscStop_Proc(
 			BCN_UPDATE_IE_CHG);
 		WscStop(pAd, FALSE, pWscControl);
 	}
-
-#ifdef WSC_LED_SUPPORT
-	if (ApHasSecuritySetting(pAd))
-	{
-		LinkStatus = LINK_STATUS_NORMAL_CONNECTION_WITH_SECURITY;
-	}
-	else
-	{
-		LinkStatus = LINK_STATUS_NORMAL_CONNECTION_WITHOUT_SECURITY;
-	}
-	twSetLedStatus(LinkStatus);
-#endif /* WSC_LED_SUPPORT */
 
 	pWscControl->bWscTrigger = FALSE;
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("<===== Set_WscStop_Proc"));
@@ -18249,6 +20429,7 @@ VOID RTMPIoctlWscProfile(
 	BSS_STRUCT *pMbss;
 	struct wifi_dev *wdev;
 	UINT msg_len = 2048;
+	int ret, left_buf_size;
 
 	pMbss = &pAd->ApCfg.MBSSID[apidx];
 	wdev = &pMbss->wdev;
@@ -18267,9 +20448,15 @@ VOID RTMPIoctlWscProfile(
 			int i;
 
 			for (i = 0; i < wdev->SecConfig.WepKey[Profile.DefaultKeyIdx].KeyLen; i++) {
-				snprintf((RTMP_STRING *) Profile.WscWPAKey, sizeof(Profile.WscWPAKey),
-						 "%s%02x", Profile.WscWPAKey,
-						 wdev->SecConfig.WepKey[Profile.DefaultKeyIdx].Key[i]);
+				left_buf_size = sizeof(Profile.WscWPAKey) - strlen(Profile.WscWPAKey);
+				ret = snprintf((RTMP_STRING *) Profile.WscWPAKey + strlen(Profile.WscWPAKey),
+					left_buf_size,
+					"%02x", wdev->SecConfig.WepKey[Profile.DefaultKeyIdx].Key[i]);
+					if (os_snprintf_error(left_buf_size, ret)) {
+						MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+						return;
+					}
 			}
 
 			Profile.WscWPAKey[(wdev->SecConfig.WepKey[Profile.DefaultKeyIdx].KeyLen) * 2] = '\0';
@@ -18293,46 +20480,141 @@ VOID RTMPIoctlWscProfile(
 		return;
 
 	memset(msg, 0x00, msg_len);
-	snprintf(msg, msg_len, "%s", "\n");
+	ret = snprintf(msg, msg_len, "%s", "\n");
+	if (os_snprintf_error(msg_len, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 
-	if (Profile.WscEncrypType == 1)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s%-33s%-12s%-12s\n", "Configured", "SSID", "AuthMode", "EncrypType");
-	else if (Profile.WscEncrypType == 2)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s%-33s%-12s%-12s%-13s%-26s\n", "Configured", "SSID", "AuthMode", "EncrypType",
+	if (Profile.WscEncrypType == 1) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s%-33s%-12s%-12s\n", "Configured", "SSID", "AuthMode", "EncrypType");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else if (Profile.WscEncrypType == 2) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s%-33s%-12s%-12s%-13s%-26s\n", "Configured", "SSID", "AuthMode", "EncrypType",
 				"DefaultKeyID", "Key");
-	else
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s%-33s%-12s%-12s%-64s\n", "Configured", "SSID", "AuthMode", "EncrypType", "Key");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s%-33s%-12s%-12s%-64s\n", "Configured", "SSID", "AuthMode", "EncrypType", "Key");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
 
-	if (Profile.WscConfigured == 1)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", "No");
-	else
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", "Yes");
+	if (Profile.WscConfigured == 1) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", "No");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", "Yes");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
 
-	snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-33s", Profile.WscSsid);
+	left_buf_size = msg_len - strlen(msg);
+	ret = snprintf(msg + strlen(msg), left_buf_size, "%-33s", Profile.WscSsid);
+	if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+		goto done;
+	}
 
-	if (IS_AKM_WPA1PSK(wdev->SecConfig.AKMMap) || IS_AKM_WPA2PSK(wdev->SecConfig.AKMMap))
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", "WPAPSKWPA2PSK");
-	else
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", WscGetAuthTypeStr(Profile.WscAuthMode));
+	if (IS_AKM_WPA1PSK(wdev->SecConfig.AKMMap) || IS_AKM_WPA2PSK(wdev->SecConfig.AKMMap)) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", "WPAPSKWPA2PSK");
+		if (os_snprintf_error(left_buf_size, ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", WscGetAuthTypeStr(Profile.WscAuthMode));
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
 
-	if (IS_CIPHER_TKIP(wdev->SecConfig.PairwiseCipher) || IS_CIPHER_CCMP128(wdev->SecConfig.PairwiseCipher))
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", "TKIPAES");
-	else
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-12s", WscGetEncryTypeStr(Profile.WscEncrypType));
+	if (IS_CIPHER_TKIP(wdev->SecConfig.PairwiseCipher) || IS_CIPHER_CCMP128(wdev->SecConfig.PairwiseCipher)) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", "TKIPAES");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-12s", WscGetEncryTypeStr(Profile.WscEncrypType));
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
 
-	if (Profile.WscEncrypType == 1)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%s\n", "");
-	else if (Profile.WscEncrypType == 2) {
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-13d", Profile.DefaultKeyIdx);
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-26s\n", Profile.WscWPAKey);
-	} else if (Profile.WscEncrypType >= 4)
-		snprintf(msg + strlen(msg), msg_len - strlen(msg), "%-64s\n", Profile.WscWPAKey);
+	if (Profile.WscEncrypType == 1) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%s\n", "");
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else if (Profile.WscEncrypType == 2) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-13d", Profile.DefaultKeyIdx);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-26s\n", Profile.WscWPAKey);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	} else if (Profile.WscEncrypType >= 4) {
+		left_buf_size = msg_len - strlen(msg);
+		ret = snprintf(msg + strlen(msg), left_buf_size, "%-64s\n", Profile.WscWPAKey);
+		if (os_snprintf_error(left_buf_size, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			goto done;
+		}
+	}
 
 #ifdef INF_AR9
 	wrq->u.data.length = strlen(msg);
 	copy_to_user(wrq->u.data.pointer, msg, wrq->u.data.length);
 #endif/* INF_AR9 */
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s", msg));
+done:
 	os_free_mem(msg);
 }
 
@@ -18615,6 +20897,10 @@ BOOLEAN WscCheckEnrolleeNonceFromUpnp(
 		memcpy((UINT8 *)&TLV_Recv, pData, 4);
 		WscType = be2cpu16(TLV_Recv.Type);
 		WscLen  = be2cpu16(TLV_Recv.Length);
+		if (Length < WscLen + 4) {
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+			break;
+		}
 		pData  += 4;
 		Length -= 4;
 
@@ -18661,6 +20947,10 @@ UCHAR	WscRxMsgTypeFromUpnp(
 			NdisMoveMemory(&WscType, pData, 2);
 			NdisMoveMemory(&WscLen,  pData + 2, 2);
 			WscLen = ntohs(WscLen);
+			if (Length < WscLen + 4) {
+				MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+				break;
+			}
 
 			if (ntohs(WscType) == WSC_ID_MSG_TYPE)
 				return (*(pData + 4));	/* Found the message type */
@@ -18679,6 +20969,7 @@ VOID RTMPIoctlSetWSCOOB(
 	char        *pTempSsid = NULL;
 	POS_COOKIE  pObj = (POS_COOKIE) pAd->OS_Cookie;
 	UCHAR       apidx = pObj->ioctl_if;
+	int ret;
 
 	pObj->pSecConfig = &pAd->ApCfg.MBSSID[apidx].wdev.SecConfig;
 #ifdef APCLI_SUPPORT
@@ -18700,10 +20991,17 @@ VOID RTMPIoctlSetWSCOOB(
 
 	if (pTempSsid) {
 		memset(pTempSsid, 0, 33);
-		snprintf(pTempSsid, 33, "RalinkInitialAP%02X%02X%02X",
+		ret = snprintf(pTempSsid, 33, "RalinkInitialAP%02X%02X%02X",
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[3],
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[4],
 				 pAd->ApCfg.MBSSID[apidx].wdev.bssid[5]);
+		if (os_snprintf_error(33, ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			vfree(pTempSsid);
+			return;
+		}
+
 		Set_AP_SSID_Proc(pAd, pTempSsid);
 		vfree(pTempSsid);
 	}
@@ -19245,6 +21543,9 @@ INT	Set_DisConnectSta_Proc(
 		if (IS_MAP_ENABLE(pAd) && IS_MAP_R2_ENABLE(pAd))
 			wapp_send_sta_disassoc_stats_event(pAd, pEntry, REASON_DISASSOC_STA_LEAVING);
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+		WirelessEventSendDiassoc(pAd, pEntry, REASON_DISASSOC_STA_LEAVING);
+#endif
 		MlmeDeAuthAction(pAd, pEntry, REASON_DISASSOC_STA_LEAVING, FALSE);
 		/*		MacTableDeleteEntry(pAd, pEntry->wcid, Addr); */
 	}
@@ -19258,8 +21559,8 @@ INT Set_DisConnectAllSta_Proc(
 {
 	INT i;
 	MAC_TABLE_ENTRY *pEntry;
-#ifdef DOT11W_PMF_SUPPORT
 	CHAR value = os_str_tol(arg, 0, 10);
+#ifdef DOT11W_PMF_SUPPORT
 
 	if (value == 2) {
 		POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
@@ -19278,6 +21579,9 @@ INT Set_DisConnectAllSta_Proc(
 				if (IS_MAP_ENABLE(pAd) && IS_MAP_R2_ENABLE(pAd))
 					wapp_handle_sta_disassoc(pAd, i, REASON_DEAUTH_STA_LEAVING);
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+				WirelessEventSendDiassoc(pAd, pEntry, REASON_DEAUTH_STA_LEAVING);
+#endif
 				MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
 			}
 		}
@@ -19289,11 +21593,17 @@ INT Set_DisConnectAllSta_Proc(
 		HEADER_802_11 DeAuthHdr;
 		USHORT Reason;
 		ULONG FrameLen = 0;
+		UCHAR bss_idx;
+		POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 
 		for (i = 0; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
 			pEntry = &pAd->MacTab.Content[i];
+			bss_idx = pEntry->func_tb_idx;
 
 			if (IS_ENTRY_CLIENT(pEntry)) {
+				/* Disconnect with the STAs of the specified BSS if value is 3*/
+				if ((value == 3) && (bss_idx != pObj->ioctl_if))
+					continue;
 				pEntry->EnqueueEapolStartTimerRunning = EAPOL_START_DISABLE;
 #ifdef CONFIG_AP_SUPPORT
 				IF_DEV_CONFIG_OPMODE_ON_AP(pAd) {
@@ -19311,10 +21621,13 @@ INT Set_DisConnectAllSta_Proc(
 						if (IS_MAP_R2_ENABLE(pAd))
 							wapp_handle_sta_disassoc(pAd, i, REASON_DEAUTH_STA_LEAVING);
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+						WirelessEventSendDiassoc(pAd, pEntry, Reason);
+#endif
 						Reason = REASON_NO_LONGER_VALID;
 						MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_WARN,
-								 ("Send DeAuth (Reason=%d) to %02x:%02x:%02x:%02x:%02x:%02x\n",
-								  Reason, PRINT_MAC(pEntry->Addr)));
+								 ("Send DeAuth (Reason=%d) to "MACSTR"\n",
+								  Reason, MAC2STR(pEntry->Addr)));
 						MgtMacHeaderInit(pAd, &DeAuthHdr, SUBTYPE_DEAUTH, 0, pEntry->Addr,
 										 pAd->ApCfg.MBSSID[pEntry->func_tb_idx].wdev.if_addr,
 										 pAd->ApCfg.MBSSID[pEntry->func_tb_idx].wdev.bssid);
@@ -19598,8 +21911,8 @@ INT	Set_DumpPMKID_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 			if (pBssInfo->Valid) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-						 ("Cacheidx = %d, Mbssidx = %d, Mac = %02x:%02x:%02x:%02x:%02x:%02x\n",
-						  i, pBssInfo->Mbssidx, PRINT_MAC(pBssInfo->MAC)));
+						 ("Cacheidx = %d, Mbssidx = %d, Mac = "MACSTR"\n",
+						  i, pBssInfo->Mbssidx, MAC2STR(pBssInfo->MAC)));
 			}
 		}
 	}
@@ -19624,8 +21937,8 @@ INT show_RADIUS_acl_cache(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		pCacheEntry = (PRT_802_11_RADIUS_ACL_ENTRY)pListEntry;
 
 		while (pCacheEntry != NULL) {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02x:%02x:%02x:%02x:%02x:%02x --> %d\n",
-					 PRINT_MAC(pCacheEntry->Addr), pCacheEntry->result));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, (MACSTR" --> %d\n",
+					 MAC2STR(pCacheEntry->Addr), pCacheEntry->result));
 			pListEntry = pListEntry->pNext;
 			pCacheEntry = (PRT_802_11_RADIUS_ACL_ENTRY)pListEntry;
 		}
@@ -19819,7 +22132,7 @@ INT set_mgm_rate_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING *arg)
 		MlmeUpdateTxRates(pAd, FALSE, (UCHAR)pObj->ioctl_if);
 	}
 
-	return TRUE;
+	return status;
 }
 
 
@@ -20489,7 +22802,13 @@ INT	Set_AP2040ReScan_Proc(
 
 	if (!VALID_MBSS(pAd, ifIndex)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("%s(): error AP index \n", __func__));
+			("%s(): error AP index\n", __func__));
+		return FALSE;
+	}
+
+	if (pAd->CommonCfg.bBssCoexEnable == FALSE) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s(): BssCoex not enable\n", __func__));
 		return FALSE;
 	}
 
@@ -20497,7 +22816,7 @@ INT	Set_AP2040ReScan_Proc(
 	APOverlappingBSSScan(pAd, wdev);
 	/* apply setting */
 	SetCommonHtVht(pAd, wdev);
-	wlan_operate_set_prim_ch(wdev, wdev->channel);
+
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set_AP2040ReScan_Proc() Trigger AP ReScan !!!\n"));
 	return TRUE;
 }
@@ -20816,8 +23135,8 @@ INT	Show_MbssInfo_Display_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		DbdcIdx = HcGetBandByWdev(wdev);
 
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("\t%d\t%16s\t%02x-%02x-%02x-%02x-%02x-%02x\t%d\t(%s)",
-			IdBss, mod_str, PRINT_MAC(wdev->if_addr),
+			("\t%d\t%16s\t"MACSTR"\t%d\t(%s)",
+			IdBss, mod_str, MAC2STR(wdev->if_addr),
 			mbss->mbss_grp_idx,
 			RTMP_OS_NETDEV_GET_DEVNAME(wdev->if_dev)));
 #ifdef DOT11V_MBSSID_SUPPORT
@@ -20865,8 +23184,8 @@ INT	Show_MbssInfo_Display_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		DbdcIdx = HcGetBandByWdev(wdev);
 
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("\t%d\t%16s\t%02x-%02x-%02x-%02x-%02x-%02x\t%d\t(%s)\n",
-			 i, mod_str, PRINT_MAC(wdev->if_addr), DbdcIdx,
+			("\t%d\t%16s\t"MACSTR"\t%d\t(%s)\n",
+			 i, mod_str, MAC2STR(wdev->if_addr), DbdcIdx,
 			 RTMP_OS_NETDEV_GET_DEVNAME(wdev->if_dev)));
 
 		if (mod_str)
@@ -21117,7 +23436,7 @@ INT RTMP_AP_IoctlHandle(
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	INT Status = NDIS_STATUS_SUCCESS;
 	UINT	ifIndex;
-	
+
 	pAd->IoctlHandleFlag = TRUE;
 
 	switch (cmd) {
@@ -21431,8 +23750,8 @@ INT RTMP_AP_IoctlHandle(
 
 		if (pBssidStr != NULL) {
 			memcpy(pBssidDest, pBssidStr, ETH_ALEN);
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::SIOCGIWAP(=%02x:%02x:%02x:%02x:%02x:%02x)\n",
-					 PRINT_MAC(pBssidStr)));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::SIOCGIWAP(="MACSTR")\n",
+					 MAC2STR(pBssidStr)));
 		} else
 			memset(pBssidDest, 0, ETH_ALEN);
 	}
@@ -21514,6 +23833,11 @@ INT RTMP_AP_IoctlHandle(
 	case CMD_RTPRIV_IOCTL_PHY_STATE:
 		Status = RTMPPhyState(pAd, wrq);
 		break;
+#ifdef CONFIG_COLGIN_MT6890
+	case CMD_RTPRIV_IOCTL_LOW_POWER:
+		Status = RTMPAPPrivIoctlLowPower(pAd, wrq);
+	break;
+#endif
 
 	default:
 		Status = RTMP_COM_IoctlHandle(pAd, wrq, cmd, subcmd, pData, Data);
@@ -21555,7 +23879,7 @@ INT Set_P2p_OpMode_Proc(
 		if ((!P2P_CLI_ON(pAd)) || (P2P_CLI_ON(pAd))) {
 			P2PCfgInit(pAd);
 			P2P_CliStartUp(pAd);
-			AsicEnableBssSync(pAd, pAd->CommonCfg.BeaconPeriod);
+			AsicEnableBssSync(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0]);
 		}
 	} else {
 		if (P2P_CLI_ON(pAd))
@@ -21564,7 +23888,7 @@ INT Set_P2p_OpMode_Proc(
 			P2P_GoStop(pAd);
 
 			if (INFRA_ON(pAd))
-				AsicEnableBssSync(pAd, pAd->CommonCfg.BeaconPeriod);
+				AsicEnableBssSync(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0]);
 		}
 
 		P2PCfgInit(pAd);
@@ -22180,8 +24504,6 @@ INT Send_ANQP_Rsp(
 						RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
 						goto error1;
 					}
-
-					GASPeerEntry->AllocResource++;
 					NdisZeroMemory(GASQueryRspFrag, sizeof(*GASQueryRspFrag));
 					GASQueryRspFrag->GASRspFragID = i;
 
@@ -22189,22 +24511,22 @@ INT Send_ANQP_Rsp(
 						GASQueryRspFrag->FragQueryRspLen = pGASCtrl->MMPDUSize;
 					else
 						GASQueryRspFrag->FragQueryRspLen = ANQPRspLen - (pGASCtrl->MMPDUSize * i);
+					if (GASQueryRspFrag->FragQueryRspLen > 0) {
+						os_alloc_mem(NULL, (UCHAR **)&GASQueryRspFrag->FragQueryRsp,
+								GASQueryRspFrag->FragQueryRspLen);
 
-					os_alloc_mem(NULL, (UCHAR **)&GASQueryRspFrag->FragQueryRsp,
-								 GASQueryRspFrag->FragQueryRspLen);
-					GASPeerEntry->AllocResource++;
+						if (!GASQueryRspFrag->FragQueryRsp) {
+							MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s Not available memory\n", __func__));
+							RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
+							goto error2;
+						}
 
-					if (!GASQueryRspFrag->FragQueryRsp) {
-						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s Not available memory\n", __func__));
-						RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-						goto error2;
+						NdisMoveMemory(GASQueryRspFrag->FragQueryRsp, &ANQPRsp[QueryRspOffset],
+								GASQueryRspFrag->FragQueryRspLen);
+						QueryRspOffset += GASQueryRspFrag->FragQueryRspLen;
+						DlListAddTail(&GASPeerEntry->GASQueryRspFragList,
+								&GASQueryRspFrag->List);
 					}
-
-					NdisMoveMemory(GASQueryRspFrag->FragQueryRsp, &ANQPRsp[QueryRspOffset],
-								   GASQueryRspFrag->FragQueryRspLen);
-					QueryRspOffset += GASQueryRspFrag->FragQueryRspLen;
-					DlListAddTail(&GASPeerEntry->GASQueryRspFragList,
-								  &GASQueryRspFrag->List);
 				}
 
 				break;
@@ -22262,7 +24584,8 @@ INT Send_ANQP_Rsp(
 		Event->u.GAS_RSP_DATA.QueryRspLen = ANQPRspLen;
 		Len += 2;
 
-		NdisMoveMemory(Event->u.GAS_RSP_DATA.QueryRsp, ANQPRsp, ANQPRspLen);
+		if (ANQPRspLen > 0)
+			NdisMoveMemory(Event->u.GAS_RSP_DATA.QueryRsp, ANQPRsp, ANQPRspLen);
 		Len += ANQPRspLen;
 
 		MlmeEnqueue(pAd, GAS_STATE_MACHINE, GAS_RSP, Len, Buf, 0);
@@ -22343,7 +24666,7 @@ INT Send_BTM_Req(
 	BTM_PEER_ENTRY *BTMPeerEntry;
 	UINT32 Len = 0;
 	INT32 Ret;
-	BOOLEAN IsFound = FALSE;
+	BOOLEAN IsFound = FALSE, ret = FALSE;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s\n", __func__));
 	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
@@ -22401,13 +24724,16 @@ INT Send_BTM_Req(
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			 ("\nbefore adding BSS Transition Candidate List Entries::BTMReqLen=%d, Len=%d\n",
 			  BTMReqLen, Len));
-	MlmeEnqueue(pAd, BTM_STATE_MACHINE, BTM_REQ, Len, Buf, 0);
+	ret = MlmeEnqueue(pAd, BTM_STATE_MACHINE, BTM_REQ, Len, Buf, 0);
+	if (FALSE == ret)
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s::enqueue MLME failed!\n", __func__));
+
 	os_free_mem(Buf);
 	return TRUE;
 error1:
 
 	if (!IsFound)
-		os_free_mem(BTMPeerEntry);
+		BTM_free_Entry(BTMPeerEntry);
 
 error0:
 	return FALSE;
@@ -22691,8 +25017,8 @@ INT Set_QosMap(
 		}
 		AtoH(value, &peer_mac_addr[i++], 1);
 	}
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Mac Addres %02x %02x %02x %02x %02x %02x\n",
-		peer_mac_addr[0], peer_mac_addr[1], peer_mac_addr[2], peer_mac_addr[3], peer_mac_addr[4], peer_mac_addr[5]));
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Mac Addres "MACSTR"\n",
+			MAC2STR(peer_mac_addr)));
 
 	pEntry = MacTableLookup(pAd, peer_mac_addr);
 	if (pEntry != NULL) {
@@ -22764,8 +25090,8 @@ INT Set_QosMap(
 				     qos_map_buf_len,
 				     pEntry->func_tb_idx);
 	} else {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("pEntry for %02x %02x %02x %02x %02x %02x not found\n",
-		peer_mac_addr[0], peer_mac_addr[1], peer_mac_addr[2], peer_mac_addr[3], peer_mac_addr[4], peer_mac_addr[5]));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("pEntry for "MACSTR" not found\n",
+				MAC2STR(peer_mac_addr)));
 	}
 	return TRUE;
 }
@@ -23157,7 +25483,7 @@ INT	Set_Dscp_Pri_Proc(
 	}
 
 	dscpValue = simple_strtol(this_char, 0, 10);
-	if ((dscpValue < 0) || (dscpValue > 63)) {
+	if (dscpValue > 63) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 		 ("%s Invalid Dscp Value Valid Value between 0 to 63\n", __func__));
 		return FALSE;
@@ -23265,11 +25591,12 @@ INT Set_Enable_Air_Monitor_Proc(
 	}
 	mnt_enable = (UCHAR)simple_strtol(arg, 0, 10);
 	band_idx = HcGetBandByWdev(wdev);
+	pAd->MntEnable[band_idx] = mnt_enable;
 
 	ret = asic_set_air_mon_enable(pAd, mnt_enable, band_idx);
 
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("<-- %s()\n", __func__));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<-- %s()[Band%d]MntEnable=0x%x\n", __func__, band_idx, pAd->MntEnable[band_idx]));
 	return TRUE;
 }
 
@@ -23280,7 +25607,7 @@ INT	Set_MonitorRule_Proc(
 {
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
-	INT ret = TRUE;
+	INT ret;
 	RTMP_STRING *this_char = NULL, *value = NULL;
 	INT idx = 0;
 	UCHAR rx_rule[3], band_idx;
@@ -23362,10 +25689,7 @@ INT	Set_MonitorTarget_Proc(
 			continue;
 	}
 
-	for (idx = 0; idx < MAC_ADDR_LEN; idx++)
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02X ", pAd->curMntAddr[idx]));
-
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n"));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, (MACSTR"\n", MAC2STR(pAd->curMntAddr)));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<-- %s()\n", __func__));
 	return ret;
 }
@@ -23374,7 +25698,7 @@ INT Set_MonitorIndex_Proc(
 	IN RTMP_ADAPTER	*pAd,
 	IN RTMP_STRING	*arg)
 {
-	INT ret = TRUE;
+	INT ret;
 	UCHAR mnt_idx = 0, band_idx = 0;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
@@ -23400,35 +25724,36 @@ INT	Set_MonitorShowAll_Proc(
 	IN RTMP_STRING	*arg)
 {
 	INT ret = TRUE;
-	UCHAR i = 0;
+	UCHAR i = 0, bidx = 0;
 	MNT_STA_ENTRY *pEntry = NULL;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("--> %s()\n", __func__));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  Monitor Enable: %d\n", pAd->MntEnable));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  Index last set: %d\n", pAd->MntIdx));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  BAND0 Count: %d\n", pAd->MonitrCnt[BAND0]));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  BAND1 Count: %d\n", pAd->MonitrCnt[BAND1]));
+	for (bidx = 0; bidx < DBDC_BAND_NUM; bidx++) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  Monitor Enable: BAND%d: %d\n", bidx, pAd->MntEnable[bidx]));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  Index last set: BAND%d: %d\n", bidx, pAd->MntIdx[bidx]));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  BAND%d Count: %d\n", bidx, pAd->MonitrCnt[bidx]));
+	}
+	for (bidx = 0; bidx < DBDC_BAND_NUM; bidx++) {
+		for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
+			pEntry = &pAd->MntTable[bidx][i];
 
-	for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
-		pEntry = &pAd->MntTable[i];
-
-		if (pEntry->bValid) {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Band%d: Monitor STA[%d]\t", pEntry->Band, i));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02X:%02X:%02X:%02X:%02X:%02X\t", PRINT_MAC(pEntry->addr)));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("[DATA]=%08lu\t", pEntry->data_cnt));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("[MGMT]=%08lu\t", pEntry->mgmt_cnt));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("[CNTL]=%08lu\t", pEntry->cntl_cnt));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("[TOTAL]=%08lu\t", pEntry->Count));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("RSSI:%d,%d,%d,%d\n",
-					 pEntry->RssiSample.AvgRssi[0], pEntry->RssiSample.AvgRssi[1],
-					 pEntry->RssiSample.AvgRssi[2], pEntry->RssiSample.AvgRssi[3]));
+			if (pEntry->bValid) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Band%d: Monitor STA[%d]\t", pEntry->Band, i));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, (MACSTR"\t", MAC2STR(pEntry->addr)));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						 ("[DATA]=%08lu\t", pEntry->data_cnt));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						 ("[MGMT]=%08lu\t", pEntry->mgmt_cnt));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						 ("[CNTL]=%08lu\t", pEntry->cntl_cnt));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						 ("[TOTAL]=%08lu\t", pEntry->Count));
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("RSSI:%d,%d,%d,%d\n",
+						 pEntry->RssiSample.AvgRssi[0], pEntry->RssiSample.AvgRssi[1],
+						 pEntry->RssiSample.AvgRssi[2], pEntry->RssiSample.AvgRssi[3]));
+			}
 		}
 	}
-
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<-- %s()\n", __func__));
 	return ret;
 }
@@ -23438,20 +25763,22 @@ INT	Set_MonitorClearCounter_Proc(
 	IN RTMP_STRING	*arg)
 {
 	INT ret = TRUE;
-	UCHAR i = 0;
+	UCHAR i = 0, bidx = 0;
 	MNT_STA_ENTRY *pEntry = NULL;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("--> %s()\n", __func__));
-
-	for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
-		pEntry = pAd->MntTable + i;
-		pEntry->data_cnt = 0;
-		pEntry->mgmt_cnt = 0;
-		pEntry->cntl_cnt = 0;
-		pEntry->Count = 0;
-		NdisZeroMemory(&pEntry->RssiSample, sizeof(RSSI_SAMPLE));
+	for (bidx = 0; bidx < DBDC_BAND_NUM; bidx++) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("--> %s()[%d], %p, %p, %p\n",
+					__func__, bidx, pAd->MntTable, pAd->MntTable[bidx], &pAd->MntTable[bidx]));
+		for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
+			pEntry = pAd->MntTable[bidx] + i;
+			pEntry->data_cnt = 0;
+			pEntry->mgmt_cnt = 0;
+			pEntry->cntl_cnt = 0;
+			pEntry->Count = 0;
+			NdisZeroMemory(&pEntry->RssiSample, sizeof(RSSI_SAMPLE));
+		}
 	}
-
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<-- %s()\n", __func__));
 	return ret;
 }
@@ -23461,7 +25788,7 @@ INT	Set_Enable_MonitorTarget_Proc(
 	IN RTMP_STRING	*arg,
 	IN USHORT	index)
 {
-	INT ret = TRUE;
+	INT ret;
 	CHAR str[8];
 
 	ret = Set_MonitorTarget_Proc(pAd, arg);
@@ -23470,7 +25797,12 @@ INT	Set_Enable_MonitorTarget_Proc(
 		return ret;
 
 	if (index < MAX_NUM_OF_MONITOR_STA) {
-		snprintf(str, sizeof(str), "%u", index);
+		ret = snprintf(str, sizeof(str), "%u", index);
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s,%d,final_name snprintf error!\n", __func__, __LINE__));
+			return FALSE;
+		}
 		ret = Set_MonitorIndex_Proc(pAd, str);
 	} else {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -23617,10 +25949,10 @@ VOID Air_Monitor_Pkt_Report_Action(
 
 	BandIdx = HcGetBandByChannel(pAd, Channel);
 
-	if (BandIdx >= BAND_NUM)
+	if (BandIdx >= DBDC_BAND_NUM)
 		return;
 
-	pMntEntry = pAd->MntTable + pMacEntry->mnt_idx[BandIdx];
+	pMntEntry = pAd->MntTable[BandIdx] + pMacEntry->mnt_idx[BandIdx];
 
 	if (!pMntEntry->bValid)
 		return;
@@ -23785,9 +26117,8 @@ INT Set_Sta_Vlan(RTMP_ADAPTER *pAd, RT_CMD_AP_STA_VLAN *sta_vlan)
 	INT Status = NDIS_STATUS_SUCCESS;
 	MAC_TABLE_ENTRY *pEntry;
 
-	printk("Set_Sta_Vlan searching pEntry for Addr %02x %02x %02x %02x %02x %02x\n",
-		sta_vlan->sta_addr[0], sta_vlan->sta_addr[1], sta_vlan->sta_addr[2], sta_vlan->sta_addr[3],
-		sta_vlan->sta_addr[4], sta_vlan->sta_addr[5]);
+	printk("Set_Sta_Vlan searching pEntry for Addr "MACSTR"\n",
+			MAC2STR(sta_vlan->sta_addr));
 
 	/*Search for station address in the Mac Table if entry found set the vlan id */
 	pEntry = MacTableLookup(pAd, sta_vlan->sta_addr);
@@ -23823,7 +26154,7 @@ INT Set_Ft_Param(RTMP_ADAPTER *pAd, RT_CMD_AP_11R_PARAM *ap_11r_param)
 	INT Status = NDIS_STATUS_SUCCESS, apidx = 0;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("%s: OwnMac: %02x%02x%02x%02x%02x%02x\n", __func__, PRINT_MAC(ap_11r_param->own_mac)));
+			("%s: OwnMac: "MACSTR"\n", __func__, MAC2STR(ap_11r_param->own_mac)));
 
 	apidx = get_apidx_by_addr(pAd, ap_11r_param->own_mac);
 
@@ -23982,6 +26313,24 @@ INT Set_Map_Proc(
 	STA_ADMIN_CONFIG *pApCliEntry = NULL;
 	PULONG pCurrState;
 	PWSC_CTRL pWscControl = NULL;
+	struct wifi_dev *wdev = NULL;
+	int i = 0;
+
+	for (i = BSS0; i < pAd->ApCfg.BssidNum; i++) {
+		wdev = &pAd->ApCfg.MBSSID[i].wdev;
+		if (wdev != NULL)
+			NdisZeroMemory(&(wdev->MAPCfg.scan_bh_ssids), sizeof(struct scan_BH_ssids));
+	}
+
+	for (i = BSS0; i < MAX_APCLI_NUM; i++) {
+		STA_ADMIN_CONFIG *apcli_entry = &pAd->StaCfg[i];
+
+		if (apcli_entry) {
+			wdev = &apcli_entry->wdev;
+			if (wdev != NULL)
+				NdisZeroMemory(&(wdev->MAPCfg.scan_bh_ssids), sizeof(struct scan_BH_ssids));
+		}
+	}
 
 	if (pAd->MAPMode == map_mode) {
 		/* No need to do anything, current and previos values are same */
@@ -24086,7 +26435,7 @@ INT Set_BlackList_Add(
 			continue;
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("sta mac:%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(sta_mac)));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("sta mac:"MACSTR"\n", MAC2STR(sta_mac)));
 	RTMP_SEM_LOCK(&pBss->BlackListLock);
 	map_blacklist_add(&pBss->BlackList, sta_mac);
 	RTMP_SEM_UNLOCK(&pBss->BlackListLock);
@@ -24102,6 +26451,9 @@ INT Set_BlackList_Add(
 	if (pEntry && (pEntry->wdev->func_idx == IfIdx)) {
 #ifdef MAP_R2
 		wapp_send_sta_disassoc_stats_event(pAd, pEntry, REASON_DISASSOC_STA_LEAVING);
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+		WirelessEventSendDiassoc(pAd, pEntry, REASON_DISASSOC_STA_LEAVING);
 #endif
 		MlmeDeAuthAction(pAd, pEntry, REASON_DISASSOC_STA_LEAVING, FALSE);
 	}
@@ -24156,7 +26508,7 @@ INT Set_BlackList_Del(
 			continue;
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("sta mac:%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(sta_mac)));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("sta mac:"MACSTR"\n", MAC2STR(sta_mac)));
 	RTMP_SEM_LOCK(&pBss->BlackListLock);
 	map_blacklist_del(&pBss->BlackList, sta_mac);
 	RTMP_SEM_UNLOCK(&pBss->BlackListLock);
@@ -24248,14 +26600,23 @@ VOID ch_switch_monitor_timeout(
 {
 	BOOLEAN ret = 0;
 	PTIMER_FUNC_CONTEXT pContext = (PTIMER_FUNC_CONTEXT)function_context;
-	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)pContext->pAd;
+	RTMP_ADAPTER *pAd;
 	UCHAR band_idx = pContext->BandIdx;
-	struct wifi_dev *wdev = pAd->ch_sw_cfg[band_idx].wdev;
+	struct wifi_dev *wdev;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:: enter\n", __func__));
+	MTWF_PRINT("%s:: enter\n", __func__);
 
-	if ((!pAd) || (!wdev)) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s:: error!!! pAd or wdev is null!!!\n", __func__));
+	pAd = (RTMP_ADAPTER *)pContext->pAd;
+
+	if (!pAd) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("error! pAd is null!\n"));
+		return;
+	}
+
+	wdev = pAd->ch_sw_cfg[band_idx].wdev;
+
+	if (!wdev) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("error! wdev is null!\n"));
 		return;
 	}
 	ret = MlmeEnqueueWithWdev(pAd, CH_SWITCH_MONITOR_STATE_MACHINE, CH_SWITCH_MSG_TIMEOUT, 0, NULL, 0, wdev);
@@ -24579,6 +26940,10 @@ INT Set_CSI_Ctrl_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT_8 ArgNum = 0;
 	struct CMD_CSI_CONTROL_T *prCSICtrl = NULL;
 	struct CSI_INFO_T *prCSIInfo = NULL;
+	CHAR *mac_str = NULL;
+	PCSI_STA pCSISta = NULL, pCSISta_tmp = NULL;
+	INT idx;
+	RTMP_STRING *tmp;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	UINT apidx = pObj->ioctl_if;
 
@@ -24625,50 +26990,55 @@ INT Set_CSI_Ctrl_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		case 3:
 			prCSICtrl->ucValue2 = os_str_toul(par_value, 0, 10);
 			break;
+		case 4:
+			tmp = NULL;
+			mac_str = par_value;
+
+			if (strlen(mac_str) < 17) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("check your mac addr format: xx:xx:xx:xx:xx:xx!!!\n"));
+				ret = -1;
+				goto out;
+			}
+
+			/*macstr to hex*/
+			for (idx = 0, tmp = rstrtok(mac_str, ":"); tmp; tmp = rstrtok(NULL, ":")) {
+				if ((strlen(tmp) != 2) || (!isxdigit(*tmp)) || (!isxdigit(*(tmp + 1)))) {
+					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("illegal MAC address format or octet!\n"));
+					ret = -1;
+					goto out;
+				}
+
+				AtoH(tmp, &prCSICtrl->mac_addr[idx++], 1);
+			}
+			break;
 		default:
 			break;
 		}
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("parsing arg is %d-%d-%d-%d.\n",
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("parsing basic para is %d-%d-%d-%d.\n",
 	prCSICtrl->ucMode, prCSICtrl->ucCfgItem, prCSICtrl->ucValue1, prCSICtrl->ucValue2));
 
 	/*check arg num*/
-	if (ArgNum < 1 || ArgNum > 4) {
+	if (ArgNum < 1 || ArgNum > 5) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					 ("argc %d is invalid!\n", ArgNum));
 		ret = -1;
 		goto out;
 	}
-	/*check opt1-mode*/
-	if (prCSICtrl->ucMode >= CSI_CONTROL_MODE_NUM ||
-		prCSICtrl->ucMode < 0) {
+
+	/*###check parameter 1###*/
+	if (prCSICtrl->ucMode >= CSI_CONTROL_MODE_NUM) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 		("Invalid ucMode %d, should be (0-1-2-3).\n", prCSICtrl->ucMode));
 		ret = -1;
 		goto out;
 	}
 
-	prCSIInfo->ucMode = prCSICtrl->ucMode;
-
-	/*debug to get the specific H(jw)*/
-	if (prCSICtrl->ucMode == CSI_CONTROL_MODE_DEBUG) {
-		prCSIInfo->bIncomplete = FALSE;
-		prCSIInfo->u4CopiedDataSize = 0;
-		prCSIInfo->u4RemainingDataSize = 0;
-		prCSIInfo->u4CSIBufferHead = 0;
-		prCSIInfo->u4CSIBufferTail = 0;
-		prCSIInfo->u4CSIBufferUsed = 0;
-		if (prCSICtrl->ucCfgItem > 15)
-			prCSIInfo->Matrix_Get_Bit = 0;
-		else {
-			prCSIInfo->Matrix_Get_Bit = (1 << prCSICtrl->ucCfgItem);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("Set Matrix H%d only!\n", prCSICtrl->ucCfgItem));
-		}
-		goto out;
-	}
-
+	/*normal case*/
+	/*start or stop CSI*/
 	if (prCSICtrl->ucMode == CSI_CONTROL_MODE_STOP ||
 		prCSICtrl->ucMode == CSI_CONTROL_MODE_START) {
 		prCSIInfo->bIncomplete = FALSE;
@@ -24677,11 +27047,42 @@ INT Set_CSI_Ctrl_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		prCSIInfo->u4CSIBufferHead = 0;
 		prCSIInfo->u4CSIBufferTail = 0;
 		prCSIInfo->u4CSIBufferUsed = 0;
-		HW_CSI_CTRL(pAd, (void *)prCSICtrl);		/*send fw cmd*/
-		goto out;
+		/*clear the CSI buffer*/
+		os_zero_mem(prCSIInfo->arCSIBuffer, sizeof(struct CSI_DATA_T) * CSI_RING_SIZE);
+
+		if (prCSICtrl->ucMode == CSI_CONTROL_MODE_STOP) {
+			/*clear the list*/
+			NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+			DlListForEach(pCSISta, &prCSIInfo->CSIStaList, CSI_STA, List) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						("Remove csi sta, "MACSTR"\n", MAC2STR(pCSISta->Addr)));
+				pCSISta_tmp = pCSISta;
+				pCSISta = DlListEntry(pCSISta->List.Prev, CSI_STA, List);
+				DlListDel(&(pCSISta_tmp->List));
+				os_free_mem(pCSISta_tmp);
+			}
+			NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+			prCSIInfo->sta_sel_cnt = 0;
+		}
+
+		if (prCSICtrl->ucMode == CSI_CONTROL_MODE_START) {
+			/*check report mode*/
+			if (prCSICtrl->ucCfgItem == CSI_NETLINK) {
+				prCSIInfo->CSI_report_mode = CSI_NETLINK;
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("%s: CSI start with netlink mode!\n", __func__));
+			} else if (prCSICtrl->ucCfgItem == CSI_PROC) {
+				prCSIInfo->CSI_report_mode = CSI_PROC;
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("%s: CSI start with proc mode(default)!\n", __func__));
+			}
+
+			HW_CSI_CTRL(pAd, (void *)prCSICtrl);		/*send fw cmd*/
+			goto out;
+		}
 	}
 
-	/*check opt2-item*/
+	/*###check parameter 2###*/
 	if (prCSICtrl->ucCfgItem >= CSI_CONFIG_ITEM_NUM) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 		("Invalid csi cfg_item %u\n", prCSICtrl->ucCfgItem));
@@ -24689,10 +27090,149 @@ INT Set_CSI_Ctrl_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		goto out;
 	}
 
-	/*get opt3 and opt4*/
+	/*special case*/
+	/*if usr need to use mac filter*/
+	if ((prCSICtrl->ucCfgItem == CSI_CONFIG_FILTER_MODE) &&
+		(prCSICtrl->ucValue1 == CSI_MAC_FILTER)) {
+		if (prCSICtrl->ucValue2 == CSI_STA_MAC_ADD) {
+			if (!mac_str) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("CSI_MAC_FILTER with empty mac addr input!!!\n"));
+				ret = -1;
+				goto out;
+			}
+			/*list full*/
+			if (prCSIInfo->sta_sel_cnt >= Max_Sta_Mac_Num) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("CSI List full!current:%d.\n", prCSIInfo->sta_sel_cnt));
+				ret = -1;
+				goto out;
+			}
+
+			/*search sta list*/
+			NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+			DlListForEach(pCSISta, &prCSIInfo->CSIStaList, CSI_STA, List) {
+				if (NdisCmpMemory(pCSISta->Addr, prCSICtrl->mac_addr, MAC_ADDR_LEN) == 0) {
+						MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+						("Already in csi sta list:%02x:%02x:%02x:%02x:%02x:%02x\n",
+							PRINT_MAC(pCSISta->Addr)));
+						NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+						ret = -1;
+						goto out;
+				}
+			}
+			NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+
+			/* new sta */
+			pCSISta = NULL;
+			os_alloc_mem_suspend(NULL, (UCHAR **)&pCSISta, sizeof(CSI_STA));
+			if (!pCSISta) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("%s:allocate memory for pCSISta failed!\n", __func__));
+				ret = -1;
+				goto out;
+			}
+			NdisZeroMemory(pCSISta, sizeof(CSI_STA));
+			NdisCopyMemory(pCSISta->Addr, prCSICtrl->mac_addr, MAC_ADDR_LEN);
+			NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+			DlListAdd(&prCSIInfo->CSIStaList, &(pCSISta->List));
+			NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("Add sta mac(%02x:%02x:%02x:%02x:%02x:%02x) to CSI List.\n",
+				PRINT_MAC(pCSISta->Addr)));
+
+			prCSIInfo->sta_sel_cnt++;
+			HW_CSI_CTRL(pAd, (void *)prCSICtrl);		/*send fw cmd*/
+			goto out;
+		} else if (prCSICtrl->ucValue2 == CSI_STA_MAC_DEL) {
+			if (!mac_str) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("CSI_MAC_FILTER with empty mac addr input!!!\n"));
+				ret = -1;
+				goto out;
+			}
+			/*list empty*/
+			if (prCSIInfo->sta_sel_cnt == 0) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("CSI List is empty!current:%d.\n", prCSIInfo->sta_sel_cnt));
+				ret = -1;
+				goto out;
+			}
+
+			/*search sta list*/
+			NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+			DlListForEach(pCSISta, &prCSIInfo->CSIStaList, CSI_STA, List) {
+			if (NdisCmpMemory(pCSISta->Addr, prCSICtrl->mac_addr, MAC_ADDR_LEN) == 0) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Del sta mac(%02x:%02x:%02x:%02x:%02x:%02x) from CSI List.\n",
+					PRINT_MAC(pCSISta->Addr)));
+				pCSISta_tmp = pCSISta;
+				pCSISta = DlListEntry(pCSISta->List.Prev, CSI_STA, List);
+				DlListDel(&(pCSISta_tmp->List));
+				os_free_mem(pCSISta_tmp);
+				NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+				prCSIInfo->sta_sel_cnt--;
+				HW_CSI_CTRL(pAd, (void *)prCSICtrl);		/*send fw cmd*/
+				goto out;
+			}
+			}
+
+			/*not find*/
+			NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("Not find in CSI list.\n"));
+			ret = -1;
+			goto out;
+		} else if (prCSICtrl->ucValue2 == CSI_STA_MAC_SHOW) {
+			/*search sta list*/
+			NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+			DlListForEach(pCSISta, &prCSIInfo->CSIStaList, CSI_STA, List) {
+				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("=>Show csi sta mac:%02x:%02x:%02x:%02x:%02x:%02x\n",
+					PRINT_MAC(pCSISta->Addr)));
+			}
+			NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+			goto out;
+		}
+	}
+
+	/*check invalid data*/
+	/*check invalid chain mode 0~2, number 1~16*/
+	if ((prCSICtrl->ucCfgItem == CSI_CONFIG_CHAIN_NUMBER) &&
+		((prCSICtrl->ucValue1 > 2) || (prCSICtrl->ucValue2 > CSI_MAX_CHAIN_NUM))) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s:invalid cmd!\n", __func__));
+		goto out;
+	}
+
+	/*check ping length filter 1~1500*/
+	if ((prCSICtrl->ucCfgItem == CSI_CONFIG_FILTER_MODE) &&
+		(prCSICtrl->ucValue1 == CSI_LENGTH_FILTER) &&
+		((prCSICtrl->ucValue2 > CSI_MAX_PKT_BYTES) || (prCSICtrl->ucValue2 < 1))) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s:invalid pkt length!\n", __func__));
+		goto out;
+	}
+
+	/*driver will filter specific pkt by TS, and usr will get a relatively precise result, like 10Hz.*/
+	/*ex: usr will get all pkts with TS: Init + n* 100*1000 us */
+	if ((prCSICtrl->ucCfgItem == CSI_CONFIG_FILTER_MODE) &&
+		(prCSICtrl->ucValue1 == CSI_TS_FILTER)) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s:set Ts filter length(%u us)!\n", __func__, prCSICtrl->ucValue2));
+		if (prCSICtrl->ucValue2 >= CSI_MAX_TS_OFFSET)
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("At most 10s offset!\n"));
+		else
+			prCSIInfo->usr_offset = prCSICtrl->ucValue2;
+		goto out;
+	}
+
+	/*prCSICtrl => prCSIInfo */
+	prCSIInfo->ucMode = prCSICtrl->ucMode;
 	prCSIInfo->ucValue1[prCSICtrl->ucCfgItem] = prCSICtrl->ucValue1;
-	if (prCSICtrl->ucCfgItem == CSI_CONFIG_FRAME_TYPE)
-		prCSIInfo->ucValue2[prCSICtrl->ucCfgItem] = prCSICtrl->ucValue2;
+	prCSIInfo->ucValue2[prCSICtrl->ucCfgItem] = prCSICtrl->ucValue2;
 
 	HW_CSI_CTRL(pAd, (void *)prCSICtrl);		/*send fw cmd*/
 out:
@@ -24705,151 +27245,583 @@ out:
 #ifdef CONFIG_COLGIN_MT6890
 INT	set_suspend_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-    INT32 ret = 0;
-    struct net_device *ndev = NULL;
-    unsigned long priv_flags;
+	struct net_device *ndev = NULL;
+	unsigned long priv_flags;
 
-    for_each_netdev(&init_net, ndev) {
-        if (RTMP_OS_NETDEV_STATE_RUNNING(ndev)) {
-            priv_flags = ((struct mt_dev_priv *)netdev_priv(ndev))->priv_flags;
-            MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-                ("%s(): line(%d), priv_flags(0x%lx), ndev->name(%s)\n",
-                __func__,__LINE__, priv_flags, ndev->name));
+	for_each_netdev(&init_net, ndev) {
+		if (RTMP_OS_NETDEV_STATE_RUNNING(ndev)) {
+			priv_flags = ((struct mt_dev_priv *)netdev_priv(ndev))->priv_flags;
+			MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s(): line(%d), priv_flags(0x%lx), ndev->name(%s)\n",
+				__func__, __LINE__, priv_flags, ndev->name));
 
-            if ((priv_flags == INT_MAIN) ||
-                (priv_flags == INT_MBSSID) ||
-                (priv_flags == INT_WDS) ||
-                (priv_flags == INT_APCLI) ||
-                (priv_flags == INT_MESH) ||
-                (priv_flags == INT_MONITOR)) {
+			if ((priv_flags == INT_MAIN) ||
+				(priv_flags == INT_MBSSID) ||
+				(priv_flags == INT_WDS) ||
+				(priv_flags == INT_APCLI) ||
+				(priv_flags == INT_MESH) ||
+				(priv_flags == INT_MONITOR)) {
 
-                pAd = ((struct mt_dev_priv *)netdev_priv(ndev))->sys_handle;
-                if (pAd == NULL) {
-                    MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-                        ("%s(): line(%d), ndev->name(%s) interface have already closed!\n",
-                        __func__, __LINE__, ndev->name));
-                    return FALSE;
-                }
+				pAd = ((struct mt_dev_priv *)netdev_priv(ndev))->sys_handle;
+				if (pAd == NULL) {
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("%s(): line(%d), ndev->name(%s) interface has closed!\n",
+						__func__, __LINE__, ndev->name));
+					return FALSE;
+				}
 
-                if (priv_flags == INT_MAIN) {
-                    Set_CpuUtilEn_Proc(pAd, "0");
-                    RtmpOsMsDelay(1);// delay 1ms
-                    Set_CpuUtilMode_Proc(pAd, "3");
-                    RtmpOsMsDelay(1);// delay 1ms
-                    Set_CpuUtilMode_Proc(pAd, "2");
-                    RtmpOsMsDelay(1);// delay 1ms
-                }
-                dev_close(ndev);
-                MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-                    ("%s(): line(%d), %s iface close sucess\n",
-                    __func__, __LINE__, ndev->name));
-            }
-        }
-        else {
-            MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-                ("%s(): line(%d), ndev->name(%s) interface have already closed!\n",
-                __func__, __LINE__, ndev->name));
-        }
-    }
+				if (priv_flags == INT_MAIN) {
+					Set_CpuUtilEn_Proc(pAd, "0");
+					RtmpOsMsDelay(1);	/* delay 1ms */
+					Set_CpuUtilMode_Proc(pAd, "3");
+					RtmpOsMsDelay(1);	/* delay 1ms */
+					Set_CpuUtilMode_Proc(pAd, "2");
+					RtmpOsMsDelay(1);	/* delay 1ms */
+				}
+				dev_close(ndev);
+				MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("%s(): line(%d), %s iface close success\n",
+					__func__, __LINE__, ndev->name));
+			}
+		} else {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s(): line(%d), ndev->name(%s) interface has closed!\n",
+				__func__, __LINE__, ndev->name));
+		}
+	}
 
-    return ret;
+	return TRUE;
 }
 
 INT	set_resume_intf_open(struct net_device *ndev, RTMP_ADAPTER *pAd)
 {
-    INT32 ret = 0;
-    pAd->bIsLowPower = TRUE;
-    ret = dev_open(ndev);
-    if (ret < 0) {
-        MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-            ("%s(): line(%d), iface %s cannot be opened (%d)\n",
-            __func__, __LINE__, ndev->name, ret));
-    }
-    else {
-        MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-            ("%s(): line(%d), %s iface open sucess\n", __func__,
-            __LINE__, ndev->name));
-    }
-    pAd->bIsLowPower = FALSE;
-    return ret;
+	INT32 ret = TRUE;
+
+	pAd->bIsLowPower = TRUE;
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+	ret = dev_open(ndev);
+#else
+	ret = dev_open(ndev, NULL);
+#endif
+	if (ret < 0) {
+		MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("%s(): line(%d), iface %s cannot be opened, ret(%d).\n",
+			__func__, __LINE__, ndev->name, ret));
+	} else {
+		MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("%s(): line(%d), %s iface open success, ret(%d).\n",
+			__func__, __LINE__, ndev->name, ret));
+	}
+	pAd->bIsLowPower = FALSE;
+
+	return TRUE;
 }
 
 INT	set_resume_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-    INT32 ret = 0;
-    struct net_device *ndev = NULL;
-    unsigned long IfNum = 0;
-    unsigned long priv_flags = INT_MAIN;
+	INT32 ret = TRUE;
+	struct net_device *ndev = NULL;
+	unsigned long priv_flags = INT_MAIN;
 
-    RTMP_DRIVER_VIRTUAL_INF_NUM_GET(pAd, &IfNum);
+	for_each_netdev(&init_net, ndev) {
+		if (!(RTMP_OS_NETDEV_STATE_RUNNING(ndev))) {
+			priv_flags = ((struct mt_dev_priv *)netdev_priv(ndev))->priv_flags;
+			MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s(): line(%d), priv_flags(0x%lx), ndev->name(%s)\n",
+				__func__, __LINE__, priv_flags, ndev->name));
 
-    for_each_netdev(&init_net, ndev) {
-        if (!(RTMP_OS_NETDEV_STATE_RUNNING(ndev))) {
-            priv_flags = ((struct mt_dev_priv *)netdev_priv(ndev))->priv_flags;
-            MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-                ("%s(): line(%d), priv_flags(0x%lx), ndev->name(%s)\n",
-                __func__,__LINE__, priv_flags, ndev->name));
+			if ((priv_flags == INT_MAIN) ||
+				(priv_flags == INT_MBSSID) ||
+				(priv_flags == INT_WDS) ||
+				(priv_flags == INT_APCLI) ||
+				(priv_flags == INT_MESH) ||
+				(priv_flags == INT_MONITOR)) {
 
-            if ((priv_flags == INT_MAIN) ||
-                (priv_flags == INT_MBSSID) ||
-                (priv_flags == INT_WDS) ||
-                (priv_flags == INT_APCLI) ||
-                (priv_flags == INT_MESH) ||
-                (priv_flags == INT_MONITOR)) {
-
-                pAd = ((struct mt_dev_priv *)netdev_priv(ndev))->sys_handle;
-                if (pAd == NULL) {
-                    MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-                        ("%s(): line(%d), ndev->name(%s) have invalid pAd!\n",
-                        __func__, __LINE__, ndev->name));
-                    return FALSE;
-                }
+				pAd = ((struct mt_dev_priv *)netdev_priv(ndev))->sys_handle;
+				if (pAd == NULL) {
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("%s(): line(%d), ndev->name(%s) has invalid pAd!\n",
+						__func__, __LINE__, ndev->name));
+					return FALSE;
+				}
 
 #ifdef APCLI_SUPPORT
-                if (priv_flags == INT_APCLI) {
-                    UINT ifIndex = 0;
-                    POS_COOKIE pObj = NULL;
-                    pObj = (POS_COOKIE) pAd->OS_Cookie;
-                    ifIndex = pObj->ioctl_if;
+				if (priv_flags == INT_APCLI) {
+					UINT ifIndex = 0;
+					POS_COOKIE pObj = NULL;
 
-                    if (ifIndex < MAX_MULTI_STA) {
-                        if (pAd->StaCfg[ifIndex].ApcliInfStat.Enable == TRUE) {
-                            ret = set_resume_intf_open(ndev, pAd);
-                        }
-                        else {
-                            MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-                                ("%s(): line(%d), %s don't need to open\n", __func__,
-                                __LINE__, ndev->name));
-                            continue;
-                        }
-                    }
-                    else {
-                        MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-                            ("%s(): line(%d), invalid sta entry id(%d)\n", __func__, __LINE__, ifIndex));
-                        return FALSE;
-                    }
-                }
+					pObj = (POS_COOKIE) pAd->OS_Cookie;
+					ifIndex = pObj->ioctl_if;
+
+					if (ifIndex < MAX_MULTI_STA) {
+						if (pAd->StaCfg[ifIndex].ApcliInfStat.Enable == TRUE)
+							ret = set_resume_intf_open(ndev, pAd);
+						else {
+							MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+								("%s(): line(%d), %s don't need to open\n",
+								__func__, __LINE__, ndev->name));
+							continue;
+						}
+					} else {
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							("%s(): line(%d), invalid sta entry id(%d)\n",
+							__func__, __LINE__, ifIndex));
+						return FALSE;
+					}
+				}
 #endif
-                if (priv_flags != INT_APCLI)
-                    ret = set_resume_intf_open(ndev, pAd);
-            }
-        }
-        else {
-            MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-                ("%s(): line(%d), ndev->name(%s) interface have already opened!\n",
-                __func__, __LINE__, ndev->name));
-        }
-    }
+				if (priv_flags != INT_APCLI)
+					ret = set_resume_intf_open(ndev, pAd);
+			}
+		} else {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s(): line(%d), ndev->name(%s) interface has opened!\n",
+				__func__, __LINE__, ndev->name));
+		}
+	}
 
-    return ret;
+	return TRUE;
 }
 
 INT	show_resume_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-    MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-        ("%s(): line(%d), bIsLowPower(%d)\n", __func__, __LINE__, pAd->bIsLowPower));
+	MTWF_LOG(DBG_CAT_HIF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s(): line(%d), bIsLowPower(%d)\n",
+		__func__, __LINE__, pAd->bIsLowPower));
 
-    return TRUE;
+	return TRUE;
 }
 #endif
+
+#ifdef LOW_POWER_SUPPORT
+INT set_ap_idle_timeout(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UINT32 idle_time;
+
+	idle_time = simple_strtol(arg, 0, 10);
+
+	if (idle_time < MAC_TABLE_MIN_AGEOUT_TIME && idle_time != 0)
+		pAd->ApCfg.ApIdleTimeout = MAC_TABLE_MIN_AGEOUT_TIME;
+	else
+		pAd->ApCfg.ApIdleTimeout = idle_time;
+
+	NdisZeroMemory(pAd->ApIdleCount, sizeof(pAd->ApIdleCount));
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: IdleTimeout=%d\n",
+			__func__, pAd->ApCfg.ApIdleTimeout));
+
+	return TRUE;
+}
+#endif
+
+#ifdef WIFI_MD_COEX_SUPPORT
+/**
+* Set_CoexDebug_Level - seg debug log level in coex module.
+* @pAd: pointer of the RTMP_ADAPTER
+* @arg: dbg_level (0: disable; 1: Error; 2: Warning; 3: Trace.)
+*
+* This function is for feature debug
+*
+**/
+INT Set_CoexDebug_Level(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UCHAR dbg_level;
+
+	if (arg == NULL || strlen(arg) == 0)
+		return FALSE;
+
+	dbg_level = os_str_tol(arg, 0, 10);
+
+	send_debug_level_to_wifi_md_coex(dbg_level);
+
+	return TRUE;
+}
+
+#endif
+INT32 rtmp_get_macPower(IN VOID* pAdSrc)
+{
+	UINT32 cmacVal = 0, omacVal = 0, val = 0, val0 = 0;
+	INT32 retPwr = 0, oPwr = 0, cPwr = 0;
+	UCHAR band = 0;
+	PRTMP_ADAPTER ad = (PRTMP_ADAPTER)pAdSrc;
+	POS_COOKIE pObj = NULL;
+	UCHAR apidx = 0;
+	struct wifi_dev *wdev = NULL;
+
+	if (ad == NULL) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ad null!\n"));
+		return -EFAULT;
+	}
+	pObj = (POS_COOKIE)ad->OS_Cookie;
+	if (pObj == NULL) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("pObj null!\n"));
+		return -EFAULT;
+	}
+	apidx = pObj->ioctl_if;
+	/* For all ioctl to this function, we assume that's query for AP/APCLI/GO device */
+	if ((pObj->ioctl_if_type == INT_MBSSID) || (pObj->ioctl_if_type == INT_MAIN)) {
+		if (apidx >= ad->ApCfg.BssidNum)
+			return -EFAULT;
+		wdev = &ad->ApCfg.MBSSID[apidx].wdev;
+	}
+	if (wdev)
+		band = HcGetBandByWdev(wdev);
+	else
+		band = BAND0;
+	if (band == BAND0) {
+		MAC_IO_READ32(ad->hdev_ctrl, 0x21024, &omacVal);
+		MAC_IO_READ32(ad->hdev_ctrl, 0x21020, &cmacVal);
+	} else {
+		MAC_IO_READ32(ad->hdev_ctrl, 0xa1024, &omacVal);
+		MAC_IO_READ32(ad->hdev_ctrl, 0xa1020, &cmacVal);
+	}
+		/*Unit: 0.5dBm*/
+		/*The encoding rule is 2's complement.*/
+		/*7'b0000000: 0dBm*/
+		/*7'b0000001: 0.5dBm*/
+		/*7'b0111111: 31.5dBm*/
+		/*7'b1111111: -0.5dBm*/
+		/*7'b1000000: -32dBm*/
+	val = (cmacVal & 0xff);
+	if (val <= 0x3f)
+		cPwr = ((INT32)val >> 1);
+	else
+		cPwr = (((INT32)(val - 0x80) >> 1) | 0x80000000);
+	val0 = (omacVal & 0xff);
+	if (val0 <= 0x3f)
+		oPwr = ((INT32)val0 >> 1);
+	else
+		oPwr = (((INT32)(val0 - 0x80) >> 1) | 0x80000000);
+
+	retPwr = ((oPwr > cPwr) ? oPwr : cPwr);
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Got %s Power %d\n", (band == BAND0)?"2G":"5G", retPwr));
+	return retPwr;
+}
+
+#ifdef CONFIG_6G_SUPPORT
+INT show_bss_mgmt_info(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "\n%s:\n", __func__);
+	bssmnger_show_bsslist_info();
+	return TRUE;
+}
+
+BOOLEAN in_band_discovery_update(struct wifi_dev *wdev,
+		UCHAR type, UCHAR interval, UCHAR tx_mode, UCHAR by_cfg)
+{
+	wlan_config_set_unsolicit_tx_type(wdev, type);
+	wlan_config_set_unsolicit_tx_tu(wdev, interval);
+	wlan_config_set_unsolicit_tx_mode(wdev, tx_mode);
+	wlan_config_set_unsolicit_tx_by_cfg(wdev, by_cfg);
+
+	if (WDEV_BSS_STATE(wdev) == BSS_READY) {
+		/* sync to bss manager */
+		bssmnger_update_discovery_rule(wdev);
+		/* sync discovery frame, enable beacon */
+#ifdef BSSMGR_CROSS_MODULE_SUPPORT
+		/* Send event to wappd*/
+		indicate_bssentry_to_wappd(wdev, BSSMNGER_MSG_IOB_DISCOVERY);
+#endif /* BSSMGR_CROSS_MODULE_SUPPORT */
+
+		UpdateBeaconHandler(wdev->sys_handle, wdev, BCN_UPDATE_ENABLE_TX);
+	}
+
+	return TRUE;
+}
+
+BOOLEAN qos_injector_update(struct wifi_dev *wdev,
+		UCHAR interval, UCHAR state)
+{
+	wlan_config_set_qos_tx_tu(wdev, interval);
+	wlan_config_set_qos_tx_state(wdev, state);
+
+	if (WDEV_BSS_STATE(wdev) == BSS_READY) {
+		/* sync discovery frame, enable beacon */
+		UpdateBeaconHandler(wdev->sys_handle, wdev, BCN_UPDATE_ENABLE_TX);
+	}
+
+	return TRUE;
+}
+
+BOOLEAN out_band_discovery_update(struct wifi_dev *wdev,
+		UCHAR rnr2g, UCHAR rnr5g, UCHAR rnr6g)
+{
+	wlan_config_set_rnr_in_probe_rsp(wdev, rnr2g, rnr5g, rnr6g);
+
+	if (WDEV_BSS_STATE(wdev) == BSS_READY) {
+		/* sync to bss manager */
+		bssmnger_update_discovery_rule(wdev);
+
+#ifdef BSSMGR_CROSS_MODULE_SUPPORT
+		/* Send event to wappd*/
+		indicate_bssentry_to_wappd(wdev, BSSMNGER_MSG_OOB_DISCOVERY);
+#endif /* BSSMGR_CROSS_MODULE_SUPPORT */
+	}
+
+	return TRUE;
+}
+
+INT set_6g_ap_iob_discovery_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+	BOOLEAN fgStatus = FALSE;
+	INT type, interval, txmode;
+	INT32 i4Recv = 0;
+
+	if (arg) {
+		i4Recv = sscanf(arg, "%d-%d-%d", &(type), &(interval), &(txmode));
+		if (i4Recv == 3 && type <= UNSOLICIT_TX_FILS_DISC) {
+			MTWF_PRINT("type=%d, interval=%d, txmode=%d\n",
+					 type, interval, txmode);
+			fgStatus = in_band_discovery_update(wdev, type, interval, txmode, TRUE);
+		}
+	}
+
+	if (fgStatus == FALSE) {
+		MTWF_PRINT("iwpriv ra0 set 6giob=[Type]-[Interval]-[TxMode]\n");
+		MTWF_PRINT("[Type]     0:Off, 1:BC.Probe.Rsp, 2:FILS.Discovery\n");
+		MTWF_PRINT("[Interval] unit in TUs\n");
+		MTWF_PRINT("[TxMode]   0:RATE_NON_HT, 1:RATE_NON_HT_DUP, 2:RATE_HE_SU\n");
+	}
+
+	return TRUE;
+}
+
+INT set_6g_ap_qos_injector_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+	BOOLEAN fgStatus = FALSE;
+	INT state, interval;
+	INT32 i4Recv = 0;
+
+	if (arg) {
+		i4Recv = sscanf(arg, "%d-%d", &(interval), &(state));
+		if (i4Recv == 2) {
+			MTWF_PRINT("interval=%d, state=%d\n",
+					 interval, state);
+			fgStatus = qos_injector_update(wdev, interval, state);
+		}
+	}
+
+	if (fgStatus == FALSE) {
+		MTWF_PRINT("iwpriv ra0 set 6gqos=[Interval]-[State]\n");
+		MTWF_PRINT("[Interval] unit in TUs\n");
+		MTWF_PRINT("[State]   0:Disable, 1:Enable\n");
+	}
+
+	return TRUE;
+}
+
+
+INT set_6g_ap_oob_discovery_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
+	BOOLEAN fgStatus = FALSE;
+	INT rnr2g, rnr5g, rnr6g;
+	INT32 i4Recv = 0;
+
+	if (arg) {
+		i4Recv = sscanf(arg, "%d-%d-%d", &(rnr2g), &(rnr5g), &(rnr6g));
+		if (i4Recv == 3) {
+			MTWF_PRINT("RNR(2G:5G:6G)=(%d:%d:%d)\n", rnr2g, rnr5g, rnr6g);
+			fgStatus = out_band_discovery_update(wdev, rnr2g, rnr5g, rnr6g);
+		}
+	}
+
+	if (fgStatus == FALSE) {
+		MTWF_PRINT("iwpriv ra0 set 6goob=[RNR2G]-[RNR5G]-[RNR6G]\n");
+		MTWF_PRINT("[RNR2G/5G/6G] 0:Off, 1:MainBSS, 2:AllBSSs\n");
+	}
+
+	return TRUE;
+}
+#endif /* CONFIG_6G_SUPPORT */
+
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+INT set_fgi_and_ltf_profile(
+	RTMP_ADAPTER *pAd,
+	struct wifi_dev *wdev,
+	UINT32 value)
+{
+	UINT8 gi_idx = 0;
+
+	if (wdev == NULL)
+		return -EFAULT;
+
+	if (value == 0)
+		gi_idx = GI_AUTO;
+	else if (value == 800)
+		gi_idx = FIXED_GI_08_US;
+	else if (value == 1600)
+		gi_idx = FIXED_GI_16_US;
+	else if (value == 3200)
+		gi_idx = FIXED_GI_32_US;
+	else {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid gi parameter(%d)!!!\n", value);
+		return -1;
+	}
+
+	wlan_config_set_he_gi(wdev, gi_idx);
+	MTWF_PRINT("set target_gi(%d)\n", value);
+
+	return TRUE;
+}
+
+INT set_fgi_and_ltf_proc(
+	RTMP_ADAPTER *pAd,
+	RTMP_STRING *arg)
+{
+	struct wifi_dev *wdev = NULL;
+	POS_COOKIE obj = (POS_COOKIE)pAd->OS_Cookie;
+	INT32 i4Recv = 0;
+	UINT32 target_gi = 0;
+	UINT8 gi_idx = 0;
+
+	wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, obj->ioctl_if, obj->ioctl_if_type);
+	if (wdev == NULL)
+		return -EFAULT;
+
+	if (arg) {
+		do {
+			i4Recv = sscanf(arg, "%d", &(target_gi));
+		} while (0);
+
+		if (((target_gi != 0) && (target_gi != 800) && (target_gi != 1600) && (target_gi != 3200))
+			||(i4Recv != 1)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Wrong parameters!!!\n");
+			return -1;
+		} else {
+			if (target_gi == 0)
+				gi_idx = GI_AUTO;
+			else if (target_gi == 800)
+				gi_idx = FIXED_GI_08_US;
+			else if (target_gi == 1600)
+				gi_idx = FIXED_GI_16_US;
+			else
+				gi_idx = FIXED_GI_32_US;
+
+			wlan_config_set_he_gi(wdev, gi_idx);
+			MTWF_PRINT("set target_gi(%d)\n", target_gi);
+		}
+	}
+	return TRUE;
+}
+
+INT show_fgi_and_ltf_proc(
+	RTMP_ADAPTER *pAd,
+	RTMP_STRING *arg)
+{
+	struct wifi_dev *wdev = NULL;
+	POS_COOKIE obj = (POS_COOKIE)pAd->OS_Cookie;
+	UINT32 cur_gi = 0;
+	PCHAR gi_ltf_info[4] = {
+	"Auto_GI",
+	"GI_08_US + LTF_2x",
+	"GI_16_US + LTF_2x",
+	"GI_32_US + LTF_4x"
+	};
+
+	wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, obj->ioctl_if, obj->ioctl_if_type);
+	if (wdev == NULL)
+		return -EFAULT;
+	cur_gi = wlan_config_get_he_gi(wdev);
+
+	if (cur_gi > FIXED_GI_32_US) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error!!!(cur_gi(%d) is invalid!\n", cur_gi);
+		return -EFAULT;
+	}
+
+	MTWF_PRINT("Current_gi(%s)\n", gi_ltf_info[cur_gi]);
+
+	return TRUE;
+}
+#endif
+#ifdef VLAN_SUPPORT
+INT	Set_Vlan2Eth_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UCHAR bV2e = 0;
+
+	bV2e = os_str_tol(arg, 0, 10);
+	if ((bV2e != TRUE) && (bV2e != FALSE)) {
+		MTWF_PRINT("Error vlaue(%d)\n", bV2e);
+		return FALSE;
+	}
+	pAd->CommonCfg.vlan2ethctl = bV2e;
+	MTWF_PRINT("Now bV2e(%d)\n", pAd->CommonCfg.vlan2ethctl);
+	return TRUE;
+}
+#endif
+BOOLEAN wdev_down_exec_ioctl(RTMP_IOCTL_INPUT_STRUCT *wrq, USHORT subcmd)
+{
+
+	USHORT cmd = 0;
+	BOOLEAN retval = FALSE;
+	UCHAR *buf = NULL;
+	INT Status = NDIS_STATUS_SUCCESS;
+
+	MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wdev_down_exec_ioctl return!!!\n");
+	cmd = subcmd;
+	if (cmd & OID_GET_SET_TOGGLE) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"interface is down, cmd [%x] return!!!\n", cmd);
+		switch (cmd & 0x7FFF) {
+#ifdef WAPP_SUPPORT
+		case OID_WAPP_EVENT:{
+			struct wapp_req *req;
+
+			os_alloc_mem(NULL, (UCHAR **)&buf, wrq->u.data.length);
+			Status = copy_from_user(buf, wrq->u.data.pointer, wrq->u.data.length);
+			if (Status) {
+				MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"copy_from_user return status received = failure\n");
+				Status = -NDIS_STATUS_FAILURE;
+			}
+			req = (struct wapp_req *)buf;
+			if (req && (req->req_id == WAPP_BSS_START_REQ)) {
+				retval = TRUE;
+				MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"interface is down, cmd [%x] return!!!\n", cmd);
+			}
+			os_free_mem(buf);
+			break;
+		}
+#endif
+		default:
+			break;
+		}
+	}
+	return retval;
+}
+
+
+#ifdef CONFIG_COLGIN_MT6890
+INT SetWoRXCounterEnable(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	UINT32 wo_cnt_enable;
+	INT ret;
+
+	wo_cnt_enable = os_str_tol(arg, 0, 10);
+
+	if (wo_cnt_enable == 1) {
+		/* param0: 0:disable, 1:enable */
+		/* param1: Time Interval, event send to host by Time Interval * 150ms */
+		ret = mt_cmd_wo_query(pAd, WO_CMD_RXCNT_CTRL, 1, 7);
+		if (!ret)
+			pAd->wo_rx_cnt_enable = TRUE;
+	} else if (wo_cnt_enable == 0) {
+		ret = mt_cmd_wo_query(pAd, WO_CMD_RXCNT_CTRL, 0, 0);
+		if (!ret)
+			pAd->wo_rx_cnt_enable = FALSE;
+	} else
+		MTWF_PRINT("Bad Parameter. Input 1:enable, 0:disable.\n");
+
+	MTWF_PRINT("WO RX Counter Enable = %d.\n", pAd->wo_rx_cnt_enable);
+
+	return TRUE;
+}
+#endif
+
 

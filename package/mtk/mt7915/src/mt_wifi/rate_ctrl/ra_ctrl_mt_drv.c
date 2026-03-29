@@ -302,33 +302,33 @@ BssInfoRACommCfgSet(
 	pCmdBssInfoAutoRateCfg->u4RaFastInterval = cpu2le32(pRaCfg->u4RaFastInterval);
 
 #ifdef CFG_RATE_ADJUST_PARAM_DEBUG
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: sizeof CMD_BSSINFO_AUTO_RATE_CFG_T = %d\n", __func__, (UINT_32)sizeof(CMD_BSSINFO_AUTO_RATE_CFG_T)));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("OpMode=%d\n", pCmdBssInfoAutoRateCfg->OpMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgAdHocOn=%d\n", pCmdBssInfoAutoRateCfg->fgAdHocOn));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgShortPreamble=%d\n", pCmdBssInfoAutoRateCfg->fgShortPreamble));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TxStream=%d\n", pCmdBssInfoAutoRateCfg->TxStream));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("RxStream=%d\n", pCmdBssInfoAutoRateCfg->RxStream));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucRateAlg=%d\n", pCmdBssInfoAutoRateCfg->ucRateAlg));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TestbedForceShortGI=%d\n", pCmdBssInfoAutoRateCfg->TestbedForceShortGI));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TestbedForceGreenField=%d\n", pCmdBssInfoAutoRateCfg->TestbedForceGreenField));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s: sizeof CMD_BSSINFO_AUTO_RATE_CFG_T = %d\n", __func__, (UINT_32)sizeof(CMD_BSSINFO_AUTO_RATE_CFG_T));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "OpMode=%d\n", pCmdBssInfoAutoRateCfg->OpMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgAdHocOn=%d\n", pCmdBssInfoAutoRateCfg->fgAdHocOn);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgShortPreamble=%d\n", pCmdBssInfoAutoRateCfg->fgShortPreamble);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TxStream=%d\n", pCmdBssInfoAutoRateCfg->TxStream);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "RxStream=%d\n", pCmdBssInfoAutoRateCfg->RxStream);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucRateAlg=%d\n", pCmdBssInfoAutoRateCfg->ucRateAlg);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TestbedForceShortGI=%d\n", pCmdBssInfoAutoRateCfg->TestbedForceShortGI);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TestbedForceGreenField=%d\n", pCmdBssInfoAutoRateCfg->TestbedForceGreenField);
 #ifdef DOT11_N_SUPPORT
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HtMode=%d\n", pCmdBssInfoAutoRateCfg->HtMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fAnyStation20Only=%d\n", pCmdBssInfoAutoRateCfg->fAnyStation20Only));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("bRcvBSSWidthTriggerEvents=%d\n", pCmdBssInfoAutoRateCfg->bRcvBSSWidthTriggerEvents));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "HtMode=%d\n", pCmdBssInfoAutoRateCfg->HtMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fAnyStation20Only=%d\n", pCmdBssInfoAutoRateCfg->fAnyStation20Only);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "bRcvBSSWidthTriggerEvents=%d\n", pCmdBssInfoAutoRateCfg->bRcvBSSWidthTriggerEvents);
 #ifdef DOT11_VHT_AC
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("vht_nss_cap=%d\n", pCmdBssInfoAutoRateCfg->vht_nss_cap));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "vht_nss_cap=%d\n", pCmdBssInfoAutoRateCfg->vht_nss_cap);
 #endif /* DOT11_VHT_AC */
 #endif /* DOT11_N_SUPPORT */
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgSeOff=%d\n", pCmdBssInfoAutoRateCfg->fgSeOff));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucAntennaIndex=%d\n", pCmdBssInfoAutoRateCfg->ucAntennaIndex));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TrainUpRule=%d\n", pCmdBssInfoAutoRateCfg->TrainUpRule));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TrainUpHighThrd=%d\n", pCmdBssInfoAutoRateCfg->TrainUpHighThrd));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TrainUpRuleRSSI=%d\n", pCmdBssInfoAutoRateCfg->TrainUpRuleRSSI));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("lowTrafficThrd=%d\n", pCmdBssInfoAutoRateCfg->lowTrafficThrd));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u2MaxPhyRate=%d\n", pCmdBssInfoAutoRateCfg->u2MaxPhyRate));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("PhyCaps=%d\n", pCmdBssInfoAutoRateCfg->PhyCaps));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u4RaInterval=%d\n", pCmdBssInfoAutoRateCfg->u4RaInterval));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u4RaFastInterval=%d\n", pCmdBssInfoAutoRateCfg->u4RaFastInterval));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgSeOff=%d\n", pCmdBssInfoAutoRateCfg->fgSeOff);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucAntennaIndex=%d\n", pCmdBssInfoAutoRateCfg->ucAntennaIndex);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TrainUpRule=%d\n", pCmdBssInfoAutoRateCfg->TrainUpRule);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TrainUpHighThrd=%d\n", pCmdBssInfoAutoRateCfg->TrainUpHighThrd);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "TrainUpRuleRSSI=%d\n", pCmdBssInfoAutoRateCfg->TrainUpRuleRSSI);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "lowTrafficThrd=%d\n", pCmdBssInfoAutoRateCfg->lowTrafficThrd);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u2MaxPhyRate=%d\n", pCmdBssInfoAutoRateCfg->u2MaxPhyRate);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "PhyCaps=%d\n", pCmdBssInfoAutoRateCfg->PhyCaps);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u4RaInterval=%d\n", pCmdBssInfoAutoRateCfg->u4RaInterval);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u4RaFastInterval=%d\n", pCmdBssInfoAutoRateCfg->u4RaFastInterval);
 #endif
 
 	return NDIS_STATUS_SUCCESS;
@@ -416,49 +416,49 @@ StaRecAutoRateParamSet(
 	}
 
 #ifdef CFG_RATE_ADJUST_PARAM_DEBUG
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: sizeof CMD_STAREC_AUTO_RATE_T = %d\n", __func__, (UINT_32)sizeof(CMD_STAREC_AUTO_RATE_T)));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgRaValid=%d\n", pCmdStaRecAutoRate->fgRaValid));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgAutoTxRateSwitch=%d\n", pCmdStaRecAutoRate->fgAutoTxRateSwitch));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucPhyMode=%d\n", pCmdStaRecAutoRate->ucPhyMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucChannel=%d\n", pCmdStaRecAutoRate->ucChannel));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucBBPCurrentBW=%d\n", pCmdStaRecAutoRate->ucBBPCurrentBW));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgDisableCCK=%d\n", pCmdStaRecAutoRate->fgDisableCCK));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgHtCapMcs32=%d\n", pCmdStaRecAutoRate->fgHtCapMcs32));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgHtCapInfoGF=%d\n", pCmdStaRecAutoRate->fgHtCapInfoGF));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s: sizeof CMD_STAREC_AUTO_RATE_T = %d\n", __func__, (UINT_32)sizeof(CMD_STAREC_AUTO_RATE_T));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgRaValid=%d\n", pCmdStaRecAutoRate->fgRaValid);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgAutoTxRateSwitch=%d\n", pCmdStaRecAutoRate->fgAutoTxRateSwitch);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucPhyMode=%d\n", pCmdStaRecAutoRate->ucPhyMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucChannel=%d\n", pCmdStaRecAutoRate->ucChannel);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucBBPCurrentBW=%d\n", pCmdStaRecAutoRate->ucBBPCurrentBW);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgDisableCCK=%d\n", pCmdStaRecAutoRate->fgDisableCCK);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgHtCapMcs32=%d\n", pCmdStaRecAutoRate->fgHtCapMcs32);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgHtCapInfoGF=%d\n", pCmdStaRecAutoRate->fgHtCapInfoGF);
 
 	for (ucIdx = 0; ucIdx < 4; ucIdx++)
-		MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("aucHtCapMCSSet[%d]=%d\n", ucIdx, pCmdStaRecAutoRate->aucHtCapMCSSet[ucIdx]));
+		MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "aucHtCapMCSSet[%d]=%d\n", ucIdx, pCmdStaRecAutoRate->aucHtCapMCSSet[ucIdx]);
 
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucMmpsMode=%d\n", pCmdStaRecAutoRate->ucMmpsMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucGband256QAMSupport=%d\n", pCmdStaRecAutoRate->ucGband256QAMSupport));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucMaxAmpduFactor=%d\n", pCmdStaRecAutoRate->ucMaxAmpduFactor));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("fgAuthWapiMode=%d\n", pCmdStaRecAutoRate->fgAuthWapiMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("RateLen=%d\n", pCmdStaRecAutoRate->RateLen));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucSupportRateMode=%x\n", pCmdStaRecAutoRate->ucSupportRateMode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucSupportCCKMCS=%x\n", pCmdStaRecAutoRate->ucSupportCCKMCS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ucSupportOFDMMCS=%x\n", pCmdStaRecAutoRate->ucSupportOFDMMCS));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucMmpsMode=%d\n", pCmdStaRecAutoRate->ucMmpsMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucGband256QAMSupport=%d\n", pCmdStaRecAutoRate->ucGband256QAMSupport);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucMaxAmpduFactor=%d\n", pCmdStaRecAutoRate->ucMaxAmpduFactor);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "fgAuthWapiMode=%d\n", pCmdStaRecAutoRate->fgAuthWapiMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "RateLen=%d\n", pCmdStaRecAutoRate->RateLen);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucSupportRateMode=%x\n", pCmdStaRecAutoRate->ucSupportRateMode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucSupportCCKMCS=%x\n", pCmdStaRecAutoRate->ucSupportCCKMCS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ucSupportOFDMMCS=%x\n", pCmdStaRecAutoRate->ucSupportOFDMMCS);
 #ifdef DOT11_N_SUPPORT
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u4SupportHTMCS=%x\n", pCmdStaRecAutoRate->u4SupportHTMCS));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u4SupportHTMCS=%x\n", pCmdStaRecAutoRate->u4SupportHTMCS);
 #ifdef DOT11_VHT_AC
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u2SupportVHTMCS1SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS1SS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u2SupportVHTMCS2SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS2SS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u2SupportVHTMCS3SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS3SS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("u2SupportVHTMCS4SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS4SS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("force_op_mode=%d\n", pCmdStaRecAutoRate->force_op_mode));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("vhtOpModeChWidth=%d\n", pCmdStaRecAutoRate->vhtOpModeChWidth));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("vhtOpModeRxNss=%d\n", pCmdStaRecAutoRate->vhtOpModeRxNss));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("vhtOpModeRxNssType=%x\n", pCmdStaRecAutoRate->vhtOpModeRxNssType));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u2SupportVHTMCS1SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS1SS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u2SupportVHTMCS2SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS2SS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u2SupportVHTMCS3SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS3SS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "u2SupportVHTMCS4SS=%x\n", pCmdStaRecAutoRate->u2SupportVHTMCS4SS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "force_op_mode=%d\n", pCmdStaRecAutoRate->force_op_mode);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "vhtOpModeChWidth=%d\n", pCmdStaRecAutoRate->vhtOpModeChWidth);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "vhtOpModeRxNss=%d\n", pCmdStaRecAutoRate->vhtOpModeRxNss);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "vhtOpModeRxNssType=%x\n", pCmdStaRecAutoRate->vhtOpModeRxNssType);
 #endif /* DOT11_VHT_AC */
 #endif /* DOT11_N_SUPPORT */
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ClientStatusFlags=%x\n", pCmdStaRecAutoRate->ClientStatusFlags));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.MODE=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.MODE));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.Flags=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.Flags));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.STBC=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.STBC));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.ShortGI=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.ShortGI));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.BW=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.BW));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.ldpc=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.ldpc));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.MCS=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.MCS));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MaxPhyCfg.VhtNss=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.VhtNss));
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ClientStatusFlags=%x\n", pCmdStaRecAutoRate->ClientStatusFlags);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.MODE=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.MODE);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.Flags=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.Flags);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.STBC=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.STBC);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.ShortGI=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.ShortGI);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.BW=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.BW);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.ldpc=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.ldpc);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.MCS=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.MCS);
+	MTWF_DBG(NULL, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "MaxPhyCfg.VhtNss=%d\n", pCmdStaRecAutoRate->MaxPhyCfg.VhtNss);
 #endif
 	return NDIS_STATUS_SUCCESS;
 }
@@ -627,8 +627,8 @@ INT32 CmdRaFixRateUpdateWoSta(
 
 	ret = chip_cmd_tx(pAd, msg);
 error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("%s:(ret = %d)\n", __func__, ret));
+
+	MTWF_PRINT("%s:(ret = %d)\n", __func__, ret);
 
 	return ret;
 }

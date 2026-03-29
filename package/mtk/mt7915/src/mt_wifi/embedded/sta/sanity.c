@@ -105,7 +105,7 @@ BOOLEAN PeerAssocRspSanity(
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 #endif /* DOT11R_FT_SUPPORT */
 #ifdef CONFIG_MAP_SUPPORT
-	unsigned char map_cap;
+	unsigned char map_cap = 0;
 #ifdef MAP_R2
 	UCHAR map_profile;
 	UINT16 map_vid;
@@ -163,7 +163,6 @@ BOOLEAN PeerAssocRspSanity(
 #ifdef DOT11_N_SUPPORT
 
 		case IE_HT_CAP:
-		case IE_HT_CAP2:
 			if (pEid->Len >= SIZE_HT_CAP_IE) {	/* Note: allow extension.!! */
 				NdisMoveMemory(&cmm_ies->ht_cap, pEid->Octet, sizeof(HT_CAPABILITY_IE));
 				SET_HT_CAPS_EXIST(cmm_ies->ie_exists);
@@ -176,7 +175,6 @@ BOOLEAN PeerAssocRspSanity(
 			break;
 
 		case IE_ADD_HT:
-		case IE_ADD_HT2:
 			if (pEid->Len >= sizeof(ADD_HT_INFO_IE)) {
 				/*
 				 *   This IE allows extension, but we can ignore extra bytes beyond our knowledge , so only
@@ -250,6 +248,7 @@ BOOLEAN PeerAssocRspSanity(
 				, &map_profile, &map_vid
 #endif
 				) == TRUE) {
+				pAd->CommonCfg.MapCapRemDev = TRUE;
 				ie_list->MAP_AttriValue = map_cap;
 #ifdef MAP_R2
 				ie_list->MAP_ProfileValue = map_profile;

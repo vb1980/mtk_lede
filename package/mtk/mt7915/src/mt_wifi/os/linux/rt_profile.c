@@ -43,6 +43,11 @@
 #include <net/ra_nat.h>
 #endif /*CONFIG_FAST_NAT_SUPPORT*/
 
+#if defined(CONFIG_COLGIN_MT6890)
+#include <linux/kernel.h>
+#include <linux/string.h>
+#endif
+
 #define BSSID_WCID_TO_REMOVE 1
 
 struct l1profile_info_t {
@@ -219,11 +224,15 @@ static NDIS_STATUS l1set_profile_path(RTMP_ADAPTER *pAd, UINT_32 extra, RTMP_STR
 	RTMP_STRING *target = get_dev_l2profile(pAd);
 	RTMP_STRING *pSemicolon = strchr(value, ';');
 	UINT8 str_len;
+	INT ret;
 
 	if (pSemicolon) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("DBDC format of profile path!\n"));
 		*pSemicolon = '\0';
 	}
+
+	if (!target)
+		return NDIS_STATUS_FAILURE;
 #ifdef MULTI_PROFILE
 	if (pSemicolon)
 		update_mtb_value(pAd, MTB_EXT_PROFILE, extra, pSemicolon + 1);
@@ -236,7 +245,9 @@ static NDIS_STATUS l1set_profile_path(RTMP_ADAPTER *pAd, UINT_32 extra, RTMP_STR
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				 ("profile update from %s to %s\n", target, value));
 
-		snprintf(target, L2PROFILE_PATH_LEN, "%s", value);
+		ret = snprintf(target, L2PROFILE_PATH_LEN, "%s", value);
+		if (ret < 0 || ret >= L2PROFILE_PATH_LEN)
+			retVal = NDIS_STATUS_FAILURE;
 	} else
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("profile remain %s\n", target));
 
@@ -249,13 +260,19 @@ static NDIS_STATUS l1set_eeprom_bin(RTMP_ADAPTER *pAd, UINT_32 extra, RTMP_STRIN
 	INT retVal = NDIS_STATUS_SUCCESS;
 	RTMP_STRING *target = l1profile[get_dev_config_idx(pAd)].ee_info.bin_name;
 	UINT8 str_len;
+	INT ret;
 
 	str_len = strlen(value);
 	if (strcmp(target, value) && (str_len < L1PROFILE_ATTRNAME_LEN)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				 ("eeprom binary update from %s to %s\n", target, value));
 
-		snprintf(target, L1PROFILE_ATTRNAME_LEN, "%s", value);
+		ret = snprintf(target, L1PROFILE_ATTRNAME_LEN, "%s", value);
+		if (os_snprintf_error(L1PROFILE_ATTRNAME_LEN, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "target snprintf error!!!\n");
+			retVal = NDIS_STATUS_FAILURE;
+		}
 		*(target+str_len) = '\0';
 	} else
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("eeprom binary remain %s\n", target));
@@ -309,6 +326,7 @@ static NDIS_STATUS l1set_ifname(RTMP_ADAPTER *pAd, UINT_32 extra, RTMP_STRING *v
 	INT retVal = NDIS_STATUS_SUCCESS;
 	RTMP_STRING *target = NULL;
 	RTMP_STRING *pSemicolon = NULL;
+	INT ret;
 
 	target = get_dev_name_prefix(pAd, extra);
 	pSemicolon = strchr(value, ';');
@@ -326,7 +344,12 @@ static NDIS_STATUS l1set_ifname(RTMP_ADAPTER *pAd, UINT_32 extra, RTMP_STRING *v
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					 ("ifname update from %s to %s\n", target, value));
 
-			snprintf(target, IFNAMSIZ, "%s", value);
+			ret = snprintf(target, IFNAMSIZ, "%s", value);
+			if (os_snprintf_error(IFNAMSIZ, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "target snprintf error!!!\n");
+				retVal =  NDIS_STATUS_FAILURE;
+			}
 		} else
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("ifname remain %s\n", target));
 	} else
@@ -388,18 +411,116 @@ static NDIS_STATUS match_index_by_chipname(IN RTMP_STRING *l1profile_data,
 		IN RTMP_ADAPTER *pAd,
 		IN RTMP_STRING *chipName)
 {
-	INT retVal = NDIS_STATUS_FAILURE;
+	INT retVal = NDIS_STATUS_SUCCESS;
 	INT if_idx = 0;
 	RTMP_STRING	key[10] = {0};
 	RTMP_STRING *tmpbuf = NULL;
+#if defined(CONFIG_COLGIN_MT6890)
+	POS_COOKIE handle = NULL;
+	struct pci_dev *pdev = NULL;
+	char *pci_slot = NULL;
+	char *pci_temp = NULL;
+	RTMP_STRING pci_name_temp[20] = {0};
+	RTMP_STRING	key_slot[20] = {0};
+	RTMP_STRING *tmpbuf_slot = NULL;
+#endif
+	INT ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&tmpbuf, MAX_PARAM_BUFFER_SIZE);
+#if defined(CONFIG_COLGIN_MT6890)
+	os_alloc_mem(NULL, (UCHAR **)&tmpbuf_slot, MAX_PARAM_BUFFER_SIZE);
+	handle = pAd->OS_Cookie;
+	pdev = handle->pci_dev;
+
+	/* read pci slot from pci name*/
+	ret = snprintf(pci_name_temp, sizeof(pci_name_temp), (char *)pci_name(pdev));
+	if (os_snprintf_error(sizeof(pci_name_temp), ret)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "pci_name_temp snprintf error!!!\n");
+		retVal = NDIS_STATUS_FAILURE;
+		os_free_mem(tmpbuf);
+		os_free_mem(tmpbuf_slot);
+		return retVal;
+	}
+
+	pci_temp = pci_name_temp;
+	pci_slot = strsep(&pci_temp, ":");
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		 ("pci_slot=%s\n", pci_slot));
 
 	while (if_idx < MAX_L1PROFILE_INDEX) {
-		sprintf(key, "INDEX%d", if_idx);
-
+		ret = sprintf(key, "INDEX%d", if_idx);
+		if (ret < 0) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "key sprintf error!!!\n");
+			retVal = NDIS_STATUS_FAILURE;
+		}
+		/* find chip name */
 		if (RTMPGetKeyParameter(key, tmpbuf, MAX_PARAM_BUFFER_SIZE, l1profile_data, TRUE)) {
-			if (strncmp(tmpbuf, chipName, strlen(chipName)) == 0) {
+
+			/* read slot id in l1profile.dat */
+			ret = snprintf(key_slot, sizeof(key_slot), "%s_pcie_slot", key);
+			if (os_snprintf_error(sizeof(key_slot), ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						 "key_slot snprintf error!!!\n");
+				retVal = NDIS_STATUS_FAILURE;
+			}
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 ("key_slot=%s\n", key_slot));
+			if (NDIS_STATUS_SUCCESS == retVal &&
+				RTMPGetKeyParameter(key_slot, tmpbuf_slot, MAX_PARAM_BUFFER_SIZE, l1profile_data, TRUE)) {
+				if (!strlen(tmpbuf_slot)) {
+					if_idx++;
+					continue;
+				}
+
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 ("tmpbuf_slot=%s\n", tmpbuf_slot));
+				if ((strncmp(pci_slot, tmpbuf_slot, strlen(pci_slot)) == 0) &&
+					(strlen(pci_slot) == strlen(tmpbuf_slot))) {
+
+					/* find match slot */
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 ("find match slot =%s\n", pci_slot));
+					if ((strncmp(tmpbuf, chipName, strlen(chipName)) == 0) &&
+						(strlen(chipName) == strlen(tmpbuf))) {
+						snprintf(l1profile[get_dev_config_idx(pAd)].profile_index, \
+							L1PROFILE_INDEX_LEN, "%s", key);
+						retVal = NDIS_STATUS_SUCCESS;
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+							 ("find match slot=%s and match chip name=%s\n", pci_slot, tmpbuf));
+					} else {
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, \
+							 ("match slot=%s, but chip=%s not match profile %s, fail.\n", \
+							 pci_slot, chipName, tmpbuf));
+					}
+					os_free_mem(tmpbuf);
+					os_free_mem(tmpbuf_slot);
+					return retVal;
+				} else
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+							 ("profile %s and slot %s not match, next cfg\n", key, pci_slot));
+			}
+		} else
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("not find chip name %s\n", key));
+
+		if_idx++;
+	}
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("Not find slot id, back to old rule.\n"));
+	if_idx = 0;
+#endif
+	while (if_idx < MAX_L1PROFILE_INDEX) {
+		ret = sprintf(key, "INDEX%d", if_idx);
+		if (ret < 0) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "key sprintf error!!!\n");
+			retVal = NDIS_STATUS_FAILURE;
+		}
+		if (RTMPGetKeyParameter(key, tmpbuf, MAX_PARAM_BUFFER_SIZE, l1profile_data, TRUE)) {
+
+			if ((strncmp(tmpbuf, chipName, strlen(chipName)) == 0) && \
+				(strlen(chipName) == strlen(tmpbuf))) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 						 ("%s found as %s\n", chipName, key));
 
@@ -425,6 +546,9 @@ static NDIS_STATUS match_index_by_chipname(IN RTMP_STRING *l1profile_data,
 	}
 
 	os_free_mem(tmpbuf);
+#if defined(CONFIG_COLGIN_MT6890)
+	os_free_mem(tmpbuf_slot);
+#endif
 	return retVal;
 }
 
@@ -435,17 +559,42 @@ static NDIS_STATUS l1get_profile_index(IN RTMP_STRING *l1profile_data, IN RTMP_A
 	INT dev_idx = get_dev_config_idx(pAd);
 	RTMP_STRING chipName[10] = {0};
 	RTMP_STRING *tmpbuf = NULL;
+	INT ret;
+	UINT LeftBufferSize;
 
-	sprintf(chipName, "MT%x", pAd->ChipID);
+	ret = sprintf(chipName, "MT%x", pAd->ChipID);
+	if (ret < 0) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "chipName sprintf error!!!\n");
+	}
+
 	os_alloc_mem(NULL, (UCHAR **)&tmpbuf, MAX_PARAM_BUFFER_SIZE);
 
-	if (IS_MT7615(pAd) && (pAd->RfIcType == RFIC_7615A))
+	if (IS_MT7615(pAd) && (pAd->RfIcType == RFIC_7615A)) {
 
-		snprintf(chipName + strlen(chipName), sizeof(chipName) - strlen(chipName), "%s", "A");
+		LeftBufferSize = sizeof(chipName) - strlen(chipName);
+		ret = snprintf(chipName + strlen(chipName), LeftBufferSize, "%s", "A");
+		if (os_snprintf_error(LeftBufferSize, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					 "chipName snprintf error!!!\n");
+			retVal = NDIS_STATUS_FAILURE;
+			os_free_mem(tmpbuf);
+			return retVal;
+		}
+	}
 #if defined(MT_FMAC) && defined(MT7915)
-	else if (IS_MT7915(pAd) && (pAd->hw_bound & MTF_BND_OPT_1))
+	else if (IS_MT7915(pAd) && (pAd->hw_bound & MTF_BND_OPT_1)) {
 
-		snprintf(chipName + strlen(chipName), sizeof(chipName) - strlen(chipName), "%s", "D");
+		LeftBufferSize = sizeof(chipName) - strlen(chipName);
+		ret = snprintf(chipName + strlen(chipName), LeftBufferSize, "%s", "D");
+		if (os_snprintf_error(LeftBufferSize, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					 "chipName snprintf error!!!\n");
+			retVal = NDIS_STATUS_FAILURE;
+			os_free_mem(tmpbuf);
+			return retVal;
+		}
+	}
 #endif
 	if (match_index_by_chipname(l1profile_data, pAd, chipName) == NDIS_STATUS_SUCCESS) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%d]%s found by chip\n", dev_idx, chipName));
@@ -710,6 +859,7 @@ NDIS_STATUS load_dev_l1profile(IN RTMP_ADAPTER *pAd)
 	RTMP_OS_FD_EXT srcf;
 	INT retval = NDIS_STATUS_SUCCESS;
 	ULONG buf_size = MAX_INI_BUFFER_SIZE;
+	INT ret;
 	os_alloc_mem(pAd, (UCHAR **)&buffer, buf_size);
 
 	if (!buffer) {
@@ -727,7 +877,11 @@ NDIS_STATUS load_dev_l1profile(IN RTMP_ADAPTER *pAd)
 
 		retval = strlen(l1profile_default);
 
-		snprintf(buffer, buf_size, "%s", l1profile_default);
+		ret = snprintf(buffer, buf_size, "%s", l1profile_default);
+		if (os_snprintf_error(buf_size, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "buffer snprintf error!!!\n");
+		}
 	} else {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Open file \"%s\" Succeed!\n", L1_PROFILE_PATH));
 #ifndef OS_ABL_SUPPORT
@@ -1100,6 +1254,34 @@ VOID ApCliLinkCoverRxPolicy(
 }
 #endif /* CONFIG_WIFI_PKT_FWD */
 
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+void announce_802_11_radiotap_packet(RTMP_ADAPTER *pAd, PNDIS_PACKET pPacket, struct _RX_BLK *rx_blk)
+{
+	struct sk_buff *pOSPkt;
+	UCHAR wdev_idx = BSS0;
+
+	pOSPkt = RTPKT_TO_OSPKT(pPacket);
+	skb_reset_mac_header(pOSPkt);
+	pOSPkt->protocol = htons(ETH_P_802_2);
+	if (rx_blk->band == 0)
+		wdev_idx = BSS0;
+	else
+		wdev_idx = BSS1;
+
+	pOSPkt->dev = get_netdev_from_bssid(pAd, wdev_idx);
+	pOSPkt->pkt_type = PACKET_OTHERHOST;
+	pOSPkt->ip_summed = CHECKSUM_NONE;
+
+
+	if (pOSPkt->dev == NULL)
+		RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_FAILURE);
+	else
+		netif_rx_ni(pOSPkt);
+
+}
+#endif
+
+
 void announce_802_3_packet(
 	IN VOID *pAdSrc,
 	IN PNDIS_PACKET pPacket,
@@ -1297,8 +1479,12 @@ void announce_802_3_packet(
 			RtmpOsPktProtocolAssign(pRxPkt);
 
 			if (!whnat_rx_en) {
+				unsigned char *sk_head_orig = RTPKT_TO_OSPKT(pRxPkt)->head;
+
 				RtmpOsPktNatMagicTag(pRxPkt);
-				if (ra_sw_nat_hook_rx(pRxPkt))
+
+			/* [coverity fix] check whether pRxPkt is tainted by RtmpOsPktNatMagicTag */
+				if ((sk_head_orig == RTPKT_TO_OSPKT(pRxPkt)->head) && ra_sw_nat_hook_rx(pRxPkt))
 					RtmpOsPktRcvHandle(pRxPkt, napi);
 			} else {
 				if (RTMP_GET_PACKET_TYPE(pRxPkt)
@@ -1866,7 +2052,8 @@ int RTMPSendPackets(
 	if (!pPacket)
 		return 0;
 
-	if (pkt_total_len < 14) {
+	/* drop zero-length packet to avoid tx hang */
+	if (pkt_total_len <= 14) {
 		hex_dump("bad packet", GET_OS_PKT_DATAPTR(pPacket), pkt_total_len);
 		RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_FAILURE);
 		tr_cnt->pkt_len_invalid++;
@@ -2153,7 +2340,13 @@ VOID AP_WDS_KeyNameMakeUp(
 	IN	UINT32						KeyMaxSize,
 	IN	INT							KeyId)
 {
-	snprintf(pKey, KeyMaxSize, "Wds%dKey", KeyId);
+	INT ret;
+
+	ret = snprintf(pKey, KeyMaxSize, "Wds%dKey", KeyId);
+	if (os_snprintf_error(KeyMaxSize, ret)) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "pKey snprintf error!!!\n");
+	}
 }
 #endif /* WDS_SUPPORT */
 #if defined(CONFIG_WIFI_PKT_FWD) || defined(CONFIG_WIFI_PKT_FWD_MODULE)
@@ -2241,9 +2434,10 @@ wf_drv_tbl.wf_fwd_set_bridge_hook = NULL;
 
 }
 #if defined(CONFIG_WIFI_PKT_FWD) || defined(CONFIG_WIFI_PKT_FWD_MODULE)
+#ifndef MT76XX_COMBO_DUAL_DRIVER_SUPPORT
 EXPORT_SYMBOL(wifi_fwd_register);
 EXPORT_SYMBOL(wifi_fwd_unregister);
+#endif /* !MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
 #endif
-
 #endif
 

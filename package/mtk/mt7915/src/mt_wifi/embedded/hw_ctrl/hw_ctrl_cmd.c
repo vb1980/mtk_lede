@@ -317,6 +317,23 @@ VOID RTMP_UPDATE_MIB_COUNTER(PRTMP_ADAPTER pAd)
 	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_UPDATE_MIB_COUNTER, 0, NULL);
 }
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+VOID HANDLE_NULL_ACK_EVENT(PRTMP_ADAPTER pAd, UINT8 *data)
+{
+	UINT32 ret;
+	/*pass wcid as UINT16 so size of */
+	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_HANDLE_NULL_ACK_EVENT, sizeof(EXT_EVENT_NULL_ACK_WCID_T), (void *)data);
+}
+
+/*HANDLE_STA_NULL_ACK_TIMEOUT*/
+VOID HANDLE_STA_NULL_ACK_TIMEOUT(PRTMP_ADAPTER pAd, UCHAR BandIdx)
+{
+	UINT32 ret;
+	/*pass wcid as UINT16 so size of */
+	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_HANDLE_STA_NULL_ACK_TIMEOUT, sizeof(UCHAR), &BandIdx);
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 #ifdef MT_MAC
 
 #if defined(PRETBTT_INT_EVENT_SUPPORT) || defined(BCN_OFFLOAD_SUPPORT)
@@ -466,10 +483,6 @@ VOID RTMP_MAC_RECOVERY(struct _RTMP_ADAPTER *pAd, UINT32 Status)
 	if (IS_P18(pAd) || IS_MT7663(pAd) || IS_AXE(pAd) || IS_MT7626(pAd) || IS_MT7915(pAd))
 		value = Status & MT7663_ERROR_DETECT_MASK;
 #endif
-#if defined(MT7615) || defined(MT7622)
-	if (IS_MT7615(pAd) || IS_MT7622(pAd))
-		value = Status & ERROR_DETECT_MASK;
-#endif
 
 	/* Trigger error recovery process with fw reload. */
 	if (pAd->HwCtrl.ser_func_state != RTMP_TASK_STAT_RUNNING) {
@@ -483,6 +496,7 @@ VOID RTMP_MAC_RECOVERY(struct _RTMP_ADAPTER *pAd, UINT32 Status)
 	if (value != pAd->HwCtrl.ser_status) {
 		MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_WARN, ("%s::Status(0x%x)\n", __func__, Status));
 		pAd->HwCtrl.ser_status = value;
+		pAd->ErrRecoveryCtl.hostSerStep = 8;
 		RTCMDUp(&pAd->HwCtrl.ser_task);
 	} else {
 		/* TODO: do we may hit this case? */
@@ -501,6 +515,13 @@ INT IsStopingPdma(struct _ERR_RECOVERY_CTRL_T *pErrRecoveryCtl)
 	return (pErrRecoveryCtl->errRecovStage == ERR_RECOV_STAGE_STOP_IDLE) ?
 		   FALSE : TRUE;
 }
+
+#ifdef WHNAT_SUPPORT
+INT IsStopingRxDma(struct _ERR_RECOVERY_CTRL_T *pErrRecoveryCtl)
+{
+	return pErrRecoveryCtl->stop_rx_dma;
+}
+#endif
 
 BOOLEAN IsErrRecoveryInIdleStat(RTMP_ADAPTER *pAd)
 {
@@ -746,14 +767,21 @@ VOID HW_SET_VOW_SCHEDULE_CTRL(
 	VOW_SCH_CFG_T vow_sch_cfg;
 	UINT32 ret;
 
+	if (apply_sch_ctrl == pAd->vow_sch_cfg.apply_sch_ctrl
+		&& sch_type == pAd->vow_sch_cfg.sch_type
+		&& sch_policy == pAd->vow_sch_cfg.sch_policy) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			"SCH Unchanging, Don't Apply!");
+		return;
+	}
+
 	vow_sch_cfg.apply_sch_ctrl = apply_sch_ctrl;
 	vow_sch_cfg.sch_type = sch_type;
 	vow_sch_cfg.sch_policy = sch_policy;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s: apply_sch_ctrl=%x, sch_type=%x, sch_policy=%x\n", __func__,
-			  vow_sch_cfg.apply_sch_ctrl, vow_sch_cfg.sch_type,
-			  vow_sch_cfg.sch_policy));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"apply_sch_ctrl=%x, sch_type=%x, sch_policy=%x\n",
+		vow_sch_cfg.apply_sch_ctrl, vow_sch_cfg.sch_type, vow_sch_cfg.sch_policy);
 	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_SET_VOW_SCHEDULE_CTRL,
 							sizeof(VOW_SCH_CFG_T), (VOID *)&vow_sch_cfg);
 }
@@ -809,6 +837,30 @@ VOID HW_REMOVE_REPT_ENTRY(
 							&remove_rept_entry);
 }
 
+#ifdef PLE_MONITOR_SUPPORT
+VOID HW_FLUSH_PLE_AC_QUEUE(
+	PRTMP_ADAPTER pAd,
+	UINT16 wcid,
+	UINT16 pkt_num,
+	BOOLEAN chk_ps, ...)
+{
+	UINT32 ret;
+	FLUSH_PLE_AC_QUEUE_STRUC flush_ac_entry;
+
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s(), wcid(%d), pkt_num(%d), chk_ps(%d)\n", __func__, wcid, pkt_num, chk_ps));
+
+	os_zero_mem(&flush_ac_entry, sizeof(FLUSH_PLE_AC_QUEUE_STRUC));
+	flush_ac_entry.Wcid = wcid;
+	flush_ac_entry.PktCnt = pkt_num;
+	flush_ac_entry.NeedChkPs = chk_ps;
+	ret = HW_CTRL_BASIC_ENQ(pAd,
+							HWCMD_TYPE_PS,
+							HWCMD_ID_FLUSH_PLE_AC_QUEUE,
+							sizeof(FLUSH_PLE_AC_QUEUE_STRUC),
+							&flush_ac_entry);
+}
+#endif
 
 VOID HW_BEACON_UPDATE(
 	IN RTMP_ADAPTER *pAd,
@@ -838,6 +890,14 @@ VOID HW_SET_PBC_CTRL(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, struct _M
 	pbc.type = type;
 	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_WMM, HWCMD_ID_PBC_CTRL,
 							sizeof(struct pbc_ctrl), (VOID *)&pbc);
+}
+
+VOID HW_SET_PBC_CTRL_QOS(struct _RTMP_ADAPTER *pAd, BOOLEAN qos_enable)
+{
+	UINT32 ret;
+
+	ret = HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_WMM, HWCMD_ID_PBC_CTRL_QOS,
+							sizeof(BOOLEAN), (VOID *)&qos_enable);
 }
 #endif
 
@@ -965,6 +1025,7 @@ static UINT32 wifi_sys_queue_work(struct _RTMP_ADAPTER *ad, UINT32 id, struct WI
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			("%s(): do not equeue wifi sys layer API to dispatch context!\n", __func__));
 		dump_stack();
+		ret = NDIS_STATUS_FAILURE;
 		return ret;
 	}
 
@@ -976,7 +1037,7 @@ static UINT32 wifi_sys_queue_work(struct _RTMP_ADAPTER *ad, UINT32 id, struct WI
 		wsys,
 		HwCtrlTxd
 	);
-	HW_CTRL_TXD_RSP(ad, 0, NULL, 2000, HwCtrlTxd);
+	HW_CTRL_TXD_RSP(ad, 0, NULL, 3000, HwCtrlTxd);
 	ret = HwCtrlEnqueueCmd(ad, HwCtrlTxd);
 	return ret;
 }
@@ -984,76 +1045,76 @@ static UINT32 wifi_sys_queue_work(struct _RTMP_ADAPTER *ad, UINT32 id, struct WI
 /*
 *
 */
-VOID HW_WIFISYS_OPEN(
+UINT32 HW_WIFISYS_OPEN(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_OPEN, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_OPEN, wsys);
 }
 
 
 /*
 *
 */
-VOID HW_WIFISYS_CLOSE(
+UINT32 HW_WIFISYS_CLOSE(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_CLOSE, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_CLOSE, wsys);
 }
 
 
 /*
 *
 */
-VOID HW_WIFISYS_LINKDOWN(
+UINT32 HW_WIFISYS_LINKDOWN(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_LINKDOWN, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_LINKDOWN, wsys);
 }
 
 
 /*
 *
 */
-VOID HW_WIFISYS_LINKUP(
+UINT32 HW_WIFISYS_LINKUP(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_LINKUP, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_LINKUP, wsys);
 }
 
 
 /*
 *
 */
-VOID HW_WIFISYS_PEER_LINKUP(
+UINT32 HW_WIFISYS_PEER_LINKUP(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_LINKUP, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_LINKUP, wsys);
 }
 
 
 /*
 *
 */
-VOID HW_WIFISYS_PEER_LINKDOWN(
+UINT32 HW_WIFISYS_PEER_LINKDOWN(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_LINKDOWN, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_LINKDOWN, wsys);
 }
 
 /*
 *
 */
-VOID HW_WIFISYS_PEER_UPDATE(
+UINT32 HW_WIFISYS_PEER_UPDATE(
 	RTMP_ADAPTER *pAd,
 	struct WIFI_SYS_CTRL *wsys)
 {
-	wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_UPDATE, wsys);
+	return wifi_sys_queue_work(pAd, HWCMD_ID_WIFISYS_PEER_UPDATE, wsys);
 }
 
 /*
@@ -1107,15 +1168,16 @@ VOID HW_WIFI_COEX_APCCCI2FW(struct _RTMP_ADAPTER *pAd, VOID *apccci2fw_msg)
 {
 	if (HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_WIFI_COEX_APCCCI2FW,
 			      sizeof(MT_WIFI_COEX_APCCCI2FW), apccci2fw_msg))
-		MTWF_LOG(DBG_CAT_COEX, CATPROTO_TWT, DBG_LVL_ERROR, ("%s::Failed to enqueue cmd\n", __func__));
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Failed to enqueue cmd\n");
 }
 
 VOID HW_QUERY_LTE_SAFE_CHANNEL(struct _RTMP_ADAPTER *pAd)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_NOTICE, "\n");
 	if (HW_CTRL_BASIC_ENQ(pAd, HWCMD_TYPE_RADIO, HWCMD_ID_QUERY_LTE_SAFE_CHANNEL, 0, NULL) != NDIS_STATUS_SUCCESS)
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s::Failed to enqueue cmd\n", __func__));
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Failed to enqueue cmd\n");
 }
+
 #endif /* WIFI_MD_COEX_SUPPORT */
 
 #ifdef CFG_SUPPORT_CSI

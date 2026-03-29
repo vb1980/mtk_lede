@@ -85,6 +85,7 @@ INT Set_Dot11kRRM_Enable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 	==========================================================================
  */
 INT Set_BeaconReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Set_BeaconReq_LastBcnRptInd_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_BeaconReq_RandInt_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 
@@ -565,7 +566,7 @@ int check_rrm_nrrsp_custom_params(RTMP_ADAPTER *pAd,
 	UINT32 nr_rsp_data_len);
 
 void compose_rrm_nrrsp_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
-	PUCHAR nr_rsp_ie, PUINT32 p_ie_len,
+	PUCHAR nr_rsp_ie, PULONG p_ie_len,
 	struct nr_info *p_candidate_info, UINT8 cnt);
 
 VOID send_nr_rsp_param_toair(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM *Elem);

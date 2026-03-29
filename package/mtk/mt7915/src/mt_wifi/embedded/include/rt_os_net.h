@@ -275,6 +275,7 @@ BOOLEAN RtmpPhyNetDevExit(
 
 #endif /* RTMP_MODULE_OS && OS_ABL_FUNC_SUPPORT */
 int main_virtual_if_close(IN struct net_device *net_dev);
+int main_virtual_if_open(IN struct net_device *net_dev);
 
 VOID RT28xx_MSTA_Init(VOID *pAd, PNET_DEV main_dev_p);
 INT msta_virtual_if_open(PNET_DEV pDev);
@@ -317,7 +318,7 @@ VOID RTMP_P2P_Remove(VOID *pAd);
 PWIRELESS_DEV RTMP_CFG80211_FindVifEntryWdev_ByType(VOID *pAdSrc, UINT32 devType);
 PWIRELESS_DEV RTMP_CFG80211_FindVifEntryWdev_ByName(VOID *pAdSrc, CHAR ucIfName[]);
 #endif /* IWCOMMAND_CFG80211_SUPPORT && !RT_CFG80211_P2P_CONCURRENT_DEVICE */
-
+INT32 rtmp_get_macPower(IN VOID *pAdSrc);
 
 #ifdef RT_CFG80211_P2P_SUPPORT
 #define CFG_P2PGO_ON(__pAd)  RTMP_CFG80211_VIF_P2P_GO_ON(__pAd)

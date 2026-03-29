@@ -9,11 +9,16 @@ INT RTMPAPPrivIoctlShow(
 	IN RTMP_ADAPTER *pAd,
 	IN RTMP_IOCTL_INPUT_STRUCT * pIoctlCmdStr);
 
-#ifdef VENDOR_FEATURE6_SUPPORT
+#if defined (VENDOR_FEATURE6_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
 VOID RTMPAPGetAssoMacTable(
-	IN RTMP_ADAPTER * pAd,
+	IN RTMP_ADAPTER *pAd,
 	IN RTMP_IOCTL_INPUT_STRUCT * pIoctlCmdStr);
-#endif /* VENDOR_FEATURE6_SUPPORT */
+#endif /* VENDOR_FEATURE6_SUPPORT || ENHANCE_STAT_SUPPORT */
+#ifdef ENHANCE_STAT_SUPPORT
+VOID RTMPAPGetStaAssocCap(
+	IN RTMP_ADAPTER *pAd,
+	IN RTMP_IOCTL_INPUT_STRUCT * pIoctlCmdStr);
+#endif /* ENHANCE_STAT_SUPPORT */
 
 #if defined(INF_AR9) || defined(BB_SOC)
 #if defined(AR9_MAPI_SUPPORT) || defined(BB_SOC)
@@ -201,6 +206,11 @@ INT	ApCfg_Set_PerMbssMaxStaNum_Proc(
 
 INT	ApCfg_Set_IdleTimeout_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
+#ifdef CONFIG_COLGIN_MT6890
+INT RTMPAPPrivIoctlLowPower(
+	IN RTMP_ADAPTER *pAd,
+	IN RTMP_IOCTL_INPUT_STRUCT *pIoctlCmdStr);
+#endif
 
 struct apcfg_parameters {
 	LONG cfg_mode[2]; /*WirelessMode*/
@@ -247,6 +257,9 @@ struct apcfg_parameters {
 
 #ifdef MT_DFS_SUPPORT
 	BOOLEAN bDfsEnable; /*DfsEnable*/
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+	BOOLEAN band4DfsEnable; /*Band4DfsEnable*/
+#endif
 #endif
 
 #ifdef BACKGROUND_SCAN_SUPPORT
@@ -286,6 +299,7 @@ INT Set_Quick_Channel_Switch_En_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #ifdef CONFIG_AP_SUPPORT
 void ap_phy_rrm_init_byRf(RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 #endif
+VOID MacTableResetNonMapWdev(RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 #ifdef CONFIG_MAP_SUPPORT
 INT Set_Bh_Bss_Proc(
 	PRTMP_ADAPTER pAd,
@@ -296,13 +310,9 @@ INT Set_Fh_Bss_Proc(
 INT Set_Map_Channel_Proc(
 	PRTMP_ADAPTER pAd,
 	char *arg);
-INT Set_Map_Channel_En_Proc(
-	RTMP_ADAPTER *pAd,
-	RTMP_STRING *arg);
 INT Set_Map_Proc(
 	PRTMP_ADAPTER pAd,
 	char *arg);
-VOID MacTableResetNonMapWdev(RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 #ifdef MAP_R2
 INT Set_Map_Bh_Primary_Vid_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_Map_Bh_Primary_Pcp_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
@@ -351,6 +361,13 @@ VOID ch_switch_monitor_timeout(IN PVOID system_specific1, IN PVOID function_cont
 			IN PVOID system_specific2, IN PVOID system_specific3);
 extern INT ch_switch_monitor_scan_ch_restore(RTMP_ADAPTER *pAd, UCHAR OpMode, struct wifi_dev *pwdev);
 #endif
+
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+INT set_fgi_and_ltf_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT show_fgi_and_ltf_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT set_fgi_and_ltf_profile(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UINT32 value);
+#endif
+
 #ifdef OCE_FILS_SUPPORT
 VOID RTMPIoctlStaMlmeEvent(
 	IN      PRTMP_ADAPTER   pAd,
@@ -373,3 +390,9 @@ VOID RTMPIoctlPmkCacheEvent(
 INT Set_CSI_Ctrl_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif
 #endif /* __AP_CFG_H__ */
+BOOLEAN wdev_down_exec_ioctl(RTMP_IOCTL_INPUT_STRUCT *wrq, USHORT subcmd);
+
+#ifdef CONFIG_COLGIN_MT6890
+INT SetWoRXCounterEnable(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif
+

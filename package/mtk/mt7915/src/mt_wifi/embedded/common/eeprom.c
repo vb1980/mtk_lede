@@ -158,17 +158,6 @@ INT rtmp_read_freq_offset_from_eeprom(RTMP_ADAPTER *pAd)
 		else
 			pAd->RfFreqOffset = 0;
 	}
-#ifdef RTMP_RBUS_SUPPORT
-
-	if (pAd->infType == RTMP_DEV_INF_RBUS) {
-		if (pAd->RfFreqDelta & 0x10)
-			pAd->RfFreqOffset = (pAd->RfFreqOffset >= pAd->RfFreqDelta) ? (pAd->RfFreqOffset - (pAd->RfFreqDelta & 0xf)) : 0;
-		else
-			pAd->RfFreqOffset = ((pAd->RfFreqOffset + pAd->RfFreqDelta) < 0x40) ? (pAd->RfFreqOffset +
-								(pAd->RfFreqDelta & 0xf)) : 0x3f;
-	}
-
-#endif /* RTMP_RBUS_SUPPORT */
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("E2PROM: RF FreqOffset=0x%x\n", pAd->RfFreqOffset));
 	return TRUE;
 }
@@ -214,38 +203,6 @@ INT rtmp_read_txpwr_from_eeprom(RTMP_ADAPTER *pAd)
 	return TRUE;
 }
 
-#if defined(MT7622)
-static INT32 check_antcap_sanity(RTMP_ADAPTER *ad)
-{
-	UCHAR tx_ant_cap = 0, rx_ant_cap = 0;
-	UCHAR efuse_value;
-	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(ad->hdev_ctrl);
-	struct mcs_nss_caps *nss_cap = &cap->mcs_nss;
-
-	if (nss_cap->max_nss > 0) {
-		efuse_value = ad->EEPROMImage[EEPROM_NIC1_OFFSET];
-
-		tx_ant_cap = (efuse_value >> 4) & 0xf;
-		rx_ant_cap = efuse_value & 0xf;
-
-		efuse_value = 0;
-
-		if (tx_ant_cap != 0)
-			efuse_value |= min(tx_ant_cap, nss_cap->max_nss) << 4;
-		else
-			efuse_value |= nss_cap->max_nss << 4;
-
-		if (rx_ant_cap != 0)
-			efuse_value |= min(rx_ant_cap, nss_cap->max_nss);
-		else
-			efuse_value |= nss_cap->max_nss;
-
-		ad->EEPROMImage[EEPROM_NIC1_OFFSET] = efuse_value;
-	}
-
-	return 0;
-}
-#endif /* MT7622 */
 
 /*
 	========================================================================
@@ -268,7 +225,7 @@ static INT32 check_antcap_sanity(RTMP_ADAPTER *ad)
 INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 {
 	USHORT i, value = 0;
-	EEPROM_VERSION_STRUC Version;
+	EEPROM_VERSION_STRUC Version = {0};
 	EEPROM_ANTENNA_STRUC Antenna;
 	EEPROM_NIC_CONFIG2_STRUC NicConfig2;
 	USHORT  Addr01 = 0, Addr23 = 0, Addr45 = 0;
@@ -313,9 +270,6 @@ INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 			MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Non Cal Free IC!!\n"));
 		}
 #endif	/* CAL_FREE_IC_SUPPORT */
-#if defined(MT7622)
-		check_antcap_sanity(pAd);
-#endif /* MT7622 */
 #endif /*WCX_SUPPORT */
 
 		/* Merge RF parameters in Effuse to E2p buffer */
@@ -391,11 +345,9 @@ INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 		if (pAd->E2pAccessMode == E2P_FLASH_MODE ||
 			pAd->E2pAccessMode == E2P_BIN_MODE) {
 #ifdef CONFIG_COLGIN_MT6890
-            /* Resume: go to Pre-K flow; Normal: go to on-line calibration */
-            if (pAd->bIsLowPower == TRUE)
-                DoPreCal = 0x7;
-            else
-                DoPreCal = 0;
+				/* Resume: go to Pre-K flow*/
+				if (pAd->bIsLowPower == TRUE)
+					DoPreCal = 0x7;
 #endif
 			if (DoPreCal & (1 << GROUP_PRECAL_INDN_BIT)) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -549,8 +501,8 @@ INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 	if (pAd->PermanentAddress[0] == 0xff)
 		pAd->PermanentAddress[0] = RandomByte(pAd) & 0xf8;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("E2PROM MAC: =%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 PRINT_MAC(pAd->PermanentAddress)));
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("E2PROM MAC: ="MACSTR"\n",
+			 MAC2STR(pAd->PermanentAddress)));
 
 	/* Assign the actually working MAC Address */
 	if (pAd->bLocalAdminMAC) {
@@ -559,7 +511,7 @@ INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 #if defined(BB_SOC) && !defined(NEW_MBSSID_MODE)
 		/* BBUPrepareMAC(pAd, pAd->CurrentAddress); */
 		COPY_MAC_ADDR(pAd->PermanentAddress, pAd->CurrentAddress);
-		printk("now bb MainSsid mac %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pAd->CurrentAddress));
+		printk("now bb MainSsid mac "MACSTR"\n", MAC2STR(pAd->CurrentAddress));
 #endif
 	} else if (mac_addr &&
 			   strlen((RTMP_STRING *)mac_addr) == 17 &&
@@ -656,12 +608,6 @@ INT NICReadEEPROMParameters(RTMP_ADAPTER *pAd, RTMP_STRING *mac_addr)
 	/* Set the RfICType here, then we can initialize RFIC related operation callbacks*/
 	pAd->Mlme.RealRxPath = (UCHAR) Antenna.field.RxPath;
 	pAd->RfIcType = (UCHAR) Antenna.field.RfIcType;
-#ifdef MT7622
-
-	if (IS_MT7622(pAd))
-		pAd->RfIcType = RFIC_7622;
-
-#endif /* MT7622 */
 #ifdef MT7915
 	if (IS_MT7915(pAd))
 		pAd->RfIcType = RFIC_7915;
@@ -876,7 +822,7 @@ NDIS_STATUS rtmp_eeprom_TxPwr_update(
 )
 {
 	PUINT8 pu1Param = NULL;
-	BOOLEAN  fgGBand = TRUE;
+	BOOLEAN  fgGBand;
 	UCHAR ColumnNum = 0;
 
 	/* get pointer to common module */
@@ -1214,7 +1160,7 @@ INT RtmpChipOpsEepromHook(RTMP_ADAPTER *pAd, INT infType, INT forceMode)
 	efuse_probe(pAd);
 #endif /* RTMP_EFUSE_SUPPORT */
 
-	rtmp_eeprom_of_platform(pAd); 
+	/* rtmp_eeprom_of_platform(pAd);  //for MT7615, only use E2pAccessMode parameter to get eeprom type */
 
 	if (forceMode != E2P_NONE && forceMode < NUM_OF_E2P_MODE) {
 		e2p_type = forceMode;
@@ -1264,10 +1210,8 @@ INT RtmpChipOpsEepromHook(RTMP_ADAPTER *pAd, INT infType, INT forceMode)
 		pChipOps->eeinit = rtmp_ee_bin_init;
 		pChipOps->eeread = rtmp_ee_bin_read16;
 		pChipOps->eewrite = rtmp_ee_bin_write16;
-#ifdef BB_SOC
 		pChipOps->eeread_range = rtmp_ee_bin_read_with_range;
 		pChipOps->eewrite_range = rtmp_ee_bin_write_with_range;
-#endif
 		pChipOps->ee_gen_cmd = rtmp_ee_fr_host;
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("NVM is BIN mode\n"));
 		return 0;
@@ -1399,7 +1343,6 @@ INT rtmp_ee_bin_write16(
 	return 0;
 }
 
-#ifdef BB_SOC
 BOOLEAN rtmp_ee_bin_read_with_range(PRTMP_ADAPTER pAd, UINT32 start, UINT32 Length, UCHAR *pbuf)
 {
 	BOOLEAN IsEmpty = 0;
@@ -1424,13 +1367,13 @@ INT rtmp_ee_bin_write_with_range(PRTMP_ADAPTER pAd, UINT32 start, UINT32 Length,
 
 	return 0;
 }
-#endif
 
 INT rtmp_ee_load_from_bin(
 	IN PRTMP_ADAPTER	pAd)
 {
 	CHAR src[100] = {'\0'};
 	INT ret_val;
+	INT n;
 	RTMP_OS_FD srcf;
 	RTMP_OS_FS_INFO osFSInfo;
 	EEPROM_CONTROL *pE2pCtrl = &pAd->E2pCtrl;
@@ -1490,10 +1433,30 @@ INT rtmp_ee_load_from_bin(
 				 ("%s::Error %d closing %s\n", __func__, -ret_val, src));
 
 	pE2pCtrl->e2pSource = E2P_SRC_FROM_BIN;
-	sprintf(pE2pCtrl->BinSource, "%s", src);
+	n = snprintf(pE2pCtrl->BinSource, sizeof(pE2pCtrl->BinSource), "%s", src);
+	if (n < 0 || n >= sizeof(pE2pCtrl->BinSource)) {
+		MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+	}
 	RtmpOSFSInfoChange(&osFSInfo, FALSE);
 	return TRUE;
 error:
+#ifdef CONFIG_COLGIN_MT6890
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		 ("\n\n\n\n\n\n"
+		"********************************************************\n"
+		"********************************************************\n"
+		"*                                                      *\n"
+		"*      Notice! Notice! Notice Notice! Notice!          *\n"
+		"*                                                      *\n"
+		"*        Did Not Find Correct Bin File in Path:        *\n"
+		"*                 %-37s*\n"
+		"*       Bin File Mode May Not Work Correctly!!!        *\n"
+		"*                                                      *\n"
+		"********************************************************\n"
+		"********************************************************\n"
+		"\n\n\n\n\n", src));
+#endif
 
 	if (cap->EEPROM_DEFAULT_BIN != NULL) {
 		NdisMoveMemory(pAd->EEPROMImage, cap->EEPROM_DEFAULT_BIN,
@@ -1501,10 +1464,14 @@ error:
 					   MAX_EEPROM_BUFFER_SIZE));
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Load EEPROM Buffer from default BIN.\n"));
 		pE2pCtrl->e2pSource = E2P_SRC_FROM_BIN;
-		sprintf(pE2pCtrl->BinSource, "Default BIN");
+		n = snprintf(pE2pCtrl->BinSource, sizeof(pE2pCtrl->BinSource), "%s", "Default BIN");
+		if (n < 0 || n >= sizeof(pE2pCtrl->BinSource)) {
+			MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 	}
 	RtmpOSFSInfoChange(&osFSInfo, FALSE);
-	
+
 	return FALSE;
 }
 

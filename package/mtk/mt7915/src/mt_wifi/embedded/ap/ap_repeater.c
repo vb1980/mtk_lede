@@ -105,13 +105,9 @@ INT Show_ReptTable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
 				("%-5lu", wdev->assoc_machine.CurrState));
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
-				("%02X:%02X:%02X:%02X:%02X:%02X  ",
-				 pReptCliEntry->OriginalAddress[0], pReptCliEntry->OriginalAddress[1], pReptCliEntry->OriginalAddress[2],
-				 pReptCliEntry->OriginalAddress[3], pReptCliEntry->OriginalAddress[4], pReptCliEntry->OriginalAddress[5]));
+				(""MACSTR"  ", MAC2STR(pReptCliEntry->OriginalAddress)));
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
-				("%02X:%02X:%02X:%02X:%02X:%02X  ",
-				 pReptCliEntry->CurrentAddress[0], pReptCliEntry->CurrentAddress[1], pReptCliEntry->CurrentAddress[2],
-				 pReptCliEntry->CurrentAddress[3], pReptCliEntry->CurrentAddress[4], pReptCliEntry->CurrentAddress[5]));
+				(""MACSTR"  ", MAC2STR(pReptCliEntry->OriginalAddress)));
 		/* read muar cr MAR0,MAR1 */
 		{
 			/* UINT32	mar_val; */
@@ -537,14 +533,8 @@ BOOLEAN RTMPQueryLookupRepeaterCliEntryMT(
 	REPEATER_CLIENT_ENTRY *pEntry = NULL;
 
 	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
-			 ("%s:: %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__,
-			  pAddr[0],
-			  pAddr[1],
-			  pAddr[2],
-			  pAddr[3],
-			  pAddr[4],
-			  pAddr[5]));
+			 ("%s:: "MACSTR"\n",
+			  __func__, MAC2STR(pAddr)));
 	pEntry = RTMPLookupRepeaterCliEntry(pData, FALSE, pAddr, bIsPad);
 
 	if (pEntry == NULL) {
@@ -585,7 +575,7 @@ INT ReptGetMuarIdxByCliIdx(RTMP_ADAPTER *pAd, UCHAR CliIdx, UCHAR *muar_idx)
 	REPEATER_CLIENT_ENTRY *pReptEntry = NULL;
 	HD_REPT_ENRTY *pHReptEntry = NULL;
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
-	UCHAR ReptOmacIdx = cap->RepeaterStartIdx;
+	UCHAR ReptOmacIdx;
 
 	if (CliIdx >= GET_MAX_REPEATER_ENTRY_NUM(cap)) {
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
@@ -686,8 +676,8 @@ UINT32 ReptTxPktCheckHandler(
 #endif /* WSC_AP_SUPPORT  */
 						HW_ADD_REPT_ENTRY(pAd, cli_link_wdev, (pSrcBufVA + MAC_ADDR_LEN));
 						MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_WARN,
-								("pMacEntry(%02X:%02X:%02X:%02X:%02X:%02X) connect to mbss idx:%d, use CliLink:%d to RootAP\n",
-								PRINT_MAC((pSrcBufVA + MAC_ADDR_LEN)),
+								("pMacEntry("MACSTR") connect to mbss idx:%d, use CliLink:%d to RootAP\n",
+								MAC2STR((pSrcBufVA + MAC_ADDR_LEN)),
 							 	mbss_wdev->func_idx, cli_link_wdev->func_idx));
 						return INSERT_REPT_ENTRY;
 #ifdef WSC_AP_SUPPORT
@@ -711,8 +701,8 @@ the eth pkt or upper layer pkt connecting rule should be refined.
 #endif /* WSC_AP_SUPPORT  */
 					HW_ADD_REPT_ENTRY(pAd, cli_link_wdev, (pSrcBufVA + MAC_ADDR_LEN));
 					MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_WARN,
-							("pAddr(%02X:%02X:%02X:%02X:%02X:%02X) use CliLink:%d to RootAP\n",
-						 	PRINT_MAC((pSrcBufVA + MAC_ADDR_LEN)),
+							("pAddr("MACSTR") use CliLink:%d to RootAP\n",
+						 	MAC2STR((pSrcBufVA + MAC_ADDR_LEN)),
 						 	cli_link_wdev->func_idx));
 					return INSERT_REPT_ENTRY;
 #ifdef WSC_AP_SUPPORT
@@ -771,6 +761,7 @@ VOID RepeaterSyncWdevWithMainSta(
 	rept_wdev->tr_tb_idx = main_wdev->tr_tb_idx;
 	rept_wdev->OpStatusFlags = main_wdev->OpStatusFlags;
 	rept_wdev->forbid_data_tx = main_wdev->forbid_data_tx;
+	rept_wdev->bWmmCapable = main_wdev->bWmmCapable;
 }
 
 BOOLEAN RepeaterInitWdev(
@@ -931,8 +922,8 @@ BOOLEAN RepeaterAssignMacAddress(
 	if (RTMPLookupRepeaterCliEntry_NoLock(pAd, FALSE, tempMAC, TRUE) != NULL) {
 		NdisReleaseSpinLock(&pAd->ApCfg.ReptCliEntryLock);
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
-				("ReptCLI duplicate Insert %02x:%02x:%02x:%02x:%02x:%02x !\n",
-				PRINT_MAC(tempMAC)));
+				("ReptCLI duplicate Insert "MACSTR" !\n",
+				MAC2STR(tempMAC)));
 		return FALSE;
 	}
 	COPY_MAC_ADDR(rept_addr, tempMAC);
@@ -978,8 +969,8 @@ VOID RTMPInsertRepeaterEntry(
 		   ) {
 			NdisReleaseSpinLock(&pAd->ApCfg.ReptCliEntryLock);
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
-					 ("\n  receive mac :%02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-					  PRINT_MAC(pAddr)));
+					 ("\n  receive mac :"MACSTR" !!!\n",
+					  MAC2STR(pAddr)));
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
 					 (" duplicate Insert !!!\n"));
 			return;
@@ -1221,8 +1212,8 @@ done:
 #endif /* FAST_EAPOL_WAR */
 
 	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF,
-		("%s:real=%02x:%02x:%02x:%02x:%02x:%02x,fake=%02x:%02x:%02x:%02x:%02x:%02x\n",
-		__func__, PRINT_MAC(pEntry->OriginalAddress), PRINT_MAC(pEntry->CurrentAddress)));
+		("%s:real="MACSTR",fake="MACSTR"\n",
+		__func__, MAC2STR(pEntry->OriginalAddress), MAC2STR(pEntry->CurrentAddress)));
 
 	pEntry->CliConnectState = REPT_ENTRY_DISCONNT;
 	pEntry->CliDisconnectState = REPT_ENTRY_DISCONNT_STATE_UNKNOWN;
@@ -1246,7 +1237,7 @@ done:
 	ReptLinkDownComplete(pEntry);
 	NdisReleaseSpinLock(&pAd->ApCfg.ReptCliEntryLock);
 #ifdef MTFWD
-	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Remove MacRep Sta:%pM\n", CurrentAddress));
+	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Remove MacRep Sta:"MACSTR"\n", MAC2STR(CurrentAddress)));
 	RtmpOSWrielessEventSend(if_dev,
 				RT_WLAN_EVENT_CUSTOM,
 				FWD_CMD_DEL_TX_SRC,
@@ -1433,8 +1424,8 @@ VOID InsertIgnoreAsRepeaterEntryTable(
 		}
 	}
 
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, (" Store Invaild MacAddr = %02x:%02x:%02x:%02x:%02x:%02x. !!!\n",
-			 PRINT_MAC(pEntry->MacAddr)));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, (" Store Invaild MacAddr = "MACSTR". !!!\n",
+			 MAC2STR(pEntry->MacAddr)));
 	pAd->ApCfg.ReptControl.IgnoreAsRepeaterEntrySize++;
 	NdisReleaseSpinLock(&pAd->ApCfg.ReptCliEntryLock);
 }
@@ -1568,7 +1559,6 @@ VOID RepeaterLinkMonitor(RTMP_ADAPTER *pAd)
 												("%s:Connection falied with pmkid ,delete cache entry and sae instance \n", __func__));
 									if (pSaeIns != NULL) {
 										delete_sae_instance(pSaeIns);
-										pSaeIns = NULL;
 									}
 #endif
 									sta_delete_pmkid_cache(pAd, pApCliEntry->MlmeAux.Bssid, ifIndex, wdev,
@@ -1636,10 +1626,7 @@ INT Show_Repeater_Cli_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			DataRate = 0;
 			getRate(pEntry->HTPhyMode, &DataRate);
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
-					("%02X:%02X:%02X:%02X:%02X:%02X  ",
-					 pEntry->pReptCli->CurrentAddress[0], pEntry->pReptCli->CurrentAddress[1],
-					 pEntry->pReptCli->CurrentAddress[2], pEntry->pReptCli->CurrentAddress[3],
-					 pEntry->pReptCli->CurrentAddress[4], pEntry->pReptCli->CurrentAddress[5]));
+					(""MACSTR"  ", MAC2STR(pEntry->pReptCli->CurrentAddress)));
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
 					("%-4d", (int)pEntry->Aid));
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,

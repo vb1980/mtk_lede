@@ -415,6 +415,7 @@ typedef struct __RTMP_IOCTL_INPUT_STRUCT {
 typedef struct _LIST_RESOURCE_OBJ_ENTRY {
 	struct _LIST_RESOURCE_OBJ_ENTRY *pNext;
 	VOID *pRscObj;
+	VOID *timer_name;
 } LIST_RESOURCE_OBJ_ENTRY, *PLIST_RESOURCE_OBJ_ENTRY;
 
 
@@ -459,6 +460,7 @@ typedef struct _LIST_RESOURCE_OBJ_ENTRY {
 #define MAX_SEQ_NUMBER              0x0fff
 #define LENGTH_802_3_NO_TYPE		12
 #define LENGTH_802_1Q				4 /* VLAN related */
+#define LENGTH_802_11_QOS_FIELD     2
 
 
 /*
@@ -473,6 +475,7 @@ typedef struct  _PACKET_INFO    {
 
 
 #define MAC_ADDR_LEN                    6
+#define AP_MAC_CNT				    32
 
 #define IS_BM_MAC_ADDR(Addr)				(((Addr[0]) & 0x01) == 0x01)
 #define IS_MULTICAST_MAC_ADDR(Addr)			((((Addr[0]) & 0x01) == 0x01) && ((Addr[0]) != 0xff))

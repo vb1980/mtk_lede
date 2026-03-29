@@ -27,6 +27,10 @@
 #include "rt_config.h"
 #include "wlan_config/config_internal.h"
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+#include "hdev/hdev_basic.h"
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 /*----- 802.11H -----*/
 /*
 	========================================================================
@@ -52,6 +56,12 @@ BOOLEAN RadarChannelCheck(
 
 	UCHAR BandIdx;
 	CHANNEL_CTRL *pChCtrl;
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+	if (pAd->ApCfg.bDfsZeroWaitDedicatedCac)
+		return TRUE;
+#endif
+
 	for (BandIdx = 0; BandIdx < DBDC_BAND_NUM; BandIdx++) {
 		pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 		for (i = 0; i < pChCtrl->ChListNum; i++) {
@@ -84,6 +94,11 @@ BOOLEAN dfs_get_outband_bw(
 	PUCHAR phy_bw)
 {
 	struct wlan_config *cfg = NULL;
+	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
+	UCHAR bandIdx;
+	CHANNEL_CTRL *pChCtrl;
+	UINT_8 i;
+	BOOLEAN BwSupport = FALSE;
 
 	if (wdev == NULL)
 		return FALSE;
@@ -107,6 +122,25 @@ BOOLEAN dfs_get_outband_bw(
 		else
 			;
 	}
+
+	bandIdx = HcGetBandByWdev(wdev);
+	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, bandIdx);
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"Adjust before:OutBand Channel(%d), OutBand Bw(%d)\n", pDfsParam->OutBandCh, pDfsParam->OutBandBw);
+	while ((*phy_bw > BW_20)  && (*phy_bw != BW_8080)) {
+		for (i = 0; i < pChCtrl->ChListNum; i++) {
+			if (pDfsParam->OutBandCh == pChCtrl->ChList[i].Channel)
+				BwSupport = (pChCtrl->ChList[i].SupportBwBitMap) & BIT(*phy_bw);
+		}
+		if (!BwSupport) {
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+				"Warning:This Channel can not match BW(%d)\n", *phy_bw);
+			*phy_bw = *phy_bw - 1;
+		} else
+			break;
+	}
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"Adjust after:OutBand Channel(%d), OutBand Bw(%d)\n", pDfsParam->OutBandCh, pDfsParam->OutBandBw);
 	return TRUE;
 
 }
@@ -132,6 +166,7 @@ VOID RadarStateCheck(
 	struct wlan_config *cfg = NULL;
 	UCHAR phy_bw = 0;
 	UCHAR vht_cent2 = 0;
+	BOOLEAN cac_done = FALSE;
 
 	if (wdev == NULL)
 		return;
@@ -167,12 +202,19 @@ VOID RadarStateCheck(
 		return;
 	}
 
+	if (pAd->CommonCfg.DfsParameter.CERegCacEn)
+		cac_done = dfs_cac_op(pAd, wdev, CAC_DONE_CHECK, wdev->channel);
+
 #ifdef MT_DFS_SUPPORT
 	if ((pAd->CommonCfg.bIEEE80211H == 1) &&
 		DfsRadarChannelCheck(pAd, wdev, vht_cent2, phy_bw)
 	) {
 #ifdef MAP_R2
-		if (IS_MAP_TURNKEY_ENABLE(pAd)) {
+		if (IS_MAP_TURNKEY_ENABLE(pAd)
+#ifdef DFS_ZEROWAIT_SUPPORT
+			|| pAd->ApCfg.bChSwitchNoCac
+#endif
+			) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\x1b[1;33m [%s]cac_not_req %d \x1b[m \n", __func__, wdev->cac_not_required));
 			if (wdev->cac_not_required == TRUE) {
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\x1b[1;33m [%s] switch back to RD_NORMAL_MODE \x1b[m \n", __func__));
@@ -186,6 +228,15 @@ VOID RadarStateCheck(
 #else
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\x1b[1;33m [%s] RD_SILENCE_MODE \x1b[m \n", __func__));
 #endif
+
+		/* check prev cac done */
+		if (cac_done == TRUE) {
+			pDot11h->RDMode = RD_NORMAL_MODE;
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+				"\x1b[1;33m switch back to RD_NORMAL_MODE CH:%d \x1b[m\n", wdev->channel);
+			return;
+		}
+
 		pDot11h->RDMode = RD_SILENCE_MODE;
 		pDot11h->RDCount = 0;
 		pDot11h->InServiceMonitorCount = 0;
@@ -368,15 +419,46 @@ VOID ChannelSwitchingCountDownProc(
 			return;
 		}
 		pDot11h->csa_ap_bitmap &= ~(UINT32)(1 << apIdx);
+		if (pDot11h->wdev_count > 0)
+			pDot11h->wdev_count--;
 
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_TRACE,
-				 ("  Type = %d, func_idx = %d, csa_ap_bitmap = 0x%x\n",
-				 wdev->wdev_type, wdev->func_idx, pDot11h->csa_ap_bitmap));
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_TRACE,
+				 "Type = %d, func_idx = %d, wdev_count = %d, csa_ap_bitmap = 0x%x\n",
+				 wdev->wdev_type, wdev->func_idx, pDot11h->wdev_count, pDot11h->csa_ap_bitmap);
 
 		/* do channel switch only when all BSS done */
-		if (pDot11h->csa_ap_bitmap == 0)
+		if (pDot11h->csa_ap_bitmap == 0) {
+#ifdef ZERO_LOSS_CSA_SUPPORT
+			if (pAd->Zero_Loss_Enable) {
+				UCHAR BandIdx = HcGetBandByWdev(wdev);
+
+				pDot11h->CSA0EventApidx = apIdx;
+				pDot11h->ChnlSwitchState = CHANNEL_SWITCH_COUNT_ZERO_EVENT;
+				pAd->chan_switch_time[1] = jiffies_to_msecs(jiffies);
+				/*Disable zero loss sta traffic*/
+				RTEnqueueInternalCmd(pAd, CMDTHREAD_DISABLE_ZERO_LOSS_STA_TRAFFIC, &(BandIdx), sizeof(UCHAR));
+				/*EXT_EVENT_CSA_NOTIFY event comes from f/w on PreTBTT
+				  *while TBTT - PreTBTT ~20-30ms
+				  *wait for last CSA Beacon Tx event before switching channel
+				*/
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_WARN,
+							"Type = %d, func_idx = %d, csa_ap_bitmap = 0x%x, set CSALastBcnTxEventTimer\n",
+							wdev->wdev_type, wdev->func_idx, pDot11h->csa_ap_bitmap);
+				RTMPSetTimer(&pDot11h->CSALastBcnTxEventTimer, 30);
+			} else
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 			RTEnqueueInternalCmd(pAd, CMDTHRED_DOT11H_SWITCH_CHANNEL, &apIdx, sizeof(UCHAR));
+		}
 	}
+}
+
+NTSTATUS DropRadarEventHandler(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
+{
+	UCHAR BandIdx = DBDC_BAND0;
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s]After Dropping Radar event, enable DFS tx start\n", __func__));
+	NdisMoveMemory(&BandIdx, CMDQelmt->buffer, sizeof(UCHAR));
+	MtCmdSetDfsTxStart(pAd, BandIdx);
+	return 0;
 }
 
 /*
@@ -384,14 +466,19 @@ VOID ChannelSwitchingCountDownProc(
 */
 NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 {
-	UCHAR apIdx;
+	UCHAR apIdx, i;
 	BSS_STRUCT *pMbss = &pAd->ApCfg.MBSSID[MAIN_MBSSID];
 	UCHAR apOper = AP_BSS_OPER_ALL;
 	struct DOT11_H *pDot11h = NULL;
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	int j;
+	UCHAR WcidCount = 0;
+	UINT16 WcidList[3] = {0};
+	ktime_t chnl_switch_init, chnl_switch_exit;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	UCHAR BandIdx = DBDC_BAND0;
 	struct wifi_dev *wdev;
 	AUTO_CH_CTRL *pAutoChCtrl = NULL;
-	BOOLEAN isRadarCh = FALSE;
 #ifdef OFFCHANNEL_SCAN_FEATURE
 	OFFCHANNEL_SCAN_MSG Rsp;
 	UCHAR RfIC = 0;
@@ -401,16 +488,6 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 #endif
 #if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
 	struct wlan_config *cfg;
-#endif
-
-	wdev = &pMbss->wdev;
-	BandIdx = HcGetBandByWdev(wdev);
-#ifdef OFFCHANNEL_SCAN_FEATURE
-	Rsp.Action = DRIVER_CHANNEL_SWITCH_SUCCESSFUL;
-	memcpy(Rsp.ifrn_name, pAd->ScanCtrl[BandIdx].if_name, IFNAMSIZ);
-#endif
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-	cfg = (struct wlan_config *)wdev->wpf_cfg;
 #endif
 
 
@@ -429,11 +506,28 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 	if (pDot11h == NULL)
 		goto end;
 
+	wdev = &pMbss->wdev;
+	BandIdx = HcGetBandByWdev(wdev);
+#ifdef OFFCHANNEL_SCAN_FEATURE
+	Rsp.Action = DRIVER_CHANNEL_SWITCH_SUCCESSFUL;
+	memcpy(Rsp.ifrn_name, pAd->ScanCtrl[BandIdx].if_name, IFNAMSIZ);
+#endif
+#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
+	cfg = (struct wlan_config *)wdev->wpf_cfg;
+#endif
+
 	/* Normal DFS */
 #if defined(MT_DFS_SUPPORT) && defined(BACKGROUND_SCAN_SUPPORT)
 	DedicatedZeroWaitStop(pAd, FALSE);
 #endif
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]\x1b[1;33m Change to RD_SILENCE_MODE\x1b[m\n",
+										 __func__));
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->chan_switch_time[3] = jiffies_to_msecs(jiffies);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	pDot11h->RDMode = RD_SILENCE_MODE;
+	if (pMbss->wdev.channel <= 14)
+		pAd->CommonCfg.ChannelSwitchFor2G.CHSWMode = NORMAL_MODE;
 
 #ifdef DOT11W_PMF_SUPPORT
 	if (pMbss->wdev.quick_ch_change && pMbss->wdev.SecConfig.ocv_support)
@@ -446,18 +540,93 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 #ifdef CONFIG_MAP_SUPPORT
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("cacreq %d\n", pMbss->wdev.cac_not_required));
 #endif
-	isRadarCh = RadarChannelCheck(pAd, pMbss->wdev.channel);
-	if (pMbss->wdev.quick_ch_change != QUICK_CH_SWICH_DISABLE && (!isRadarCh
+	if (pMbss->wdev.quick_ch_change != QUICK_CH_SWICH_DISABLE
 #ifdef CONFIG_MAP_SUPPORT
-	|| (isRadarCh && pMbss->wdev.cac_not_required)
+	|| (IS_MAP_ENABLE(pAd) && RadarChannelCheck(pAd, pMbss->wdev.channel) && pMbss->wdev.cac_not_required)
 #endif
-			)) {
+	) {
+		struct wifi_dev *tdev = NULL;
+		/* For DFS certification, After CSA done and Disable Beacon*/
+		for (i = 0; i < WDEV_NUM_MAX; i++) {
+			tdev = pAd->wdev_list[i];
+			if (tdev
+				&& HcIsRadioAcq(tdev)
+				&& (BandIdx == HcGetBandByWdev(tdev))
+				&& tdev->wdev_type == WDEV_TYPE_AP) {
+				if (WMODE_CAP_5G(tdev->PhyMode) && (pAd->CommonCfg.bIEEE80211H == TRUE)) {
+					MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("CSA done and Disable Beacon: %s\n", (char *)tdev->if_dev->name));
+					UpdateBeaconHandler(pAd, tdev, BCN_UPDATE_DISABLE_TX);
+				}
+			}
+		}
+#ifdef ZERO_LOSS_CSA_SUPPORT
+		pAd->chan_switch_time[4] = jiffies_to_msecs(jiffies);
+#ifdef PROPRIETARY_DRIVER_SUPPORT
+		{
+			struct timespec64 kts64 = {0};
 
-		ap_phy_rrm_init_byRf(pAd, &pMbss->wdev);
-#ifdef CONFIG_MAP_SUPPORT
-#ifdef OFFCHANNEL_SCAN_FEATURE
-		wdev->quick_ch_change = QUICK_CH_SWICH_DISABLE;
+			ktime_get_real_ts64(&kts64);
+			chnl_switch_init = timespec64_to_ktime(kts64);
+		}
+#else
+		chnl_switch_init = ktime_get();
+#endif /* PROPRIETARY_DRIVER_SUPPORT */
+#endif /*#ZERO_LOSS_CSA_SUPPORT*/
+
+		/* Update channel of wdev as new channel */
+		ap_phy_rrm_init_byRf(pAd, wdev);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+#ifdef PROPRIETARY_DRIVER_SUPPORT
+		{
+			struct timespec64 kts64 = {0};
+
+			ktime_get_real_ts64(&kts64);
+			chnl_switch_exit = timespec64_to_ktime(kts64);
+		}
+#else
+		chnl_switch_exit = ktime_get();
+#endif /* PROPRIETARY_DRIVER_SUPPORT */
+
+
+		if (pAd->Zero_Loss_Enable) {
+			/*set ChnlSwitchState = ASIC_CHANNEL_SWITCH_COMMAND_ISSUED*/
+			pDot11h->ChnlSwitchState = ASIC_CHANNEL_SWITCH_COMMAND_ISSUED;
+
+			/*channel switched, send null frame sending request to fw*/
+			for (j = 0; j < 3; j++) {
+				if (pAd->ZeroLossSta[j].valid) {
+					if ((pAd->ZeroLossSta[j].wcid) && (pAd->ZeroLossSta[j].band == BandIdx)) {
+						WcidList[WcidCount] = pAd->ZeroLossSta[j].wcid;
+						WcidCount++;
+					}
+				}
+			}
+
+			/*send null frame to zero loss sta, and start null ack failsafe timer*/
+			if (WcidCount)
+				MtCmdSetChkPeerLink(pAd, WcidCount, (UINT8 *)WcidList);
+
+			pAd->chan_switch_time[14] = jiffies_to_msecs(jiffies);
+
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"set sta skip tx reset timer for %dms\n", pAd->ucSTATimeout);
+
+			/*skip tx failsafe:: set timer=500ms, if skip_tx still set, reset it*/
+			RTMPSetTimer(&pDot11h->ChnlSwitchStaNullAckWaitTimer, pAd->ucSTATimeout);
+		}
+
+		MTWF_DBG(pAd, DBG_CAT_MLME, CATCHN_DFS, DBG_LVL_WARN,
+					"channel switch diff: %d msec\n", ktime_to_ms(ktime_sub(chnl_switch_exit, chnl_switch_init)));
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+		/* if zero-wait cac is ended, dedicated rx switch to new dfs ch */
+		DfsBuildChannelList(pAd, wdev);
+#if ((DFS_ZEROWAIT_DEFAULT_FLOW == 1) && defined(BACKGROUND_SCAN_SUPPORT))
+		zero_wait_dfs_switch_ch(pAd, wdev, RDD_DEDICATED_RX);
 #endif
+
+#ifdef CONFIG_MAP_SUPPORT
+
 		pMbss->wdev.cac_not_required = FALSE;
 
 		for (u = 0; u < pAd->ApCfg.BssidNum; u++) {
@@ -470,6 +639,15 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("if: %s cac_not_required: %d\n",
 							(char *)wdev_temp->if_dev->name,
 							wdev_temp->cac_not_required));
+
+			if (wdev_temp->is_cac_requested == TRUE) {
+				wdev_temp->is_cac_requested = FALSE;
+			}
+			/*need to make all the MBSS cac not required false*/
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("if: %s is_cac_requested: %d\n",
+							(char *)wdev_temp->if_dev->name,
+							wdev_temp->is_cac_requested));
+
 		}
 #endif
 	} else
@@ -502,7 +680,11 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 #endif
 #endif
 #ifdef CONFIG_MAP_SUPPORT
-	if (IS_MAP_TURNKEY_ENABLE(pAd)) {
+	if (IS_MAP_TURNKEY_ENABLE(pAd)
+#ifdef DFS_ZEROWAIT_SUPPORT
+		|| pAd->ApCfg.bChSwitchNoCac
+#endif
+		) {
 		if (pMbss->wdev.cac_not_required) {
 			pMbss->wdev.cac_not_required = FALSE;
 			pDot11h->RDCount = pDot11h->cac_time;
@@ -537,6 +719,21 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 					}
 				}
 			}
+
+			if (pMbss->wdev.is_cac_requested) {
+				int i = 0;
+				struct wifi_dev *wdev_temp = NULL;
+
+				for (i = 0; i < pAd->ApCfg.BssidNum; i++) {
+					wdev_temp = &pAd->ApCfg.MBSSID[i].wdev;
+
+					if ((wdev_temp->channel == pMbss->wdev.channel) && wdev_temp->is_cac_requested) {
+							wdev_temp->is_cac_requested = FALSE;
+					}
+				}
+
+
+			}
 		}
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s] cac not req %d\n", __func__, pDot11h->cac_not_required));
 
@@ -555,7 +752,6 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 
 #ifdef ANTENNA_CONTROL_SUPPORT
 			{
-				UINT8 BandIdx = HcGetBandByWdev(wdev);
 				if (pAd->bAntennaSetAPEnable[BandIdx]) {
 					if ((pAd->TxStream[BandIdx] == 4) &&
 						(pAd->RxStream[BandIdx] == 4))
@@ -576,16 +772,316 @@ NTSTATUS Dot11HCntDownTimeoutAction(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
 #endif
 end:
 	pAd->ApCfg.set_ch_async_flag = FALSE;
+#ifdef DFS_ZEROWAIT_SUPPORT
+	if (pAd->ApCfg.bChSwitchNoCac == 1)
+		pAd->ApCfg.bChSwitchNoCac = 0;
+#endif
+	pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
+	if (pAutoChCtrl) {
+		if (pAutoChCtrl->AutoChSelCtrl.AutoChScanStatMachine.CurrState == AUTO_CH_SEL_SCAN_LISTEN)
+			pAutoChCtrl->AutoChSelCtrl.AutoChScanStatMachine.CurrState = AUTO_CH_SEL_SCAN_IDLE;
+	}
 	if (pAd->ApCfg.iwpriv_event_flag) {
 		RTMP_OS_COMPLETE(&pAd->ApCfg.set_ch_aync_done);
-		BandIdx = HcGetBandByWdev(wdev);
-		pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
-		if (pAutoChCtrl)
-			pAutoChCtrl->AutoChSelCtrl.AutoChScanStatMachine.CurrState = AUTO_CH_SEL_SCAN_IDLE;
+	} else {
+		/*for some modules without asynchronous mode, should release ChannelOpCharge when CSA done */
+		ReleaseChannelOpChargeForCurrentOwner(pAd, &pMbss->wdev);
 	}
 	return 0;
 }
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+/*
+	==========================================================================
+	Description:
+		last 'CSA count=0" Bcn Sent Event Timeout handler, executed in timer thread
+	==========================================================================
+ */
+VOID CSALastBcnTxEventTimeout(
+	IN PVOID SystemSpecific1,
+	IN PVOID FunctionContext,
+	IN PVOID SystemSpecific2,
+	IN PVOID SystemSpecific3)
+{
+	struct radio_dev *rdev = (struct radio_dev *)FunctionContext;
+	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)rdev->priv;
+	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)ctrl->priv;
+
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"[%s]: All Bcns with CS Count0 sent for band:%d\n", rdev->pRadioCtrl->BandIdx);
+	RTEnqueueInternalCmd(pAd, CMDTHREAD_LAST_BCN_TX_SWITCH_CHANNEL, &(rdev->pRadioCtrl->BandIdx), sizeof(UCHAR));
+}
+
+/*
+    ==========================================================================
+	Description:
+	after channel switch, wait for "NULL ack from sta" timed out, executed in timer thread
+    ==========================================================================
+ */
+VOID ChnlSwitchStaNullAckWaitTimeout(
+	IN PVOID SystemSpecific1,
+	IN PVOID FunctionContext,
+	IN PVOID SystemSpecific2,
+	IN PVOID SystemSpecific3)
+{
+	struct radio_dev *rdev = (struct radio_dev *)FunctionContext;
+	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)rdev->priv;
+	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)ctrl->priv;
+
+	MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					"Connected Stations Channel Switch wait: Timed out \n");
+
+	pAd->chan_switch_time[16] = jiffies_to_msecs(jiffies);
+
+	HANDLE_STA_NULL_ACK_TIMEOUT(pAd, rdev->pRadioCtrl->BandIdx);
+}
+
+NTSTATUS LastBcnTxChannelSwitch(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
+{
+	UCHAR BandIdx = 0xff;			/*set to some invalid value by default*/
+
+	NdisMoveMemory(&BandIdx, CMDQelmt->buffer, sizeof(UCHAR));
+	RTEnqueueInternalCmd(pAd, CMDTHRED_DOT11H_SWITCH_CHANNEL, &(pAd->Dot11_H[BandIdx].CSA0EventApidx), sizeof(UCHAR));
+	return 0;
+}
+
+NTSTATUS DisableZeroLossStaTraffic(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt)
+{
+	int i = 0;
+	UCHAR BandIdx = 0xff;			/*set to some invalid value by default*/
+
+	NdisMoveMemory(&BandIdx, CMDQelmt->buffer, sizeof(UCHAR));
+
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"set sta skip tx, BandIdx:%d\n", BandIdx);
+	for (i = 0; i < 3; i++)	{
+		MAC_TABLE_ENTRY *pEntry = NULL;
+		struct wifi_dev *wdev = NULL;
+
+		if (pAd->ZeroLossSta[i].valid) {
+			pEntry = MacTableLookup(pAd, pAd->ZeroLossSta[i].StaAddr);
+			/*If entry was added before connection or sta roamed, update wcid/band */
+			if (pEntry) {
+				pAd->ZeroLossSta[i].wcid = pEntry->wcid;
+				wdev = &(pEntry->pMbss->wdev);
+				pAd->ZeroLossSta[i].band = HcGetBandByWdev(wdev);
+				if ((pAd->ZeroLossSta[i].wcid) && (pAd->ZeroLossSta[i].band == BandIdx)) {
+					if (!AsicReadSkipTx(pAd, pAd->ZeroLossSta[i].wcid)) {
+						AsicUpdateSkipTx(pAd, pAd->ZeroLossSta[i].wcid, 1);
+						pAd->ZeroLossSta[i].suspend_time = jiffies_to_msecs(jiffies);
+						pAd->ZeroLossSta[i].ChnlSwitchSkipTx = 1;
+						/*increase PS queue for sta to avoid pkt drop */
+						MtCmdStaPsQLimit(pAd, pAd->ZeroLossSta[i].wcid, pAd->ZeroLossStaPsQLimit);
+						MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+										"Tx Disabled for "MACSTR" band:%d\n",
+										MAC2STR(pAd->ZeroLossSta[i].StaAddr), pAd->ZeroLossSta[i].band);
+					} else
+						MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+							"%s:Tx Disable already set for "MACSTR"\n",
+							MAC2STR(pAd->ZeroLossSta[i].StaAddr));
+				} else
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+								"%s:pEntry not found for "MACSTR"\n",
+								MAC2STR(pAd->ZeroLossSta[i].StaAddr));
+			}
+		}
+	}
+	return 0;
+}
+
+INT Show_ChannelSwitchTime_Proc(RTMP_ADAPTER	*pAd, RTMP_STRING *arg)
+{
+	int i = 0;
+
+	MTWF_PRINT("CSA Beacon Update Time:%lu msec\n", pAd->chan_switch_time[0]);
+	MTWF_PRINT("PreTBTT Event for CSALast :%lu msec\n", pAd->chan_switch_time[1]);
+	MTWF_PRINT("Last CSA Bcn sent Event rcvd:%lu msec\n", pAd->chan_switch_time[2]);
+	MTWF_PRINT("Dot11HCntDownTimeoutAction enter:%lu msec\n", pAd->chan_switch_time[3]);
+	MTWF_PRINT("after UpdateBcnHndlr to disable Bcn, before ap_phy_rrm_init:%lu msec\n", pAd->chan_switch_time[4]);
+	MTWF_PRINT(" ap_phy_rrm_init_byRf after udelay:%lu msec\n", pAd->chan_switch_time[5]);
+	/*MTWF_PRINT("in wlan_oper_init after init config:%lu msec\n", pAd->chan_switch_time[6]);*/
+	MTWF_PRINT("before HcSuspendMSDUTx in hcRadioUpdate:%lu msec\n", pAd->chan_switch_time[7]);
+	MTWF_PRINT("before asic switch channel:%lu msec\n", pAd->chan_switch_time[8]);
+	MTWF_PRINT("before MtCmdChannelSwitch :%lu msec\n", pAd->chan_switch_time[9]);
+	MTWF_PRINT("after MtCmdChannelSwitch :%lu msec\n", pAd->chan_switch_time[10]);
+	MTWF_PRINT("after MtCmdSetTxRxPath :%lu msec\n", pAd->chan_switch_time[11]);
+	MTWF_PRINT("after AsicSetBW :%lu msec\n", pAd->chan_switch_time[12]);
+	MTWF_PRINT("after HcUpdateMSDUTxAllow :%lu msec\n", pAd->chan_switch_time[13]);
+	MTWF_PRINT("after null frame send to sta request to fw :%lu msec\n", pAd->chan_switch_time[14]);
+	MTWF_PRINT("after first sta null ack event/VHT action :%lu msec\n", pAd->chan_switch_time[15]);
+	MTWF_PRINT("after sta null ack wait timeout :%lu msec\n", pAd->chan_switch_time[16]);
+	for (i = 0; i < 17; i++)
+		pAd->chan_switch_time[i] = 0;
+	return TRUE;
+}
+
+INT Show_PerSTA_StopTx_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	INT i;
+
+	MTWF_PRINT("ZeroLossStaCount:%d\n", pAd->ZeroLossStaCount);
+
+	MTWF_PRINT("\n%-25s%-20s%-20s%-20s%-20s\n",
+				"MAC", "WCID", "Suspend-Time", "Resume-Time", "Diff(ms)");
+
+	for (i = 0; i < 3; i++) {
+		MTWF_PRINT("%02X:%02X:%02X:%02X:%02X:%02X          ",
+					PRINT_MAC(pAd->ZeroLossSta[i].StaAddr));
+		MTWF_PRINT("%-20d", pAd->ZeroLossSta[i].wcid);
+		MTWF_PRINT("%-20lu", pAd->ZeroLossSta[i].suspend_time);
+		MTWF_PRINT("%-20lu", pAd->ZeroLossSta[i].resume_time);
+		MTWF_PRINT("%-20lu\n", (pAd->ZeroLossSta[i].resume_time - pAd->ZeroLossSta[i].suspend_time));
+	}
+	return TRUE;
+}
+
+INT	Show_ZeroLossStaList_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	INT i = 0;
+
+	MTWF_PRINT("Current zero loss sta list::\n");
+	for (i = 0; i < 3; i++) {
+		MTWF_PRINT("index %d: valid:%d, wcid:%d band:%d addr:%02x:%02x:%02x:%02x:%02x:%02x\n",
+				i, pAd->ZeroLossSta[i].valid, pAd->ZeroLossSta[i].wcid, pAd->ZeroLossSta[i].band,
+				PRINT_MAC(pAd->ZeroLossSta[i].StaAddr));
+	}
+	return TRUE;
+}
+
+INT	Set_STA_Tx_Unblock_Timeout_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	pAd->ucSTATimeout = (USHORT) simple_strtol(arg, 0, 10);
+
+	MTWF_PRINT("Set_STA_TX_Unblock_Timeout_Proc::(Time = %d)\n", pAd->ucSTATimeout);
+
+	return TRUE;
+}
+
+INT	Set_CHSWPeriod_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	int i;
+	UCHAR CHSWPeriod = 0;
+
+	CHSWPeriod = (USHORT) simple_strtol(arg, 0, 10);
+
+	/*todo: support separate Channel Switch Period per band*/
+	for (i = 0; i < DBDC_BAND_NUM; i++)
+		pAd->Dot11_H[i].CSPeriod = CHSWPeriod;
+
+	MTWF_PRINT("%s::(CHSWPeriod=%d) \n", __func__, CHSWPeriod);
+
+	return TRUE;
+}
+
+INT	Set_ZeroLossStaAdd_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	UCHAR macAddr[MAC_ADDR_LEN];
+	RTMP_STRING *value;
+	INT i = 0;
+	MAC_TABLE_ENTRY *pEntry = NULL;
+	struct wifi_dev *wdev = NULL;
+
+	if (strlen(arg) != 17)  /*Mac address acceptable format 01:02:03:04:05:06 length 17 */
+		return FALSE;
+
+	for (i = 0, value = rstrtok(arg, ":"); value; value = rstrtok(NULL, ":")) {
+		if ((strlen(value) != 2) || (!isxdigit(*value)) || (!isxdigit(*(value+1))))
+			return FALSE;  /*Invalid */
+		AtoH(value, (UCHAR *)&macAddr[i++], 1);
+	}
+
+	pEntry = MacTableLookup(pAd, macAddr);
+
+	for (i = 0; i < 3; i++) {
+		if (pAd->ZeroLossSta[i].valid) {
+			if (NdisCmpMemory(pAd->ZeroLossSta[i].StaAddr, macAddr, MAC_ADDR_LEN) == 0) {
+				MTWF_PRINT("Zero Loss Sta already exist: index:%d wcid:%d\n", i, pAd->ZeroLossSta[i].wcid);
+				return TRUE;
+			}
+		}
+	}
+
+	for (i = 0; i < 3; i++) {
+		if (pAd->ZeroLossSta[i].valid == 0) {
+			NdisCopyMemory(pAd->ZeroLossSta[i].StaAddr, macAddr, MAC_ADDR_LEN);
+			pAd->ZeroLossSta[i].valid = 1;
+			if (pEntry) {
+				pAd->ZeroLossSta[i].wcid = pEntry->wcid;
+				wdev = &(pEntry->pMbss->wdev);
+				pAd->ZeroLossSta[i].band = HcGetBandByWdev(wdev);
+			}
+			pAd->ZeroLossStaCount++;
+			break;
+		}
+	}
+	if (i >= 3)
+		MTWF_PRINT("FAIL:::Zero Loss Sta list full, remove any existing station\n");
+	else
+		MTWF_PRINT("Zero Loss Sta added: index:%d wcid:%d\n", i, pAd->ZeroLossSta[i].wcid);
+
+	MTWF_PRINT("current zero sta list::\n");
+	for (i = 0; i < 3; i++) {
+		MTWF_PRINT("index %d: valid:%d, wcid:%d addr:%02x:%02x:%02x:%02x:%02x:%02x\n",
+						i, pAd->ZeroLossSta[i].valid, pAd->ZeroLossSta[i].wcid, PRINT_MAC(pAd->ZeroLossSta[i].StaAddr));
+	}
+	return TRUE;
+}
+
+INT	Set_ZeroLossStaRemove_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	UCHAR macAddr[MAC_ADDR_LEN];
+	RTMP_STRING *value;
+	INT i = 0;
+	MAC_TABLE_ENTRY *pEntry = NULL;
+
+	if (strlen(arg) != 17)  /*Mac address acceptable format 01:02:03:04:05:06 length 17 */
+		return FALSE;
+
+	for (i = 0, value = rstrtok(arg, ":"); value; value = rstrtok(NULL, ":")) {
+		if ((strlen(value) != 2) || (!isxdigit(*value)) || (!isxdigit(*(value+1))))
+			return FALSE;  /*Invalid */
+
+		AtoH(value, (UCHAR *)&macAddr[i++], 1);
+	}
+
+	pEntry = MacTableLookup(pAd, macAddr);
+
+	for (i = 0; i < 3; i++) {
+		if (pAd->ZeroLossSta[i].valid) {
+			if (NdisCmpMemory(pAd->ZeroLossSta[i].StaAddr, macAddr, MAC_ADDR_LEN) == 0) {
+				/*restore default PS queue limit for station*/
+				MtCmdStaPsQLimit(pAd, pAd->ZeroLossSta[i].wcid, 0);
+				pAd->ZeroLossSta[i].valid = 0;
+				pAd->ZeroLossSta[i].wcid = 0;
+				pAd->ZeroLossSta[i].band = 0;
+				NdisZeroMemory(pAd->ZeroLossSta[i].StaAddr, MAC_ADDR_LEN);
+				pAd->ZeroLossStaCount--;
+				break;
+			}
+		}
+	}
+
+	if (i >= 3)
+		MTWF_PRINT("FAIL:::station not found\n");
+	else
+		MTWF_PRINT("Zero Loss Sta removed, remaining zeroloss sta count:%d\n", pAd->ZeroLossStaCount);
+
+	MTWF_PRINT("current zero sta list::\n");
+	for (i = 0; i < 3; i++) {
+		MTWF_PRINT("index %d: valid:%d wcid:%d addr:%02x:%02x:%02x:%02x:%02x:%02x\n",
+						i, pAd->ZeroLossSta[i].valid, pAd->ZeroLossSta[i].wcid, PRINT_MAC(pAd->ZeroLossSta[i].StaAddr));
+	}
+	return TRUE;
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #endif /* CONFIG_AP_SUPPORT */
 
 
@@ -692,24 +1188,30 @@ INT Set_BlockChReset_Proc(
 VOID UpdateDot11hForWdev(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, BOOLEAN attach)
 {
 	UCHAR bandIdx = 0;
+	struct DOT11_H *pDot11h = NULL;
+
+	if (!wdev) {
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "no wdev!\n");
+		return;
+	}
 
 	if (attach) {
-		if (wdev) {
-			bandIdx = HcGetBandByWdev(wdev);
-			wdev->pDot11_H = &pAd->Dot11_H[bandIdx];
-		} else {
-			MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s(): no wdev!\n", __func__));
-		}
+		bandIdx = HcGetBandByWdev(wdev);
+		wdev->pDot11_H = &pAd->Dot11_H[bandIdx];
 	} else {
-		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("%s(): Detach wdev=%d_Dot11_H!\n", __func__, wdev->wdev_idx));
+		pDot11h = wdev->pDot11_H;
+		if (pDot11h && pDot11h->csa_ap_bitmap) {
+			pDot11h->csa_ap_bitmap &= ~(UINT32)(1 << wdev->func_idx);
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_TRACE,
+				"Clear csa_ap_bitmap = 0x%x\n", pDot11h->csa_ap_bitmap);
+		}
 		wdev->pDot11_H = NULL;
 		wdev->csa_count = 0;
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_TRACE,
+			"Detach wdev=%d_Dot11_H\n", wdev->wdev_idx);
 	}
 }
 
-#if !(defined(MT7615) || defined(MT7622))
 #ifdef MT_DFS_SUPPORT
 INT set_radar_min_lpn_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
@@ -1024,4 +1526,3 @@ INT show_radar_threshold_param_proc(
 }
 
 #endif /* MT_DFS_SUPPORT */
-#endif

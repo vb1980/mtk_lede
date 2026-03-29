@@ -509,6 +509,11 @@ INT set_veri_pkt_ctnt(struct _RTMP_ADAPTER *ad, char *arg)
 		input_argument = sscanf(arg,
 					"len:%d-ctnt:%100s",
 					&padding_to_length, ctnt_str);
+		if (input_argument != 2) {
+			MTWF_DBG(ad, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_WARN, "ctnt scanf error\n");
+			ret = NDIS_STATUS_FAILURE;
+			goto done;
+		}
 
 		ctnt_length = strlen(ctnt_str) / 2;
 		if (ctnt_length_sanity_check(ctnt_str, ctnt_length, padding_to_length) == FALSE) {
@@ -1014,115 +1019,164 @@ INT set_veri_pkt_ctrl_assign(struct _RTMP_ADAPTER *ad, RTMP_STRING *arg)
 	NdisZeroMemory(&assign_ctrl_input, sizeof(struct veri_designated_ctrl));
 	if (arg) {
 		assign_dur_str = strstr(arg, "du:");
-		assign_seq_str = strstr(arg, "sn:");
-		assign_pid_str = strstr(arg, "pid:");
-		assign_pm_str = strstr(arg, "pm:");
-		assign_lifetime_str = strstr(arg, "life:");
-		assign_htc_str = strstr(arg, "htc:");
-
-		if (assign_htc_str) {
-			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_HTC_CTRL)) {
-				pch = strchr(assign_htc_str, ':');
-				setting_value = (UINT32)os_str_tol(pch + 1, 0, 16);
-				NdisCopyMemory(&assign_ctrl_input.assigned_pkt_htc,
-					       &setting_value,
-					       sizeof(assign_ctrl_input.assigned_pkt_htc));
-			} else
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("enable htc control in first\n"));
-		}
-
-		if (assign_dur_str) {
+		if (assign_dur_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg du:\n");
+		else {
 			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_DUR_CTRL_BY_SW)) {
 				pch = strchr(assign_dur_str, ':');
-				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-				NdisCopyMemory(&assign_ctrl_input.assigned_dur,
-					       &setting_value,
-					       sizeof(assign_ctrl_input.assigned_dur));
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
+				else {
+					setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+					NdisCopyMemory(&assign_ctrl_input.assigned_dur,
+						       &setting_value,
+						       sizeof(assign_ctrl_input.assigned_dur));
+				}
 			} else
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("enable dur control in first\n"));
 		}
 
-		if (assign_seq_str) {
+		assign_seq_str = strstr(arg, "sn:");
+		if (assign_seq_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg sn:\n");
+		else {
 			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_SEQ_CTRL_BY_SW)) {
 				pch = strchr(assign_seq_str, ':');
-				setting_value = (USHORT)os_str_tol(pch + 1, 0, 10);
-
-				if (setting_value < 4096) /*sanity check*/
-					NdisCopyMemory(&assign_ctrl_input.assigned_seq,
-						       &setting_value,
-						       sizeof(assign_ctrl_input.assigned_seq));
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
 				else {
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s: seq:%u over spec\n", __func__, setting_value));
-					ret = FALSE;
-					return ret;
+					setting_value = (USHORT)os_str_tol(pch + 1, 0, 10);
+
+					if (setting_value < 4096) /*sanity check*/
+						NdisCopyMemory(&assign_ctrl_input.assigned_seq,
+							       &setting_value,
+							       sizeof(assign_ctrl_input.assigned_seq));
+					else {
+						MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"seq:%u over spec\n", setting_value);
+						ret = FALSE;
+						return ret;
+					}
 				}
 			} else
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("enable sn control in first\n"));
 		}
 
-		if (assign_pid_str) {
+		assign_pid_str = strstr(arg, "pid:");
+		if (assign_pid_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg pid:\n");
+		else {
 			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_TXS2H) ||
 			    CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_TXS2M)) {
 				pch = strchr(assign_pid_str, ':');
-				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-
-				if (setting_value < 256) /*sanity check*/
-					NdisCopyMemory(&assign_ctrl_input.assigned_pid,
-						       &setting_value,
-						       sizeof(assign_ctrl_input.assigned_pid));
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
 				else {
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s: seq:%u over spec\n", __func__, setting_value));
-					ret = FALSE;
-					return ret;
+					setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+
+					if (setting_value < 256) /*sanity check*/
+						NdisCopyMemory(&assign_ctrl_input.assigned_pid,
+							       &setting_value,
+							       sizeof(assign_ctrl_input.assigned_pid));
+					else {
+						MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"seq:%u over spec\n", setting_value);
+						ret = FALSE;
+						return ret;
+					}
 				}
 			} else
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("enable txs2m/txs2h control in first\n"));
 		}
 
-		if (assign_pm_str) {
+
+		assign_pm_str = strstr(arg, "pm:");
+		if (assign_pm_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg pm:\n");
+		else {
 			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_PM_CTRL_BY_SW)) {
 				pch = strchr(assign_pm_str, ':');
-				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-
-				if (setting_value <= 1) /*sanity check*/
-					NdisCopyMemory(&assign_ctrl_input.assigned_pm,
-						       &setting_value,
-						       sizeof(assign_ctrl_input.assigned_pm));
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
 				else {
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s: pm:%u over spec\n", __func__, setting_value));
-					ret = FALSE;
-					return ret;
+					setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+
+					if (setting_value <= 1) /*sanity check*/
+						NdisCopyMemory(&assign_ctrl_input.assigned_pm,
+							       &setting_value,
+							       sizeof(assign_ctrl_input.assigned_pm));
+					else {
+						MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"pm:%u over spec\n", setting_value);
+						ret = FALSE;
+						return ret;
+					}
 				}
 			} else
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("enable pm control in first\n"));
 		}
 
-		if (assign_lifetime_str) {
+
+		assign_lifetime_str = strstr(arg, "life:");
+		if (assign_lifetime_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg life:\n");
+		else {
 			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_LIFETIME_CTRL)) {
 				pch = strchr(assign_lifetime_str, ':');
-				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-
-				if ((setting_value >= 0) && (setting_value <= 255))/*sanity check*/
-					NdisCopyMemory(&assign_ctrl_input.assigned_pkt_lifetime,
-						       &setting_value,
-						       sizeof(assign_ctrl_input.assigned_pkt_lifetime));
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
 				else {
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s: pkt_lifetime:%u over spec\n", __func__, setting_value));
-					ret = FALSE;
-					return ret;
+					setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+
+					if (setting_value <= 255)/*sanity check*/
+						NdisCopyMemory(&assign_ctrl_input.assigned_pkt_lifetime,
+							       &setting_value,
+							       sizeof(assign_ctrl_input.assigned_pkt_lifetime));
+					else {
+						MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"pkt_lifetime:%u over spec\n", setting_value);
+						ret = FALSE;
+						return ret;
+					}
 				}
 			} else
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("enable assigned_pkt_lifetime control in first\n"));
+		}
+
+		assign_htc_str = strstr(arg, "htc:");
+		if (assign_htc_str == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+							"can not find arg htc:\n");
+		else {
+			if (CHECK_VERI_PKT_CTRL_IDX(veri_ctrl->veri_pkt_ctrl_map, VERI_HTC_CTRL)) {
+				pch = strchr(assign_htc_str, ':');
+				if (pch == NULL)
+					MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
+				else {
+					setting_value = (UINT32)os_str_tol(pch + 1, 0, 16);
+					NdisCopyMemory(&assign_ctrl_input.assigned_pkt_htc,
+							   &setting_value,
+							   sizeof(assign_ctrl_input.assigned_pkt_htc));
+				}
+			} else
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"enable htc control in first\n");
 		}
 
 		prepare_veri_pkt_ctrl_assign(ad, &assign_ctrl_input);
@@ -1171,95 +1225,166 @@ INT set_veri_pkt_ctrl_en(struct _RTMP_ADAPTER *ad, RTMP_STRING *arg)
 
 	if (arg) {
 		du_ctrl_str = strstr(arg, "du:");
-		na_ctrl_str = strstr(arg, "na:");
-		tm_ctrl_str = strstr(arg, "tm:");
-		sn_ctrl_str = strstr(arg, "sn:");
-		txs2m_ctrl_str = strstr(arg, "txs2m:");
-		txs2h_ctrl_str = strstr(arg, "txs2h:");
-		pm_ctrl_str = strstr(arg, "pm:");
-		lifetime_ctrl_str = strstr(arg, "life:");
-		htc_ctrl_str = strstr(arg, "htc:");
-
-		if (du_ctrl_str) {
+		if (du_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg du:\n");
+		else {
 			pch = strchr(du_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_DUR_CTRL_BY_SW);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_DUR_CTRL_BY_SW);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in du string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_DUR_CTRL_BY_SW);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_DUR_CTRL_BY_SW);
+			}
 		}
 
-		if (na_ctrl_str) {
+		na_ctrl_str = strstr(arg, "na:");
+		if (na_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg na:\n");
+		else {
 			pch = strchr(na_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_NA);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_NA);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in na string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_NA);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_NA);
+			}
 		}
 
-		if (tm_ctrl_str) {
+		tm_ctrl_str = strstr(arg, "tm:");
+		if (tm_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg tm:\n");
+		else {
 			pch = strchr(tm_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TM);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TM);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in tm string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TM);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TM);
+			}
 		}
 
-		if (sn_ctrl_str) {
+		sn_ctrl_str = strstr(arg, "sn:");
+		if (sn_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg sn:\n");
+		else {
 			pch = strchr(sn_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_SEQ_CTRL_BY_SW);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_SEQ_CTRL_BY_SW);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in sn string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_SEQ_CTRL_BY_SW);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_SEQ_CTRL_BY_SW);
+			}
 		}
 
-		if (txs2m_ctrl_str) {
+		txs2m_ctrl_str = strstr(arg, "txs2m:");
+		if (txs2m_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg sn:\n");
+		else {
 			pch = strchr(txs2m_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2M);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2M);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in txs2m string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2M);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2M);
+			}
 		}
 
-		if (txs2h_ctrl_str) {
+		txs2h_ctrl_str = strstr(arg, "txs2h:");
+		if (txs2h_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg txs2h:\n");
+		else {
 			pch = strchr(txs2h_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2H);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2H);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in txs2h string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2H);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_TXS2H);
+			}
 		}
 
-		if (pm_ctrl_str) {
+		pm_ctrl_str = strstr(arg, "pm:");
+		if (pm_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg pm:\n");
+		else {
 			pch = strchr(pm_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_PM_CTRL_BY_SW);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_PM_CTRL_BY_SW);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in pm string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_PM_CTRL_BY_SW);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_PM_CTRL_BY_SW);
+			}
 		}
 
-		if (lifetime_ctrl_str) {
+		lifetime_ctrl_str = strstr(arg, "life:");
+		if (lifetime_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg pm:\n");
+		else {
 			pch = strchr(lifetime_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value)
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_LIFETIME_CTRL);
-			else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_LIFETIME_CTRL);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in lifetime string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value)
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_LIFETIME_CTRL);
+				else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_LIFETIME_CTRL);
+			}
 		}
 
-		if (htc_ctrl_str) {
+		htc_ctrl_str = strstr(arg, "htc:");
+		if (htc_ctrl_str == NULL)
+			MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"can not find arg htc:\n");
+		else {
 			pch = strchr(htc_ctrl_str, ':');
-			setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
-			if (setting_value) {
-				SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_HTC_CTRL);
-				veri_ctrl->veri_pkt_length += 4;/*if assign HTC, header extend 4 bytes.*/
-			} else
-				CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_HTC_CTRL);
+			if (pch == NULL)
+				MTWF_DBG(ad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"can not find arg : in htc string\n");
+			else {
+				setting_value = (UCHAR)os_str_tol(pch + 1, 0, 10);
+				if (setting_value) {
+					SET_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_HTC_CTRL);
+					veri_ctrl->veri_pkt_length += 4;/*if assign HTC, header extend 4 bytes.*/
+				} else
+					CLEAR_VERI_PKT_CTRL_IDX(pkt_ctrl_map_input, VERI_HTC_CTRL);
+			}
 		}
 
 		prepare_veri_pkt_ctrl_en(ad, pkt_ctrl_map_input);

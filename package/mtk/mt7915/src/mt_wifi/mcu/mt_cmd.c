@@ -41,6 +41,10 @@
 #define MT_CMD_RETRY_COUNT 5
 #define MT_CMD_RETRY_INTEVAL 200    /* usec */
 
+#ifdef WIFI_EAP_FEATURE
+static VOID eapEventDispatcher(struct cmd_msg *msg, char *rsp_payload,
+		UINT16 rsp_payload_len);
+#endif
 
 UINT16 GetRealPortQueueID(struct cmd_msg *msg, UINT8 cmd_type)
 {
@@ -624,7 +628,7 @@ static VOID MtCmdWifiSpectrumResp(
 */
 static INT32 MtCmdWifiSpectrum(
 	IN PRTMP_ADAPTER pAd,
-	IN EXT_CMD_SPECTRUM_CTRL_T SpectrumCtrl,
+	IN EXT_CMD_SPECTRUM_CTRL_T * SpectrumCtrl,
 	IN UINT8 ctrl_flag,
 	IN UINT16 rsp_wait_time,
 	IN MSG_RSP_HANDLER rsp_handler,
@@ -632,8 +636,8 @@ static INT32 MtCmdWifiSpectrum(
 	IN UINT16 rsp_len)
 {
 	struct cmd_msg *msg;
-	UINT32 FuncIndex = SpectrumCtrl.u4FuncIndex;
-	INT32 Status = NDIS_STATUS_FAILURE;
+	UINT32 FuncIndex = SpectrumCtrl->u4FuncIndex;
+	INT32 Status;
 #if (NEW_MCU_INIT_CMD_API)
 	struct _CMD_ATTRIBUTE attr = {0};
 #endif
@@ -644,7 +648,7 @@ static INT32 MtCmdWifiSpectrum(
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			("%s: FuncIndex = %d\n", __func__, FuncIndex));
 
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(SpectrumCtrl));
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_SPECTRUM_CTRL_T));
 
 	if (!msg) {
 		Status = NDIS_STATUS_RESOURCES;
@@ -660,7 +664,7 @@ static INT32 MtCmdWifiSpectrum(
 	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, rsp_len);
 	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, rsp_payload);
 	MtAndesInitCmdMsg(msg, attr);
-	MtAndesAppendCmdMsg(msg, (char *)&SpectrumCtrl, sizeof(SpectrumCtrl));
+	MtAndesAppendCmdMsg(msg, (char *)SpectrumCtrl, sizeof(EXT_CMD_SPECTRUM_CTRL_T));
 	Status = chip_cmd_tx(pAd, msg);
 error:
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -683,7 +687,7 @@ INT32 MtCmdWifiSpectrumStart(
 	IN RTMP_ADAPTER *pAd,
 	IN UINT8 *pData)
 {
-	INT32 Status = NDIS_STATUS_FAILURE;
+	INT32 Status;
 	EXT_CMD_SPECTRUM_CTRL_T SpectrumCtrl;
 	RBIST_CAP_START_T *pSpectrumInfo = NULL;
 	RBIST_CAP_START_T *prRBISTInfo = (RBIST_CAP_START_T *)pData;
@@ -722,7 +726,7 @@ INT32 MtCmdWifiSpectrumStart(
 			pSpectrumInfo->u4CapStopCycle, pSpectrumInfo->u4BW, pSpectrumInfo->u4MACTriggerEvent,
 			pSpectrumInfo->u4SourceAddressLSB, pSpectrumInfo->u4SourceAddressMSB, pSpectrumInfo->u4BandIdx));
 
-	Status = MtCmdWifiSpectrum(pAd, SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
+	Status = MtCmdWifiSpectrum(pAd, &SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
 								, NULL, NULL, SPECTRUM_DEFAULT_RESP_LEN);
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("%s:(Status = %d)\n", __func__, Status));
@@ -809,7 +813,7 @@ INT32 MtCmdWifiSpectrumSolicitCapStatus(
 	SpectrumCtrl.u4FuncIndex = cpu2le32(SPECTRUM_CTRL_FUNCID_GET_CAPTURE_STATUS);
 
 	/* Query current captured status by solicited event */
-	MtCmdWifiSpectrum(pAd, SpectrumCtrl, INIT_CMD_SET_AND_WAIT_RETRY_RSP
+	MtCmdWifiSpectrum(pAd, &SpectrumCtrl, INIT_CMD_SET_AND_WAIT_RETRY_RSP
 						, SPECTRUM_WAIT_RESP_TIME, &MtCmdWifiSpectrumResp
 						, (INT8 *)&CapDone, sizeof(EXT_EVENT_RBIST_CAP_STATUS_T));
 
@@ -921,7 +925,7 @@ INT32 MtCmdWifiSpectrumUnSolicitRawDataProc(
 			/* Update SpectrumIdx */
 			pAd->SpectrumIdx = i;
 
-			MtCmdWifiSpectrum(pAd, SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
+			MtCmdWifiSpectrum(pAd, &SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
 								, NULL, NULL, SPECTRUM_DEFAULT_RESP_LEN);
 
 			/* OS wait for completion time out */
@@ -935,7 +939,7 @@ INT32 MtCmdWifiSpectrumUnSolicitRawDataProc(
 	} else {
 		/* Query whole RBIST data at a time */
 		{
-			MtCmdWifiSpectrum(pAd, SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
+			MtCmdWifiSpectrum(pAd, &SpectrumCtrl, INIT_CMD_SET, SPECTRUM_DEFAULT_WAIT_RESP_TIME
 								, NULL, NULL, SPECTRUM_DEFAULT_RESP_LEN);
 
 			/* OS wait for completion time out */
@@ -1003,7 +1007,7 @@ INT32 MtCmdRfTestICapStart(
 	IN RTMP_ADAPTER *pAd,
 	IN UINT8 *pData)
 {
-	INT32 Status = NDIS_STATUS_FAILURE;
+	INT32 Status;
 	CMD_TEST_CTRL_T TestCtrl;
 	RBIST_CAP_START_T *prICapInfo = NULL;
 	RBIST_CAP_START_T *prRBISTInfo = (RBIST_CAP_START_T *)pData;
@@ -1078,7 +1082,7 @@ INT32 MtCmdRfTestICapStart(
 INT32 MtCmdRfTestUnSolicitICapStatus(
 	IN RTMP_ADAPTER *pAd)
 {
-	INT32 Status = NDIS_STATUS_FAILURE;
+	INT32 Status;
 	CMD_TEST_CTRL_T TestCtrl;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -2177,9 +2181,6 @@ INT32 MtCmdChannelSwitch(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 	UINT8 ucTxPath = pAd->Antenna.field.TxPath;
 #ifdef SINGLE_SKU_V2
 	UCHAR fg5Gband = 0;
-#if defined(MT7615) || defined(MT7622)
-	UINT8 u1SkuChannel;
-#endif
 #endif
 	UINT8 SKUIdx = 0;
 #if defined(CONFIG_ATE)
@@ -2334,15 +2335,6 @@ INT32 MtCmdChannelSwitch(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, (" fg5Gband = 0x%x\n", fg5Gband));
 
-#if defined(MT7615) || defined(MT7622)
-	if (IS_MT7615(pAd) || IS_MT7622(pAd)) {
-		/* Check G-Band/A-Band */
-		u1SkuChannel = (fg5Gband) ? (SwChCfg.ControlChannel) : (SwChCfg.CentralChannel);
-
-		/* Fill Sku parameter by channel */
-		MtFillSkuParam(pAd, u1SkuChannel, fg5Gband, ucTxPath, CmdChanSwitch.acTxPowerSKU);
-	}
-#endif /* defined(MT7615) || defined(MT7622) */
 
 	for (SKUIdx = 0; SKUIdx < SKU_TOTAL_SIZE; SKUIdx++)
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: CmdChanSwitch.aucTxPowerSKU[%d]: 0x%x\n", __func__, SKUIdx,
@@ -2391,7 +2383,7 @@ INT32 MtCmdChannelSwitch(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 #endif
 
 	{
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				 ("%s: ctrl_chl=%d, ctrl_ch2=%d, cent_ch=%d DBDCIdx=%d, ChBand=%d, BW=%d, TXStream=%d, RXStream=%d, scan(%d)\n",
 				  __func__, SwChCfg.ControlChannel, SwChCfg.ControlChannel2,
 				  SwChCfg.CentralChannel, SwChCfg.BandIdx, SwChCfg.Channel_Band, SwChCfg.Bw,
@@ -2624,7 +2616,7 @@ INT MtCmdSetTxRxPath(struct _RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 #endif
 	CmdChanSwitch.u2CacCase = cpu2le16(CmdChanSwitch.u2CacCase);
 
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("%s: ctrl_chl=%d, ctrl_ch2=%d, cent_ch=%d, RxPath=%x, BandIdx=%d, ChBand=%d, BW=%d,TXStream=%d, RXStream=%d, scan(%d)\n",
 			  __func__, pSwChCfg->ControlChannel, pSwChCfg->ControlChannel2,
 			  pSwChCfg->CentralChannel, RxPath, pSwChCfg->BandIdx, pSwChCfg->Channel_Band,
@@ -2945,125 +2937,6 @@ error:
  *****************************************/
 #ifndef COMPOS_WIN
 #ifdef CONFIG_ATE
-#if defined(MT7615) || defined(MT7622)
-static INT32 MtCmdFillTxPowerInfo(RTMP_ADAPTER *pAd, EXT_CMD_TX_POWER_CTRL_T *CmdTxPwrCtrl, ATE_TXPOWER TxPower)
-{
-	INT32 ret = 0;
-	UINT32 i;
-	UINT8 data = 0;
-	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
-	UINT32 Group = MtATEGetTxPwrGroup(TxPower.Channel, TxPower.Band_idx, TxPower.Ant_idx);
-
-	for (i = cap->efuse_content_start; i <= cap->efuse_content_end; i++) {
-		data = pAd->EEPROMImage[i];
-
-		if (ATE_ON(pAd)) {
-			if (i == Group)
-				data  = TxPower.Power;
-		}
-
-		pAd->EEPROMImage[i] = data;
-		CmdTxPwrCtrl->aucBinContent[i - cap->efuse_content_start] = data;
-	}
-
-	/* Debug print */
-	for (i = cap->efuse_content_start; i <= cap->efuse_content_end; i++) {
-		MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-				 ("[0x%x]%x ", i, CmdTxPwrCtrl->aucBinContent[i - cap->efuse_content_start]));
-	}
-
-	return ret;
-}
-
-static VOID MtCmdGetTxPowerRsp(struct cmd_msg *msg, char *Data, UINT16 Len)
-{
-	P_EXT_EVENT_ID_GET_TX_POWER_T prEventExtCmdResult = (P_EXT_EVENT_ID_GET_TX_POWER_T)Data;
-	P_EXT_EVENT_ID_GET_TX_POWER_T prTxPower = (P_EXT_EVENT_ID_GET_TX_POWER_T)msg->attr.rsp.wb_buf_in_calbk;
-
-	prTxPower->ucTxPwrType = prEventExtCmdResult->ucTxPwrType;
-	prTxPower->ucEfuseAddr = prEventExtCmdResult->ucEfuseAddr;
-	prTxPower->ucEfuseContent = prEventExtCmdResult->ucEfuseContent;
-	prTxPower->ucBand = prEventExtCmdResult->ucBand;
-
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s, Type: %d Addr: 0x%x Power: 0x%x Band: %d\n", __func__,
-			prTxPower->ucTxPwrType, prTxPower->ucEfuseAddr,
-			prTxPower->ucEfuseContent, prTxPower->ucBand));
-}
-
-INT32 MtCmdSetTxPowerCtrl(RTMP_ADAPTER *pAd, ATE_TXPOWER TxPower)
-{
-	struct cmd_msg *msg;
-	EXT_CMD_TX_POWER_CTRL_T CmdTxPwrCtrl;
-	INT32 ret = 0;
-	struct _CMD_ATTRIBUTE attr = {0};
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_TX_POWER_CTRL_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_SET_TX_POWER_CTRL);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RETRY_RSP);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
-	MtAndesInitCmdMsg(msg, attr);
-	NdisZeroMemory(&CmdTxPwrCtrl, sizeof(CmdTxPwrCtrl));
-	CmdTxPwrCtrl.ucCenterChannel = TxPower.Channel;
-	CmdTxPwrCtrl.ucDbdcIdx = TxPower.Dbdc_idx;
-	CmdTxPwrCtrl.ucBand = TxPower.Band_idx;
-	MtCmdFillTxPowerInfo(pAd, &CmdTxPwrCtrl, TxPower);
-	MtAndesAppendCmdMsg(msg, (char *)&CmdTxPwrCtrl, sizeof(CmdTxPwrCtrl));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-
-INT32 MtCmdGetTxPower(RTMP_ADAPTER *pAd, UINT8 pwrType, UINT8 centerCh,
-					  UINT8 dbdc_idx, UINT8 Ch_Band, P_EXT_EVENT_ID_GET_TX_POWER_T prTxPwrResult)
-{
-	struct cmd_msg *msg;
-	struct _EXT_CMD_GET_TX_POWER_T pwr;
-	INT32 ret = 0;
-	struct _CMD_ATTRIBUTE attr = {0};
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_GET_TX_POWER_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s, Type: %d Channel: 0x%x Band: %d\n",
-			  __func__, pwrType, centerCh, dbdc_idx));
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_GET_TX_POWER);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY_AND_WAIT_RETRY_RSP);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, sizeof(EXT_EVENT_ID_GET_TX_POWER_T));
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, prTxPwrResult);
-	SET_CMD_ATTR_RSP_HANDLER(attr, MtCmdGetTxPowerRsp);
-	MtAndesInitCmdMsg(msg, attr);
-	NdisZeroMemory(&pwr, sizeof(pwr));
-	pwr.ucTxPwrType = pwrType;
-	pwr.ucCenterChannel = centerCh;
-	pwr.ucDbdcIdx = dbdc_idx;
-	pwr.ucBand = Ch_Band;
-	MtAndesAppendCmdMsg(msg, (char *)&pwr, sizeof(pwr));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-#else
 static INT32 MtCmdFillTxPowerInfo(RTMP_ADAPTER *pAd, EXT_CMD_TX_POWER_CTRL_T *CmdTxPwrCtrl, ATE_TXPOWER TxPower)
 {
 	INT32 ret = 0;
@@ -3176,7 +3049,6 @@ error:
 			 ("%s:(ret = %d)\n", __func__, ret));
 	return ret;
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 INT32 MtCmdSetForceTxPowerCtrl(RTMP_ADAPTER *pAd, UINT8 ucBandIdx, INT8 cTxPower, UINT8 ucPhyMode, UINT8 ucTxRate, UINT8 ucBW)
 {
@@ -3575,7 +3447,7 @@ INT32 CmdETxBfAidSetting(
 	UINT_16       Aid)
 {
 	struct cmd_msg *msg;
-	struct _EXT_CMD_PEER_AID_T peer_aid;
+	struct _EXT_CMD_PEER_AID_T peer_aid = {0};
 	INT32 ret = 0;
 	struct _CMD_ATTRIBUTE attr = {0};
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -5212,7 +5084,7 @@ INT32 CmdTxBfAwareCtrl(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	EXT_CMD_BF_AWARE_CTRL_T rTxBfAwareCtrl;
+	EXT_CMD_BF_AWARE_CTRL_T rTxBfAwareCtrl = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			 ("%s: fgBfAwareCtrl = %d\n", __func__, fgBfAwareCtrl));
@@ -5287,7 +5159,7 @@ INT32 cmd_txbf_cfg_dynsnd_dmcsth(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	struct dynsnd_cfg_dmcsth_info cmd_info;
+	struct dynsnd_cfg_dmcsth_info cmd_info = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -5326,7 +5198,7 @@ INT32 cmd_txbf_en_dynsnd_pfid_intr(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	struct dynsnd_en_mu_intr_info cmd_info;
+	struct dynsnd_en_mu_intr_info cmd_info = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -5366,7 +5238,7 @@ INT32 CmdTxBfHwEnableStatusUpdate(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	EXT_CMD_BF_HW_ENABLE_STATUS_UPDATE_T rTxBfHwEnStatusUpdate;
+	EXT_CMD_BF_HW_ENABLE_STATUS_UPDATE_T rTxBfHwEnStatusUpdate = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			 ("%s: fgEBfHwEnable = %d, fgIBfHwEnable = %d\n", __func__, fgEBf, fgIBf));
@@ -5405,7 +5277,7 @@ INT32 CmdTxBfModuleEnCtrl(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	EXT_CMD_BF_MOD_EN_CTRL_T rTxBfModEnCtrl;
+	EXT_CMD_BF_MOD_EN_CTRL_T rTxBfModEnCtrl = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -5447,7 +5319,7 @@ INT32 CmdTxBfeeHwCtrl(
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0;
-	EXT_CMD_BFEE_HW_CTRL_T rTxBfeeHwCtrl;
+	EXT_CMD_BFEE_HW_CTRL_T rTxBfeeHwCtrl = {0};
 	struct _CMD_ATTRIBUTE attr = {0};
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -5709,7 +5581,7 @@ VOID MtCmdEfusBufferModeSet(RTMP_ADAPTER *pAd, UINT8 EepromType)
 		os_zero_mem(CmdEfuseBufferMode, cmd_size);
 
 		if (ops->ee_gen_cmd)
-			ret = ops->ee_gen_cmd(pAd, CmdEfuseBufferMode, cmd_seq, total_seq);
+			ops->ee_gen_cmd(pAd, CmdEfuseBufferMode, cmd_seq, total_seq);
 		else {
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				 ("%s:invalid apply ops, dismissed!\n", __func__));
@@ -5866,7 +5738,7 @@ done:
 /*****************************************
  *	ExT_CID = 0x27
  *****************************************/
-INT32 MtCmdEdcaParameterSet(RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T EdcaParam)
+INT32 MtCmdEdcaParameterSet(RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T *EdcaParam)
 {
 	struct cmd_msg *msg;
 #ifdef RT_BIG_ENDIAN
@@ -5875,11 +5747,11 @@ INT32 MtCmdEdcaParameterSet(RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T EdcaParam)
 #endif
 	INT32 ret = 0, size = 0;
 	struct _CMD_ATTRIBUTE attr = {0};
-	size = 4 + sizeof(TX_AC_PARAM_T) * EdcaParam.ucTotalNum;
+	size = 4 + sizeof(TX_AC_PARAM_T) * EdcaParam->ucTotalNum;
 #ifdef RT_BIG_ENDIAN
 
-	for (i = 0; i < EdcaParam.ucTotalNum; i++) {
-		pAcParam = &EdcaParam.rAcParam[i];
+	for (i = 0; i < EdcaParam->ucTotalNum; i++) {
+		pAcParam = &EdcaParam->rAcParam[i];
 		pAcParam->u2Txop = cpu2le16(pAcParam->u2Txop);
 		pAcParam->u2WinMax = cpu2le16(pAcParam->u2WinMax);
 	}
@@ -5903,7 +5775,7 @@ INT32 MtCmdEdcaParameterSet(RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T EdcaParam)
 	MtAndesInitCmdMsg(msg, attr);
 
 	if (size <= sizeof(MT_EDCA_CTRL_T))
-		MtAndesAppendCmdMsg(msg, (char *)&EdcaParam, size);
+		MtAndesAppendCmdMsg(msg, (char *)EdcaParam, size);
 
 	ret = chip_cmd_tx(pAd, msg);
 	return ret;
@@ -5958,114 +5830,6 @@ error:
  *	ExT_CID = 0x23
  *****************************************/
 
-#if defined(MT7615) || defined(MT7622)
-INT32 MtCmdThermalProtect(
-	RTMP_ADAPTER *pAd,
-	UINT8 ucBand,
-	UINT8 HighEn,
-	CHAR HighTempTh,
-	UINT8 LowEn,
-	CHAR LowTempTh,
-	UINT32 RechkTimer,
-	UINT8 RFOffEn,
-	CHAR RFOffTh,
-	UINT8 ucType
-)
-{
-	struct cmd_msg *msg;
-	INT32 ret = 0;
-	EXT_CMD_THERMAL_PROTECT_T ThermalProtect;
-	struct _CMD_ATTRIBUTE attr = {0};
-
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("%s: HighEn: %d, HighTempTh: %d, LowEn: %d, LowTempTh: %d, RechkTimer: %d\n", __FUNCTION__, HighEn, HighTempTh, LowEn, LowTempTh, RechkTimer));
-
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("%s: RFOffEn: %d, RFOffTh: %d, ucType: %d\n", __FUNCTION__, RFOffEn, RFOffTh, ucType));
-
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_THERMAL_PROTECT_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_THERMAL_PROTECT);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RETRY_RSP);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
-	MtAndesInitCmdMsg(msg, attr);
-
-	/* Init firmware command content */
-	os_zero_mem(&ThermalProtect, sizeof(ThermalProtect));
-
-	/* config command content */
-	ThermalProtect.ucHighEnable = HighEn;
-	ThermalProtect.cHighTempThreshold = HighTempTh;
-	ThermalProtect.ucLowEnable = LowEn;
-	ThermalProtect.cLowTempThreshold = LowTempTh;
-	ThermalProtect.RecheckTimer = cpu2le32(RechkTimer);
-	ThermalProtect.ucRFOffEnable = RFOffEn;
-	ThermalProtect.cRFOffThreshold = RFOffTh;
-	ThermalProtect.ucType = ucType;
-
-	MtAndesAppendCmdMsg(msg, (char *)&ThermalProtect, sizeof(ThermalProtect));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-
-INT32
-MtCmdThermalProtectAdmitDuty(
-	RTMP_ADAPTER *pAd,
-	UINT8 ucBand,
-	UINT32 u4Lv0Duty,
-	UINT32 u4Lv1Duty,
-	UINT32 u4Lv2Duty,
-	UINT32 u4Lv3Duty
-)
-{
-	struct cmd_msg *msg;
-	INT32 ret = 0;
-	EXT_CMD_THERMAL_PROTECT_T ThermalProtect;
-	struct _CMD_ATTRIBUTE attr = {0};
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_THERMAL_PROTECT_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_THERMAL_PROTECT);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RETRY_RSP);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
-	MtAndesInitCmdMsg(msg, attr);
-	os_zero_mem(&ThermalProtect, sizeof(ThermalProtect));
-	ThermalProtect.ucExtraTag = THERAML_PROTECTION_TAG_SET_ADMIT_DUTY;
-	ThermalProtect.ucLv0Duty = (UINT8)u4Lv0Duty;
-	ThermalProtect.ucLv1Duty = (UINT8)u4Lv1Duty;
-	ThermalProtect.ucLv2Duty = (UINT8)u4Lv2Duty;
-	ThermalProtect.ucLv3Duty = (UINT8)u4Lv3Duty;
-	MtAndesAppendCmdMsg(msg, (char *)&ThermalProtect, sizeof(ThermalProtect));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-
-#else
 INT32 MtCmdThermalProtect(
 	RTMP_ADAPTER *pAd,
 	UINT8 ucBand,
@@ -6211,7 +5975,6 @@ error:
 	return ret;
 }
 
-#endif /* defined(MT7615) || defined(MT7622) */
 
 INT32
 MtCmdThermalProtectEnable(
@@ -6523,53 +6286,6 @@ error:
 /*****************************************
  *	ExT_CID = 0x2c
  *****************************************/
-#if defined(MT7615) || defined(MT7622)
-static VOID MtCmdThemalSensorRsp(struct cmd_msg *msg, char *Data, UINT16 Len)
-{
-	struct _EXT_EVENT_GET_SENSOR_RESULT_T *EventExtCmdResult =
-		(struct _EXT_EVENT_GET_SENSOR_RESULT_T *)Data;
-	EventExtCmdResult->u4SensorResult =
-		le2cpu32(EventExtCmdResult->u4SensorResult);
-	os_move_mem(msg->attr.rsp.wb_buf_in_calbk, &EventExtCmdResult->u4SensorResult,
-				sizeof(EventExtCmdResult->u4SensorResult));
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			("ThemalSensor = 0x%x\n", EventExtCmdResult->u4SensorResult));
-}
-
-INT32 MtCmdGetThermalSensorResult(RTMP_ADAPTER *pAd, UINT8 ActionIdx, UINT8 ucDbdcIdx, UINT32 *SensorResult)
-{
-	struct cmd_msg *msg;
-	struct _EXT_CMD_GET_SENSOR_RESULT_T Cmdmsg;
-	INT32 ret = 0;
-	struct _CMD_ATTRIBUTE attr = {0};
-	os_zero_mem(&Cmdmsg, sizeof(Cmdmsg));
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s: Action = %d\n", __func__, ActionIdx));
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(Cmdmsg));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_THERMAL_FEATURE_CTRL);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY_AND_WAIT_RETRY_RSP);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, SensorResult);
-	SET_CMD_ATTR_RSP_HANDLER(attr, MtCmdThemalSensorRsp);
-	MtAndesInitCmdMsg(msg, attr);
-	Cmdmsg.u1ActionIdx = ActionIdx;
-	MtAndesAppendCmdMsg(msg, (char *)&Cmdmsg, sizeof(Cmdmsg));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-#else
 static VOID MtCmdThemalSensorRsp(struct cmd_msg *msg, char *Data, UINT16 Len)
 {
 	P_EXT_EVENT_THERMAL_SENSOR_INFO_T prEventExtCmdResult = (P_EXT_EVENT_THERMAL_SENSOR_INFO_T)Data;
@@ -6618,7 +6334,6 @@ error:
 			 ("%s:(ret = %d)\n", __func__, ret));
 	return ret;
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 /*****************************************
  *	ExT_CID = 0x2d
@@ -6736,9 +6451,9 @@ VOID MT76xxAndesWOWEnable(
 			CmdGTK.WPAVersion = cpu2le32(PF_WPA2);
 
 		MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s::Bssid(%02x:%02x:%02x:%02x:%02x:%02x), Wcid(%d, %d), McMcIdx(%d)\n",
+				 ("%s::Bssid("MACSTR"), Wcid(%d, %d), McMcIdx(%d)\n",
 				  __func__,
-				  PRINT_MAC(wdev->bssid),
+				  MAC2STR(wdev->bssid),
 				  pEntry->wcid, wdev->tr_tb_idx,
 				  wdev->bss_info_argument.bmc_wlan_idx));
 		/* TODO: Pat: how if big endian */
@@ -7197,7 +6912,7 @@ error:
 /*****************************************
  *    ExT_CID = 0x49
  *****************************************/
-INT32 MtCmdBcnOffloadSet(RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T bcn_offload)
+INT32 MtCmdBcnOffloadSet(RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T *bcn_offload)
 {
 	struct cmd_msg *msg;
 	INT32 ret = 0, size = 0;
@@ -7207,9 +6922,9 @@ INT32 MtCmdBcnOffloadSet(RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T bcn_offload)
 	MTWF_LOG(DBG_CAT_AP, CATAP_BCN, DBG_LVL_OFF,
 			("%s(): Enable=%d, OM=%d, WlanIdx=%d, Band=%d, Len=%d, TimOffset=%d\n",
 			__func__,
-			bcn_offload.ucEnable, bcn_offload.ucOwnMacIdx,
-			bcn_offload.ucWlanIdx, bcn_offload.ucBandIdx,
-			bcn_offload.u2PktLength, bcn_offload.u2TimIePos));
+			bcn_offload->ucEnable, bcn_offload->ucOwnMacIdx,
+			bcn_offload->ucWlanIdx, bcn_offload->ucBandIdx,
+			bcn_offload->u2PktLength, bcn_offload->u2TimIePos));
 
 	msg = MtAndesAllocCmdMsg(pAd, size);
 
@@ -7228,12 +6943,12 @@ INT32 MtCmdBcnOffloadSet(RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T bcn_offload)
 	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
 	MtAndesInitCmdMsg(msg, attr);
 #ifdef RT_BIG_ENDIAN
-	bcn_offload.u2PktLength = cpu2le16(bcn_offload.u2PktLength);
-	bcn_offload.u2TimIePos = cpu2le16(bcn_offload.u2TimIePos);
-	bcn_offload.u2CsaIePos = cpu2le16(bcn_offload.u2CsaIePos);
-	bcn_offload.u2BccIePos = cpu2le16(bcn_offload.u2BccIePos);
+	bcn_offload->u2PktLength = cpu2le16(bcn_offload->u2PktLength);
+	bcn_offload->u2TimIePos = cpu2le16(bcn_offload->u2TimIePos);
+	bcn_offload->u2CsaIePos = cpu2le16(bcn_offload->u2CsaIePos);
+	bcn_offload->u2BccIePos = cpu2le16(bcn_offload->u2BccIePos);
 #endif
-	MtAndesAppendCmdMsg(msg, (char *)&bcn_offload, size);
+	MtAndesAppendCmdMsg(msg, (char *)bcn_offload, size);
 	ret = chip_cmd_tx(pAd, msg);
 error:
 	MTWF_LOG(DBG_CAT_AP, CATAP_BCN, DBG_LVL_INFO,
@@ -9656,7 +9371,43 @@ error:
 			 ("%s:(ret = %d)\n", __func__, ret));
 	return ret;
 }
+INT32 MtCmdGetWtblTxStat(RTMP_ADAPTER *pAd, UINT32 u4Field, UINT8 ucWcid)
+{
 
+	struct cmd_msg *msg;
+	INT32 Ret = 0;
+	EXT_CMD_GET_WTBL_TX_COUNT_T WtblTxCntCmd = {0};
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(WtblTxCntCmd));
+	if (!msg) {
+		Ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_GET_WTBL_TX_COUNTER);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+
+	MtAndesInitCmdMsg(msg, attr);
+	os_zero_mem(&WtblTxCntCmd, sizeof(WtblTxCntCmd));
+#ifdef RT_BIG_ENDIAN
+	WtblTxCntCmd.u4Field = cpu2le32(u4Field);
+#else
+	WtblTxCntCmd.u4Field = u4Field;
+#endif
+	WtblTxCntCmd.ucWlanIdx = ucWcid;
+	MtAndesAppendCmdMsg(msg, (char *)&WtblTxCntCmd, sizeof(WtblTxCntCmd));
+	Ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s:(ret = %d)\n", __FUNCTION__, Ret));
+	return Ret;
+}
 INT32 MtCmdFwDecompressStart(
 	RTMP_ADAPTER *ad,
 	P_INIT_CMD_WIFI_START_WITH_DECOMPRESSION decompress_info)
@@ -9936,7 +9687,7 @@ static VOID MtCmdGetPartialMibInfoCntRsp(struct cmd_msg *msg, char *Data, UINT16
 		= le2cpu32(pMibInfoParm->u4RxFifoOverflowCnt);
 	pPartialMibInfoCntRspResult->rMibInfoParam.u4RxMpduCnt
 		= le2cpu32(pMibInfoParm->u4RxMpduCnt);
-	pPartialMibInfoCntRspResult->rMibInfoParam.u4RxChannelIdleCnt 
+	pPartialMibInfoCntRspResult->rMibInfoParam.u4RxChannelIdleCnt
 		= le2cpu32(pMibInfoParm->u4RxChannelIdleCnt);
 	pPartialMibInfoCntRspResult->rMibInfoParam.u4CcaNavTxTimeCnt
 		= le2cpu32(pMibInfoParm->u4CcaNavTxTimeCnt);
@@ -11430,7 +11181,7 @@ INT32 MtCmdPreCalReStoreProc(RTMP_ADAPTER *pAd, INT32 *pPreCalBuffer)
 INT32 MtCmdThermalMode(RTMP_ADAPTER *pAd, UINT8 Mode, UINT8 Action)
 {
 	struct cmd_msg *msg;
-	EXT_CMD_THERMAL_MODE_CTRL_T ThermalModeCtrl;
+	EXT_CMD_THERMAL_MODE_CTRL_T ThermalModeCtrl = {0};
 	INT32 ret = 0;
 
 	struct _CMD_ATTRIBUTE attr = {0};
@@ -11564,6 +11315,129 @@ error:
 	return Status;
 }
 #endif /* CAL_BIN_FILE_SUPPORT */
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+INT32 MtCmdSetChkPeerLink(RTMP_ADAPTER *pAd, UINT8 WcidCount, UINT8 *wcidlist)
+{
+	struct cmd_msg *msg;
+	EXT_CMD_CHK_PEER_STA_LINK_T ChkPeerStaLink = {0};
+	INT32 ret = 0, i = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+	UINT16 *pWcidList = (UINT16 *)wcidlist;
+
+	ChkPeerStaLink.u1NumOfSta = WcidCount;
+	for (i = 0; i < WcidCount; i++)
+		ChkPeerStaLink.u2Wcid[i] = pWcidList[i];
+
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+				"set wcid list count:%d wcid: %d, %d, %d for null ack event\n",
+				WcidCount, ChkPeerStaLink.u2Wcid[0], ChkPeerStaLink.u2Wcid[1],
+				ChkPeerStaLink.u2Wcid[2]);
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(ChkPeerStaLink));
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_CHECK_PEER_STA_LINK);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+
+	MtAndesInitCmdMsg(msg, attr);
+
+	MtAndesAppendCmdMsg(msg, (char *)&ChkPeerStaLink, sizeof(ChkPeerStaLink));
+
+	ret  = chip_cmd_tx(pAd, msg);
+
+	return ret;
+error:
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(ret = %d)\n", ret);
+	return ret;
+}
+
+INT32 MtCmdSetZeroPktLossVariable(RTMP_ADAPTER *pAd, ENUM_ZERO_PKT_LOSS_VARIABLE eVariable, UINT8 Value)
+{
+	struct cmd_msg *msg;
+	INT32 ret = 0;
+	EXT_CMD_SET_ZERO_PKT_LOSS_VARIABLE_T SetZeroPktLossVariable = {0};
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	SetZeroPktLossVariable.u1ZeroPktLossVariable = eVariable;
+	SetZeroPktLossVariable.u1Value = Value;
+
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"set ZeroPktLossVariable: %d value: %d\n",
+				SetZeroPktLossVariable.u1ZeroPktLossVariable, SetZeroPktLossVariable.u1Value);
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(SetZeroPktLossVariable));
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_SET_ZERO_PKT_LOSS_VARIABLE);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+
+	MtAndesInitCmdMsg(msg, attr);
+
+	MtAndesAppendCmdMsg(msg, (char *)&SetZeroPktLossVariable, sizeof(SetZeroPktLossVariable));
+
+	ret  = chip_cmd_tx(pAd, msg);
+
+error:
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"%s:(ret = %d)\n", ret);
+	return ret;
+}
+
+INT32 MtCmdSetMacTxEnable(RTMP_ADAPTER *pAd, UINT8 enable)
+{
+	struct cmd_msg *msg;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"Set Mac Tx Enable %d\n", enable);
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(UINT8));
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_SET_MAC_TX_ENABLE);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+
+	MtAndesInitCmdMsg(msg, attr);
+
+	MtAndesAppendCmdMsg(msg, (char *)&enable, sizeof(UINT8));
+
+	ret  = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(ret = %d)\n", ret);
+	return ret;
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 static VOID CmdWifiHifCtrlRsp(struct cmd_msg *msg, char *Data, UINT16 Len)
 {
@@ -11735,7 +11609,6 @@ error:
 	return ret;
 }
 
-#if !(defined(MT7615) || defined(MT7622))
 INT32 mt_cmd_set_fcc5_min_lpn(RTMP_ADAPTER *pAd, UINT16 min_lpn_update)
 {
 	struct cmd_msg *msg;
@@ -11919,7 +11792,7 @@ INT32 mt_cmd_set_test_radar_pattern(RTMP_ADAPTER *pAd, P_CMD_RDM_TEST_RADAR_PATT
 		cmd_set_test_pls_pattern.prd_pls_buff[i].prd_pls_wdth
 			= cpu2le16(cmd_set_test_pls_pattern.prd_pls_buff[i].prd_pls_wdth);
 		cmd_set_test_pls_pattern.prd_pls_buff[i].prd_pls_pwr
-			= cpu2le16(cmd_set_test_pls_pattern.prd_pls_buff[i].prd_pls_pwr);	
+			= cpu2le16(cmd_set_test_pls_pattern.prd_pls_buff[i].prd_pls_pwr);
 	}
 #endif
 
@@ -11996,7 +11869,6 @@ error:
 	return ret;
 
 }
-#endif /* MT_DFS_SUPPORT */
 #endif
 
 #if OFF_CH_SCAN_SUPPORT
@@ -12378,6 +12250,8 @@ INT32 mt_cmd_wo_query(RTMP_ADAPTER *pAd, UINT32 option, UINT32 param0, UINT32 pa
 	MtAndesAppendCmdMsg(msg, (char *)&cmd_wo_query, sizeof(cmd_wo_query));
 
 	ret = call_fw_cmd_notifieriers(option, pAd, msg->net_pkt);
+	if (msg->net_pkt)
+		RTMPFreeNdisPacket(pAd, msg->net_pkt);
 	AndesFreeCmdMsg(msg);
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -13230,7 +13104,708 @@ error:
 	return ret;
 }
 
+#ifdef WIFI_EAP_FEATURE
+RATE_TABLE_UPDATE arRateTableData[] = {
+	{eRateSwitchTable,   eRateSwTbl11b,             "RateSwitchTableAGBS11B"},
+	{eRateSwitchTable,   eRateSwTbl11g,             "RateSwitchTableAGBS11G"},
+	{eRateSwitchTable,   eRateSwTbl11bg,            "RateSwitchTableAGBS11BG"},
+	{eRateSwitchTable,   eRateSwTbl11n1ss,          "RateSwitchTableAGBS11N1SS"},
+	{eRateSwitchTable,   eRateSwTbl11n2ss,          "RateSwitchTableAGBS11N2SS"},
+	{eRateSwitchTable,   eRateSwTbl11n3ss,          "RateSwitchTableAGBS11N3SS"},
+	{eRateSwitchTable,   eRateSwTbl11n4ss,          "RateSwitchTableAGBS11N4SS"},
+	{eRateSwitchTable,   eRateSwTblvht1ss,          "RateSwitchTableAGBSVht1SS"},
+	{eRateSwitchTable,   eRateSwTblvht2ss,          "RateSwitchTableAGBSVht2SS"},
+	{eRateSwitchTable,   eRateSwTblvht3ss,          "RateSwitchTableAGBSVht3SS"},
+	{eRateSwitchTable,   eRateSwTblvht4ss,          "RateSwitchTableAGBSVht4SS"},
+	{eRateSwitchTable,   eRateSwTblvht2ssbccbw80,   "RateSwitchTableAGBSVht2SSBccBw80"},
+	{eRateSwitchTable,   eRateSwTblhe1ss,           "RateSwitchTableAGBSHe1SS"},
+	{eRateSwitchTable,   eRateSwTblhe2ss,           "RateSwitchTableAGBSHe2SS"},
 
+	{eRateHwFbTable,     eRateHwFbTbl11b,	        "HwFallbackTable11B"},
+	{eRateHwFbTable,     eRateHwFbTbl11g,	        "HwFallbackTable11G"},
+	{eRateHwFbTable,     eRateHwFbTbl11bg,	        "HwFallbackTable11BG"},
+	{eRateHwFbTable,     eRateHwFbTbl11n1ss,        "HwFallbackTable11N1SS"},
+	{eRateHwFbTable,     eRateHwFbTbl11n2ss,        "HwFallbackTable11N2SS"},
+	{eRateHwFbTable,     eRateHwFbTbl11n3ss,        "HwFallbackTable11N3SS"},
+	{eRateHwFbTable,     eRateHwFbTbl11n4ss,        "HwFallbackTable11N4SS"},
+	{eRateHwFbTable,     eRateHwFbTblbgn1ss,        "HwFallbackTableBGN1SS"},
+	{eRateHwFbTable,     eRateHwFbTblbgn2ss,        "HwFallbackTableBGN2SS"},
+	{eRateHwFbTable,     eRateHwFbTblbgn3ss,        "HwFallbackTableBGN3SS"},
+	{eRateHwFbTable,     eRateHwFbTblbgn4ss,        "HwFallbackTableBGN4SS"},
+	{eRateHwFbTable,     eRateHwFbTblvht1ss,        "HwFallbackTableVht1SS"},
+	{eRateHwFbTable,     eRateHwFbTblvht2ss,        "HwFallbackTableVht2SS"},
+	{eRateHwFbTable,     eRateHwFbTblvht3ss,        "HwFallbackTableVht3SS"},
+	{eRateHwFbTable,     eRateHwFbTblvht4ss,        "HwFallbackTableVht4SS"},
+	{eRateHwFbTable,     eRateHwFbTblvht2ssbccbw80, "HwFallbackTableVht2SSBccBw80"},
+	{eRateHwFbTable,     eRateHwFbTblhe1ss,         "HwFallbackTableHe1SS"},
+	{eRateHwFbTable,     eRateHwFbTblhe2ss,         "HwFallbackTableHe2SS"},
+
+	{eRateTableMax,      0,                         "\0"}
+};
+
+PCHAR getRaTableName(UINT8 TblType, UINT8 TblIdx)
+{
+	UINT8 TblArrayIdx = 0;
+	PCHAR TblName = "\0";
+
+	if (TblType >= eRateTableMax)
+		return TblName;
+
+	while (arRateTableData[TblArrayIdx].u1RaTblType < eRateTableMax) {
+		if ((TblType == arRateTableData[TblArrayIdx].u1RaTblType)
+			&& (TblIdx == arRateTableData[TblArrayIdx].u1RaTblIdx)) {
+			TblName = arRateTableData[TblArrayIdx].acTableName;
+			break;
+		}
+
+		TblArrayIdx++;
+	}
+
+	return TblName;
+}
+
+UINT8 getRaTableIndex(UINT8 TblType, CHAR *TblName)
+{
+	UINT8 Index = 0;
+
+	while (arRateTableData[Index].u1RaTblType < eRateTableMax) {
+		if ((arRateTableData[Index].u1RaTblType == TblType)
+			&& (strcmp(arRateTableData[Index].acTableName, TblName) == FALSE))
+			return arRateTableData[Index].u1RaTblIdx;
+
+		Index++;
+	}
+
+	return RA_TBL_INDEX_INVALID;
+}
+INT32 MtCmdInitIPICtrl(
+	RTMP_ADAPTER *pAd,
+	UINT8 BandIdx
+)
+{
+	struct cmd_msg *msg;
+	CMD_INIT_IPI_CTRL_T rInitIPICtrl;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s: BandIdx: %d\n", __func__, BandIdx));
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(rInitIPICtrl));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&rInitIPICtrl, sizeof(rInitIPICtrl));
+	rInitIPICtrl.u4EapCtrlCmdId = INIT_IPI_CTRL;
+	rInitIPICtrl.u1BandIdx = BandIdx;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EAP_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	rInitIPICtrl.u4EapCtrlCmdId = cpu2le32(rInitIPICtrl.u4EapCtrlCmdId);
+
+	MtAndesAppendCmdMsg(msg, (char *)&rInitIPICtrl, sizeof(rInitIPICtrl));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+static VOID ShowEapRaTblInfoCallback(char *rsp_payload, UINT16 rsp_payload_len)
+{
+	P_EVENT_SHOW_RATE_TABLE pTblentry = (P_EVENT_SHOW_RATE_TABLE)rsp_payload;
+	UINT8 NumofRow, NumofCol, RowIndex, ElemIdx;
+	PCHAR TblName;
+	CHAR *fname = NULL;
+	UINT32 write_size, buf_size = 512;
+	UCHAR buf[512];
+	RTMP_OS_FD_EXT srcf;
+	INT retval;
+
+	TblName = getRaTableName(pTblentry->u1RaTblTypeIdx, pTblentry->u1RaTblIdx);
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			("%s TableType:%u TableIdx:%u RW:%u\n", __func__,
+			 pTblentry->u1RaTblTypeIdx, pTblentry->u1RaTblIdx, pTblentry->u1RW));
+
+	if (pTblentry->u1RW) {
+		if (pTblentry->u1RaTblTypeIdx == eRateSwitchTable)
+			fname = EAP_FW_RA_SWITCH_TBL_PATH;
+		else if (pTblentry->u1RaTblTypeIdx == eRateHwFbTable)
+			fname = EAP_FW_RA_HW_FB_TBL_PATH;
+		else
+			fname = NULL;
+
+		if (!fname) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					("--> %s: fname is NULL\n", __func__));
+			pTblentry->u1RW = 0;
+		} else {
+			memset(buf, 0, sizeof(buf));
+			srcf = os_file_open(fname, O_WRONLY | O_CREAT | O_APPEND, 0);
+
+			if (srcf.Status) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("Open file \"%s\" failed!\n", fname));
+				pTblentry->u1RW = 0;
+			}
+		}
+	}
+
+	if (pTblentry->u1RaTblTypeIdx == eRateSwitchTable) {
+		PUINT8 Buf = NULL;
+
+		Buf = (PUINT8) pTblentry->ucBuf;
+		NumofCol = NUM_OF_COL_RATE_SWITCH_TABLE;
+		NumofRow = (pTblentry->u2RaTblLength) / (NumofCol * sizeof(*Buf));
+
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("NumofRow:%u\n", NumofRow));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Table:%s\nItem\tMode\tMCS\tTrnUp\tTrnDn\tUpIdx\tDnIdx"
+				 "\tNssUp\tNssDn\tDnIdx2\tCngBw\tAM24\tAM816\tTxCnt\tCBRN\n",
+				 TblName));
+
+		if (pTblentry->u1RW) {
+			retval = snprintf(buf + strlen(buf), buf_size - strlen(buf),
+					"Table:%s\nItem\tMode\tMCS\tTrnUp\tTrnDn\tUpIdx\tDnIdx"
+					"\tNssUp\tNssDn\tDnIdx2\tCngBw\tAM24\tAM816\tTxCnt\tCBRN\n",
+					TblName);
+			if (os_snprintf_error((buf_size - strlen(buf)), retval)) {
+				MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, " buffer Snprintf failed!\n");
+				return;
+			}
+
+
+			write_size = strlen(buf);
+			retval = os_file_write(srcf, buf, write_size);
+
+			if (retval <= 0)
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("Write file \"%s\" failed for header!\n", fname));
+
+			memset(buf, 0, buf_size);
+		}
+
+		for (RowIndex = 0; RowIndex < NumofRow; RowIndex++) {
+			ElemIdx = RowIndex * NumofCol;
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u"
+					 "\t%u\t%u\t%u\t%u\n",
+					 Buf[ElemIdx], Buf[ElemIdx + 1], Buf[ElemIdx + 2],
+					 Buf[ElemIdx + 3], Buf[ElemIdx + 4], Buf[ElemIdx + 5],
+					 Buf[ElemIdx + 6], Buf[ElemIdx + 7], Buf[ElemIdx + 8],
+					 Buf[ElemIdx + 9], Buf[ElemIdx + 10], Buf[ElemIdx + 11],
+					 Buf[ElemIdx + 12], Buf[ElemIdx + 13], Buf[ElemIdx + 14]));
+
+			if (pTblentry->u1RW) {
+				retval = snprintf(buf + strlen(buf), buf_size - strlen(buf),
+						"%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u"
+						"\t%u\t%u\t%u\n",
+						Buf[ElemIdx], Buf[ElemIdx + 1], Buf[ElemIdx + 2],
+						Buf[ElemIdx + 3], Buf[ElemIdx + 4], Buf[ElemIdx + 5],
+						Buf[ElemIdx + 6], Buf[ElemIdx + 7], Buf[ElemIdx + 8],
+						Buf[ElemIdx + 9], Buf[ElemIdx + 10], Buf[ElemIdx + 11],
+						Buf[ElemIdx + 12], Buf[ElemIdx + 13], Buf[ElemIdx + 14]);
+				if (os_snprintf_error((buf_size - strlen(buf)), retval)) {
+					MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, " buffer Snprintf failed!\n");
+					return;
+				}
+
+				write_size = strlen(buf);
+				retval = os_file_write(srcf, buf, write_size);
+
+				if (retval <= 0)
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							("Write file \"%s\" failed for row:%d!\n",
+							 fname, RowIndex));
+
+				memset(buf, 0, buf_size);
+			}
+		}
+	} else if (pTblentry->u1RaTblTypeIdx == eRateHwFbTable) {
+		PUINT16 Buf = NULL;
+
+		Buf = (PUINT16)pTblentry->ucBuf;
+		NumofCol = NUM_OF_COL_RATE_HWFB_TABLE;
+		NumofRow = (pTblentry->u2RaTblLength) / (NumofCol * sizeof(*Buf));
+
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("NumofRow:%u\n", NumofRow));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Table:%s\nRate1\tRate2\tRate3\tRate4"
+				 "\tRate5\tRate6\tRate7\tRate8\n",
+				 TblName));
+
+		if (pTblentry->u1RW) {
+			snprintf(buf + strlen(buf), buf_size - strlen(buf),
+					"Table:%s\nRate1\tRate2\tRate3\tRate4"
+					"\tRate5\tRate6\tRate7\tRate8\n",
+					TblName);
+			write_size = strlen(buf);
+			retval = os_file_write(srcf, buf, write_size);
+
+			if (retval <= 0)
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("Write file \"%s\" failed for header!\n", fname));
+
+			memset(buf, 0, buf_size);
+		}
+
+		for (RowIndex = 0; RowIndex < NumofRow; RowIndex++) {
+			ElemIdx = RowIndex * NumofCol;
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\n",
+					 Buf[ElemIdx], Buf[ElemIdx + 1], Buf[ElemIdx + 2],
+					 Buf[ElemIdx + 3], Buf[ElemIdx + 4], Buf[ElemIdx + 5],
+					 Buf[ElemIdx + 6], Buf[ElemIdx + 7]));
+
+			if (pTblentry->u1RW) {
+				snprintf(buf + strlen(buf), buf_size - strlen(buf),
+						"%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\n",
+						Buf[ElemIdx], Buf[ElemIdx + 1], Buf[ElemIdx + 2],
+						Buf[ElemIdx + 3], Buf[ElemIdx + 4], Buf[ElemIdx + 5],
+						Buf[ElemIdx + 6], Buf[ElemIdx + 7]);
+
+				write_size = strlen(buf);
+				retval = os_file_write(srcf, buf, write_size);
+
+				if (retval <= 0)
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							("Write file \"%s\" failed for row:%d!\n",
+							 fname, RowIndex));
+
+				memset(buf, 0, buf_size);
+			}
+		}
+	}
+
+	if (pTblentry->u1RW) {
+		if (os_file_close(srcf) != 0) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("Close file \"%s\" failed!\n", fname));
+		} else {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Successfully written in \"%s\"!\n", fname));
+		}
+	}
+}
+
+static VOID ShowEapIPIValueCallback(char *rsp_payload, UINT16 rsp_payload_len)
+{
+	P_EVENT_GET_IPI_VALUE pMentry = (P_EVENT_GET_IPI_VALUE)rsp_payload;
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s\n", __func__));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("IPI value:[0] %x [1] %x [2] %x [3] %x",
+			 le2cpu32(pMentry->au4IPIValue[0]), le2cpu32(pMentry->au4IPIValue[1]),
+			 le2cpu32(pMentry->au4IPIValue[2]), le2cpu32(pMentry->au4IPIValue[3])));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("IPI value:[4] %x [5] %x [6] %x [7] %x",
+			 le2cpu32(pMentry->au4IPIValue[4]), le2cpu32(pMentry->au4IPIValue[5]),
+			 le2cpu32(pMentry->au4IPIValue[6]), le2cpu32(pMentry->au4IPIValue[7])));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("IPI value:[8] %x [9] %x [10] %x",
+			 le2cpu32(pMentry->au4IPIValue[8]), le2cpu32(pMentry->au4IPIValue[9]),
+			 le2cpu32(pMentry->au4IPIValue[10])));
+
+}
+
+static VOID eapEventDispatcher(struct cmd_msg *msg, char *rsp_payload,
+							UINT16 rsp_payload_len)
+{
+	UINT32 u4EventId = (*(UINT32 *)rsp_payload);
+	char *pData = (rsp_payload);
+	UINT16 len = (rsp_payload_len);
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s: u4EventId = %u, len = %u\n", __func__, u4EventId, len));
+#ifdef RT_BIG_ENDIAN
+	u4EventId = cpu2le32(u4EventId);
+#endif
+
+	switch (u4EventId) {
+	case EAP_EVENT_IPI_VALUE:
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				 ("%s: EAP_EVENT_IPI_VALUE\n", __func__));
+		ShowEapIPIValueCallback(pData, len);
+		break;
+
+	case EAP_EVENT_SHOW_RATE_TABLE:
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				 ("%s: EAP_EVENT_SHOW_RATE_TABLE\n", __func__));
+		ShowEapRaTblInfoCallback(pData, len);
+		break;
+
+	default:
+		break;
+	}
+}
+
+INT32 MtCmdGetIPIValue(
+	RTMP_ADAPTER *pAd,
+	UINT8 BandIdx
+)
+{
+	struct cmd_msg *msg;
+	CMD_GET_IPI_VALUE rGetIPIVal;
+	EVENT_GET_IPI_VALUE rIPIValue;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s: BandIdx: %d\n", __func__, BandIdx));
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(rGetIPIVal));
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+	os_zero_mem(&rGetIPIVal, sizeof(rGetIPIVal));
+	rGetIPIVal.u4EapCtrlCmdId = GET_IPI_VALUE;
+	rGetIPIVal.u1BandIdx = BandIdx;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EAP_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY_AND_WAIT_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, sizeof(rIPIValue));
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, &rIPIValue);
+	SET_CMD_ATTR_RSP_HANDLER(attr, eapEventDispatcher);
+	MtAndesInitCmdMsg(msg, attr);
+	rGetIPIVal.u4EapCtrlCmdId = cpu2le32(rGetIPIVal.u4EapCtrlCmdId);
+	MtAndesAppendCmdMsg(msg, (char *)&rGetIPIVal,
+						sizeof(rGetIPIVal));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdSetDataTxPwrOffset(
+	IN PRTMP_ADAPTER pAd,
+	IN UINT16 WlanIdx,
+	IN INT8 TxPwr_Offset,
+	IN UINT8 BandIdx
+)
+{
+	struct cmd_msg *msg;
+	CMD_SET_DATA_TXPWR_OFFSET rSetDataTxPwrOffset;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(rSetDataTxPwrOffset));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&rSetDataTxPwrOffset, sizeof(rSetDataTxPwrOffset));
+	rSetDataTxPwrOffset.u4EapCtrlCmdId = SET_DATA_TXPWR_OFFSET;
+	rSetDataTxPwrOffset.u1WlanIdx = (UINT8)WlanIdx;
+	rSetDataTxPwrOffset.i1TxPwrOffset = TxPwr_Offset;
+	rSetDataTxPwrOffset.u1BandIdx = BandIdx;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EAP_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	rSetDataTxPwrOffset.u4EapCtrlCmdId = cpu2le32(rSetDataTxPwrOffset.u4EapCtrlCmdId);
+	MtAndesAppendCmdMsg(msg, (char *)&rSetDataTxPwrOffset,
+						sizeof(rSetDataTxPwrOffset));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdSetRaTable(
+	PRTMP_ADAPTER pAd,
+	UINT8 BandIdx,
+	UINT8 TblType,
+	UINT8 TblIndex,
+	UINT16 TblLength,
+	PUCHAR Buffer
+)
+{
+	struct cmd_msg *msg;
+	CMD_SET_RA_TABLE rSetRaTblParams;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+	UINT_16 Length = 0;
+
+	if (!Buffer) {
+		ret = NDIS_STATUS_INVALID_DATA;
+		goto error;
+	}
+
+	Length = sizeof(rSetRaTblParams) + TblLength - sizeof(rSetRaTblParams.ucBuf);
+
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s: TblType:%u TblIdx:%u BandIdx: %u, Length:%u\n",
+			  __func__, TblType, TblIndex, BandIdx, Length));
+
+	msg = MtAndesAllocCmdMsg(pAd, Length);
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&rSetRaTblParams, Length);
+	rSetRaTblParams.u4EapCtrlCmdId = SET_RA_TABLE_DATA;
+	rSetRaTblParams.u1RaTblTypeIdx = TblType;
+	rSetRaTblParams.u1RaTblIdx = TblIndex;
+	rSetRaTblParams.u1BandIdx = BandIdx;
+	rSetRaTblParams.u2RaTblLength = TblLength;
+	os_move_mem(rSetRaTblParams.ucBuf, Buffer, TblLength);
+	rSetRaTblParams.u4EapCtrlCmdId = cpu2le32(rSetRaTblParams.u4EapCtrlCmdId);
+	rSetRaTblParams.u2RaTblLength = cpu2le32(rSetRaTblParams.u2RaTblLength);
+#ifdef RT_BIG_ENDIAN
+	RTMPEndianChange(rSetRaTblParams.ucBuf, rSetRaTblParams.u2RaTblLength);
+#endif
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EAP_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	MtAndesAppendCmdMsg(msg, (char *)&rSetRaTblParams, Length);
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdGetRaTblInfo(
+	RTMP_ADAPTER *pAd,
+	UINT8 BandIdx,
+	UINT8 TblType,
+	UINT8 TblIndex,
+	UINT8 ReadnWrite
+)
+{
+	struct cmd_msg *msg;
+	CMD_SHOW_RATE_TABLE rGetRaTbl;
+	EVENT_SHOW_RATE_TABLE rRaTblInfo;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(rGetRaTbl));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&rGetRaTbl, sizeof(rGetRaTbl));
+	rGetRaTbl.u4EapCtrlCmdId = GET_RATE_INFO;
+	rGetRaTbl.u1RaTblTypeIdx = TblType;
+	rGetRaTbl.u1RaTblIdx = TblIndex;
+	rGetRaTbl.u1BandIdx = BandIdx;
+	rGetRaTbl.u1RW = ReadnWrite;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EAP_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY_AND_WAIT_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, sizeof(rRaTblInfo));
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, &rRaTblInfo);
+	SET_CMD_ATTR_RSP_HANDLER(attr, eapEventDispatcher);
+	MtAndesInitCmdMsg(msg, attr);
+	rGetRaTbl.u4EapCtrlCmdId = cpu2le32(rGetRaTbl.u4EapCtrlCmdId);
+	MtAndesAppendCmdMsg(msg, (char *)&rGetRaTbl, sizeof(rGetRaTbl));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+#endif /* WIFI_EAP_FEATURE */
+
+INT32 MtCmdSetEDCCAThreshold(
+	struct _RTMP_ADAPTER *pAd,
+	UINT8 edcca_threshold[],
+	UINT8 BandIdx
+)
+{
+	struct cmd_msg *msg;
+	EXT_CMD_EDCCA_CMD_T EdccaCmd;
+	INT32 ret = 0;
+	INT8 i = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_EDCCA_CMD_T));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&EdccaCmd, sizeof(EdccaCmd));
+	EdccaCmd.u1CmdIdx = SET_EDCCA_CTRL_THRES;
+	EdccaCmd.u1BandIdx = BandIdx;
+	os_move_mem(EdccaCmd.u1Val, edcca_threshold, 3);
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EDCCA);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	EdccaCmd.u1CmdIdx = cpu2le32(EdccaCmd.u1CmdIdx);
+	for (i = 0 ; i < 3 ; i++)
+		EdccaCmd.u1Val[i] = cpu2le32(EdccaCmd.u1Val[i]);
+
+	MtAndesAppendCmdMsg(msg, (char *)&EdccaCmd,
+						sizeof(EdccaCmd));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdSetEDCCACEnable(
+	RTMP_ADAPTER *pAd,
+	UCHAR        BandIdx,
+	UCHAR        EDCCACtrl
+)
+{
+	struct cmd_msg *msg;
+	EXT_CMD_EDCCA_CMD_T EdccaCmd;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_EDCCA_CMD_T));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	os_zero_mem(&EdccaCmd, sizeof(EXT_CMD_EDCCA_CMD_T));
+
+	EdccaCmd.u1CmdIdx = SET_EDCCA_CTRL_EN;
+	EdccaCmd.u1BandIdx = BandIdx;
+	EdccaCmd.u1Val[0] = EDCCACtrl;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EDCCA);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	EdccaCmd.u1CmdIdx = cpu2le32(EdccaCmd.u1CmdIdx);
+	EdccaCmd.u1Val[0] = cpu2le32(EdccaCmd.u1Val[0]);
+	MtAndesAppendCmdMsg(msg, (char *)&EdccaCmd,
+						sizeof(EdccaCmd));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdGetEDCCAThreshold(
+	RTMP_ADAPTER *pAd,
+	UCHAR        BandIdx,
+	BOOLEAN fginit
+)
+{
+	struct cmd_msg *msg;
+	EXT_CMD_EDCCA_CMD_T EdccaCmd;
+	INT32 ret = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_EDCCA_CMD_T));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+	os_zero_mem(&EdccaCmd, sizeof(EXT_CMD_EDCCA_CMD_T));
+	EdccaCmd.u1CmdIdx = GET_EDCCA_CTRL_THRES;
+	EdccaCmd.u1BandIdx = BandIdx;
+	EdccaCmd.fginit = fginit;
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EDCCA);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+	EdccaCmd.u1CmdIdx = cpu2le32(EdccaCmd.u1CmdIdx);
+	MtAndesAppendCmdMsg(msg, (char *)&EdccaCmd,
+						sizeof(EdccaCmd));
+	ret = chip_cmd_tx(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+
+INT32 MtCmdGetEDCCAEnable(
+	RTMP_ADAPTER *pAd,
+	UCHAR        BandIdx
+)
+{
+		struct cmd_msg *msg;
+		EXT_CMD_EDCCA_CMD_T EdccaCmd;
+		INT32 ret = 0;
+		struct _CMD_ATTRIBUTE attr = {0};
+
+		msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_EDCCA_CMD_T));
+
+		if (!msg) {
+			ret = NDIS_STATUS_RESOURCES;
+			goto error;
+		}
+		os_zero_mem(&EdccaCmd, sizeof(EXT_CMD_EDCCA_CMD_T));
+		EdccaCmd.u1CmdIdx = GET_EDCCA_CTRL_EN;
+		EdccaCmd.u1BandIdx = BandIdx;
+		SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+		SET_CMD_ATTR_TYPE(attr, EXT_CID);
+		SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_EDCCA);
+		SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY);
+		SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+		SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+		SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+		SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+		MtAndesInitCmdMsg(msg, attr);
+		EdccaCmd.u1CmdIdx = cpu2le32(EdccaCmd.u1CmdIdx);
+		MtAndesAppendCmdMsg(msg, (char *)&EdccaCmd,
+							sizeof(EdccaCmd));
+		ret = chip_cmd_tx(pAd, msg);
+error:
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 ("%s:(ret = %d)\n", __func__, ret));
+		return ret;
+}
 #ifdef WIFI_GPIO_CTRL
 INT32 MtCmdSetGpioCtrl(
 	RTMP_ADAPTER *pAd,
@@ -13648,89 +14223,6 @@ error:
 	return ret;
 }
 
-#if defined(MT7615) || defined(MT7622)
-INT32 CmdTxBfTxPwrBackOff(
-	RTMP_ADAPTER *pAd,
-	UCHAR        ucBandIdx,
-	PCHAR        pacTxPwrFccBfOnCase,
-	PCHAR        pacTxPwrFccBfOffCase)
-{
-	struct cmd_msg *msg;
-	INT32 ret = 0;
-	EXT_CMD_BF_TX_PWR_BACK_OFF_T rTxPwrBackOff;
-	struct _CMD_ATTRIBUTE attr = {0};
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s: ucBandIdx = %d\n", __FUNCTION__, ucBandIdx));
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_BF_TX_PWR_BACK_OFF_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	rTxPwrBackOff.ucCmdCategoryID = BF_TX_POWER_BACK_OFF_V0;
-	rTxPwrBackOff.ucBandIdx       = ucBandIdx;
-	os_move_mem(rTxPwrBackOff.acTxPwrFccBfOnCase, pacTxPwrFccBfOnCase, 10);
-	os_move_mem(rTxPwrBackOff.acTxPwrFccBfOffCase, pacTxPwrFccBfOffCase, 10);
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_TX_POWER_FEATURE_CTRL);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
-	MtAndesInitCmdMsg(msg, attr);
-	MtAndesAppendCmdMsg(msg, (char *)&rTxPwrBackOff, sizeof(EXT_CMD_BF_TX_PWR_BACK_OFF_T));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s:(ret = %d)\n", __FUNCTION__, ret));
-	return ret;
-}
-
-INT32 MtCmdThermalManCtrl(
-	IN RTMP_ADAPTER *pAd,
-	IN UINT8 u1BandIdx,
-	IN BOOLEAN fgManualMode,
-	IN UINT8 u1ThermalAdc)
-{
-	struct cmd_msg *msg;
-	CMD_THERMAL_MAN_CTRL_T rThermalManCtrl;
-	INT32 ret = 0;
-	struct _CMD_ATTRIBUTE attr = {0};
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("%s(): u1BandIdx: %d, fgManualMode: %d, u1ThermalAdc: %d\n", __func__, u1BandIdx, fgManualMode, u1ThermalAdc));
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(CMD_THERMAL_MAN_CTRL_T));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	os_zero_mem(&rThermalManCtrl, sizeof(CMD_THERMAL_MAN_CTRL_T));
-	rThermalManCtrl.u1PowerCtrlFormatId = TXPOWER_EVENT_THERMAL_SENSOR_SHOW_INFO;
-	rThermalManCtrl.fgManualMode = fgManualMode;
-	rThermalManCtrl.u1ThermalAdc = u1ThermalAdc;
-	rThermalManCtrl.u1BandIdx = u1BandIdx;
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_THERMAL_FEATURE_CTRL);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
-	MtAndesInitCmdMsg(msg, attr);
-	MtAndesAppendCmdMsg(msg, (char *)&rThermalManCtrl,
-						sizeof(CMD_THERMAL_MAN_CTRL_T));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-#else
 INT32 MtCmdThermalManCtrl(
 	IN RTMP_ADAPTER *pAd,
 	IN UINT8 u1BandIdx,
@@ -13856,7 +14348,6 @@ error:
 			 ("%s:(ret = %d)\n", __func__, ret));
 	return ret;
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 #ifdef GREENAP_SUPPORT
 INT32 MtCmdExtGreenAPOnOffCtrl(
@@ -14102,7 +14593,7 @@ INT32 MtCmdPktBudgetCtrl(struct _RTMP_ADAPTER *pAd, UINT8 bss_idx, UINT16 wcid, 
 	struct _CMD_PKT_BUDGET_CTRL_T  pbc;
 	struct _CMD_PKT_BUDGET_CTRL_ENTRY_T *entry;
 	struct _CMD_ATTRIBUTE attr = {0};
-	UCHAR i;
+	UCHAR i, j;
 	UINT32 size = sizeof(pbc);
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			 (":%s: bssid(%d),wcid(%d),type(%d)\n", __func__, bss_idx, wcid, type));
@@ -14132,23 +14623,27 @@ INT32 MtCmdPktBudgetCtrl(struct _RTMP_ADAPTER *pAd, UINT8 bss_idx, UINT16 wcid, 
 	os_zero_mem(&pbc, size);
 	pbc.wlan_idx = cpu2le16(wcid);
 	pbc.bss_id = bss_idx;
-	pbc.queue_num = PBC_NUM_OF_PKT_BUDGET_CTRL_QUE;
+	pbc.queue_num = PBC_NUM_OF_PKT_BUDGET_CTRL_QUE * DBDC_BAND_NUM;
 
 	switch (type) {
 	case PBC_TYPE_NORMAL: {
-		for (i = 0; i < PBC_NUM_OF_PKT_BUDGET_CTRL_QUE; i++) {
-			entry = &pbc.aacQue[i];
-			entry->lower_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
-			entry->upper_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
+		for (j = 0; j < DBDC_BAND_NUM; j++) {
+			for (i = 0; i < PBC_NUM_OF_PKT_BUDGET_CTRL_QUE; i++) {
+				entry = &pbc.aacQue[i + j * PBC_NUM_OF_PKT_BUDGET_CTRL_QUE];
+				entry->lower_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
+				entry->upper_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
+			}
 		}
 	}
 	break;
 
 	case PBC_TYPE_WMM: {
-		for (i = 0; i < PBC_NUM_OF_PKT_BUDGET_CTRL_QUE; i++) {
-			entry = &pbc.aacQue[i];
-			entry->lower_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
-			entry->upper_bound = cpu2le16(pAd->pbc_bound[i]);
+		for (j = 0; j < DBDC_BAND_NUM; j++) {
+			for (i = 0; i < PBC_NUM_OF_PKT_BUDGET_CTRL_QUE; i++) {
+				entry = &pbc.aacQue[i + j * PBC_NUM_OF_PKT_BUDGET_CTRL_QUE];
+				entry->lower_bound = cpu2le16(PBC_BOUNDARY_RESET_TO_DEFAULT);
+				entry->upper_bound = cpu2le16(pAd->pbc_bound[j][i]);
+			}
 		}
 	}
 	break;
@@ -14161,7 +14656,77 @@ INT32 MtCmdPktBudgetCtrl(struct _RTMP_ADAPTER *pAd, UINT8 bss_idx, UINT16 wcid, 
 			 ("%s: (ret = %d)\n", __func__, Ret));
 	return Ret;
 }
+
+INT32 MtCmdPktBudgetCtrlQoS(struct _RTMP_ADAPTER *pAd, BOOLEAN qos_enable)
+{
+	struct cmd_msg *msg;
+	INT32 Ret = 0;
+	CMD_PKT_BUDGET_CTRL_QOS_T pbc_qos;
+	struct _CMD_ATTRIBUTE attr = {0};
+	UINT32 size = sizeof(pbc_qos);
+
+	msg = MtAndesAllocCmdMsg(pAd, size);
+	if (!msg)
+		return NDIS_STATUS_RESOURCES;
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2CR4);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_PKT_BUDGET_CTRL_CFG_QOS);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
+	MtAndesInitCmdMsg(msg, attr);
+	os_zero_mem(&pbc_qos, size);
+	pbc_qos.qos_enable = qos_enable ? 1 : 0;
+
+	MtAndesAppendCmdMsg(msg, (char *)&pbc_qos, size);
+	Ret = chip_cmd_tx(pAd, msg);
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			 ("%s: (ret = %d)\n", __func__, Ret));
+	return Ret;
+}
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+INT32 MtCmdStaPsQLimit(struct _RTMP_ADAPTER *pAd, UINT16 wcid, UINT16 PsQLimit)
+{
+	struct cmd_msg *msg;
+	INT32 Ret = 0;
+	struct _CMD_STA_PS_Q_LIMIT_T  StaPsLimit;
+	struct _CMD_ATTRIBUTE attr = {0};
+	UINT32 size = sizeof(StaPsLimit);
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"wcid(%d),PsQLimit(%d)\n", wcid, PsQLimit);
+
+	msg = MtAndesAllocCmdMsg(pAd, size);
+
+	if (!msg) {
+		Ret = NDIS_STATUS_RESOURCES;
+		return Ret;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2CR4);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_STA_PS_Q_LIMIT);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 8);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
+	MtAndesInitCmdMsg(msg, attr);
+	os_zero_mem(&StaPsLimit, size);
+	StaPsLimit.u2Wcid = cpu2le16(wcid);
+	StaPsLimit.u2PsQLimit = cpu2le16(PsQLimit);
+
+	MtAndesAppendCmdMsg(msg, (char *)&StaPsLimit, size);
+	Ret = chip_cmd_tx(pAd, msg);
+	MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d)\n", Ret);
+	return Ret;
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 INT32 MtCmdSetBWFEnable(RTMP_ADAPTER *pAd, UINT8 Enable)
 {
@@ -14194,7 +14759,7 @@ INT32 MtCmdSetBWFEnable(RTMP_ADAPTER *pAd, UINT8 Enable)
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			 ("%s: send cmd to N9 CmdBWFEnable.ucBwfLwcEnable [%d] Enable[%d]\n"
 			  , __func__, CmdBWFEnable.ucBwfLwcEnable, Enable));
-	ret = chip_cmd_tx(pAd, msg);
+	chip_cmd_tx(pAd, msg);
 	/* send the same msg to CR4 */
 	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_ID_BWF_LWC_ENABLE_T));
 
@@ -15262,6 +15827,194 @@ error:
 	return Ret;
 }
 
+INT SetHeraMuInitRateInterval(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	PCHAR pch = NULL;
+	INT32 Ret = TRUE;
+	/* prepare command message */
+	struct _CMD_ATTRIBUTE attr = {0};
+	struct cmd_msg *msg = NULL;
+	UINT32 cmd = HERA_CFG_MU_INIT_RATE_INTV_CMD;
+	CMD_CFG_MU_INIT_RATE_INTV_T param;
+
+	os_zero_mem(&param, sizeof(param));
+
+	pch = strsep(&arg, "");
+	if (pch != NULL) {
+		param.u1IntvInUnit50Ms = os_str_toul(pch, 0, 10);
+	} else {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Empty u1IntvInUnit50Ms !!\n", __func__));
+		Ret = 0;
+		goto error;
+	}
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: u1IntvInUnit50Ms:%d !!\n",
+			__func__, param.u1IntvInUnit50Ms));
+
+	msg = AndesAllocCmdMsg(pAd, sizeof(cmd) + sizeof(param));
+
+	if (!msg) {
+		Ret = 0;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_HE_RA_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	AndesInitCmdMsg(msg, attr);
+#ifdef RT_BIG_ENDIAN
+	cmd = cpu2le32(cmd);
+#endif
+	AndesAppendCmdMsg(msg, (char *)&cmd, sizeof(cmd));
+	AndesAppendCmdMsg(msg, (char *)&param, sizeof(param));
+	AndesSendCmdMsg(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s:(Ret = %d\n", __func__, Ret));
+
+	return Ret;
+}
+
+INT SetHeraMuDisableSwitchSu(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	PCHAR pch = NULL;
+	INT32 Ret = TRUE;
+	/* prepare command message */
+	struct _CMD_ATTRIBUTE attr = {0};
+	struct cmd_msg *msg = NULL;
+	UINT32 cmd = HERA_CFG_MU_DIS_SWITCH_SU_CMD;
+	CMD_CFG_MU_DIS_SWITCH_SU_T param;
+
+	os_zero_mem(&param, sizeof(param));
+
+	pch = strsep(&arg, "");
+	if (pch != NULL) {
+		param.fgDisSwitchSU = os_str_toul(pch, 0, 10) ? 1 : 0;
+	} else {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Empty fgDisSwitchSU !!\n", __func__));
+		Ret = 0;
+		goto error;
+	}
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: fgDisSwitchSU:%d !!\n",
+			__func__, param.fgDisSwitchSU));
+
+	msg = AndesAllocCmdMsg(pAd, sizeof(cmd) + sizeof(param));
+
+	if (!msg) {
+		Ret = 0;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_HE_RA_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	AndesInitCmdMsg(msg, attr);
+#ifdef RT_BIG_ENDIAN
+	cmd = cpu2le32(cmd);
+#endif
+	AndesAppendCmdMsg(msg, (char *)&cmd, sizeof(cmd));
+	AndesAppendCmdMsg(msg, (char *)&param, sizeof(param));
+	AndesSendCmdMsg(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s:(Ret = %d\n", __func__, Ret));
+
+	return Ret;
+}
+
+INT SetHeraSingleNssTxEnable(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	RTMP_STRING *arg)
+{
+	PCHAR pch = NULL;
+	INT32 Ret = TRUE;
+	/* prepare command message */
+	struct _CMD_ATTRIBUTE attr = {0};
+	struct cmd_msg *msg = NULL;
+	UINT32 cmd = HERA_SINGLE_NSS_TX_EN_CMD;
+	struct _CMD_CFG_SINGLE_NSS_TX_EN_T param;
+
+	os_zero_mem(&param, sizeof(param));
+
+	pch = strsep(&arg, ":");
+	if (pch != NULL) {
+		param.u1BandIdx = os_str_toul(pch, 0, 10);
+		/* sanity check for Band index */
+		if (param.u1BandIdx >= DBDC_BAND_NUM) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					("%s: Invalid Band Index !!\n", __func__));
+			Ret = 0;
+			goto error;
+		}
+	} else {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Empty Band Index !!\n", __func__));
+		Ret = 0;
+		goto error;
+	}
+
+	pch = strsep(&arg, "");
+	if (pch != NULL) {
+		param.fgSingleNssTxEn = os_str_toul(pch, 0, 10) ? 1 : 0;
+	} else {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Empty fgSingleNssTxEn !!\n", __func__));
+		Ret = 0;
+		goto error;
+	}
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: BandIdx:%d fgSingleNssTxEn:%d !!\n",
+			__func__, param.u1BandIdx, param.fgSingleNssTxEn));
+
+	msg = AndesAllocCmdMsg(pAd, sizeof(cmd) + sizeof(param));
+
+	if (!msg) {
+		Ret = 0;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_HE_RA_CTRL);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_RETRY);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	AndesInitCmdMsg(msg, attr);
+#ifdef RT_BIG_ENDIAN
+	cmd = cpu2le32(cmd);
+#endif
+	AndesAppendCmdMsg(msg, (char *)&cmd, sizeof(cmd));
+	AndesAppendCmdMsg(msg, (char *)&param, sizeof(param));
+	AndesSendCmdMsg(pAd, msg);
+error:
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("%s:(Ret = %d\n", __func__, Ret));
+
+	return Ret;
+}
+
 INT32 mt_cmd_set_rdd_ipi_hist(
 	PRTMP_ADAPTER pAd,
 	P_EXT_CMD_RDD_IPI_HIST_T p_cmd_rdd_ipi_hist)
@@ -15348,41 +16101,6 @@ INT32 mt_cmd_get_rdd_ipi_hist(
 	rdd_ipi_hist_cmd.ipi_hist_idx = rdd_ipi_hist_idx;
 	rdd_ipi_hist_cmd.band_idx = p_rdd_ipi_hist_rlt->band_idx;
 	MtAndesAppendCmdMsg(msg, (char *)&rdd_ipi_hist_cmd, sizeof(EXT_CMD_RDD_IPI_HIST_T));
-	ret = chip_cmd_tx(pAd, msg);
-error:
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s:(ret = %d)\n", __func__, ret));
-	return ret;
-}
-
-
-INT32 mt_cmd_set_ed_cca(
-	RTMP_ADAPTER *pAd,
-	P_EXT_CMD_ED_CCA_CTRL p_cmd_set_edcca)
-{
-	struct cmd_msg *msg;
-	INT32 ret = 0;
-	struct _CMD_ATTRIBUTE attr = {0};
-
-	msg = MtAndesAllocCmdMsg(pAd, sizeof(EXT_CMD_ED_CCA_CTRL));
-
-	if (!msg) {
-		ret = NDIS_STATUS_RESOURCES;
-		goto error;
-	}
-
-	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
-	SET_CMD_ATTR_TYPE(attr, EXT_CID);
-	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_SET_EDCCA);
-	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
-	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
-	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
-	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
-	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
-
-	MtAndesInitCmdMsg(msg, attr);
-	MtAndesAppendCmdMsg(msg, (char *)p_cmd_set_edcca,
-						sizeof(EXT_CMD_ED_CCA_CTRL));
 	ret = chip_cmd_tx(pAd, msg);
 error:
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -15991,6 +16709,50 @@ error:
 }
 #endif
 
+#ifdef PLE_MONITOR_SUPPORT
+INT32 cmd_flush_ac_queue(struct _RTMP_ADAPTER *ad, UINT16 u2WlanId, UINT16 u2PktCnt, BOOLEAN fgNeedChkPs)
+{
+	struct cmd_msg *msg;
+	INT32 ret = 0, size = 0;
+	struct _CMD_ATTRIBUTE attr = {0};
+	struct _CMD_SET_FLUSH_AC_QUEUE_T flush_ac_cmd = {0};
+
+	size = sizeof(CMD_SET_FLUSH_AC_QUEUE_T);
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s(): wcid = %d, pkt_cnt = %d, need_chk_ps = %d\n",
+		__func__, u2WlanId, u2PktCnt, fgNeedChkPs));
+
+	msg = MtAndesAllocCmdMsg(ad, size);
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	/*set attr*/
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_FLUSH_AC_QUEUE);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET_AND_WAIT_RETRY_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, MT_IGNORE_PAYLOAD_LEN_CHECK);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, EventExtCmdResult);
+	MtAndesInitCmdMsg(msg, attr);
+
+	flush_ac_cmd.u2WlanId = u2WlanId;
+	flush_ac_cmd.u2PktCnt = u2PktCnt;
+	flush_ac_cmd.fgNeedChkPs = fgNeedChkPs;
+
+	MtAndesAppendCmdMsg(msg, (UCHAR *)&flush_ac_cmd, size);
+	ret = chip_cmd_tx(ad, msg);
+error:
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+		("%s:(ret = %d)\n", __func__, ret));
+	return ret;
+}
+#endif
+
 INT ShowHeraRelatedInfoProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	INT32 Ret = TRUE;
@@ -16088,7 +16850,7 @@ static VOID mt_cmd_get_lte_safe_channel_rsp(
 	UINT16 Len)
 {
 	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *) msg->priv;
-	
+
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s, pAd:%p, Data:%p, Len:%d\n", __func__, pAd, Data, Len));
 	ExtEventLteSafeChnHandler(pAd, Data, Len);
 }
@@ -16123,6 +16885,81 @@ error:
 	return;
 }
 
+static VOID mt_cmd_get_idc_info_rsp(
+	struct cmd_msg *msg,
+	char *Data,
+	UINT16 Len)
+{
+	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *) msg->priv;
+
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pAd:%p, Data:%p, Len:%d\n", pAd, Data, Len);
+	ExtEventIdcEventHandler(pAd, Data, Len);
+}
+
+VOID MtCmdIdcInfoQuery(struct _RTMP_ADAPTER *pAd)
+{
+	struct cmd_msg *msg;
+	struct _CMD_ATTRIBUTE attr = {0};
+	INT32 ret = 0;
+
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "\n");
+	msg = MtAndesAllocCmdMsg(pAd, 0);
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_GET_IDC_INFO);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_QUERY_AND_WAIT_RSP);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, sizeof(COEX_IDC_INFO));
+	SET_CMD_ATTR_RSP_HANDLER(attr, mt_cmd_get_idc_info_rsp);
+	MtAndesInitCmdMsg(msg, attr);
+	ret = chip_cmd_tx(pAd, msg);
+error:
+
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "(ret = %d)\n", ret);
+	return;
+}
+
+INT32 MtCmdIdcStateUpdate(struct _RTMP_ADAPTER *pAd, BOOLEAN enable)
+{
+	struct cmd_msg *msg;
+	INT32 ret = 0;
+	UINT32 Val;
+	struct _CMD_ATTRIBUTE attr = {0};
+
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "\n");
+	msg = MtAndesAllocCmdMsg(pAd, sizeof(UINT32));
+
+	if (!msg) {
+		ret = NDIS_STATUS_RESOURCES;
+		goto error;
+	}
+
+	SET_CMD_ATTR_MCU_DEST(attr, HOST2N9);
+	SET_CMD_ATTR_TYPE(attr, EXT_CID);
+	SET_CMD_ATTR_EXT_TYPE(attr, EXT_CMD_ID_SET_IDC_STATE);
+	SET_CMD_ATTR_CTRL_FLAGS(attr, INIT_CMD_SET);
+	SET_CMD_ATTR_RSP_WAIT_MS_TIME(attr, 0);
+	SET_CMD_ATTR_RSP_EXPECT_SIZE(attr, 0);
+	SET_CMD_ATTR_RSP_WB_BUF_IN_CALBK(attr, NULL);
+	SET_CMD_ATTR_RSP_HANDLER(attr, NULL);
+	MtAndesInitCmdMsg(msg, attr);
+
+	Val = cpu2le32(enable);
+	MtAndesAppendCmdMsg(msg, (char *)&Val, sizeof(Val));
+	ret = chip_cmd_tx(pAd, msg);
+
+error:
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "(ret = %d)\n", ret);
+	return ret;
+}
 
 #endif
 

@@ -39,7 +39,8 @@ s_int32 mt_test_mac_restore_cr(
 s_int32 mt_test_mac_set_ampdu_ba_limit(
 	struct test_wlan_info *winfos,
 	u_int8 wmm_idx,
-	u_int8 agg_limit);
+	u_int8 agg_limit,
+	u_int8 bandidx);
 s_int32 mt_test_mac_set_sta_pause_cr(
 	struct test_wlan_info *winfos);
 s_int32 mt_test_mac_set_ifs_cr(

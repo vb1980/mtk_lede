@@ -445,8 +445,6 @@ static inline BOOLEAN WscCheckWSCHeader(UCHAR *pData)
 #define WSC_WPS_FAIL_LED_PATTERN_TIMEOUT		15000		/* 15 seconds. */
 #define WSC_WPS_SKIP_TURN_OFF_LED_TIMEOUT		2500			/* 2.5 seconds. */
 #define WSC_WPS_TURN_OFF_LED_TIMEOUT			1000			/* 1 second. */
-#define WSC_WPS_TURN_OFF_LED_TIMEOUT_5SEC		5000			/* 5 second. */
-#define WSC_WPS_TURN_OFF_LED_TIMEOUT_500MS		500				/* 0.5 second. */
 #endif /* WSC_LED_SUPPORT */
 
 #ifdef WSC_V2_SUPPORT

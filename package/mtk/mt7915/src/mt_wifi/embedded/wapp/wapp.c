@@ -85,7 +85,7 @@ UINT8 get_channel_utilization(PRTMP_ADAPTER pAd, u32 ifindex)
 	}
 
 	Channel = wdev->channel;
-	i = HcGetBandByChannel(pAd, Channel);
+	i = HcGetBandByWdev(wdev);
 	ObssAirTime[i] = Get_OBSS_AirTime(pAd, i);
 	MyTxAirTime[i] = Get_My_Tx_AirTime(pAd, i);
 	MyRxAirTime[i] = Get_My_Rx_AirTime(pAd, i);
@@ -98,7 +98,18 @@ UINT8 get_channel_utilization(PRTMP_ADAPTER pAd, u32 ifindex)
 	if (MyTxAirTime[i] != 0 || MyRxAirTime[i] != 0)
 		MyAirOccupyPercentage[i] = ((MyTxAirTime[i] + MyRxAirTime[i]) * 100)/ONE_SEC_2_US;
 
+	if (MyAirOccupyPercentage[i] >= 100) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			("MyAirOccupyPercentage exceeds and return 255!!\n"));
+		return 255;
+	}
 	res = (MyAirOccupyPercentage[i] + ObssAirOccupyPercentage[i]);
+
+	if (res >= 100) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			("TotalOccupyPercentage exceeds and return 255!!\n"));
+		return 255;
+	}
 	/* convert to a scale of 255 */
 	res *= 255;
 	res = (res / 100);
@@ -224,10 +235,13 @@ INT wapp_send_wdev_vht_cap_rsp(
 				switch	(wlan_operate_get_rx_stream(wdev)) {
 				case 4:
 					drv_vht_op.basic_mcs_set.mcs_ss4 = cap->mcs_nss.max_vht_mcs;
+					/* fall through */
 				case 3:
 					drv_vht_op.basic_mcs_set.mcs_ss3 = cap->mcs_nss.max_vht_mcs;
+					/* fall through */
 				case 2:
 					drv_vht_op.basic_mcs_set.mcs_ss2 = cap->mcs_nss.max_vht_mcs;
+					/* fall through */
 				case 1:
 					drv_vht_op.basic_mcs_set.mcs_ss1 = cap->mcs_nss.max_vht_mcs;
 					break;
@@ -241,10 +255,13 @@ INT wapp_send_wdev_vht_cap_rsp(
 					switch	(wlan_operate_get_rx_stream(wdev)) {
 					case 4:
 						drv_vht_op.basic_mcs_set.mcs_ss4 = VHT_MCS_CAP_8;
+						/* fall through */
 					case 3:
 						drv_vht_op.basic_mcs_set.mcs_ss3 = VHT_MCS_CAP_9;
+						/* fall through */
 					case 2:
 						drv_vht_op.basic_mcs_set.mcs_ss2 = VHT_MCS_CAP_8;
+						/* fall through */
 					case 1:
 						drv_vht_op.basic_mcs_set.mcs_ss1 = VHT_MCS_CAP_8;
 						break;
@@ -259,10 +276,13 @@ INT wapp_send_wdev_vht_cap_rsp(
 					switch	(wlan_operate_get_rx_stream(wdev)) {
 					case 4:
 						drv_vht_op.basic_mcs_set.mcs_ss4 = VHT_MCS_CAP_9;
+						/* fall through */
 					case 3:
 						drv_vht_op.basic_mcs_set.mcs_ss3 = VHT_MCS_CAP_8;
+						/* fall through */
 					case 2:
 						drv_vht_op.basic_mcs_set.mcs_ss2 = VHT_MCS_CAP_9;
+						/* fall through */
 					case 1:
 						drv_vht_op.basic_mcs_set.mcs_ss1 = VHT_MCS_CAP_9;
 						break;
@@ -393,23 +413,47 @@ INT wapp_fill_client_info_new(
 	STA_TR_ENTRY *tr_entry;
 	ULONG DataRate = 0, DataRate_r = 0;
 	HTTRANSMIT_SETTING HTPhyMode;
-	HETRANSMIT_SETTING HEPhyMode;
+	HE_TRANSMIT_SETTING HEPhyMode;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+	USHORT PhyMode;
+#ifdef MAP_WF6
+	int i = 0;
+	struct ppdu_caps *ppdu = NULL;
+#endif
 #ifdef DOT11_HE_AX
 	UINT8 he_dcm = 0, he_mcs = 0, he_nss = 0;
 #endif
 	tr_entry = &tr_ctl->tr_entry[mac_entry->wcid];
 
 	COPY_MAC_ADDR(cli_info->mac_addr, mac_entry->Addr);
-	COPY_MAC_ADDR(cli_info->bssid, mac_entry->wdev->bssid);
-	cli_info->sta_status = \
-		(tr_entry->PortSecured == WPA_802_1X_PORT_SECURED) ?
-		WAPP_STA_CONNECTED : WAPP_STA_DISCONNECTED;
+
+	/*wapp_send_cli_query_rsp() will called by user space daemon*/
+	/*and the caller have an for loop this */
+	/* lock may suffer system performance.*/
+	NdisAcquireSpinLock(&pAd->MacTabLock);
+	if (mac_entry->wdev) {
+		COPY_MAC_ADDR(cli_info->bssid, mac_entry->wdev->bssid);
+		PhyMode = mac_entry->wdev->PhyMode;
+#ifdef MAP_WF6
+	ppdu = (struct ppdu_caps *)wlan_config_get_ppdu_caps(mac_entry->wdev);
+#endif
+	}
+	else
+		NdisZeroMemory(cli_info->bssid, MAC_ADDR_LEN);
+	NdisReleaseSpinLock(&pAd->MacTabLock);
+
+	if (tr_entry)
+		cli_info->sta_status = (tr_entry->PortSecured == WPA_802_1X_PORT_SECURED) ? WAPP_STA_CONNECTED : WAPP_STA_DISCONNECTED;
+	else
+		cli_info->sta_status =  WAPP_STA_DISCONNECTED;
+
 	cli_info->assoc_time = mac_entry->StaConnectTime;
 	cli_info->assoc_req_len = mac_entry->assoc_req_len;
-	HEPhyMode.word = (USHORT)mac_entry->map_LastTxRate;
+	HEPhyMode.Dword = (USHORT)mac_entry->map_LastTxRate;
+	HTPhyMode.word = (USHORT)mac_entry->map_LastTxRate;
 #ifdef DOT11_HE_AX
-		if (HEPhyMode.field.MODE == MODE_HE_SU_REMAPPING) {
+		if ((HEPhyMode.field.MODE == MODE_HE_SU_REMAPPING) ||
+			(HEPhyMode.field.MODE == MODE_HE_SU)) {
 			he_mcs = HEPhyMode.field.MCS & 0xf;
 			he_dcm = HEPhyMode.field.MCS  & 0x10 ? 1 : 0;
 			he_nss = ((HEPhyMode.field.MCS & (0x3 << 5)) >> 5) + 1;
@@ -418,7 +462,6 @@ INT wapp_fill_client_info_new(
 		} else
 #endif
 		{
-			HTPhyMode.word = (USHORT)mac_entry->map_LastTxRate;
 			getRate(HTPhyMode, &DataRate);
 			cli_info->downlink = (u16) DataRate;
 		}
@@ -469,7 +512,7 @@ INT wapp_fill_client_info_new(
 	/*11 AX Support*/
 #ifdef DOT11_HE_AX
 	if (cli_info->cli_caps.phy_mode == MODE_HE) {
-		if (mac_entry->wdev->channel < 14)
+		if (mac_entry->wdev && mac_entry->wdev->channel < 14)
 			cli_info->cli_caps.bw = peer_max_bw_cap(mac_entry->cap.ch_bw.he_ch_width & 0x01);
 		else
 			cli_info->cli_caps.bw = peer_max_bw_cap(mac_entry->cap.ch_bw.he_ch_width & 0x0E);
@@ -504,7 +547,22 @@ INT wapp_fill_client_info_new(
 	} else
 #endif
 		cli_info->is_APCLI = 0;
-
+#ifdef MAP_WF6
+		cli_info->tid_cnt = MAX_TID;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "WF6:Driver:Setting TID value for %02x:%02x:%02x:%02x:%02x:%02x\n",
+			PRINT_MAC(cli_info->mac_addr));
+		if (ppdu) {
+			for (i = 0; i < MAX_TID; i++) {
+				cli_info->status_tlv[i].tid = i;
+				if (WMODE_CAP_AX(PhyMode))
+					cli_info->status_tlv[i].tid_q_size = ppdu->he_tx_ba_wsize;
+				else
+					cli_info->status_tlv[i].tid_q_size = ppdu->non_he_tx_ba_wsize;
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "WF6:Driver:tid_cnt %x, tid %x, tid_q_size %x\n",
+					cli_info->tid_cnt, cli_info->status_tlv[i].tid, cli_info->status_tlv[i].tid_q_size);
+			}
+		}
+#endif
 	return 0;
 }
 
@@ -523,11 +581,17 @@ INT wapp_fill_client_info(
 	EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
 	HTTRANSMIT_SETTING LastTxRate;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+	USHORT PhyMode;
+#ifdef MAP_WF6
+	int i = 0;
+	struct ppdu_caps *ppdu = NULL;
+#endif
 #ifdef DOT11_HE_AX
 	UINT8 he_dcm = 0, he_mcs = 0;
 
 #endif
 
+	os_zero_mem(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
 	MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, mac_entry->wcid, &rTxStatResult);
 	LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
 	LastTxRate.field.BW = rTxStatResult.rEntryTxRate.BW;
@@ -554,10 +618,24 @@ INT wapp_fill_client_info(
 	tr_entry = &tr_ctl->tr_entry[mac_entry->wcid];
 
 	COPY_MAC_ADDR(cli_info->mac_addr, mac_entry->Addr);
-	COPY_MAC_ADDR(cli_info->bssid, mac_entry->wdev->bssid);
-	cli_info->sta_status = \
-				(tr_entry->PortSecured == WPA_802_1X_PORT_SECURED) ?
-				WAPP_STA_CONNECTED : WAPP_STA_DISCONNECTED;
+
+	NdisAcquireSpinLock(&pAd->MacTabLock);
+	if (mac_entry->wdev) {
+		COPY_MAC_ADDR(cli_info->bssid, mac_entry->wdev->bssid);
+		PhyMode = mac_entry->wdev->PhyMode;
+#ifdef MAP_WF6
+		ppdu = (struct ppdu_caps *)wlan_config_get_ppdu_caps(mac_entry->wdev);
+#endif
+	}
+	else
+		NdisZeroMemory(cli_info->bssid, MAC_ADDR_LEN);
+	NdisReleaseSpinLock(&pAd->MacTabLock);
+
+	if (tr_entry)
+		cli_info->sta_status = (tr_entry->PortSecured == WPA_802_1X_PORT_SECURED) ? WAPP_STA_CONNECTED : WAPP_STA_DISCONNECTED;
+	else
+		cli_info->sta_status = WAPP_STA_DISCONNECTED;
+
 	cli_info->assoc_time = mac_entry->StaConnectTime;
 #ifdef CONFIG_MAP_SUPPORT
 	cli_info->assoc_req_len = mac_entry->assoc_req_len;
@@ -565,13 +643,13 @@ INT wapp_fill_client_info(
 	cli_info->IsReassoc = mac_entry->IsReassocSta;
 #endif
 #endif /* MAP_SUPPORT */
+	HTPhyMode.word = (USHORT)mac_entry->LastTxRate;
 #ifdef DOT11_HE_AX
 		if (LastTxRate.field.MODE == MODE_HE_SU_REMAPPING) {
 			cli_info->downlink = (u16) DataRate;
 		} else
 #endif
 		{
-			HTPhyMode.word = (USHORT)mac_entry->LastTxRate;
 			getRate(HTPhyMode, &DataRate);
 			cli_info->downlink = (u16) DataRate;
 		}
@@ -611,7 +689,7 @@ INT wapp_fill_client_info(
 	/*11 AX Support*/
 #ifdef DOT11_HE_AX
 	if (cli_info->cli_caps.phy_mode == MODE_HE) {
-		if (mac_entry->wdev->channel < 14)
+		if (mac_entry->wdev && mac_entry->wdev->channel < 14)
 			cli_info->cli_caps.bw = peer_max_bw_cap(mac_entry->cap.ch_bw.he_ch_width & 0x01);
 		else
 			cli_info->cli_caps.bw = peer_max_bw_cap(mac_entry->cap.ch_bw.he_ch_width & 0x0E);
@@ -651,6 +729,22 @@ INT wapp_fill_client_info(
 #endif
 		cli_info->is_APCLI = 0;
 
+#ifdef MAP_WF6
+		cli_info->tid_cnt = MAX_TID;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "WF6:Driver:Setting TID value for %02x:%02x:%02x:%02x:%02x:%02x\n",
+			PRINT_MAC(cli_info->mac_addr));
+		if (ppdu) {
+			for (i = 0; i < MAX_TID; i++) {
+				cli_info->status_tlv[i].tid = i;
+				if (WMODE_CAP_AX(PhyMode))
+					cli_info->status_tlv[i].tid_q_size = ppdu->he_tx_ba_wsize;
+				else
+					cli_info->status_tlv[i].tid_q_size = ppdu->non_he_tx_ba_wsize;
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "WF6:Driver:tid_cnt %x, tid %x, tid_q_size %x\n",
+					cli_info->tid_cnt, cli_info->status_tlv[i].tid, cli_info->status_tlv[i].tid_q_size);
+			}
+		}
+#endif
 	return 0;
 }
 
@@ -734,11 +828,7 @@ INT wapp_handle_cli_list_query(
 				continue;
 			}
 #ifdef CONFIG_MAP_SUPPORT
-			if ((IS_MT7915(pAd)) && mac_entry->Sst == SST_ASSOC) {
-				wapp_fill_client_info_new(pAd, cli_info, mac_entry);
-			} else {
-				wapp_fill_client_info(pAd, cli_info, mac_entry);
-			}
+			wapp_fill_client_info_new(pAd, cli_info, mac_entry);
 #else
 			wapp_fill_client_info(pAd, cli_info, mac_entry);
 #endif
@@ -966,8 +1056,8 @@ VOID wapp_send_bcn_report(
 		if (!event)
 			return;
 		NdisZeroMemory(event, sizeof(*event));
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("(%s) Sta Addr = %02x:%02x:%02x:%02x:%02x:%02x\n",
-				__func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("(%s) Sta Addr = "MACSTR"\n",
+				__func__, MAC2STR(pEntry->Addr)));
 		wdev = pEntry->wdev;
 		if (wdev->if_dev == NULL) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("!!!! (%s) wdev->ifdev = NULL\n", __func__));
@@ -1020,8 +1110,8 @@ VOID wapp_send_bcn_report_complete(
 	struct wapp_event event;
 
 	if (pEntry && IS_ENTRY_CLIENT(pEntry)) {
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("(%s) Sta Addr = %02x:%02x:%02x:%02x:%02x:%02x\n",
-				__func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("(%s) Sta Addr = "MACSTR"\n",
+				__func__, MAC2STR(pEntry->Addr)));
 		wdev = pEntry->wdev;
 		if (wdev->if_dev) {
 			event.event_id = WAPP_RCEV_BCN_REPORT_COMPLETE;
@@ -1073,6 +1163,24 @@ VOID wapp_send_cac_period_event(
 	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
 }
 #endif
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+VOID wapp_send_zwdfs_cac_report(
+	IN PRTMP_ADAPTER pAd,
+	IN UINT32 ifindex,
+	IN UCHAR cac_enable
+)
+{
+	struct wapp_event event;
+	wapp_cac_info *cac_info = NULL;
+	event.event_id = WAPP_ZWDFS_CAC_REPORT;
+	event.ifindex = ifindex;
+	cac_info = &event.data.cac_info;
+	cac_info->ret = cac_enable;
+	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+}
+#endif
+
 VOID wapp_send_csa_event(
 	IN PRTMP_ADAPTER pAd,
 	IN UINT32 ifindex,
@@ -1182,17 +1290,11 @@ INT wapp_send_chn_list_query_rsp(
 	return 0;
 }
 
-#ifdef CONFIG_MAP_SUPPORT
-UCHAR map_set_op_class_info(
-	PRTMP_ADAPTER pAd,
-	struct wifi_dev *wdev,
-	struct _wdev_op_class_info *op_class);
-#endif /* CONFIG_MAP_SUPPORT */
-
 INT wapp_send_op_class_query_rsp(
 	PRTMP_ADAPTER pAd,
 	struct wapp_req *req)
 {
+#ifndef MAP_6E_SUPPORT
 	INT i;
 	struct wifi_dev *wdev;
 	struct wapp_event event;
@@ -1215,6 +1317,9 @@ INT wapp_send_op_class_query_rsp(
 		}
 	}
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 INT wapp_send_bss_info_query_rsp(
@@ -1236,7 +1341,9 @@ INT wapp_send_bss_info_query_rsp(
 		if (pAd->wdev_list[i] != NULL) {
 			wdev = pAd->wdev_list[i];
 			if (wdev->if_dev && (RtmpOsGetNetIfIndex(wdev->if_dev) == event.ifindex)) {
-				if (i >= MAX_MBSSID_NUM(pAd) || wdev->wdev_type != WDEV_TYPE_AP) {
+				if (i >= MAX_MBSSID_NUM(pAd)
+					|| i >= MAX_BEACON_NUM
+					|| wdev->wdev_type != WDEV_TYPE_AP) {
 					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 						("%s():wdev %d is not an AP\n", __func__, i));
 					break;
@@ -1581,7 +1688,12 @@ INT wapp_bss_start(
 						break;
 					}
 				}
+#ifdef CONFIG_MAP_SUPPORT
+				if (pAd->ApCfg.MBSSID[wdev->func_idx].is_bss_stop_by_map)
+					pAd->ApCfg.MBSSID[wdev->func_idx].is_bss_stop_by_map = FALSE;
+#endif
 				APStartUpByBss(pAd, &pAd->ApCfg.MBSSID[wdev->func_idx]);
+				wdev_if_up_down(pAd, wdev, TRUE);
 				break;
 			}
 		}
@@ -1595,6 +1707,9 @@ INT wapp_bss_stop(
 {
 	INT i;
 	struct wifi_dev *wdev;
+#ifdef CONFIG_MAP_SUPPORT
+	BSS_STRUCT *pMbss;
+#endif
 
 	for (i = 0; i < WDEV_NUM_MAX; i++) {
 		if (pAd->wdev_list[i] != NULL) {
@@ -1602,7 +1717,25 @@ INT wapp_bss_stop(
 			if (wdev->if_dev && (RtmpOsGetNetIfIndex(wdev->if_dev) == req->data.ifindex)) {
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 						("%s():req->data.ifindex = %d\n", __func__, req->data.ifindex));
+#ifdef CONFIG_MAP_SUPPORT
+				if (IS_MAP_ENABLE(pAd)) {
+
+					pMbss = &pAd->ApCfg.MBSSID[wdev->func_idx];
+					pMbss->wdev.avoid_apcli_linkdown = TRUE;
+				}
+#endif
+#ifdef CONFIG_MAP_SUPPORT
+				if (!IS_MAP_ENABLE(pAd))
+#endif
+					wdev_if_up_down(pAd, wdev, FALSE);
+#ifdef CONFIG_MAP_SUPPORT
+				pAd->ApCfg.MBSSID[wdev->func_idx].is_bss_stop_by_map = TRUE;
+#endif
 				APStopByBss(pAd, &pAd->ApCfg.MBSSID[wdev->func_idx]);
+#ifdef CONFIG_MAP_SUPPORT
+				if (IS_MAP_ENABLE(pAd))
+					pMbss->wdev.avoid_apcli_linkdown = FALSE;
+#endif
 			}
 		}
 	}
@@ -1902,6 +2035,64 @@ INT wapp_send_wsc_eapol_complete_notif(
 	}
 	return 0;
 }
+
+INT wapp_send_wsc_status_start_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev)
+{
+#ifndef AX8400_COMPATIBLE
+	struct wapp_event event;
+
+	if (wdev->if_dev) {
+		event.len = 0;
+		event.event_id = WAPP_WSC_STATUS_START_NOTIF;
+		event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+		wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	}
+	return 0;
+#else
+	return 0;
+#endif
+}
+
+INT wapp_send_wsc_status_fail_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev)
+{
+#ifndef AX8400_COMPATIBLE
+	struct wapp_event event;
+
+	if (wdev->if_dev) {
+		event.len = 0;
+		event.event_id = WAPP_WSC_STATUS_FAIL_NOTIF;
+		event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+		wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	}
+	return 0;
+#else
+	return 0;
+#endif
+}
+
+INT wapp_send_wsc_status_configured_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev)
+{
+#ifndef AX8400_COMPATIBLE
+	struct wapp_event event;
+
+	if (wdev->if_dev) {
+		event.len = 0;
+		event.event_id = WAPP_WSC_STATUS_CONFIGURED_NOTIF;
+		event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+		wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	}
+	return 0;
+#else
+	return 0;
+#endif
+}
+
 #ifdef CONFIG_MAP_SUPPORT
 INT wapp_send_scan_complete_notification(
 	PRTMP_ADAPTER pAd,
@@ -1932,6 +2123,7 @@ INT lppe_send_scan_complete_notification(
 		event.event_id = LPPE_SCAN_COMPLETE_NOTIF;
 		event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
 		event.len = buflen - sizeof(event.len) - sizeof(event.event_id);
+		NdisCopyMemory(event.data.ifname, RtmpOsGetNetDevName(wdev->if_dev), IFNAMSIZ);
 
 		RtmpOSWrielessEventSend(pAd->net_dev, RT_WLAN_EVENT_CUSTOM,
 			OID_LPPE_EVENT, NULL, (PUCHAR)&event, sizeof(struct wapp_event));
@@ -1961,6 +2153,28 @@ INT wapp_send_a4_entry_missing(
 }
 #endif
 /* client disaccos */
+#ifdef AX8400_COMPATIBLE
+INT wapp_send_radar_detect_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	unsigned char channel,
+	unsigned char bw,
+	unsigned char ch_status
+	)
+{
+	struct wapp_event event;
+
+	if (wdev->if_dev) {
+		event.event_id = WAPP_RADAR_DETECT_NOTIF;
+		event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+		event.data.radar_notif.channel = channel;
+		event.data.radar_notif.status = ch_status;
+		event.data.radar_notif.bw = bw;
+		wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	}
+	return 0;
+}
+#else
 INT wapp_send_radar_detect_notif(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev,
@@ -1979,6 +2193,7 @@ INT wapp_send_radar_detect_notif(
 	}
 	return 0;
 }
+#endif
 
 #ifdef WIFI_MD_COEX_SUPPORT
 INT wapp_send_lte_safe_chn_event(
@@ -2011,6 +2226,65 @@ INT wapp_send_band_status_event(
 	return 0;
 }
 #endif
+
+#ifdef LOW_POWER_SUPPORT
+INT wapp_send_no_sta_connect_timeout_event(
+	PRTMP_ADAPTER pAd, struct wifi_dev *wdev)
+{
+	struct wapp_event event;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s: no STA connect event, interface %s\n", __func__,
+			RtmpOsGetNetDevName(wdev->if_dev)));
+
+	event.event_id = WAPP_NO_STA_CONNECT_TIMEOUT_EVENT;
+	event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	return 0;
+}
+
+INT wapp_send_no_data_traffic_timeout_event(
+	PRTMP_ADAPTER pAd, struct wifi_dev *wdev)
+{
+	struct wapp_event event;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s: no data traffic event, interface %s\n", __func__,
+			RtmpOsGetNetDevName(wdev->if_dev)));
+
+	event.event_id = WAPP_NO_DATA_TRAFFIC_TIMEOUT_EVENT;
+	event.ifindex = RtmpOsGetNetIfIndex(wdev->if_dev);
+	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	return 0;
+}
+
+INT wapp_send_wifi_up_event(
+	PRTMP_ADAPTER pAd)
+{
+	struct wapp_event event;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s: wifi up event, pAd = %p\n", __func__, pAd));
+
+	event.event_id = WAPP_WIFI_UP_EVENT;
+	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	return 0;
+}
+
+INT wapp_send_wifi_down_event(
+	PRTMP_ADAPTER pAd)
+{
+	struct wapp_event event;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s: wifi down event, pAd = %p\n", __func__, pAd));
+
+	event.event_id = WAPP_WIFI_DOWN_EVENT;
+	wext_send_wapp_qry_rsp(pAd->net_dev, &event);
+	return 0;
+}
+#endif
+
 
 VOID RTMPIoctlGetScanResults(
 	IN	PRTMP_ADAPTER	pAdapter, struct wapp_req *req)
@@ -2051,7 +2325,6 @@ VOID RTMPIoctlGetScanResults(
 #define IWEVCUSTOM_PAYLOD_MAX_LEN 220
 #endif
 	custom_event_length = IWEVCUSTOM_PAYLOD_MAX_LEN;
-	TotalLen = custom_event_length;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("RTMPIoctlGetSiteSurvey - enter\n"));
 	/*
@@ -2115,8 +2388,12 @@ VOID RTMPIoctlGetScanResults(
 		ht_cap = &pBss->ht_cap;
 		vht_cap = &pBss->vht_cap;
 		he_cap = &pBss->he_cap;
-		if (bss->Channel == 0)
+		if (bss->Channel == 0) {
+			i++;
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"break from here bss Channel is 0 i %d \n", i);
 			break;
+		}
 		pBss->Channel = bss->Channel;
 		pBss->CentralChannel = bss->CentralChannel;
 		pBss->Rssi = bss->Rssi;
@@ -2181,6 +2458,10 @@ VOID RTMPIoctlGetScanResults(
 		pBss->QbssLoad.bValid = bss->QbssLoad.bValid;
 		pBss->QbssLoad.StaNum = bss->QbssLoad.StaNum;
 		pBss->QbssLoad.ChannelUtilization = bss->QbssLoad.ChannelUtilization;
+#endif
+#ifdef MAP_6E_SUPPORT
+		pBss->rnr_6e.channel = bss->rnr_info.channel;	/* 6E channel to be filled*/
+		pBss->rnr_6e.op = bss->rnr_info.op;		/*op class for 6E channel*/
 #endif
 #endif
 		count++;
@@ -2595,6 +2876,7 @@ INT	wapp_event_handle(
 		pAd->bMAPAvoidScanDuringCac = (UINT8) req->data.value;
 		break;
 #endif /* CONFIG_MAP_SUPPORT */
+
 	default:
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("invalid wapp req id=%d\n", req->req_id));
 		break;
@@ -2690,12 +2972,25 @@ static INT set_wapp_cmm_ie(
 #ifdef CONFIG_HOTSPOT_R2
 	PHOTSPOT_CTRL pHSCtrl =  &pAd->ApCfg.MBSSID[apidx].HotSpotCtrl;
 #endif /* CONFIG_HOTSPOT_R2 */
+	INT32 Ret;
+	PUCHAR tmp_buf_ptr = NULL;
+
+	Ret = os_alloc_mem(NULL, &tmp_buf_ptr, IELen);
+	if (Ret != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: Not enough memory\n", __func__));
+		return FALSE;
+	}
+	NdisMoveMemory(tmp_buf_ptr, IE, IELen);
 
 	switch (EID) {
 	case IE_INTERWORKING:
-		os_alloc_mem(NULL, &pGasCtrl->InterWorkingIE, IELen);
-		NdisMoveMemory(pGasCtrl->InterWorkingIE, IE, IELen);
+		RTMP_SEM_LOCK(&pGasCtrl->IeLock);
+		if (pGasCtrl->InterWorkingIE)
+			os_free_mem(pGasCtrl->InterWorkingIE);
+		pGasCtrl->InterWorkingIE = tmp_buf_ptr;
 		pGasCtrl->InterWorkingIELen = IELen;
+		RTMP_SEM_UNLOCK(&pGasCtrl->IeLock);
 #ifdef CONFIG_HOTSPOT_R2
 		pHSCtrl->AccessNetWorkType  = (*(IE + 2)) & 0x0F;
 		if (IELen > 3) {
@@ -2710,33 +3005,44 @@ static INT set_wapp_cmm_ie(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set Interworking IE\n"));
 		break;
 	case IE_ADVERTISEMENT_PROTO:
-		os_alloc_mem(NULL, &pGasCtrl->AdvertisementProtoIE, IELen);
-		NdisMoveMemory(pGasCtrl->AdvertisementProtoIE, IE, IELen);
+		RTMP_SEM_LOCK(&pGasCtrl->IeLock);
+		if (pGasCtrl->AdvertisementProtoIE)
+			os_free_mem(pGasCtrl->AdvertisementProtoIE);
+		pGasCtrl->AdvertisementProtoIE = tmp_buf_ptr;
 		pGasCtrl->AdvertisementProtoIELen = IELen;
+		RTMP_SEM_UNLOCK(&pGasCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set Advertisement Protocol IE\n"));
 		break;
 
 	case IE_TIME_ADVERTISEMENT:
-		os_alloc_mem(NULL, &pWNMCtrl->TimeadvertisementIE, IELen);
-		NdisMoveMemory(pWNMCtrl->TimeadvertisementIE, IE, IELen);
+		RTMP_SEM_LOCK(&pWNMCtrl->IeLock);
+		if (pWNMCtrl->TimeadvertisementIE)
+			os_free_mem(pWNMCtrl->TimeadvertisementIE);
+		pWNMCtrl->TimeadvertisementIE = tmp_buf_ptr;
 		pWNMCtrl->TimeadvertisementIELen = IELen;
+		RTMP_SEM_UNLOCK(&pWNMCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set Time Advertisement IE\n"));
 		break;
 
 	case IE_TIME_ZONE:
-		os_alloc_mem(NULL, &pWNMCtrl->TimezoneIE, IELen);
-		NdisMoveMemory(pWNMCtrl->TimezoneIE, IE, IELen);
+		RTMP_SEM_LOCK(&pWNMCtrl->IeLock);
+		if (pWNMCtrl->TimezoneIE)
+			os_free_mem(pWNMCtrl->TimezoneIE);
+		pWNMCtrl->TimezoneIE = tmp_buf_ptr;
 		pWNMCtrl->TimezoneIELen = IELen;
+		RTMP_SEM_UNLOCK(&pWNMCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set Time Zone IE\n"));
 		break;
 #ifdef CONFIG_HOTSPOT_R2
 	case IE_QOS_MAP_SET: {
 		int tmp = 0;
 		char *pos = (char *)(IE + 2);
-
-		os_alloc_mem(NULL, &pHSCtrl->QosMapSetIE, IELen);
-		NdisMoveMemory(pHSCtrl->QosMapSetIE, IE, IELen);
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->QosMapSetIE)
+			os_free_mem(pHSCtrl->QosMapSetIE);
+		pHSCtrl->QosMapSetIE = tmp_buf_ptr;
 		pHSCtrl->QosMapSetIELen = IELen;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 
 		for (tmp = 0; tmp < (IELen - 16 - 2) / 2; tmp++) {
 			pHSCtrl->DscpException[tmp] = *pos & 0xff;
@@ -2758,14 +3064,18 @@ static INT set_wapp_cmm_ie(
 	}
 
 	case IE_ROAMING_CONSORTIUM:
-		os_alloc_mem(NULL, &pHSCtrl->RoamingConsortiumIE, IELen);
-		NdisMoveMemory(pHSCtrl->RoamingConsortiumIE, IE, IELen);
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->RoamingConsortiumIE)
+			os_free_mem(pHSCtrl->RoamingConsortiumIE);
+		pHSCtrl->RoamingConsortiumIE = tmp_buf_ptr;
 		pHSCtrl->RoamingConsortiumIELen = IELen;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set Roaming Consortium IE\n"));
 		break;
 #endif /* CONFIG_HOTSPOT_R2 */
 
 	default:
+	    os_free_mem(tmp_buf_ptr);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Unknown IE(EID = %d)\n", __func__, EID));
 		break;
 	}
@@ -2813,26 +3123,43 @@ static INT Set_AP_VENDOR_SPECIFIC_IE(
 	UCHAR apidx = pObj->ioctl_if;
 	PHOTSPOT_CTRL pHSCtrl =  &pAd->ApCfg.MBSSID[apidx].HotSpotCtrl;
 #endif
+	INT32 Ret;
+	PUCHAR tmp_buf_ptr = NULL;
+
+	Ret = os_alloc_mem(NULL, &tmp_buf_ptr, IELen);
+	if (Ret != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: Not enough memory\n", __func__));
+		return FALSE;
+	}
+	NdisMoveMemory(tmp_buf_ptr, IE, IELen);
 
 	switch (OUIType) {
 #ifdef CONFIG_HOTSPOT
 
 	case OUI_P2P:
-		os_alloc_mem(NULL, &pHSCtrl->P2PIE, IELen);
-		NdisMoveMemory(pHSCtrl->P2PIE, IE, IELen);
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->P2PIE)
+			os_free_mem(pHSCtrl->P2PIE);
+		pHSCtrl->P2PIE = tmp_buf_ptr;
 		pHSCtrl->P2PIELen = IELen;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set P2P IE\n"));
 		break;
 
 	case OUI_HS2_INDICATION:
-		os_alloc_mem(NULL, &pHSCtrl->HSIndicationIE, IELen);
-		NdisMoveMemory(pHSCtrl->HSIndicationIE, IE, IELen);
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->HSIndicationIE)
+			os_free_mem(pHSCtrl->HSIndicationIE);
+		pHSCtrl->HSIndicationIE = tmp_buf_ptr;
 		pHSCtrl->HSIndicationIELen = IELen;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set HS2.0 Indication IE\n"));
 		break;
 #endif
 
 	default:
+		os_free_mem(tmp_buf_ptr);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Unknown OUIType = %d\n", __func__, OUIType));
 		break;
 	}

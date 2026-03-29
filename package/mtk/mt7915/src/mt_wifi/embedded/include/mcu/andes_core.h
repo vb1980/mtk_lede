@@ -129,10 +129,6 @@ struct cmd_msg_cb {
 #define CMD_MSG_CB(pkt) ((struct cmd_msg_cb *)(GET_OS_PKT_CB(pkt)))
 #define CMD_MSG_RETRANSMIT_TIMES 3
 #define CMD_MSG_TIMEOUT 3000
-#if defined(MT7626) && defined(RTMP_RBUS_SUPPORT)
-#undef CMD_MSG_TIMEOUT
-#define CMD_MSG_TIMEOUT 6000
-#endif
 #define MT_CMD_TX_HOOK AndesSendCmdMsg
 
 enum BW_SETTING {
@@ -219,9 +215,8 @@ VOID _AndesQueueTailCmdMsg(DL_LIST *list, struct cmd_msg *msg, enum cmd_msg_stat
 VOID AndesRxProcessCmdMsg(struct _RTMP_ADAPTER *pAd, struct cmd_msg *rx_msg);
 struct cmd_msg *AndesAllocCmdMsgGe(struct _RTMP_ADAPTER *ad, unsigned int length);
 
-INT register_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne);
-
-INT unregister_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne);
+INT mt7915_register_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne);
+INT mt7915_unregister_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne);
 
 INT call_fw_cmd_notifieriers(INT val, struct _RTMP_ADAPTER *ad, void *msg);
 

@@ -3,9 +3,6 @@
 START=99
 
 boot() {
-	ifconfig rax0 up
-	ifconfig ra0 up
-	/etc/init.d/apcli.sh start
 	case $(board_name) in
 	alfa-network,quad-e4g)
 		[ -n "$(fw_printenv bootcount bootchanged 2>/dev/null)" ] &&\

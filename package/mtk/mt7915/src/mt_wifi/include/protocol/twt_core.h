@@ -73,9 +73,17 @@ PUINT8 build_twt_ie(
 	IN PVOID ie_list);
 
 /* TWT action frame state machine management (for peer STA role) */
+BOOLEAN twt_is_itwt_setup_frame(
+	UINT8 *ptr);
+
 VOID peer_twt_action(
 	IN struct _RTMP_ADAPTER *ad,
 	IN struct _MLME_QUEUE_ELEM *elem);
+
+VOID twt_tear_down(
+	IN struct wifi_dev *wdev,
+	IN UINT16 wcid,
+	IN UINT8 twt_flow_id);
 
 VOID peer_twt_info_action(
 	IN struct _RTMP_ADAPTER *ad,

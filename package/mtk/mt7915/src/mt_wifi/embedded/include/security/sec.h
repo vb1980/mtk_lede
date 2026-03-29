@@ -145,6 +145,10 @@ VOID ReadApcliSecParameterFromFile(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_STRING * tmpbuf,
 	IN RTMP_STRING * pBuffer);
+
+INT Set_ApCli_Trans_Disable_Proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING * arg);
 #endif /* APCLI_SUPPORT */
 
 VOID ReadSecurityParameterFromFile(
@@ -185,9 +189,16 @@ VOID process_pmkid(
 UCHAR is_pmkid_cache_in_sec_config(
 	IN struct _SECURITY_CONFIG *pSecConfig);
 
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+INT build_rsnxe_ie(
+	IN struct wifi_dev *wdev,
+	IN struct _SECURITY_CONFIG *sec_cfg,
+	IN UCHAR *buf);
+#else
 INT build_rsnxe_ie(
 	IN struct _SECURITY_CONFIG *sec_cfg,
 	IN UCHAR *buf);
+#endif
 
 UINT parse_rsnxe_ie(
 	IN struct _SECURITY_CONFIG *sec_cfg,

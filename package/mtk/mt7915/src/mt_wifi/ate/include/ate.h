@@ -107,7 +107,7 @@ INT32 ATEExit(struct _RTMP_ADAPTER *pAd);
 /* WiFi PHY mode capability */
 #define TEST_WMODE_CAP_24G		(WMODE_B | WMODE_G | WMODE_GN | WMODE_AX_24G)
 #define TEST_WMODE_CAP_5G		(WMODE_A | WMODE_AN | WMODE_AC | WMODE_AX_5G)
-#define TEST_WMODE_CAP_6G		(WMODE_GN | WMODE_AC | WMODE_AX_6G)
+#define TEST_WMODE_CAP_6G		(WMODE_AN | WMODE_AC | WMODE_AX_6G)
 
 /* ContiTxTone */
 #define WF0_TX_ONE_TONE_5M		0x0
@@ -121,7 +121,7 @@ INT32 ATEExit(struct _RTMP_ADAPTER *pAd);
 
 #define MAX_TEST_PKT_LEN        1496
 #define MIN_TEST_PKT_LEN        25
-#define MAX_TEST_BKCR_NUM       30
+#define MAX_TEST_BKCR_NUM       32
 
 /* For packet tx time, in unit of byte */
 #define MAX_HT_AMPDU_LEN        65000
@@ -309,11 +309,7 @@ struct _ATE_OPERATION {
 	INT32 (*GetCfgOnOff)(struct _RTMP_ADAPTER *pAd, UINT32 Type, UINT32 *Result);
 	INT32 (*SetRXFilterPktLen)(struct _RTMP_ADAPTER *pAd, UINT32 Enable, UINT32 RxPktLen);
 	INT32 (*DBDCTxTone)(struct _RTMP_ADAPTER *pAd, UINT32 Control, UINT32 AntIndex, UINT32 ToneType, UINT32 ToneFreq, INT32 DcOffset_I, INT32 DcOffset_Q, UINT32 Band);
-#if defined(MT7615) || defined(MT7622)
-	INT32 (*GetTxPower)(struct _RTMP_ADAPTER *pAd, UINT32 Enable, UINT32 Ch_Band, PUINT32 EfuseAddr, PUINT32 Power);
-#else
 	INT32 (*GetTxPower)(struct _RTMP_ADAPTER *pAd, UINT32 Enable, UINT32 Ch_Band, UINT32 u4AntIdx, PUINT32 Power);
-#endif /* defined(MT7615) || defined(MT7622) */
 	INT32 (*BssInfoUpdate)(struct _RTMP_ADAPTER *pAd, UINT32 OwnMacIdx, UINT32 BssIdx, UCHAR *Bssid);
 	INT32 (*DevInfoUpdate)(struct _RTMP_ADAPTER *pAd, UINT32 OwnMacIdx, UCHAR *Bssid);
 	INT32 (*LogOnOff)(struct _RTMP_ADAPTER *pAd, UINT32 type, UINT32 on_off, UINT32 num_log);

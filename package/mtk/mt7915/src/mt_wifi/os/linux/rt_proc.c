@@ -28,7 +28,7 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/proc_fs.h>
-#include <linux/uaccess.h>
+#include <asm/uaccess.h>
 
 #include "rt_config.h"
 
@@ -650,17 +650,23 @@ static ssize_t procCSIDataPrepare(
 	UINT_8 *tmpBuf = buf;
 	UINT_16 u2DataSize = prCSIData->u2DataCount * sizeof(INT_16);
 	UINT_16 u2Rsvd1Size = prCSIData->ucRsvd1Cnt * sizeof(INT_32);
-	enum ENUM_CSI_MODULATION_BW_TYPE_T eModulationType = CSI_TYPE_CCK_BW20;
+	enum ENUM_CSI_MODULATION_BW_TYPE_T eModulationType = 0;
 
 	if (prCSIData->ucBw == 0)
-		eModulationType = prCSIData->bIsCck ?
-			CSI_TYPE_CCK_BW20 : CSI_TYPE_OFDM_BW20;
+		eModulationType = CSI_TYPE_OFDM_BW20;
 	else if (prCSIData->ucBw == 1)
 		eModulationType = CSI_TYPE_OFDM_BW40;
 	else if (prCSIData->ucBw == 2)
 		eModulationType = CSI_TYPE_OFDM_BW80;
 
-	put_unaligned(0xAC, (tmpBuf + i4Pos));
+	/* magic number */
+	put_unaligned(0xAA, (tmpBuf + i4Pos));
+	i4Pos++;
+	put_unaligned(0xBB, (tmpBuf + i4Pos));
+	i4Pos++;
+	put_unaligned(0xCC, (tmpBuf + i4Pos));
+	i4Pos++;
+	put_unaligned(0xDD, (tmpBuf + i4Pos));
 	i4Pos++;
 
 	/*Just bypass total length feild here and update it in the end*/
@@ -670,7 +676,7 @@ static ssize_t procCSIDataPrepare(
 	i4Pos++;
 	put_unaligned(1, (UINT_16 *) (tmpBuf + i4Pos));
 	i4Pos += 2;
-	put_unaligned(0x1, (UINT_8 *) (tmpBuf + i4Pos));
+	put_unaligned(prCSIData->FWVer, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
 
 	put_unaligned(CSI_DATA_TYPE, (UINT_8 *) (tmpBuf + i4Pos));
@@ -682,10 +688,10 @@ static ssize_t procCSIDataPrepare(
 
 	put_unaligned(CSI_DATA_TS, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
-	put_unaligned(8, (UINT_16 *) (tmpBuf + i4Pos));
+	put_unaligned(4, (UINT_16 *) (tmpBuf + i4Pos));
 	i4Pos += 2;
-	put_unaligned(prCSIData->u8TimeStamp, (UINT_64 *) (tmpBuf + i4Pos));
-	i4Pos += 8;
+	put_unaligned(prCSIData->u4TimeStamp, (UINT_32 *) (tmpBuf + i4Pos));
+	i4Pos += 4;
 
 	put_unaligned(CSI_DATA_RSSI, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
@@ -777,17 +783,17 @@ static ssize_t procCSIDataPrepare(
 
 	put_unaligned(CSI_DATA_TX_IDX, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
-	put_unaligned(sizeof(UINT_8), (INT_16 *) (tmpBuf + i4Pos));
+	put_unaligned(sizeof(UINT_16), (INT_16 *) (tmpBuf + i4Pos));
 	i4Pos += 2;
-	put_unaligned(prCSIInfo->ucValue1[CSI_CONFIG_TX_PATH], (UINT_8 *) (tmpBuf + i4Pos));
-	i4Pos += sizeof(UINT_8);
+	put_unaligned((UINT_16)(((prCSIData->Tx_Rx_Idx)&0xffff0000) >> 16), (UINT_16 *) (tmpBuf + i4Pos));
+	i4Pos += sizeof(UINT_16);
 
 	put_unaligned(CSI_DATA_RX_IDX, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
-	put_unaligned(sizeof(UINT_8), (INT_16 *) (tmpBuf + i4Pos));
+	put_unaligned(sizeof(UINT_16), (INT_16 *) (tmpBuf + i4Pos));
 	i4Pos += 2;
-	put_unaligned(prCSIInfo->ucValue1[CSI_CONFIG_WF], (UINT_8 *) (tmpBuf + i4Pos));
-	i4Pos += sizeof(UINT_8);
+	put_unaligned((UINT_16)((prCSIData->Tx_Rx_Idx)&0xffff), (UINT_16 *) (tmpBuf + i4Pos));
+	i4Pos += sizeof(UINT_16);
 
 	put_unaligned(CSI_DATA_FRAME_MODE, (UINT_8 *) (tmpBuf + i4Pos));
 	i4Pos++;
@@ -805,10 +811,10 @@ static ssize_t procCSIDataPrepare(
 	i4Pos += sizeof(UINT_32);
 
 	/*
-	 * The lengths of magic number (1 byte) and total length (2 bytes)
+	 * The lengths of magic number (4 byte) and total length (2 bytes)
 	 * fields should not be counted in the total length value
 	*/
-	put_unaligned(i4Pos - 3, (UINT_16 *) (tmpBuf + 1));
+	put_unaligned(i4Pos - 6, (UINT_16 *) (tmpBuf + 4));
 
 	return i4Pos;
 }

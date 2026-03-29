@@ -89,12 +89,11 @@ typedef struct {
 	UINT32 FalseCCA[MAX_NUM_OF_CHANNELS + 1];
 	BOOLEAN SkipList[MAX_NUM_OF_CHANNELS + 1];
 #ifdef OFFCHANNEL_SCAN_FEATURE
-	UINT32	ChannelNo;
+	UINT32	ChannelNo[DBDC_BAND_NUM];
 	UINT8	ChannelIdx;
 	BOOLEAN GetChannelInfo;
-	CHANNEL_BUSY_TIME ChStats;
-	INT32 AvgNF;
-	UCHAR bandidx;
+	CHANNEL_BUSY_TIME ChStats[DBDC_BAND_NUM];
+	INT32 AvgNF[DBDC_BAND_NUM];
 	UINT32 diff_time;
 #endif
 	/* #ifdef AP_QLOAD_SUPPORT */
@@ -120,7 +119,7 @@ typedef struct {
 } BSSENTRY, *PBSSENTRY;
 
 typedef struct {
-	UCHAR BssNr;
+	UINT BssNr;
 	BSSENTRY BssEntry[MAX_LEN_OF_BSS_TABLE];
 } BSSINFO, *PBSSINFO;
 
@@ -134,6 +133,7 @@ typedef struct _AUTOCH_SEL_CH_LIST {
 	USHORT PhyMode;
 	BOOLEAN BwCap;
 	BOOLEAN SkipChannel;
+	BOOLEAN BuildDone;
 
 	/*
 		Channel property:
@@ -171,6 +171,10 @@ typedef struct _AUTOCH_SEL_CTRL {
 	ACS_CH_LIST_STATE ACSChStat;
 	UCHAR IsABand;
 	UINT32 pre_pcca_time;
+#ifdef ENHANCE_STAT_SUPPORT
+	UINT32 pre_noise_time;
+#endif
+	UINT32 pre_cca_nav_tx_time;
 	RALINK_TIMER_STRUCT AutoChScanTimer;
 	STATE_MACHINE AutoChScanStatMachine;
 	STATE_MACHINE_FUNC AutoChScanFunc[AUTO_CH_SEL_SCAN_FUNC_SIZE];

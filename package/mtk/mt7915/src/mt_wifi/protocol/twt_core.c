@@ -67,9 +67,11 @@ static BOOLEAN twt_agrt_in_individual(
 	resource = &ctrl->HwResourceCfg;
 	twt_ctl = &resource->twt_ctl;
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(curr_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
 				return FALSE;
@@ -81,6 +83,7 @@ static BOOLEAN twt_agrt_in_individual(
 			}
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	return wcid_in_individual;
 }
@@ -107,9 +110,11 @@ static BOOLEAN twt_agrt_in_group(
 	resource = &ctrl->HwResourceCfg;
 	twt_ctl = &resource->twt_ctl;
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(curr_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
 				return FALSE;
@@ -127,14 +132,18 @@ static BOOLEAN twt_agrt_in_group(
 				break;
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	return wcid_in_group;
 }
 
-static BOOLEAN twt_agrt_exist(
+#define ITWT_AGRT_PARA_BITMAP_CHECK (TWT_AGRT_PARA_BITMAP_WAKE_DUR_UINT | \
+					TWT_AGRT_PARA_BITMAP_IS_TRIGGER)
+static BOOLEAN twt_itwt_agrt_exist(
 	IN struct wifi_dev *wdev,
 	IN UINT16 wcid,
-	IN UINT8 flow_id)
+	IN struct twt_ie *twt_ie_in,
+	OUT struct twt_link_node **found_twt_node)
 {
 	BOOLEAN twt_agrt_exist = FALSE;
 	struct hdev_ctrl *ctrl = NULL;
@@ -142,32 +151,58 @@ static BOOLEAN twt_agrt_exist(
 	struct twt_ctrl *twt_ctl = NULL;
 	struct twt_link_node *curr_twt_node = NULL;
 	UINT8 sch_link_idx = 0;
+	UINT8 exponent = 0;
+	UINT8 wake_dur_unit = 0;
+	UINT8 agrt_para_bitmap = 0;
+	BOOLEAN trigger = 0;
 
 	if (!wdev) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
-			("%s: wdev=NULL, please check\n", __func__));
+		MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
+			"wdev=NULL, please check\n");
 		return FALSE;
 	}
 
 	ctrl = hc_get_hdev_ctrl(wdev);
 	resource = &ctrl->HwResourceCfg;
 	twt_ctl = &resource->twt_ctl;
+	/* get incoming twt request info */
+	wake_dur_unit = GET_TWT_CTRL_WAKE_DUR_UNIT(twt_ie_in->control);
+	trigger = GET_TWT_RT_TRIGGER(twt_ie_in->req_type);
+	exponent = GET_TWT_RT_WAKE_INTVAL_EXP(twt_ie_in->req_type);
 
+	if (wake_dur_unit)
+		agrt_para_bitmap |= TWT_AGRT_PARA_BITMAP_WAKE_DUR_UINT;
+	if (trigger)
+		agrt_para_bitmap |= TWT_AGRT_PARA_BITMAP_IS_TRIGGER;
+
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(curr_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
 				return FALSE;
 			}
 
+			/* TWT parameter is defined in ln39, page 186, IEEE P802.11ax/D7.0,
+			 * Check related info to find out duplicated twt request.
+			 */
 			if ((curr_twt_node->peer_id_grp_id == wcid) &&
-			    (curr_twt_node->flow_id == flow_id)) {
+				((curr_twt_node->agrt_para_bitmap & ITWT_AGRT_PARA_BITMAP_CHECK) == agrt_para_bitmap) &&
+				(curr_twt_node->agrt_sp_duration == twt_ie_in->duration) &&
+				(curr_twt_node->agrt_sp_wake_intvl_mantissa == twt_ie_in->mantissa) &&
+				(curr_twt_node->agrt_sp_wake_intvl_exponent == exponent) &&
+				(curr_twt_node->twt_channel == twt_ie_in->channel)) {
 				twt_agrt_exist = TRUE;
+				*found_twt_node = curr_twt_node;
+				MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_WARN,
+					"Duplicated twt mode is found\n");
 				break;
 			}
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	return twt_agrt_exist;
 }
@@ -558,16 +593,6 @@ static VOID twt_tbl_free(
 		return;
 	}
 
-	if (twt_agrt_exist(wdev, wcid, flow_identifier)) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
-			("%s: twt_agrt with wcid=%d, flow_id=%d exist, REJECT\n",
-			__func__,
-			wcid,
-			flow_identifier));
-		*setup_cmd = TWT_SETUP_CMD_REJECT;
-		return;
-	}
-
 	/* optimize twt parameters */
 	twt_para_optimize(&mantissa, &exponent, &duration);
 
@@ -595,6 +620,7 @@ static VOID twt_tbl_free(
 	twt_node->agrt_sp_wake_intvl_exponent = exponent;
 	twt_node->agrt_sp_start_tsf = agrt_tsf;
 	twt_node->is_role_ap = TWT_ROLE_AP;
+	twt_node->twt_channel = channel;
 
 	CLR_AGRT_PARA_BITMAP(twt_node);
 	if (trigger)
@@ -620,11 +646,12 @@ static VOID twt_tbl_free(
 
 	twt_link_insert_node(wdev, twt_node);
 
+		twt_interval = ((UINT64)(twt_node->agrt_sp_wake_intvl_mantissa)) << twt_node->agrt_sp_wake_intvl_exponent;
+
 	/* handle tsf */
 	if ((steup_cmd == TWT_SETUP_CMD_REQUEST) || (steup_cmd == TWT_SETUP_CMD_SUGGEST)) {
 		twt_get_current_tsf(wdev, current_tsf);
 		twt_current_tsf = current_tsf[0] + (((UINT64)current_tsf[1]) << 32);
-		twt_interval = ((UINT64)(twt_node->agrt_sp_wake_intvl_mantissa)) << twt_node->agrt_sp_wake_intvl_exponent;
 		temp = twt_current_tsf - twt_node->schedule_sp_start_tsf;
 		twt_mod = mod_64bit(temp, twt_interval);
 		twt_node->schedule_sp_start_tsf_abs = (twt_current_tsf + (twt_interval - twt_mod));
@@ -632,6 +659,15 @@ static VOID twt_tbl_free(
 	} else if (steup_cmd == TWT_SETUP_CMD_DEMAND) {
 		twt_assigned_tsf = twt_node->agrt_sp_start_tsf;
 	}
+
+	if (entry->twt_interval_max < twt_interval) {
+		UINT64 temp2;
+		temp = twt_interval;
+		/* Converting twt_interval from microseconds to seconds. */
+		temp2 = mod_64bit(temp, 1000000);
+		entry->twt_interval_max = temp;
+	}
+
 	os_move_mem(tsf, &twt_assigned_tsf, sizeof(twt_assigned_tsf));
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
@@ -733,11 +769,13 @@ static VOID twt_tbl_full(
 	grp_grade = twt_grp_grade(mantissa, exponent, duration);
 	twt_interval_new = ((UINT64)mantissa) << exponent;
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
     /* twt tempo is exactly the same then ACCEPT */
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(temp_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 		    curr_twt_node = temp_twt_node;
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
 				return;
@@ -757,6 +795,7 @@ static VOID twt_tbl_full(
 			}
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	if (the_same_twt_tempo) {
 		struct twt_agrt_para twt_agrt = {0};
@@ -815,10 +854,12 @@ static VOID twt_tbl_full(
 		return;
 	}
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	/* twt tempo is similar check */
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(curr_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
 				return;
@@ -834,6 +875,7 @@ static VOID twt_tbl_full(
 				all_grp_with_full_member_cnt++;
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	if (all_grp_with_full_member_cnt == TWT_HW_GRP_MAX_NUM) {
 		/* agrt twt (i+g) are fully ocupied and do REJECT reply */
@@ -904,11 +946,23 @@ static VOID twt_agrt_request(
 	struct hdev_ctrl *ctrl = hc_get_hdev_ctrl(wdev);
 	UINT8 i_tbl_free_cnt = 0;
 	UINT8 g_tbl_free_cnt = 0;
+	struct twt_link_node *found_twt_node = NULL;
 
+	if (twt_itwt_agrt_exist(wdev, wcid, twt_ie_in, &found_twt_node)) {
+		MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
+			" twt_agrt with wcid=%d, flow_id=%d exist, Accept\n",
+			wcid,
+			found_twt_node->flow_id);
+		*tbl_free = TRUE;
+		*setup_cmd = TWT_SETUP_CMD_ACCEPT;
+		*flow_id = found_twt_node->flow_id;
+		*agrt_tbl_idx = found_twt_node->agrt_tbl_idx;
+		return;
+	}
 	twt_ctrl_get_free_twt_node_num(ctrl, &i_tbl_free_cnt, &g_tbl_free_cnt);
 
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
-		("%s:i_tbl_free_cnt(%d),g_tbl_free_cnt(%d)\n", __func__, i_tbl_free_cnt, g_tbl_free_cnt));
+	MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
+		"i_tbl_free_cnt(%d),g_tbl_free_cnt(%d)\n", i_tbl_free_cnt, g_tbl_free_cnt);
 
 	if (i_tbl_free_cnt != 0) {
 		/* assign i twt */
@@ -1006,7 +1060,8 @@ static VOID twt_build_twt_ie(
 	twt_ie_out->control &= ~TWT_CTRL_NDP_PAGING_INDICATOR;
 	twt_ie_out->control &= ~TWT_CTRL_RESPONDER_PM_MODE;
 	twt_ie_out->control |= SET_TWT_CTRL_NEGO_TYPE(GET_TWT_CTRL_NEGO_TYPE(twt_ie_in->control));
-	twt_ie_out->control |= SET_TWT_CTRL_INFO_FRM_DIS(GET_TWT_CTRL_INFO_FRM_DIS(twt_ie_in->control));
+	/*twt_ie_out->control |= SET_TWT_CTRL_INFO_FRM_DIS(GET_TWT_CTRL_INFO_FRM_DIS(twt_ie_in->control));*/
+	twt_ie_out->control |= SET_TWT_CTRL_INFO_FRM_DIS(1);
 	twt_ie_out->control |= SET_TWT_CTRL_WAKE_DUR_UNIT(GET_TWT_CTRL_WAKE_DUR_UNIT(twt_ie_in->control));
 
 	/* request type */
@@ -1064,7 +1119,7 @@ PUINT8 build_twt_ie(
 	return pos;
 }
 
-static VOID twt_teardown_request(
+static BOOLEAN twt_teardown_request(
 	IN struct wifi_dev *wdev,
 	IN UINT16 wcid,
 	IN UINT8 twt_flow_id)
@@ -1085,7 +1140,7 @@ static VOID twt_teardown_request(
 	if (!wdev) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 			("%s: wdev=NULL, please check\n", __func__));
-		return;
+		return FALSE;
 	}
 
 	ctrl = hc_get_hdev_ctrl(wdev);
@@ -1096,6 +1151,7 @@ static VOID twt_teardown_request(
 	ad = (struct _RTMP_ADAPTER *)(wdev->sys_handle);
 	entry = &ad->MacTab.Content[wcid];
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	/*
 	 * find twt database for peer wcid + twt flow id
 	 * delete: in individial
@@ -1106,9 +1162,10 @@ static VOID twt_teardown_request(
 		DlListForEach(temp_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 		    curr_twt_node = temp_twt_node;
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s: twt_entry=NULL, please check\n", __func__));
-				return;
+				return FALSE;
 			}
 
 			if ((curr_twt_node->peer_id_grp_id == wcid) &&
@@ -1120,8 +1177,12 @@ static VOID twt_teardown_request(
 			}
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	if (found) {
+		if (entry->twt_flow_id_bitmap == 0)
+			entry->twt_interval_max = 0;
+
 		twt_agrt_cmd_set(&twt_agrt, curr_twt_node, TWT_AGRT_CTRL_DELETE, CMD_TSF_TYPE_NA);
 		mt_asic_twt_agrt_update(wdev, twt_agrt);
 		if (process_last_wcid) {
@@ -1132,9 +1193,21 @@ static VOID twt_teardown_request(
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 			("%s: process=FALSE, wcid=%d,flow_id=%d\n", __func__, wcid, twt_flow_id));
 	}
+
+	return found;
 }
 
 /* TWT action frame state machine management (for peer STA role) */
+BOOLEAN twt_is_itwt_setup_frame(UINT8 *ptr)
+{
+	if ((*ptr == CATEGORY_S1G) && (*(ptr + 1) == CATE_S1G_ACTION_TWT_SETUP)) {
+		if (GET_TWT_CTRL_NEGO_TYPE(*(ptr + 5)) == TWT_CTRL_NEGO_TYPE_ITWT)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
 static VOID peer_twt_setup_action(
 	IN struct _RTMP_ADAPTER *ad,
 	IN struct _MLME_QUEUE_ELEM *elem)
@@ -1276,11 +1349,13 @@ VOID peer_twt_info_action(
 		("%s:wcid(%d),fid(%d),subfield_size(%d),all_twt(%d),next_twt(msb:0x%.8x,lsb:0x%.8x)\n",
 		__func__, wcid, twt_flow_id, next_twt_subfield_size, all_twt, frame_in->next_twt[1], frame_in->next_twt[0]));
 
+	NdisAcquireSpinLock(&twt_ctl->twt_rec_lock);
 	/* find the twt agrt with flow id */
 	for (sch_link_idx = 0; sch_link_idx < SCH_LINK_NUM; sch_link_idx++) {
 		DlListForEach(temp_twt_node, &twt_ctl->twt_link[sch_link_idx], struct twt_link_node, list) {
 		    curr_twt_node = temp_twt_node;
 			if (!curr_twt_node) {
+				NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
 					("%s:twt_entry=NULL,please check\n", __func__));
 				return;
@@ -1336,6 +1411,7 @@ VOID peer_twt_info_action(
 			}
 		}
 	}
+	NdisReleaseSpinLock(&twt_ctl->twt_rec_lock);
 
 	if (found_num == 0) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
@@ -1343,6 +1419,15 @@ VOID peer_twt_info_action(
 			__func__, wcid, twt_flow_id, all_twt));
 	}
 #else
+	struct wifi_dev *wdev = elem->wdev;
+	UINT16 wcid = elem->Wcid;
+	UINT8 twt_flow_id = 0;
+	struct frame_twt_information *frame_in = NULL;
+
+	frame_in = (struct frame_twt_information *)&elem->Msg;
+	twt_flow_id = GET_TWT_INFO_FLOW_ID(frame_in->twt_info);
+	twt_tear_down(wdev, wcid, twt_flow_id);
+
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
 		("%s:Not support\n", __func__));
 #endif /* TWT_IFNO_FRAME_EN */
@@ -1448,7 +1533,7 @@ VOID mlme_twt_teradown_action(
 	struct wifi_dev *wdev = NULL;
 	PUCHAR out_buffer = NULL;
 	ULONG frame_len = 0;
-	NDIS_STATUS status = NDIS_STATUS_FAILURE;
+	NDIS_STATUS status = NDIS_STATUS_SUCCESS;
 
 	/* get an unused nonpaged memory */
 	status = os_alloc_mem(ad, &out_buffer, MAX_MGMT_PKT_LEN);
@@ -1463,31 +1548,34 @@ VOID mlme_twt_teradown_action(
 	wdev = msg->wdev;
 
 	/* handle twt_node, twt_link_lsit, twt cmd-event */
-	twt_teardown_request(wdev, msg->wcid, msg->twt_flow_id);
+	if (twt_teardown_request(wdev, msg->wcid, msg->twt_flow_id)) {
+		/* send action frame to peer sta */
+		os_zero_mem(&frame_out, sizeof(struct frame_teardown));
+		ActHeaderInit(ad, &frame_out.hdr, msg->peer_addr, wdev->if_addr, wdev->bssid);
+		frame_out.category = CATEGORY_S1G;
+		frame_out.s1g_action = CATE_S1G_ACTION_TWT_TEARDOWN;
+		frame_out.twt_flow_id = msg->twt_flow_id;
 
-	/* send action frame to peer sta */
-	os_zero_mem(&frame_out, sizeof(struct frame_teardown));
-	ActHeaderInit(ad, &frame_out.hdr, msg->peer_addr, wdev->if_addr, wdev->bssid);
-	frame_out.category = CATEGORY_S1G;
-	frame_out.s1g_action = CATE_S1G_ACTION_TWT_TEARDOWN;
-	frame_out.twt_flow_id = msg->twt_flow_id;
+		MakeOutgoingFrame(out_buffer,
+			&frame_len,
+			sizeof(struct frame_teardown),
+			&frame_out,
+			END_OF_ARGS);
+		MiniportMMRequest(ad,
+			(MGMT_USE_QUEUE_FLAG | WMM_UP2AC_MAP[QID_AC_VO]),
+			out_buffer, frame_len);
 
-	MakeOutgoingFrame(out_buffer,
-		&frame_len,
-		sizeof(struct frame_teardown),
-		&frame_out,
-		END_OF_ARGS);
-	MiniportMMRequest(ad,
-		(MGMT_USE_QUEUE_FLAG | WMM_UP2AC_MAP[QID_AC_VO]),
-		out_buffer, frame_len);
+		os_free_mem(out_buffer);
 
-	os_free_mem(out_buffer);
-
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
-		("%s: wcid(%d), flow_id(%d)\n",
-		__func__,
-		msg->wcid,
-		msg->twt_flow_id));
+		MTWF_DBG(ad,DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_TRACE,
+			"wcid(%d), flow_id(%d)\n",
+			msg->wcid,
+			msg->twt_flow_id);
+	} else {
+		os_free_mem(out_buffer);
+		MTWF_DBG(ad,DBG_CAT_PROTO, CATPROTO_TWT, DBG_LVL_ERROR,
+			"Tearadown action failed\n");
+	}
 }
 
 /* Peer STA link down twt management */

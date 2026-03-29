@@ -33,8 +33,7 @@
 #define EAPOL_GROUP_MSG_1    5
 #define EAPOL_GROUP_MSG_2    6
 
-//#define ENQUEUE_EAPOL_START_TIMER                100 /* 100 ms, for 4 way */
-#define ENQUEUE_EAPOL_START_TIMER                50 /* 100 ms, for 4 way */
+#define ENQUEUE_EAPOL_START_TIMER                100 /* 100 ms, for 4 way */
 #define ENQUEUE_EAPOL_2WAY_START_TIMER    500 /* 300 ms, for 2 way */
 
 #define EAPOL_START_DISABLE    0

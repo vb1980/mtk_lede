@@ -102,20 +102,17 @@ MODULE_DEVICE_TABLE(pci, mt_pci_slave_tbl);
 
 static int rt_pci_suspend(struct pci_dev *pci_dev, pm_message_t state)
 {
-#ifndef CONFIG_COLGIN_MT6890
 	struct pci_hif_chip *chip_hif = pci_get_drvdata(pci_dev);
 	struct net_device *net_dev = chip_hif->hif->net_dev;
 	VOID *pAd = NULL;
-#endif
 	INT32 retval = 0;
 
 	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("===>%s()\n", __func__));
 
-#ifndef CONFIG_COLGIN_MT6890
 	if (net_dev == NULL)
 		MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR, ("net_dev == NULL!\n"));
 	else {
-		ULONG IfNum;
+		ULONG IfNum = 0;
 
 		GET_PAD_FROM_NET_DEV(pAd, net_dev);
 		/* we can not use IFF_UP because ra0 down but ra1 up */
@@ -124,6 +121,11 @@ static int rt_pci_suspend(struct pci_dev *pci_dev, pm_message_t state)
 		RTMP_DRIVER_VIRTUAL_INF_NUM_GET(pAd, &IfNum);
 
 		if (IfNum > 0) {
+#ifdef CONFIG_COLGIN_MT6890
+			MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE,
+						("%s(), IfNum: %ld\n", __func__, IfNum));
+			return -EINVAL;
+#else
 			/* avoid users do suspend after interface is down */
 			/* stop interface */
 			netif_carrier_off(net_dev);
@@ -133,9 +135,9 @@ static int rt_pci_suspend(struct pci_dev *pci_dev, pm_message_t state)
 			RTMP_DRIVER_PCI_SUSPEND(pAd);
 			RT_MOD_HNAT_DEREG(net_dev);
 			RT_MOD_DEC_USE_COUNT();
+#endif
 		}
 	}
-#endif
 
 #if (KERNEL_VERSION(2, 6, 10) < LINUX_VERSION_CODE)
 	/*
@@ -334,6 +336,13 @@ err_out:
 /*
  *	 PCI device probe & initialization function
  */
+#ifdef WIFI_MD_COEX_SUPPORT
+static UCHAR active_pci_num;
+UCHAR mt_get_active_pci_num(void)
+{
+	return active_pci_num;
+}
+#endif
 static int DEVINIT rt_pci_probe(struct pci_dev *pdev, const struct pci_device_id *pci_id)
 {
 	struct _RTMP_ADAPTER *pAd = NULL, *handle;
@@ -343,7 +352,7 @@ static int DEVINIT rt_pci_probe(struct pci_dev *pdev, const struct pci_device_id
 	RTMP_OS_NETDEV_OP_HOOK netDevHook;
 	UINT32 OpMode = 0;
 	RT_CMD_PCIE_INIT pci_config;
-	struct pci_hif_chip *hif_chip;
+	struct pci_hif_chip *hif_chip = NULL;
 	struct pci_hif_chip_cfg cfg;
 	struct _PCI_HIF_T *pci_hif;
 
@@ -374,6 +383,10 @@ static int DEVINIT rt_pci_probe(struct pci_dev *pdev, const struct pci_device_id
 
 	if (rv != NDIS_STATUS_SUCCESS)
 		goto err_out_iounmap;
+
+#ifdef WIFI_MD_COEX_SUPPORT
+	active_pci_num++;
+#endif
 
 	RTMP_DRIVER_PCI_CSR_SET(pAd, csr_addr);
 	RTMP_DRIVER_PCIE_INIT(pAd, &pci_config, pdev);
@@ -440,10 +453,8 @@ static int DEVINIT rt_pci_probe(struct pci_dev *pdev, const struct pci_device_id
 
 		RTMP_DRIVER_MAC_ADDR_GET(pAd, &mac_addr[0]);
 		MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE,
-				 ("@%s MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  __func__, mac_addr[0], mac_addr[1],
-				  mac_addr[2], mac_addr[3],
-				  mac_addr[4], mac_addr[5]));
+				 ("@%s MAC address: "MACSTR"\n",
+				  __func__, MAC2STR(mac_addr)));
 		/* Set up the Mac address */
 		RtmpOSNetDevAddrSet(OpMode, net_dev, &mac_addr[0], NULL);
 	}
@@ -451,7 +462,22 @@ static int DEVINIT rt_pci_probe(struct pci_dev *pdev, const struct pci_device_id
 #ifdef WIFI_DIAG
 	diag_ctrl_alloc(pAd);
 #endif
+#ifdef COEX_DIRECT_PATH
+	pAd->fw2apccci_msg.pci_base_addr = (unsigned int)pci_resource_start(pdev, 0);
+	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF, ("%s() pci_resource_start = 0x%x \n",
+			__func__, pAd->fw2apccci_msg.pci_base_addr));
+#endif
+#ifdef MTK_FE_RESET_RECOVER
+	mtk_fe_reset_notifier_init(pAd);
+#endif
+#ifdef WF_RESET_SUPPORT
+	rv = wf_reset_init(pAd);
+	if (rv)
+		goto err_out_free_netdev;
+#endif /* WF_RESET_SUPPORT */
+
 	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("<=%s()\n", __func__));
+
 	return 0; /* probe ok */
 	/* --------------------------- ERROR HANDLE --------------------------- */
 err_out_free_netdev:
@@ -476,6 +502,16 @@ static VOID DEVEXIT rt_pci_remove(struct pci_dev *pci_dev)
 	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("===> %s()\n", __func__));
 
 	if (pAd != NULL) {
+#ifdef MTK_FE_RESET_RECOVER
+		mtk_fe_reset_notifier_exit(pAd);
+#endif
+#ifdef WIFI_MD_COEX_SUPPORT
+		active_pci_num--;
+#endif
+#ifdef WF_RESET_SUPPORT
+		wf_reset_exit(pAd);
+#endif /* WF_RESET_SUPPORT */
+
 #ifdef WIFI_DIAG
 		diag_ctrl_free(pAd);
 #endif
@@ -507,47 +543,6 @@ static VOID DEVEXIT rt_pci_remove(struct pci_dev *pci_dev)
 }
 
 
-static VOID DEVEXIT rt_pci_shutdown(struct pci_dev *pci_dev)
-{
-	struct pci_hif_chip *chip_hif = pci_get_drvdata(pci_dev);
-	PNET_DEV net_dev = chip_hif->hif->net_dev;
-	VOID *pAd = NULL;
-	struct wifi_dev *wdev = NULL;
-	INT ioctl_if, ioctl_if_type;
-
-	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF, ("===> %s()\n", __func__));
-	GET_PAD_FROM_NET_DEV(pAd, net_dev);
-
-	if (pAd != NULL) {
-		for (ioctl_if = 0; ioctl_if <= FIRST_MBSSID; ioctl_if++) {
-			if (ioctl_if == MAIN_MBSSID)
-				ioctl_if_type = INT_MAIN;
-			else if (ioctl_if == FIRST_MBSSID)
-				ioctl_if_type = INT_MBSSID;
-			else {
-				MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF, ("IF ID error.\n"));
-				return;
-			}
-
-			wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, ioctl_if, ioctl_if_type);
-			if (!wdev) {
-				MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("wdev is NULL\n"));
-				continue;
-			}
-
-			if (!wdev->if_up_down_state) {
-				MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("IF %d is down.\n", wdev->wdev_idx));
-				continue;
-			}
-
-			if (main_virtual_if_close(net_dev))
-				MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF, ("Close wifi device fail.\n"));
-		}
-	} else
-		MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF, ("===> %s() PAd is Null Fail.\n", __func__));
-}
-
-
 /*
  *	 PCI device probe & initialization function
  */
@@ -556,7 +551,7 @@ static int DEVINIT rt_pci_slave_probe(struct pci_dev *pdev, const struct pci_dev
 	int rv;
 	unsigned long csr_addr;
 	struct pci_hif_chip_cfg cfg;
-	struct pci_hif_chip *hif_chip;
+	struct pci_hif_chip *hif_chip = NULL;
 
 	rv = mt_pci_dev_set(pdev, &csr_addr);
 	if (rv != 0) {
@@ -619,7 +614,6 @@ resume :
 	rt_pci_resume,
 #endif
 #endif
-	.shutdown =	rt_pci_shutdown,
 };
 
 /*
@@ -648,7 +642,6 @@ resume :
 	rt_pci_resume,
 #endif
 #endif
-	.shutdown = rt_pci_shutdown,
 };
 
 /*

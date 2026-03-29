@@ -621,11 +621,12 @@ const UINT8 BACKOFF_FILL_TABLE_BF_LENGTH[BACKOFF_PARAM_NUM_V1] = {
 	BACKOFF_TABLE_BF_ON_RU106_LENGTH_V1
 };
 
-const UINT32 hif_ownsership_cr[1][OWNERSHIP_CR_TYPE_NUM] = {
+#define HIF_PORT_MAX	1
+const UINT32 hif_ownsership_cr[HIF_PORT_MAX][OWNERSHIP_CR_TYPE_NUM] = {
 	{CONN_HOST_CSR_TOP_WF_BAND0_LPCTL_ADDR, CONN_HOST_CSR_TOP_WF_BAND0_IRQ_STAT_ADDR}
 };
 
-const UINT32 hif_ownsership_mac1_cr[1][OWNERSHIP_CR_TYPE_NUM] = {
+const UINT32 hif_ownsership_mac1_cr[HIF_PORT_MAX][OWNERSHIP_CR_TYPE_NUM] = {
 	{CONN_HOST_CSR_TOP_WF1_BAND0_LPCTL_ADDR, CONN_HOST_CSR_TOP_WF1_BAND0_IRQ_STAT_ADDR}
 };
 
@@ -730,13 +731,24 @@ static void switch_channel(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 	cap->channelbw = SwChCfg.Bw;
 	/* update power limit table */
 	MtPwrLimitTblChProc(pAd, SwChCfg.BandIdx, SwChCfg.Channel_Band, SwChCfg.ControlChannel, SwChCfg.CentralChannel);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->chan_switch_time[9] = jiffies_to_msecs(jiffies);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 #ifdef PRE_CAL_MT7986_SUPPORT
     mt7986_apply_dpd_flatness_data(pAd, SwChCfg);
 #endif
 
 	MtCmdChannelSwitch(pAd, SwChCfg);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->chan_switch_time[10] = jiffies_to_msecs(jiffies);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 	MtCmdSetTxRxPath(pAd, SwChCfg);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->chan_switch_time[11] = jiffies_to_msecs(jiffies);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 	pAd->LatchRfRegs.Channel = SwChCfg.CentralChannel;
 }
 
@@ -927,7 +939,7 @@ err_out:
 
 static inline VOID cal_free_data_get_from_addr(RTMP_ADAPTER *ad, UINT16 Offset)
 {
-	UINT16 value;
+	UINT16 value = 0;
 
 	if ((Offset % 2) != 0) {
 		rtmp_ee_efuse_read16(ad, Offset - 1, &value);
@@ -984,6 +996,9 @@ static VOID init_mac_cr(RTMP_ADAPTER *pAd)
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 	UCHAR bw_signal = wlan_config_get_vht_bw_sig(wdev);
 
+#ifndef MAC_INIT_OFFLOAD
+	UINT32 mac_val = 0;
+#endif
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s()-->\n", __func__));
 #ifndef MAC_INIT_OFFLOAD
@@ -1014,7 +1029,7 @@ static VOID init_mac_cr(RTMP_ADAPTER *pAd)
 
 static VOID BBPInit(RTMP_ADAPTER *pAd)
 {
-	BOOLEAN isDBDC = FALSE, band_vld[2];
+	BOOLEAN band_vld[2];
 	INT idx, cbw[2] = {0};
 	INT cent_ch[2] = {0}, prim_ch[2] = {0}, prim_ch_idx[2] = {0};
 	INT band[2] = {0};
@@ -1031,7 +1046,7 @@ static VOID BBPInit(RTMP_ADAPTER *pAd)
 	prim_ch_idx[0] = vht_prim_ch_idx(cent_ch[0], prim_ch[0], cbw[0]);
 #endif /* DOT11_VHT_AC */
 
-	if (isDBDC) {
+	if (pAd->CommonCfg.dbdc_mode) {
 		band_vld[1] = TRUE;
 		band[1] = BAND_5G;
 		cbw[1] = RF_BW_20;
@@ -1053,7 +1068,7 @@ static VOID BBPInit(RTMP_ADAPTER *pAd)
 	for (idx = 0; idx < 2; idx++) {
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				 ("\tBand %d: valid=%d, isDBDC=%d, Band=%d, CBW=%d, CentCh/PrimCh=%d/%d, prim_ch_idx=%d, txStream=%d\n",
-				  idx, band_vld[idx], isDBDC, band[idx], cbw[idx], cent_ch[idx], prim_ch[idx],
+				  idx, band_vld[idx], pAd->CommonCfg.dbdc_mode, band[idx], cbw[idx], cent_ch[idx], prim_ch[idx],
 				  prim_ch_idx[idx], txStream[idx]));
 	}
 
@@ -1069,14 +1084,10 @@ static void antenna_default_reset(
 	struct _RTMP_ADAPTER *pAd,
 	EEPROM_ANTENNA_STRUC *pAntenna)
 {
+	USHORT value = 0;
 #ifdef DBDC_MODE
-	USHORT value;
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 	UINT8 max_nss = cap->mcs_nss.max_nss;
-#else
-#ifdef TXBF_SUPPORT
-	USHORT value;
-#endif
 #endif
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s() todo\n", __func__));
@@ -1405,12 +1416,15 @@ static UINT32 mt7986_rxv_get_byte_cnt(
 
 	/* sanity check for null pointer */
 	if (!ptr)
-		return FALSE;
+		goto error;
 
 	/* read byte count */
-	*byte_cnt = ((*ptr) & BITS(0, 15)) >> 0;
+	/* *byte_cnt = ((*ptr) & BITS(0, 15)) >> 0; */
 
-	return FALSE;
+error:
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		"(rxv) null pointer for rxv byte cnt\n");
+	return TRUE;
 }
 
 static UINT32 mt7986_rxv_get_content(
@@ -1425,8 +1439,6 @@ static UINT32 mt7986_rxv_get_content(
 	/* sanity check for null pointer */
 	if (!ptr)
 		goto error;
-
-	return FALSE;
 
 error:
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -1515,7 +1527,7 @@ static UINT32 mt7986_rxv_entry_parse(struct _RTMP_ADAPTER *pAd, VOID *Data)
 	RX_STATISTIC_RXV *rx_stat;
 	INT32 foe = 0;
 	UINT32 i = 0;
-	PUINT32 pbuf = (PUINT32)Data, pbuf2 = (PUINT32)Data, pbuf3 = (PUINT32)Data;
+	PUINT32 pbuf = (PUINT32)Data, pbuf2 = NULL, pbuf3 = (PUINT32)Data;
 	UINT8 sta_cnt = 0, user_idx, band_idx;
 	UINT32 rxv_entry_dw_cnt = 0;
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
@@ -1683,8 +1695,6 @@ static UINT32 mt7986_rxv_entry_parse(struct _RTMP_ADAPTER *pAd, VOID *Data)
 
 	/* rxv raw data parsing (CMN2) */
 
-	/* pointer increment (CMN2) */
-	pbuf += cap->rxv_cmn2_dw_num;
 
 	/* u4RxMuPktCount */
 	for (user_idx = 0; user_idx < sta_cnt; user_idx++) {
@@ -1895,40 +1905,34 @@ static UINT32 mt7986_rxv_dump_link_list_remv(struct _RTMP_ADAPTER *pAd, VOID *pt
 	switch (type) {
 	case RXV_DUMP_LIST_TYPE_CONTENT:
 		rxv_dump_entry_content = (RXV_DUMP_ENTRY_CONTENT *) ptr;
-		/* delete link for this entry */
-		DlListDel(&rxv_dump_entry_content->list);
-		/* free memory for rxv content */
-		if (rxv_dump_entry_content->content) {
-			os_free_mem(rxv_dump_entry_content->content);
-			rxv_dump_entry_content->content = NULL;
-		}
 		/* free memory for rxv dump entry content */
 		if (rxv_dump_entry_content) {
+		/* delete link for this entry */
+			DlListDel(&rxv_dump_entry_content->list);
+			/* free memory for rxv content */
+			if (rxv_dump_entry_content->content) {
+				os_free_mem(rxv_dump_entry_content->content);
+				rxv_dump_entry_content->content = NULL;
+			}
 			os_free_mem(rxv_dump_entry_content);
-			/* reset to null pointer */
-			rxv_dump_entry_content = NULL;
 		}
 		break;
 	case RXV_DUMP_LIST_TYPE_BASIC_ENTRY:
 		rxv_dump_basic_entry = (RXV_DUMP_BASIC_ENTRY *) ptr;
-		/* delete link for this entry */
-		DlListDel(&rxv_dump_basic_entry->list);
 		/* free memory for rxv dump basic entry */
 		if (rxv_dump_basic_entry) {
+			/* delete link for this entry */
+			DlListDel(&rxv_dump_basic_entry->list);
 			os_free_mem(rxv_dump_basic_entry);
-			/* reset to null pointer */
-			rxv_dump_basic_entry = NULL;
 		}
 		break;
 	case RXV_DUMP_LIST_TYPE_ENTRY:
 		rxv_dump_entry = (RXV_DUMP_ENTRY *) ptr;
-		/* delete link for this entry */
-		DlListDel(&rxv_dump_entry->list);
 		/* free memory for rxv dump entry */
 		if (rxv_dump_entry) {
+			/* delete link for this entry */
+			DlListDel(&rxv_dump_entry->list);
 			os_free_mem(rxv_dump_entry);
-			/* reset to null pointer */
-			rxv_dump_entry = NULL;
 		}
 		break;
 	default:
@@ -2255,8 +2259,11 @@ static UINT32 mt7986_rxv_dump_update(struct _RTMP_ADAPTER *pAd, VOID *rxv_pkt, U
 				/* install basic entry to list */
 				ret = mt7986_rxv_dump_link_list_instl(pAd, rxv_dump_basic_entry_list,
 						&rxv_dump_basic_entry, RXV_DUMP_LIST_TYPE_BASIC_ENTRY);
-				if (ret)
+				if (ret) {
+					os_free_mem(rxv_dump_basic_entry.data_list);
+					rxv_dump_basic_entry.data_list = NULL;
 					goto error3;
+				}
 
 				/* read basic entry pointer from link list */
 				DlListForEachSafe(rxv_dump_basic_entry_ptr, rxv_dump_basic_entry_ptr2,
@@ -2268,28 +2275,34 @@ static UINT32 mt7986_rxv_dump_update(struct _RTMP_ADAPTER *pAd, VOID *rxv_pkt, U
 				}
 
 				/* rxv content copy process */
-				data_list = rxv_dump_basic_entry_curr->data_list;
-				for (user_idx = 0; user_idx < user_num; user_idx++) {
-					os_zero_mem(&rxv_dump_entry_content, sizeof(RXV_DUMP_ENTRY_CONTENT));
-					/* config basic entry parameter */
-					rxv_dump_entry_content.user_idx = user_idx;
-					rxv_dump_entry_content.len = len_byte;
-					rxv_dump_entry_content.content = NULL;
-					ret = os_alloc_mem(pAd, (UINT8 **)&rxv_dump_entry_content.content, len_byte);
-					if (ret)
-						goto error1;
+				if (rxv_dump_basic_entry_curr) {
+					data_list = rxv_dump_basic_entry_curr->data_list;
+					if (data_list) {
+						for (user_idx = 0; user_idx < user_num; user_idx++) {
+							os_zero_mem(&rxv_dump_entry_content, sizeof(RXV_DUMP_ENTRY_CONTENT));
+							/* config basic entry parameter */
+							rxv_dump_entry_content.user_idx = user_idx;
+							rxv_dump_entry_content.len = len_byte;
+							rxv_dump_entry_content.content = NULL;
+							ret = os_alloc_mem(pAd, (UINT8 **)&rxv_dump_entry_content.content, len_byte);
+							if (ret)
+								goto error1;
 
-					/* copy rxv content to buffer */
-					os_move_mem(rxv_dump_entry_content.content, ptr, len_byte);
+							/* copy rxv content to buffer */
+							os_move_mem(rxv_dump_entry_content.content, ptr, len_byte);
 
-					/* install basic entry to list */
-					ret = mt7986_rxv_dump_link_list_instl(pAd, data_list,
-							&rxv_dump_entry_content, RXV_DUMP_LIST_TYPE_CONTENT);
-					if (ret)
-						goto error3;
-
-					/* pointer increment for rxv entry content */
-					ptr += len;
+							/* install basic entry to list */
+							ret = mt7986_rxv_dump_link_list_instl(pAd, data_list,
+									&rxv_dump_entry_content, RXV_DUMP_LIST_TYPE_CONTENT);
+							if (ret) {
+								os_free_mem(rxv_dump_entry_content.content);
+								rxv_dump_entry_content.content = NULL;
+								goto error3;
+							}
+							/* pointer increment for rxv entry content */
+							ptr += len;
+						}
+					}
 				}
 			} else {
 				/* pointer increment for rxv entry content */
@@ -2621,9 +2634,13 @@ static UINT32 mt7986_rxv_dump_type_content_compose(
 	}
 
 	/* update type detail content param */
-	param_type_idx = rxv_dump_basic_entry_curr->type_idx;
-	usr_num = rxv_dump_basic_entry_curr->usr_num;
-	data_list = rxv_dump_basic_entry_curr->data_list;
+	if (rxv_dump_basic_entry_curr) {
+		param_type_idx = rxv_dump_basic_entry_curr->type_idx;
+		usr_num = rxv_dump_basic_entry_curr->usr_num;
+		data_list = rxv_dump_basic_entry_curr->data_list;
+	}
+	if (!data_list)
+		goto error0;
 
 	/* init length */
 	*len = 0;
@@ -2698,9 +2715,11 @@ static UINT32 mt7986_rxv_dump_rxv_content_compose(
 	}
 
 	/* update type detail content param */
-	type_cnt = rxv_dump_entry_curr->type_num;
-	rxv_dump_basic_entry_list = rxv_dump_entry_curr->rxv_dump_basic_entry_list;
-	if (!rxv_dump_entry_list)
+	if (rxv_dump_entry_curr) {
+		type_cnt = rxv_dump_entry_curr->type_num;
+		rxv_dump_basic_entry_list = rxv_dump_entry_curr->rxv_dump_basic_entry_list;
+	}
+	if (!rxv_dump_basic_entry_list)
 		goto error0;
 
 	/* init length */
@@ -2755,7 +2774,7 @@ static UINT32 mt7986_rxv_dump_show_rpt(struct _RTMP_ADAPTER *pAd)
 	cmn1_len = (1 + 1) + (1 + 1) + (1 + 1) + cap->rxv_cmn1_dw_num;
 	cmn2_len = (1 + 1) + (1 + 1) + (1 + 1) + cap->rxv_cmn2_dw_num;
 	usr1_len = (1 + 1) + (1 + 1) + MAX_USER_NUM * ((1 + 1) + cap->rxv_usr1_dw_num);
-	usr1_len = (1 + 1) + (1 + 1) + MAX_USER_NUM * ((1 + 1) + cap->rxv_usr2_dw_num);
+	usr2_len = (1 + 1) + (1 + 1) + MAX_USER_NUM * ((1 + 1) + cap->rxv_usr2_dw_num);
 
 	buf_len = (cmn1_len + cmn2_len + usr1_len + usr2_len) << 2;
 	ret = os_alloc_mem(pAd, (UINT8 **)&ptr, buf_len);
@@ -2936,6 +2955,7 @@ static VOID mt7986_rssi_get(RTMP_ADAPTER *pAd, UINT16 Wcid, CHAR *RssiSet)
 {
 	RSSI_REPORT rssi_rpt;
 
+	os_zero_mem(&rssi_rpt, sizeof(RSSI_REPORT));
 	/* fw command to query rcpi/rssi */
 	MtCmdGetRssi(pAd, Wcid, &rssi_rpt);
 
@@ -3325,6 +3345,7 @@ VOID mt7986_update_mib_bucket(RTMP_ADAPTER *pAd)
 	_prPrevMibCnt = &pAd->_rPrevMibCnt;
 	curr_idx = pAd->MsMibBucket.CurIdx;
 
+	os_zero_mem(&Reg, 6 * sizeof(RTMP_MIB_PAIR));
 	for (i = 0; i < concurrent_bands; i++) {
 		if (pAd->MsMibBucket.Enabled == TRUE) {
 			Reg[0].Counter = RMAC_CNT_OBSS_AIRTIME;/* RMAC.AIRTIME14 OBSS Air time */
@@ -3463,26 +3484,33 @@ UCHAR *mt7986_get_default_bin_image(RTMP_ADAPTER *ad)
 
 INT32 mt7986_get_default_bin_image_file(RTMP_ADAPTER *ad, RTMP_STRING *path)
 {
-	if (strlen(get_dev_eeprom_binary(ad)) > 0)
-		sprintf(path, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
-	else
-		strcat(path, "/lib/firmware/e2p");
+	INT ret;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("Use default BIN from:%s.\n", path));
+	if (strlen(get_dev_eeprom_binary(ad)) > 0)
+		ret = snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
+	else
+		ret = snprintf(path, 100, "%s", "/lib/firmware/e2p");
+
+	if (ret < 0 || ret >= 100)
+		MTWF_PRINT("Unexpected error with default BIN.\n");
+	else
+		MTWF_PRINT("Use default BIN from:%s.\n", path);
 
 	return 0;
 }
 
 INT32 mt7986_get_prek_image_file(RTMP_ADAPTER *ad, RTMP_STRING *path)
 {
+	INT ret;
 	if (strlen(get_dev_eeprom_binary(ad)) > 0)
-		sprintf(path, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
+		ret = snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
 	else
-		strcat(path, "/lib/firmware/e2p");
+		ret = snprintf(path, 100, "%s", "/lib/firmware/e2p");
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("Use PreCal BIN from:%s.\n", path));
+	if (ret < 0 || ret >= 100)
+		MTWF_PRINT("Unexpected error with PreCal BIN.\n");
+	else
+		MTWF_PRINT("Use PreCal BIN from:%s.\n", path);
 
 	return 0;
 }
@@ -3551,7 +3579,14 @@ static VOID fwdl_datapath_setup(RTMP_ADAPTER *pAd, BOOLEAN init)
 #ifdef CONFIG_STA_SUPPORT
 static VOID init_dev_nick_name(RTMP_ADAPTER *ad)
 {
-	snprintf((RTMP_STRING *) ad->nickname, sizeof(ad->nickname), "mt7986_sta");
+	int ret;
+
+	ret = snprintf((RTMP_STRING *) ad->nickname, sizeof(ad->nickname), "mt7986_sta");
+	if (os_snprintf_error(sizeof(ad->nickname), ret)) {
+		MTWF_DBG(ad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"nickname init error!\n");
+		return;
+	}
 }
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -4501,7 +4536,8 @@ void get_he_etxbf_cap(
 
 			if (wdev->wdev_type == WDEV_TYPE_AP) {
 				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_SU_BFER : 0;
-				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
+				if (wlan_config_get_mu_dl_mimo(wdev))
+					he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
 			}
 
 			he_bf_struct->bf_cap |= HE_SU_BFEE;
@@ -4543,7 +4579,8 @@ void get_he_etxbf_cap(
 
 			if (wdev->wdev_type == WDEV_TYPE_AP) {
 				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_SU_BFER : 0;
-				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
+				if (wlan_config_get_mu_dl_mimo(wdev))
+					he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
 			}
 
 			if (he_bf_struct->bf_cap & HE_SU_BFER) {
@@ -4618,7 +4655,7 @@ inline VOID set_rid_value(struct pci_hif_chip *pci_hif, UINT32 rid)
 
 static INT hif_init_WFDMA(RTMP_ADAPTER *pAd)
 {
-	UINT32 val;
+	UINT32 val = 0;
 #ifdef WHNAT_SUPPORT
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
@@ -4708,7 +4745,7 @@ static INT hif_init_WFDMA(RTMP_ADAPTER *pAd)
 
 static INT hif_set_WFDMA(RTMP_ADAPTER *pAd, INT32 TxRx, BOOLEAN enable)
 {
-	UINT32 val0;
+	UINT32 val0 = 0;
 #ifdef WHNAT_SUPPORT
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
@@ -4860,7 +4897,7 @@ static BOOLEAN hif_reset_WFDMA(RTMP_ADAPTER *pAd)
 
 static INT32 get_fw_sync_value(RTMP_ADAPTER *pAd)
 {
-	UINT32 value;
+	UINT32 value = 0;
 
 	RTMP_IO_READ32(pAd->hdev_ctrl, CONN_HOST_CSR_TOP_CONN_ON_MISC_DRV_FW_STAT_SYNC_ADDR, &value);
 	value = (value & CONN_HOST_CSR_TOP_CONN_ON_MISC_DRV_FW_STAT_SYNC_MASK) >> CONN_HOST_CSR_TOP_CONN_ON_MISC_DRV_FW_STAT_SYNC_SHFT;
@@ -4873,74 +4910,6 @@ static INT32 get_fw_sync_value(RTMP_ADAPTER *pAd)
 #ifdef CONFIG_FWOWN_SUPPORT
 
 
-#ifdef RTMP_RBUS_SUPPORT
-static VOID rbus_fw_own(RTMP_ADAPTER *pAd)
-{
-	UINT32 cr_addr = 0;
-
-	if (IS_MT7986_M1(pAd))
-		cr_addr = hif_ownsership_mac1_cr[BAND0][OWNERSHIP_CR_TYPE_OWN];
-	else
-		cr_addr = hif_ownsership_cr[BAND0][OWNERSHIP_CR_TYPE_OWN];
-	RTMP_IO_WRITE32(pAd->hdev_ctrl, cr_addr, HOST_SET_FW_OWN_MASK);
-	pAd->bDrvOwn = FALSE;
-
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: Success to set fw own\n", __func__));
-}
-
-static INT32 rbus_driver_own(RTMP_ADAPTER *pAd)
-{
-	INT32 Ret = NDIS_STATUS_SUCCESS;
-	UINT32 retrycnt = 0;
-	UINT32 counter = 0;
-	UINT32 cr_addr = 0;
-	UINT32 cr_val = 0;
-#define MAX_RETRY_CNT 4
-
-	do {
-		retrycnt++;
-		if (pAd->bDrvOwn == TRUE) {
-			MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s()::Return since already in Driver Own...\n", __func__));
-			return Ret;
-		}
-
-		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s()::Try to Clear FW Own...\n", __func__));
-		/* Write CR to get driver own */
-		if (IS_MT7986_M1(pAd))
-			cr_addr = hif_ownsership_mac1_cr[BAND0][OWNERSHIP_CR_TYPE_OWN];
-		else
-			cr_addr = hif_ownsership_cr[BAND0][OWNERSHIP_CR_TYPE_OWN];
-		RTMP_IO_WRITE32(pAd->hdev_ctrl, cr_addr, HOST_CLR_FW_OWN_MASK);
-		/* Poll driver own status */
-		counter = 0;
-		while (counter < FW_OWN_POLLING_COUNTER) {
-			RtmpusecDelay(1000);
-
-			if (pAd->bDrvOwn == TRUE)
-				break;
-			counter++;
-		};
-
-		if (counter == FW_OWN_POLLING_COUNTER) {
-			RTMP_IO_READ32(pAd->hdev_ctrl, cr_addr, &cr_val);
-
-			if (!(cr_val & HOST_FW_OWN_SYNC_MASK))
-				pAd->bDrvOwn = TRUE;
-		}
-
-		if (pAd->bDrvOwn)
-			MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s()::Success to clear FW Own\n", __func__));
-		else {
-			MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s()::Fail to clear FW Own (%d)\n", __func__, counter));
-
-			if (retrycnt >= MAX_RETRY_CNT)
-				Ret = NDIS_STATUS_FAILURE;
-		}
-	} while (pAd->bDrvOwn == FALSE && retrycnt < MAX_RETRY_CNT);
-
-	return Ret;
-}
-#else /* RTMP_RBUS_SUPPORT */
 static VOID pci_fw_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 {
 	UINT32 cr_addr = 0;
@@ -4952,10 +4921,8 @@ static VOID pci_fw_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 		cr_addr = hif_ownsership_cr[port_idx][OWNERSHIP_CR_TYPE_OWN];
 	cr_val = HOST_SET_FW_OWN_MASK;
 	RTMP_IO_WRITE32(ad->hdev_ctrl, cr_addr, cr_val);
-	if (port_idx == 0)
-		ad->bDrvOwn = FALSE;
-	else
-		ad->bDrvOwn1 = FALSE;
+
+	ad->bDrvOwn = FALSE;
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: fw own to p(%d)\n", __func__, port_idx));
 }
@@ -4974,10 +4941,10 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 	do {
 		retrycnt++;
 
-		if (port_idx == 0)
-			drv_own = ad->bDrvOwn;
-		else
-			drv_own = ad->bDrvOwn1;
+		if (port_idx >= HIF_PORT_MAX)
+			return NDIS_STATUS_FAILURE;
+
+		drv_own = ad->bDrvOwn;
 
 		if (drv_own == TRUE) {
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Return since p=%d already in driver own\n", __func__, port_idx));
@@ -4997,10 +4964,7 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 		while (counter < FW_OWN_POLLING_COUNTER) {
 			RtmpusecDelay(1000);
 
-			if (port_idx == 0)
-				drv_own = ad->bDrvOwn;
-			else
-				drv_own = ad->bDrvOwn1;
+			drv_own = ad->bDrvOwn;
 
 			if (drv_own == TRUE) {
 				drv_own_from = DRIVER_OWN_INTERRUPT_MODE;
@@ -5020,10 +4984,7 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 			if (!(cr_val & HOST_FW_OWN_SYNC_MASK)) {
 				drv_own = TRUE;
 				drv_own_from = DRIVER_OWN_POLLING_MODE;
-				if (port_idx == 0)
-					ad->bDrvOwn = TRUE;
-				else
-					ad->bDrvOwn1 = TRUE;
+				ad->bDrvOwn = TRUE;
 			}
 		}
 
@@ -5039,16 +5000,9 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 
 	return ret;
 }
-#endif /* RTMP_RBUS_SUPPORT */
 
 static VOID fw_own(RTMP_ADAPTER *ad)
 {
-#ifdef RTMP_RBUS_SUPPORT
-	if (IS_RBUS_INF(ad)) {
-		rbus_fw_own(ad);
-		return;
-	}
-#else
 	struct _PCI_HIF_T *pci_hif = hc_get_hif_ctrl(ad->hdev_ctrl);
 	struct pci_hif_chip *slave_hif_chip = pci_hif->slave_hif_chip;
 
@@ -5060,7 +5014,6 @@ static VOID fw_own(RTMP_ADAPTER *ad)
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: port=1 is not enabled\n", __func__));
 		return;
 	}
-#endif /*RTMP_RBUS_SUPPORT*/
 
 }
 
@@ -5068,13 +5021,6 @@ static INT32 driver_own(RTMP_ADAPTER *ad)
 {
 	INT32 ret = NDIS_STATUS_SUCCESS;
 
-#ifdef RTMP_RBUS_SUPPORT
-	if (IS_RBUS_INF(ad)) {
-		ret = rbus_driver_own(ad);
-		if (ret != NDIS_STATUS_SUCCESS)
-			return ret;
-	}
-#else
 	struct _PCI_HIF_T *pci_hif = hc_get_hif_ctrl(ad->hdev_ctrl);
 	struct pci_hif_chip *slave_hif_chip = pci_hif->slave_hif_chip;
 
@@ -5091,7 +5037,6 @@ static INT32 driver_own(RTMP_ADAPTER *ad)
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: port=1 is not enabled\n", __func__));
 		}
 	}
-#endif /* RTMP_RBUS_SUPPORT */
 
 
 	return ret;
@@ -5344,9 +5289,6 @@ static VOID chip_irq_init(RTMP_ADAPTER *pAd)
 
 static VOID pci_io_remap_l1_read32(void *hdev_ctrl, UINT32 reg, UINT32 *val)
 {
-#ifdef RTMP_RBUS_SUPPORT
-	HIF_IO_READ32(hdev_ctrl, GET_CONN_INFRA_ADDR_OFFSET(reg), val);
-#else
 	UINT32 backup_val = 0, tmp_val = 0;
 
 	HIF_IO_READ32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, &backup_val);
@@ -5357,14 +5299,10 @@ static VOID pci_io_remap_l1_read32(void *hdev_ctrl, UINT32 reg, UINT32 *val)
 	HIF_IO_READ32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, &tmp_val);
 	HIF_IO_READ32(hdev_ctrl, (HIF_ADDR_L1_REMAP_BASE_ADDR | GET_L1_REMAP_OFFSET(reg)), val);
 	HIF_IO_WRITE32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, backup_val);
-#endif /* RTMP_RBUS_SUPPORT */
 }
 
 static VOID pci_io_remap_l1_write32(void *hdev_ctrl, UINT32 reg, UINT32 val)
 {
-#ifdef RTMP_RBUS_SUPPORT
-	HIF_IO_WRITE32(hdev_ctrl, GET_CONN_INFRA_ADDR_OFFSET(reg), val);
-#else
 	UINT32 backup_val = 0, tmp_val = 0;
 
 	HIF_IO_READ32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, &backup_val);
@@ -5375,29 +5313,14 @@ static VOID pci_io_remap_l1_write32(void *hdev_ctrl, UINT32 reg, UINT32 val)
 	HIF_IO_READ32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, &tmp_val);
 	HIF_IO_WRITE32(hdev_ctrl, (HIF_ADDR_L1_REMAP_BASE_ADDR | GET_L1_REMAP_OFFSET(reg)), val);
 	HIF_IO_WRITE32(hdev_ctrl, HIF_ADDR_L1_REMAP_ADDR, backup_val);
-#endif /* RTMP_RBUS_SUPPORT */
 }
 
 static VOID pci_io_remap_l2_read32(void *hdev_ctrl, UINT32 reg, UINT32 *val)
 {
 	UINT32 backup_val = 0, tmp_val = 0, l2_remap_cr = 0, phy_mac_cr = 0;
 
-#ifdef RTMP_RBUS_SUPPORT
-	struct _RTMP_ADAPTER *pAd = hc_get_hdev_privdata(hdev_ctrl);
-
-	if (IS_MT7986_M1(pAd)) {
-		l2_remap_cr = (GET_CONN_INFRA_WIFISYS_MAC_OFFSET(WIFISYS_MAC1_IDX) |
-						GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
-		phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR(WIFISYS_MAC1_IDX);
-	} else {
-		l2_remap_cr = (GET_CONN_INFRA_WIFISYS_MAC_OFFSET(WIFISYS_MAC0_IDX) |
-						GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
-		phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR(WIFISYS_MAC0_IDX);
-	}
-#else
 	l2_remap_cr = (GET_HIF_ADDR_L2_REMAP_BASE_ADDR | GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
 	phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR;
-#endif /* RTMP_RBUS_SUPPORT */
 
 	HIF_IO_READ32(hdev_ctrl, l2_remap_cr, &backup_val);
 	tmp_val = (backup_val & ~HIF_ADDR_L2_REMAP_MASK);
@@ -5413,22 +5336,8 @@ static VOID pci_io_remap_l2_write32(void *hdev_ctrl, UINT32 reg, UINT32 val)
 {
 	UINT32 backup_val = 0, tmp_val = 0, l2_remap_cr = 0, phy_mac_cr = 0;
 
-#ifdef RTMP_RBUS_SUPPORT
-	struct _RTMP_ADAPTER *pAd = hc_get_hdev_privdata(hdev_ctrl);
-
-	if (IS_MT7986_M1(pAd)) {
-		l2_remap_cr = (GET_CONN_INFRA_WIFISYS_MAC_OFFSET(WIFISYS_MAC1_IDX) |
-						GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
-		phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR(WIFISYS_MAC1_IDX);
-	} else {
-		l2_remap_cr = (GET_CONN_INFRA_WIFISYS_MAC_OFFSET(WIFISYS_MAC0_IDX) |
-						GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
-		phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR(WIFISYS_MAC0_IDX);
-	}
-#else
 	l2_remap_cr = (GET_HIF_ADDR_L2_REMAP_BASE_ADDR | GET_HIF_ADDR_L2_REMAP_OFFSET(HIF_ADDR_L2_REMAP_ADDR));
 	phy_mac_cr = GET_HIF_ADDR_L2_REMAP_PHY_ADDR;
-#endif /* RTMP_RBUS_SUPPORT */
 
 	HIF_IO_READ32(hdev_ctrl, l2_remap_cr, &backup_val);
 	tmp_val = (backup_val & ~HIF_ADDR_L2_REMAP_MASK);
@@ -5503,14 +5412,6 @@ VOID mt7986_chip_wifisys_id_lookup(struct _RTMP_ADAPTER *pAd)
 {
 	UINT32 reg_val = 0;
 
-#ifdef RTMP_RBUS_SUPPORT
-	HIF_IO_READ32(pAd->hdev_ctrl, GET_CONN_INFRA_ADDR_OFFSET(WIFISYS_MAC0_ID_ADDR), &reg_val);
-	if (reg_val != WFSYS_MAC0_ID) {
-			HIF_IO_READ32(pAd->hdev_ctrl, GET_CONN_INFRA_ADDR_OFFSET(WIFISYS_MAC1_ID_ADDR), &reg_val);
-		if (reg_val != WFSYS_MAC1_ID)
-			MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR, ("%s: fail to get WiFiSys ID!\n", __func__));
-	}
-#else
 #ifdef MT7986_FPGA
 	if (IP1Only != 1)
 #endif /* MT7986_FPGA */
@@ -5523,7 +5424,6 @@ VOID mt7986_chip_wifisys_id_lookup(struct _RTMP_ADAPTER *pAd)
 		if (reg_val != WFSYS_MAC1_ID)
 			MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR, ("%s: fail to get WiFiSys ID!\n", __func__));
 	}
-#endif /* RTMP_RBUS_SUPPORT */
 
 	if ((reg_val != 0) && (reg_val != 0xffffffff)) {
 		pAd->wfsys_id = reg_val;
@@ -5589,7 +5489,7 @@ static VOID pci_interrupt_enable(struct _RTMP_ADAPTER *ad)
 
 	/* traverse each pci_hif_chip */
 	for (i = 0; i < pci_hif->pci_hif_chip_num; i++) {
-		UINT32 val;
+		UINT32 val = 0;
 		struct pci_hif_chip *hif_chip = pci_hif->pci_hif_chip[i];
 
 		HIF_IO_READ32(ad->hdev_ctrl, hif_chip->int_ena_reg_addr, &val);
@@ -5697,11 +5597,7 @@ static VOID pci_sw_int_handler(RTMP_ADAPTER *ad, void *hif_chip_ptr)
 #ifdef CONFIG_FWOWN_SUPPORT
 	if (int_source & MT_SW_INT_DRV_OWN) {
 		RTMP_IO_WRITE32(ad->hdev_ctrl, (WF_WFDMA_HOST_DMA0_MCU2HOST_SW_INT_STA_ADDR + mac_offset), MT_SW_INT_DRV_OWN);
-#ifdef RTMP_RBUS_SUPPORT
-		rbus_driver_own(ad);
-#else
 		pci_driver_own_by_port(ad, 0);
-#endif
 		MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_TRACE, ("%s::SWI DriverOwn\n", __func__));
 	}
 #endif /* CONFIG_FWOWN_SUPPORT */
@@ -5736,7 +5632,7 @@ static VOID pci_sw_int_handler(RTMP_ADAPTER *ad, void *hif_chip_ptr)
 
 static VOID mt7986_dump_ser_stat(RTMP_ADAPTER *pAd, BOOLEAN fgDumpAll)
 {
-	UINT32 reg_tmp_val;
+	UINT32 reg_tmp_val = 0;
 	struct ser_dump_list {
 		char *name;
 		UINT32 reg;
@@ -6219,7 +6115,7 @@ static VOID show_muru_local_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT_32 addr;
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[3][25];
+	CHAR InputStr[3][25] = { {0} };
 	UINT_8  numofparam = 0;
 	BOOLEAN err = FALSE;
 	BOOLEAN muruparam = FALSE, qleninfo = FALSE, bsrpctrl = FALSE, txcmdctrl = FALSE;
@@ -6234,7 +6130,13 @@ static VOID show_muru_local_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	}
 
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
-		NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		if (strlen(macptr) <= 25)
+			NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macprt is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr[i], "all", strlen("all"))))
 			muruparam = qleninfo = bsrpctrl = txcmdctrl = TRUE;
@@ -7241,7 +7143,7 @@ static VOID show_muru_tx_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT_32	base = pAd->CommonCfg.rGloInfo.rMuruTxInfo.u4Addr;
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[3][25];
+	CHAR InputStr[3][25] = { {0} };
 	UINT_8  numofparam = 0;
 	BOOLEAN Globaldata = FALSE, ProtectData = FALSE, SxnTxData = FALSE, SxnTrigData = FALSE;
 
@@ -7255,7 +7157,13 @@ static VOID show_muru_tx_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	}
 
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
-		NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		if (strlen(macptr) <= 25)
+			NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr[i], "all", strlen("all"))))
 			Globaldata = ProtectData = SxnTxData = SxnTrigData = TRUE;
@@ -8906,7 +8814,7 @@ static VOID show_muru_shared_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT_32	base = pAd->CommonCfg.rGloInfo.rShareData.u4Addr;
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[25];
+	CHAR InputStr[25] = {0};
 	UINT_8  numofparam = 0;
 	BOOLEAN ShareData = FALSE, RuAllocData = FALSE, UserInfo = FALSE, StaRuRecord = FALSE;
 	UINT_16 ArrayIdx = 0;
@@ -8923,7 +8831,13 @@ static VOID show_muru_shared_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 
 		if (i == 0) {
-			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+			if (strlen(macptr) <= sizeof(InputStr))
+				NdisMoveMemory(InputStr, macptr, strlen(macptr));
+			else {
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Length of macptr is too long!\n");
+				return;
+			}
 
 			if (!(NdisCmpMemory(InputStr, "ShareData", strlen("ShareData"))))
 				ShareData = TRUE;
@@ -9290,7 +9204,7 @@ static VOID show_muru_mancfg_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[25];
+	CHAR InputStr[25] = {0};
 	UINT_8  numofparam = 0;
 	BOOLEAN ManCfg = FALSE;
 
@@ -9304,7 +9218,13 @@ static VOID show_muru_mancfg_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	}
 
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
-		NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		if (strlen(macptr) <= sizeof(InputStr))
+			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr, "all", strlen("all"))))
 			ManCfg = TRUE;
@@ -9319,7 +9239,7 @@ static VOID show_muru_stacap_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[25];
+	CHAR InputStr[25] = {0};
 	UINT_8  numofparam = 0;
 	UINT_16 WlanIdx = 0;
 
@@ -9333,7 +9253,13 @@ static VOID show_muru_stacap_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	}
 
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
-		NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		if (strlen(macptr) <= 25)
+			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		WlanIdx = (UINT16)os_str_tol(macptr, 0, 10);
 	}
@@ -9461,7 +9387,7 @@ static VOID show_mumimo_group_entry_tbl(struct _RTMP_ADAPTER *pAd, RTMP_STRING *
 {
 	UINT_8  i = 0;
 	RTMP_STRING *macptr = NULL;
-	CHAR InputStr[25];
+	CHAR InputStr[25] = {0};
 	UINT_8  numofparam = 0;
 	UINT_16 GroupIdx = 0;
 
@@ -9475,7 +9401,14 @@ static VOID show_mumimo_group_entry_tbl(struct _RTMP_ADAPTER *pAd, RTMP_STRING *
 	}
 
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
-		NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		if (strlen(macptr) <= sizeof(InputStr))
+			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
+
 		GroupIdx = (UINT16)os_str_tol(macptr, 0, 10);
 	}
 
@@ -9542,7 +9475,7 @@ static VOID show_candidate_list(struct _RTMP_ADAPTER *pAd, UINT_8 counter, UINT3
 static VOID show_mumimo_algorithm_monitor1(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	UINT_32 base, base_starec, offset, offset_starec, subbase_starec;
-	UINT_8 i, j, k, l;
+	UINT_8 i, j, k, l = 0;
 	BOOLEAN err, err_starec, err_mu_tx;
 	UINT_32 addr, addr_, addr1, addr_2, addr_starec;
 	UINT_32 u4SuccessCount[MURU_MAX_GROUP_CN][MURU_MUM_MAX_PFID_NUM];
@@ -9552,7 +9485,8 @@ static VOID show_mumimo_algorithm_monitor1(struct _RTMP_ADAPTER *pAd, RTMP_STRIN
 	UINT_16 Muru_mum_usr_mgmt[RAM_BAND_NUM][MURU_MUM_MAX_PFID_NUM];
 	RTMP_STRING *group_cap[5] = {"VHT_CAP", "HE_DLFBMUM_CAP", "HE_DLPBMUM_CAP", "HE_ULFBMUM_CAP", "HE_ULPBMUM_CAP"};
 	UINT_16 WlanIdx[8];
-	UINT_8  MumCapBitmap[MURU_MUM_MAX_PFID_NUM], counter;
+	UINT_8  MumCapBitmap[MURU_MUM_MAX_PFID_NUM] = {0};
+	UINT_8  counter;
 
 	base = pAd->CommonCfg.rGloInfo.rMuruMumCtrl.u4Addr;
 	err  = pAd->CommonCfg.rGloInfo.rMuruMumCtrl.fgError;
@@ -9870,7 +9804,7 @@ static VOID show_mumimo_groupidcli(struct _RTMP_ADAPTER *pAd)
 	addr = base + offset;
 
 	for (i = 0; i < MURU_MUM_MAX_PFID_NUM; i++) {
-		addr1 = addr + sizeof(UINT_16) * i;
+		addr = addr + sizeof(UINT_16) * i;
 		WlanIdx[i] = muru_io_r_u16(pAd, addr);
 		if (WlanIdx[i] > STA_REC_NUM)
 			WlanIdx[i] = 0;
@@ -9912,7 +9846,6 @@ static VOID show_mumimo_groupidcli(struct _RTMP_ADAPTER *pAd)
 	}
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n GroupID = %d", u1Gid));
-	if (u1NumUsr >= 0)
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		("| |-u1PFIDUser0  = %u WlanIdx = %u Mustream = %u\n", pDW0->rField.u1PFIDUser0, WlanIdx[pDW0->rField.u1PFIDUser0], pDW1->rField.u1NssUser0 + 1));
 	if (u1NumUsr >= 1)
@@ -10110,7 +10043,7 @@ static VOID show_muru_txc_tx_stats(struct _RTMP_ADAPTER *pAd, VOID *pData)
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_SU:      \t%u   \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeSuCnt, u2TxModeHeSu));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_EXT:     \t%u   \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeExtSuCnt, u2TxModeHeExt));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_MU:      \t%u   \t\t%u%%\n", u4TotalDlHeMuCount, u2TxModeHeMu));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  OFDMA:    \t%u   \t         \t\t%u%%\n", u4TotalHeDlOfdmCount, u4TotalHeMuCount));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  OFDMA:    \t%u   \t         \t\t%u%%\n", u4TotalHeDlOfdmCount, u2SubModeHeOfdmCnt));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      2RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu2RuCnt, u2StaOfdm2Ru));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      3RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu3RuCnt, u2StaOfdm3Ru));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      4RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu4RuCnt, u2StaOfdm4Ru));
@@ -11257,6 +11190,9 @@ static VOID mt7986_chipCap_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_CAP *chip_c
 	chip_cap->channelbw = BW_20;
 	chip_cap->mgmt_ctrl_frm_hw_htc_disable = TRUE;
 	chip_cap->peak_txop = TXOP_BB;
+#ifdef BCN_PROTECTION_SUPPORT
+	chip_cap->bcn_prot_sup = BCN_PROT_EN_SW_MODE;
+#endif
 #ifdef VLAN_SUPPORT
 	chip_cap->vlan_rx_tag_mode = VLAN_RX_TAG_SW_MODE;
 #endif
@@ -11549,6 +11485,9 @@ static VOID mt7986_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->archInsertRepeaterRootEntry = MtAsicInsertRepeaterRootEntryByFw;
 #endif /* MAC_REPEATER_SUPPORT */
 #endif /* APCLI_SUPPORT */
+#ifdef HTC_DECRYPT_IOT
+	arch_ops->archSetWcidAAD_OM = MtAsicUpdateStaRecAadOmByFw;
+#endif
 	arch_ops->archGetTsfTime = MtfAsicGetTsfTimeByDriver;
 	arch_ops->archSetPreTbtt = NULL;
 	arch_ops->archSetGPTimer = MtfAsicSetGPTimer;
@@ -11570,6 +11509,10 @@ static VOID mt7986_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->tx_rate_to_tmi_rate = mtf_tx_rate_to_tmi_rate;
 	arch_ops->update_raw_counters = mtf_update_raw_counters;
 	arch_ops->update_mib_bucket = mtf_update_mib_bucket;
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	arch_ops->read_skip_tx = mtf_read_skip_tx;
+	arch_ops->update_skip_tx = mtf_update_skip_tx;
+#endif
 #ifdef MAC_INIT_OFFLOAD
 	arch_ops->archSetMacTxRx = MtAsicSetMacTxRxByFw;
 	arch_ops->archSetMacMaxLen = NULL;
@@ -11607,6 +11550,9 @@ static VOID mt7986_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->rx_pkt_process = mt_rx_pkt_process;
 	arch_ops->rx_event_handler = mtf_rx_event_handler;
 	arch_ops->fill_cmd_header = mtf_fill_cmd_header;
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+	arch_ops->trans_rxd_into_radiotap = mtf_trans_rxd_into_radiotap;
+#endif
 	arch_ops->trans_rxd_into_rxblk = mtf_trans_rxd_into_rxblk;
 #ifdef IGMP_SNOOP_SUPPORT
 	arch_ops->archMcastEntryInsert = CmdMcastEntryInsert;
@@ -11681,7 +11627,7 @@ static VOID mt7986_hif_ctrl_init(struct _RTMP_ADAPTER *pAd)
 
 INT32 mt7986_get_chip_info(RTMP_ADAPTER *pAd)
 {
-	UINT32 value;
+	UINT32 value = 0;
 
 	MAC_IO_READ32(pAd->hdev_ctrl, MT_WIFI_MCUSYS_HW_VER, &value);
 	pAd->HWVersion = value;
@@ -11719,11 +11665,16 @@ VOID mt7986_init(RTMP_ADAPTER *pAd)
 
 	/* For calibration log buffer size limitation issue */
 	pAd->fgQAtoolBatchDumpSupport = TRUE;
-
+#ifdef VLAN_SUPPORT
+		pAd->tr_ctl.vlan2ethctrl = FALSE;
+#endif
 #ifdef CONFIG_AP_SUPPORT
 	/*VOW CR Address offset - Gen_FALCON*/
 	pAd->vow_gen.VOW_GEN = VOW_GEN_FALCON;
 #endif /* #ifdef CONFIG_AP_SUPPORT */
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->CommonCfg.ChannelSwitchFor2G.CHSWMode = NORMAL_MODE;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<--%s()\n", __func__));
 }

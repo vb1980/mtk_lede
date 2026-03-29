@@ -76,9 +76,9 @@ INT show_sae_info_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		pSaeIns = &pSaeCfg->sae_ins[i];
 
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_OFF,
-			 ("idx:%d, v/r:%d/%d, OM=%02x:%02x:%02x:%02x:%02x:%02x, PM=%02x:%02x:%02x:%02x:%02x:%02x\n",
+			 ("idx:%d, v/r:%d/%d, OM="MACSTR", PM="MACSTR"\n",
 			 i, pSaeIns->valid, pSaeIns->removable,
-			 PRINT_MAC(pSaeIns->own_mac), PRINT_MAC(pSaeIns->peer_mac)));
+			 MAC2STR(pSaeIns->own_mac), MAC2STR(pSaeIns->peer_mac)));
 
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_OFF,
 			 ("\tstate:%d, group:%d, sync:%d, sc:0x%x, last_peer_sc:0x%x, same_mac_ins=%d, timer_state=%d\n",
@@ -340,7 +340,7 @@ VOID sae_cfg_init(
 	pSaeCfg->open = 0;
 	pSaeCfg->dot11RSNASAERetransPeriod = 2;
 	pSaeCfg->total_ins = 0;
-	pSaeCfg->sae_anti_clogging_threshold = 10;
+	pSaeCfg->sae_anti_clogging_threshold = 8;
 	pSaeCfg->k_iteration_var = 40;
 	pSaeCfg->last_token_key_time = 0;
 	NdisZeroMemory(&pSaeCfg->token_key, SAE_TOKEN_KEY_LEN);
@@ -396,7 +396,8 @@ static UCHAR delete_all_removable_sae_instance(
 			pSaeIns->same_mac_ins = NULL;
 		}
 
-		if (pSaeIns->removable == TRUE) {
+		if (pSaeIns->removable == TRUE || (pSaeIns->delete_fake_entries == TRUE
+				&& pSaeIns->state == SAE_NOTHING)) {
 			delete_sae_instance(pSaeIns);
 			del_ins_cnt++;
 		}
@@ -537,6 +538,7 @@ VOID delete_sae_instance(
 	RTMPReleaseTimer(&pSaeIns->sae_retry_timer, &Cancelled);
 	pSaeIns->valid = FALSE;
 	pSaeIns->removable = FALSE;
+	pSaeIns->delete_fake_entries = FALSE;
 	if (pSaeIns->group_op)
 		pSaeIns->group_op->sae_group_deinit(pSaeIns);
 
@@ -572,13 +574,14 @@ UCHAR set_sae_instance_removable(
 	SAE_INSTANCE *pSaeIns = search_sae_instance(pSaeCfg, own_mac, peer_mac);
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_LOUD,
-			 ("%s:OM=%02x:%02x:%02x:%02x:%02x:%02x, PM=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, PRINT_MAC(own_mac), PRINT_MAC(peer_mac)));
+			 ("%s:OM="MACSTR", PM="MACSTR"\n",
+			 __func__, MAC2STR(own_mac), MAC2STR(peer_mac)));
 
 	if (pSaeIns == NULL)
 		return FALSE;
 
 	pSaeIns->removable = TRUE;
+	pSaeIns->delete_fake_entries = FALSE;
 	return TRUE;
 }
 
@@ -616,6 +619,7 @@ VOID sae_ins_init(
 	pSaeIns->support_group_idx = 0;
 	pSaeIns->same_mac_ins = NULL;
 	pSaeIns->removable = FALSE;
+	pSaeIns->delete_fake_entries = FALSE;
 }
 
 /* partial */
@@ -696,11 +700,15 @@ VOID sae_set_retransmit_timer(
 {
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_LOUD,
 			 ("==> %s()\n", __func__));
-	if (pSaeIns->pParentSaeCfg)
-		RTMPSetTimer(&pSaeIns->sae_retry_timer, pSaeIns->pParentSaeCfg->dot11RSNASAERetransPeriod * 1000);
-	else
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
-		("==> %s(), RTMPSetTimer fail!!\n", __func__));
+	if (pSaeIns) {
+		if (pSaeIns->pParentSaeCfg)
+			RTMPSetTimer(&pSaeIns->sae_retry_timer, pSaeIns->pParentSaeCfg->dot11RSNASAERetransPeriod * 1000);
+		else
+			MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
+			"==> %s(), RTMPSetTimer fail!!\n", __func__);
+	} else
+		MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
+			"==> %s(), pSaeIns NULL!!\n", __func__);
 }
 
 
@@ -817,6 +825,7 @@ UCHAR sae_auth_init(
 		return FALSE;
 
 	pSaeIns->same_mac_ins = pPreSaeIns;
+	pSaeIns->delete_fake_entries = TRUE;
 
 	if (pPreSaeIns)
 		pPreSaeIns->same_mac_ins = pSaeIns;
@@ -873,14 +882,15 @@ UCHAR sae_handle_auth(
 	UINT32 token_len = 0;
 	UCHAR data[DATA_SIZE];
 	UINT32 data_len = 0;
+	UCHAR *pos;
 
 	if ((sae_pk->sae_pk_test_ctrl & SAE_PK_CFG_TAKE_H2E_AS_SAEPK)
 		&& auth_status == MLME_SAE_HASH_TO_ELEMENT)
 		auth_status = MLME_SAE_PUBLIC_KEY;
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_TRACE,
-			 ("==>%s(): receive seq #%d with status code %d, instance %p, own mac addr = %02x:%02x:%02x:%02x:%02x:%02x, peer mac addr = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__, auth_seq, auth_status, pSaeIns, PRINT_MAC(Fr->Hdr.Addr1), PRINT_MAC(Fr->Hdr.Addr2)));
+			 ("==>%s(): receive seq #%d with status code %d, instance %p, own mac addr = "MACSTR", peer mac addr = "MACSTR"\n",
+			  __func__, auth_seq, auth_status, pSaeIns, MAC2STR(Fr->Hdr.Addr1), MAC2STR(Fr->Hdr.Addr2)));
 
 	/* Upon receipt of a Com event, the t0 (retransmission) timer shall be cancelled in Committed/Confirmed state */
 	/* Upon receipt of a Con event, the t0 (retransmission) timer shall be cancelled in Committed/Confirmed state */
@@ -929,46 +939,31 @@ UCHAR sae_handle_auth(
 			if (auth_status == MLME_ANTI_CLOGGING_TOKEN_REQ) {
 				/*Check presence of Anti-Clogging Token*/
 				/*If Anti-Clogging Token present store the anti-clogging token content and length*/
-				is_token_req = TRUE;
-				res = sae_parse_commit(pSaeCfg, pSaeIns, msg, msg_len, &token, &token_len, is_token_req);
+				pos = &Fr->Octet[6];
 
-				if (res != MLME_SUCCESS)
-					break;
+				os_alloc_mem(pAd, &pSaeIns->anti_clogging_token, MAX_SIZE_OF_ANTI_CLOGGING_PARAMETER);
 
-				if (token && (token_len > 0)) {
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
-								 ("%s:AntiClogging Request token found,token_len = %d\n", __func__, token_len));
+				if (pSaeIns->anti_clogging_token == NULL) {
+					MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
+						"AntiClogging token allocation fail\n");
 
-					os_alloc_mem(pAd, &pSaeIns->anti_clogging_token, token_len);
-
-					if (pSaeIns->anti_clogging_token == NULL) {
-						MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
-									 ("%s:AntiClogging token allocation fail\n", __func__));
-
-						sae_set_retransmit_timer(pSaeIns);
-						goto unfinished;
-
-					}
-					NdisZeroMemory(pSaeIns->anti_clogging_token, token_len);
-					pSaeIns->anti_clogging_token_len = token_len;
-
-
-					NdisMoveMemory(pSaeIns->anti_clogging_token, (UCHAR *)token,
-								   pSaeIns->anti_clogging_token_len);
-
-
-					sae_send_auth_commit(pAd, pSaeIns);
-					sae_set_retransmit_timer(pSaeIns);
-					goto unfinished;
-
-				} else {
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
-								 ("%s:AntiClogging Request token empty fail\n", __func__));
 					sae_set_retransmit_timer(pSaeIns);
 					goto unfinished;
 				}
 
+				NdisZeroMemory(pSaeIns->anti_clogging_token, MAX_SIZE_OF_ANTI_CLOGGING_PARAMETER);
+				if (pSaeIns->connect_type == SAE_CONNECTION_TYPE_H2E) {
+					pSaeIns->anti_clogging_token_len = MAX_SIZE_OF_ANTI_CLOGGING_PARAMETER;
+				} else {
+					pSaeIns->anti_clogging_token_len = MAX_SIZE_OF_ANTI_CLOGGING_PARAMETER - 3;
+				}
+				NdisMoveMemory(pSaeIns->anti_clogging_token, pos + 2,
+					pSaeIns->anti_clogging_token_len);
 
+
+				sae_send_auth_commit(pAd, pSaeIns);
+				sae_set_retransmit_timer(pSaeIns);
+				goto unfinished;
 
 			} else if (auth_status == MLME_FINITE_CYCLIC_GROUP_NOT_SUPPORTED) {
 				USHORT sae_group;
@@ -1059,6 +1054,7 @@ UCHAR sae_handle_auth(
 			if (pSaeIns) {
 				pSaeIns->last_rcv_auth_seq = Fr->Hdr.Sequence;
 				pSaeIns->same_mac_ins = pPreSaeIns;
+				pSaeIns->delete_fake_entries = TRUE;
 			}
 			if (pPreSaeIns)
 				pPreSaeIns->same_mac_ins = pSaeIns;
@@ -1181,8 +1177,8 @@ UCHAR sae_handle_auth(
 
 		if (token && sae_check_token(pSaeIns, token, token_len) == FALSE) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR,
-				 ("%s(): check token fail with peer mac %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  __func__, PRINT_MAC(pSaeIns->peer_mac)));
+				 ("%s(): check token fail with peer mac "MACSTR"\n",
+				  __func__, MAC2STR(pSaeIns->peer_mac)));
 			delete_sae_instance(pSaeIns);
 			pSaeIns = NULL;
 			res = MLME_UNSPECIFY_FAIL;
@@ -1558,7 +1554,7 @@ UCHAR sae_check_token(
 	IN UINT32 peer_token_len)
 {
 	SAE_CFG *sae_cfg = pSaeIns->pParentSaeCfg;
-	UCHAR token[SHA256_DIGEST_SIZE];
+	UCHAR token[SHA256_DIGEST_SIZE] = {0};
 
 	if (peer_token_len != SHA256_DIGEST_SIZE)
 		return FALSE;
@@ -1997,8 +1993,10 @@ USHORT sae_check_rejected_group(
 		("%s: peer_rejected_group = %x, rejected_group = %x\n",
 		__func__, peer_rejected_group, pSaeIns->rejected_group));
 
-	if (peer_rejected_group == pSaeIns->rejected_group)
+	if (peer_rejected_group == pSaeIns->rejected_group) {
+		pSaeIns->rejected_group = 0;
 		return MLME_SUCCESS;
+	}
 	else
 		return MLME_UNSPECIFY_FAIL;
 }
@@ -2064,7 +2062,8 @@ USHORT sae_derive_commit(
 		}
 
 		/* commit-scalar = (rand + mask) modulo r */
-		SAE_BN_MOD_ADD(pSaeIns->sae_rand, mask, pSaeIns->order, &pSaeIns->own_commit_scalar);
+		if (mask && pSaeIns->sae_rand)
+			SAE_BN_MOD_ADD(pSaeIns->sae_rand, mask, pSaeIns->order, &pSaeIns->own_commit_scalar);
 	} while (SAE_BN_IS_ZERO(pSaeIns->own_commit_scalar)
 			 || SAE_BN_IS_ONE(pSaeIns->own_commit_scalar));
 
@@ -2206,8 +2205,8 @@ VOID sae_send_auth(
 	NDIS_STATUS NStatus;
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_TRACE,
-			 ("==> %s(), seq = %d, statuscode = %d, own mac addr = %02x:%02x:%02x:%02x:%02x:%02x, peer mac addr = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__, seq, status_code, PRINT_MAC(own_mac), PRINT_MAC(peer_mac)));
+			 ("==> %s(), seq = %d, statuscode = %d, own mac addr = "MACSTR", peer mac addr = "MACSTR"\n",
+			  __func__, seq, status_code, MAC2STR(own_mac), MAC2STR(peer_mac)));
 	NStatus = MlmeAllocateMemory(pAd, &pOutBuffer);
 
 	if (NStatus != NDIS_STATUS_SUCCESS)
@@ -2270,10 +2269,11 @@ UCHAR sae_send_auth_commit(
 	NdisMoveMemory(pos, &pSaeIns->group, 2);
 #endif
 	pos += 2;
-
-	if (pSaeIns->anti_clogging_token) {
+	/*Looping case consider Anticlogging token to be present after Group ID
+	 * Present as Normal Anti-clogging token parameter in commit frame*/
+	if (pSaeIns->anti_clogging_token && pSaeIns->connect_type == SAE_CONNECTION_TYPE_LOOPING) {
 		NdisMoveMemory(pos, pSaeIns->anti_clogging_token,
-					   pSaeIns->anti_clogging_token_len);
+			pSaeIns->anti_clogging_token_len);
 		pos += pSaeIns->anti_clogging_token_len;
 	}
 
@@ -2310,6 +2310,14 @@ UCHAR sae_send_auth_commit(
 		NdisMoveMemory(pos + 3, pSaeIns->pwd_id_ptr->pwd_id, strlen(pSaeIns->pwd_id_ptr->pwd_id));
 		pos += strlen(pSaeIns->pwd_id_ptr->pwd_id) + 3;
 	}
+	/*H2E Case will contain 3 bytes extra for Header apart from Anti-Clogging token value
+	 * Present as Tagged parameter in commit frame*/
+	if (pSaeIns->anti_clogging_token && pSaeIns->connect_type == SAE_CONNECTION_TYPE_H2E) {
+		NdisMoveMemory(pos, pSaeIns->anti_clogging_token,
+			pSaeIns->anti_clogging_token_len);
+		pos += pSaeIns->anti_clogging_token_len;
+	}
+
 send_msg:
 	if (pSaeIns->connect_type == SAE_CONNECTION_TYPE_H2E)
 		status_code = MLME_SAE_HASH_TO_ELEMENT;
@@ -2321,6 +2329,13 @@ send_msg:
 
 	sae_send_auth(pAd, pSaeIns->own_mac, pSaeIns->peer_mac, pSaeIns->bssid,
 				  AUTH_MODE_SAE, SAE_COMMIT_SEQ, status_code, buf, pos - buf);
+
+	if (pSaeIns->anti_clogging_token) {
+		os_free_mem(pSaeIns->anti_clogging_token);
+		pSaeIns->anti_clogging_token = NULL;
+		pSaeIns->anti_clogging_token_len = 0;
+	}
+
 	os_free_mem(buf);
 	return TRUE;
 }
@@ -2536,10 +2551,8 @@ USHORT sae_group_allowed(
 		/* 12.4.8.6.5 the protocol instance shall verify that the finite cyclic group is the same as the previously received Commit frame.
 		  * If not, the frame shall be silently discarded.
 		  */
-		if (pSaeIns->state == SAE_CONFIRMED) {
-			delete_sae_instance(pSaeIns);
+		if (pSaeIns->state == SAE_CONFIRMED)
 			return SAE_SILENTLY_DISCARDED;
-		}
 
 		sae_clear_data(pSaeIns);
 
@@ -3329,7 +3342,7 @@ UINT32 sae_pk_build_sae_pk_element(
 	UCHAR *pos = buf;
 	KDE_HDR *kde = (KDE_HDR *)buf;
 	struct sae_pk_cfg *sae_pk = pSaeIns->sae_pk_ptr;
-	UCHAR encrypt_modifier[AES_BLOCK_SIZES + SAE_PK_MODIFIER_BYTES_LEN];
+	UCHAR encrypt_modifier[AES_BLOCK_SIZES + SAE_PK_MODIFIER_BYTES_LEN] = {0};
 
 	if (sae_pk == NULL) {
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_OFF,
@@ -4070,6 +4083,14 @@ USHORT sae_parse_commit_element_ecc(
 
 	*pos += pSaeIns->prime_len * 2;
 
+	/* Avoid memory leakage if pSaeIns->peer_commit_element not NULL. */
+	if (pSaeIns->peer_commit_element) {
+		BIG_INTEGER_EC_POINT *element = NULL;
+
+		MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR, "pSaeIns->peer_commit_element is not NULL!\n");
+		element = (BIG_INTEGER_EC_POINT *)pSaeIns->peer_commit_element;
+		ecc_point_free(&element);
+	}
 	pSaeIns->peer_commit_element = peer_element;
 fail:
 	SAE_BN_RELEASE_BACK_TO_POOL(&peer_element_x);
@@ -4176,6 +4197,14 @@ UCHAR sae_derive_commit_element_ecc(
 		return FALSE;
 	}
 
+	/* Avoid memory leakage if pSaeIns->own_commit_element is not NULL. */
+	if (pSaeIns->own_commit_element) {
+		BIG_INTEGER_EC_POINT *element = NULL;
+
+		MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR, "pSaeIns->own_commit_element is not NULL!\n");
+		element = (BIG_INTEGER_EC_POINT *)pSaeIns->own_commit_element;
+		ecc_point_free(&element);
+	}
 	pSaeIns->own_commit_element = (VOID *) commit_element;
 	return TRUE;
 }
@@ -4343,6 +4372,14 @@ USHORT sae_derive_pwe_ecc(
 		}
 	}
 
+	/* Avoid memory leakage if pSaeIns->pwe is not NULL. */
+	if (pSaeIns->pwe) {
+		BIG_INTEGER_EC_POINT *element = NULL;
+
+		MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR, "pSaeIns->pwe is not NULL!\n");
+		element = (BIG_INTEGER_EC_POINT *)pSaeIns->pwe;
+		ecc_point_free(&element);
+	}
 	SAE_BN_FREE(&x);
 	pSaeIns->pwe = (VOID *)res;
 	return MLME_SUCCESS;
@@ -4391,6 +4428,14 @@ USHORT sae_derive_pwe_pt_ecc(
 	/* PWE = scalar-op(val, PT) */
 	ECC_POINT_MUL((BIG_INTEGER_EC_POINT *)pSaeIns->pt, val, ec_group_bi, &res);
 
+	/* Avoid memory leakage if pSaeIns->pwe is not NULL. */
+	if (pSaeIns->pwe) {
+		BIG_INTEGER_EC_POINT *element = NULL;
+
+		MTWF_DBG(NULL, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_ERROR, "pSaeIns->pwe is not NULL!\n");
+		element = (BIG_INTEGER_EC_POINT *)pSaeIns->pwe;
+		ecc_point_free(&element);
+	}
 	pSaeIns->pwe = (VOID *)res;
 
 	SAE_BN_FREE(&val);
@@ -4415,7 +4460,7 @@ USHORT sae_derive_pwe_ffc(
 	SAE_BN *exp = NULL;
 	UCHAR msg[LEN_PSK + SAE_MAX_PWD_ID + 2]; /* sizeof(base)+sizeof(counter) */
 	UINT32 msg_len;
-	UCHAR pwd_seed[SHA256_DIGEST_SIZE];
+	UCHAR pwd_seed[SHA256_DIGEST_SIZE] = {0};
 	UCHAR *pwd_value = NULL;
 	SAE_BN *pwd_value_bi = NULL;
 	SAE_BN *tmp_bi = NULL;

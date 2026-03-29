@@ -59,9 +59,6 @@
 #endif /* MANUAL_MU */
 #endif /* CFG_SUPPORT_MU_MIMO */
 
-#ifdef MT7622
-#include "mac/mac_mt/dmac/dma_sch.h"
-#endif /* MT7622 */
 
 
 

@@ -40,9 +40,6 @@
 
 
 
-#ifdef MT7622
-#include "chip/mt7622.h"
-#endif /* MT7622 */
 
 
 

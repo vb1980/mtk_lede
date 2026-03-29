@@ -34,6 +34,24 @@
 #include "mac/mac_mt/mt_mac_ctrl.h"
 #endif /* MT_MAC */
 
+#define VENDOR_OUI_MTK  {0x00, 0x0C, 0xE7}
+
+/* 7.3.2.2 Data Rate Value */
+#define RATE_1M                             2	/* 1M in unit of 500kb/s */
+#define RATE_2M                             4	/* 2M */
+#define RATE_5_5M                           11	/* 5.5M */
+#define RATE_11M                            22	/* 11M */
+#define RATE_22M                            44	/* 22M */
+#define RATE_33M                            66	/* 33M */
+#define RATE_6M                             12	/* 6M */
+#define RATE_9M                             18	/* 9M */
+#define RATE_12M                            24	/* 12M */
+#define RATE_18M                            36	/* 18M */
+#define RATE_24M                            48	/* 24M */
+#define RATE_36M                            72	/* 36M */
+#define RATE_48M                            96	/* 48M */
+#define RATE_54M                            108	/* 54M */
+
 #define WMM_QUE_NUM 4
 
 enum {

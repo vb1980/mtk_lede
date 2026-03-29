@@ -246,6 +246,7 @@ typedef struct _WNM_CTRL {
 	UINT32 TimezoneIELen;
 	PUCHAR TimeadvertisementIE;
 	PUCHAR TimezoneIE;
+	NDIS_SPIN_LOCK IeLock;
 	RTMP_OS_SEM BTMPeerListLock;
 	RTMP_OS_SEM WNMNotifyPeerListLock;
 	BOOLEAN ProxyARPEnable;

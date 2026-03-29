@@ -127,13 +127,8 @@
  *	MACRO
  ******************************************************************************/
 
-#if defined(MT7615) || defined(MT7622)
-#define SINGLE_SKU_TABLE_FILE_NAME	"/etc_ro/Wireless/RT2860AP/SingleSKU.dat"
-#define BF_SKU_TABLE_FILE_NAME		"/etc_ro/Wireless/RT2860AP/SingleSKU_BF.dat"
-#else
 #define SINGLE_SKU_TABLE_FILE_NAME	"/etc/wireless/mediatek/mt7615e-sku.dat"
 #define BF_SKU_TABLE_FILE_NAME		"/etc/wireless/mediatek/mt7615e-sku-bf.dat"
-#endif /* defined(MT7615) || defined(MT7622) */
 
 /*******************************************************************************
  *	TYPES
@@ -146,17 +141,6 @@ typedef enum _POWER_LIMIT_TABLE {
 } POWER_LIMIT_TABLE, *P_POWER_LIMIT_TABLE;
 
 /* TODO: shiang-usw, need to re-organize these for MT7610/MT7601/MT7620!! */
-#if defined(MT7615) || defined(MT7622)
-typedef struct _BACKOFF_POWER_ {
-	DL_LIST  List;
-	UINT8  StartChannel;
-	UINT8  num;
-	PUINT8 Channel;
-	UINT8  band;
-	UINT8  PwrMax[3];
-} BACKOFF_POWER, *P_BACKOFF_POWER;
-#else
-#endif /* defined(MT7615) || defined(MT7622) */
 
 typedef struct _CH_POWER_V0 {
 	DL_LIST  List;
@@ -202,50 +186,6 @@ typedef enum _ENUM_POWER_LIMIT_PARAMETER_INSTANCE_TYPE {
 /*******************************************************************************
  *	FUNCTION PROTOTYPES
  ******************************************************************************/
-#if defined(MT7615) || defined(MT7622)
-INT MtSingleSkuLoadParam(
-	struct _RTMP_ADAPTER *pAd
-	);
-
-VOID
-MtSingleSkuUnloadParam(
-	struct _RTMP_ADAPTER *pAd
-	);
-
-INT
-MtBfBackOffLoadParam(
-	struct _RTMP_ADAPTER *pAd
-	);
-
-VOID
-MtBfBackOffUnloadParam(
-	struct _RTMP_ADAPTER *pAd
-	);
-
-VOID
-MtFillSkuParam(
-	struct _RTMP_ADAPTER *pAd,
-	UINT8 channel,
-	UINT8 Band,
-	UINT8 TxStream,
-	UINT8 *txPowerSku
-	);
-
-VOID
-MtFillBackoffParam(
-	struct _RTMP_ADAPTER *pAd,
-	UINT8 channel,
-	UINT8 Band,
-	UINT8 *BFPowerBackOff
-	);
-
-VOID
-MtShowSkuTable(
-	struct _RTMP_ADAPTER *pAd,
-	UINT8 u1DebugLevel
-	);
-
-#else
 NDIS_STATUS
 MtPwrLimitLoadParamHandle(
 	struct _RTMP_ADAPTER *pAd,
@@ -296,7 +236,16 @@ MtShowPwrLimitTable(
 	UINT8 u1Type,
 	UINT8 u1DebugLevel
 	);
-#endif /* defined(MT7615) || defined(MT7622) */
+
+#ifdef CONFIG_TXPWR_LIMIT_SUPPORT
+NDIS_STATUS
+MtGetMaxTxPwrLimit(
+	RTMP_ADAPTER * pAd,
+	UINT8 band_idx,
+	wdev_tx_power_limit *txpwrinfo,
+	UINT8 u1Type
+	);
+#endif
 
 VOID
 MtPwrLimitTblChProc(

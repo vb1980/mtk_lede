@@ -180,6 +180,7 @@ struct he_op {
 	UINT8 bcc_count; /* count down of BSS Color Change Announcement IE */
 	UINT32 txop_dur_rts_thld;
 	UINT8 he_af;
+	UINT8 bw;
 };
 
 
@@ -250,6 +251,7 @@ UCHAR wlan_operate_get_prim_ch(struct wifi_dev *wdev);
 UCHAR wlan_operate_get_cen_ch_2(struct wifi_dev *wdev);
 UCHAR wlan_operate_get_cen_ch_1(struct wifi_dev *wdev);
 UINT32 wlan_operate_get_frag_thld(struct wifi_dev *wdev);
+UINT32 mt7915_wlan_operate_get_frag_thld(struct wifi_dev *wdev);
 UCHAR wlan_operate_get_rts_pkt_thld(struct wifi_dev *wdev);
 UINT32 wlan_operate_get_rts_len_thld(struct wifi_dev *wdev);
 UINT8 wlan_operate_get_tx_stream(struct wifi_dev *wdev);
@@ -264,6 +266,7 @@ UINT8 wlan_operate_get_he_intra_bss_info(struct wifi_dev *wdev);
 INT32 wlan_operate_get_he_bss_next_color(struct wifi_dev *wdev, UINT8 *color, UINT8 *countdown);
 UINT16 wlan_operate_get_he_txop_dur_rts_thld(struct wifi_dev *wdev);
 UINT8 wlan_operate_get_he_af(struct wifi_dev *wdev);
+UINT8 wlan_operate_get_he_bw(struct wifi_dev *wdev);
 #endif /*DOT11_HE_AX*/
 
 VOID dump_ht_cap(struct wifi_dev *wdev);

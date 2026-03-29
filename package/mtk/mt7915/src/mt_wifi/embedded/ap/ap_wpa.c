@@ -119,6 +119,9 @@ VOID HandleCounterMeasure(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry)
 				if (IS_MAP_ENABLE(pAd) && IS_MAP_R2_ENABLE(pAd))
 					wapp_handle_sta_disassoc(pAd, i, REASON_MIC_FAILURE);
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+				WirelessEventSendDiassoc(pAd, &pAd->MacTab.Content[i], REASON_MIC_FAILURE);
+#endif
 				MlmeDeAuthAction(pAd, &pAd->MacTab.Content[i], REASON_MIC_FAILURE, FALSE);
 			}
 		}
@@ -204,4 +207,44 @@ VOID    ApcliWpaSendEapolStart(
 }
 #endif /* WPA_SUPPLICANT_SUPPORT */
 #endif/*APCLI_SUPPORT*/
+
+INT	Set_PtkRekey_Proc(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
+{
+	UINT16 wcid = 0;
+	MAC_TABLE_ENTRY *pEntry  = NULL;
+	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+	STA_TR_ENTRY *tr_entry	= NULL;
+	PSECURITY_CONFIG pSecConfig  = NULL;
+
+	wcid = (CHAR)os_str_tol(arg, 0, 10);
+	if (!VALID_UCAST_ENTRY_WCID(pAd, wcid))
+		return FALSE;
+
+	pEntry = &pAd->MacTab.Content[wcid];
+	pSecConfig = &pEntry->SecConfig;
+	tr_entry = &tr_ctl->tr_entry[pEntry->wcid];
+
+	if (!IS_ENTRY_CLIENT(pEntry))
+		return FALSE;
+
+	if ((IS_AKM_PSK(pSecConfig->AKMMap)
+		|| (IS_AKM_WPA2(pSecConfig->AKMMap) && (is_pmkid_cache_in_sec_config(pSecConfig)))
+		|| (IS_AKM_WPA3_192BIT(pSecConfig->AKMMap) && (is_pmkid_cache_in_sec_config(pSecConfig)))
+		|| (IS_AKM_OWE(pSecConfig->AKMMap) && (is_pmkid_cache_in_sec_config(pSecConfig))))) {
+
+		PHANDSHAKE_PROFILE pHandshake4Way  = NULL;
+
+		pHandshake4Way = &pSecConfig->Handshake;
+		pHandshake4Way->WpaState = AS_PTKSTART;
+		pHandshake4Way->MsgRetryCounter = 0;
+		pEntry->PrivacyFilter = Ndis802_11PrivFilter8021xWEP;
+
+		WPABuildPairMsg1(pAd, &pEntry->SecConfig, pEntry);
+
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s::(WCID=%d)\n",
+			__func__, wcid));
+	}
+
+	return TRUE;
+}
 

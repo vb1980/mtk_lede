@@ -16,7 +16,7 @@
 #include "rt_config.h"
 #include "sys_adaption.h"
 
-u_int32 serv_dbg_lvl = SERV_DBG_LVL_WARN;
+s_int32 serv_dbg_lvl = SERV_DBG_LVL_WARN;
 
 /*****************************************************************************
  *	Packet free related functions
@@ -190,3 +190,9 @@ VOID sys_ad_wakeup_os_task(struct serv_os_task *task)
 {
 	WAKE_UP(task);
 }
+
+s_int32 sys_snprintf_error(u_long size, s_int32 res)
+{
+	return res < 0 || (unsigned int) res >= size;
+}
+

@@ -99,7 +99,8 @@ BOOLEAN in_altx_filter_list(HEADER_802_11 *pHeader)
 
 		ptr += sizeof(HEADER_802_11);
 		if (*ptr == CATEGORY_PUBLIC ||
-			((*ptr == CATEGORY_BA) && (*(ptr+1) == ADDBA_RESP)))
+			((*ptr == CATEGORY_BA) && (*(ptr+1) == ADDBA_RESP)) ||
+			twt_is_itwt_setup_frame(ptr))
 			return TRUE;
 	}
 
@@ -254,3 +255,71 @@ VOID ComposePsPoll(
 	COPY_MAC_ADDR(pPsPollFrame->Ta, pTa);
 }
 
+#ifdef CONFIG_6G_SUPPORT
+VOID write_tmac_info_offload_pkt(
+	RTMP_ADAPTER *pAd,
+	struct wifi_dev *wdev,
+	UCHAR type,
+	UCHAR sub_type,
+	UCHAR *tmac_buf,
+	HTTRANSMIT_SETTING *TransmitSet,
+	ULONG frmLen)
+{
+	MAC_TX_INFO mac_info;
+
+	NdisZeroMemory((UCHAR *)&mac_info, sizeof(mac_info));
+
+	mac_info.Type = type;
+	mac_info.SubType = sub_type;
+	mac_info.FRAG = FALSE;
+	mac_info.CFACK = FALSE;
+	mac_info.InsTimestamp = TRUE;
+	mac_info.AMPDU = FALSE;
+	mac_info.BM = 1;
+	mac_info.Ack = FALSE;
+	mac_info.BASize = 0;
+	mac_info.WCID = wdev->bss_info_argument.bmc_wlan_idx;
+	mac_info.Length = frmLen;
+	mac_info.TID = 0;
+	mac_info.TxRate = 0;
+	mac_info.Txopmode = IFS_HTTXOP;
+	mac_info.hdr_len = 24;
+	mac_info.bss_idx = wdev->func_idx;
+	mac_info.SpeEn = 1;
+	mac_info.TxSPriv = wdev->func_idx;
+	mac_info.OmacIdx = wdev->OmacIdx;
+	mac_info.txpwr_offset = wdev->mgmt_txd_txpwr_offset;
+
+	if ((type == FC_TYPE_MGMT) && (sub_type == SUBTYPE_BEACON)) {
+		mac_info.NSeq = TRUE;
+		mac_info.q_idx = HcGetBcnQueueIdx(pAd, wdev);
+	} else {
+		/* HW SN and ALTX for non-beacon frame */
+		mac_info.NSeq = FALSE;
+		mac_info.q_idx = HcGetMgmtQueueIdx(pAd, wdev, TX_ALTX);
+	}
+
+	if (wdev->bcn_buf.BcnUpdateMethod == BCN_GEN_BY_FW)
+		mac_info.IsOffloadPkt = TRUE;
+	else
+		mac_info.IsOffloadPkt = FALSE;
+
+	mac_info.Preamble = LONG_PREAMBLE;
+	mac_info.IsAutoRate = FALSE;
+
+	if (pAd->CommonCfg.bSeOff != TRUE) {
+		if (HcGetBandByWdev(wdev) == BAND0)
+			mac_info.AntPri = BAND0_SPE_IDX;
+		else if (HcGetBandByWdev(wdev) == BAND1)
+			mac_info.AntPri = BAND1_SPE_IDX;
+	}
+
+	NdisZeroMemory(tmac_buf, sizeof(TMAC_TXD_L));
+	asic_write_tmac_info_fixed_rate(pAd, tmac_buf, &mac_info, TransmitSet);
+
+#ifdef RT_BIG_ENDIAN
+	if (IS_HIF_TYPE(pAd, HIF_MT))
+		MTMacInfoEndianChange(pAd, tmac_buf, TYPE_TXWI, sizeof(TMAC_TXD_L));
+#endif
+}
+#endif /* CONFIG_6G_SUPPORT */

@@ -222,7 +222,7 @@ INT32 mtf_ate_mac_cr_backup_and_set(RTMP_ADAPTER *ad)
 UINT32 bn0_agg_cnt_array[] = {BN0_WF_AGG_TOP_AALCR0_ADDR, BN0_WF_AGG_TOP_AALCR1_ADDR, BN0_WF_AGG_TOP_AALCR2_ADDR, BN0_WF_AGG_TOP_AALCR3_ADDR};
 UINT32 bn1_agg_cnt_array[] = {BN1_WF_AGG_TOP_AALCR0_ADDR, BN1_WF_AGG_TOP_AALCR1_ADDR, BN1_WF_AGG_TOP_AALCR2_ADDR, BN1_WF_AGG_TOP_AALCR3_ADDR};
 
-INT32 mtf_ate_ampdu_ba_limit(RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 agg_limit)
+INT32 mtf_ate_ampdu_ba_limit(RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 agg_limit, UINT8 control_band_idx)
 {
 	UINT32 value;
 
@@ -232,28 +232,43 @@ INT32 mtf_ate_ampdu_ba_limit(RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 agg_limit)
 			__func__, wmm_idx));
 		wmm_idx = 0xFF;
 	}
-
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 		("%s: WmmIdx=%d\n", __func__, wmm_idx));
 	value = ((agg_limit & 0xFF) << 24)
 		| ((agg_limit & 0xFF) << 16)
 		| ((agg_limit & 0xFF) << 8)
 		| ((agg_limit & 0xFF) << 0);
+	if (control_band_idx == 0) {
+		if (wmm_idx <= 3)
+			MAC_IO_WRITE32(ad->hdev_ctrl, bn0_agg_cnt_array[wmm_idx], value);
+		else {
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR0_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR1_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR2_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR3_ADDR, value);
+		}
 
-	if (wmm_idx <= 3)
-		MAC_IO_WRITE32(ad->hdev_ctrl, bn0_agg_cnt_array[wmm_idx], value);
-	else {
-		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR0_ADDR, value);
-		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR1_ADDR, value);
-		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR2_ADDR, value);
-		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AALCR3_ADDR, value);
+		value = 0x0;
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR0_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR1_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR2_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR3_ADDR, value);
+	} else if (control_band_idx == 1) {
+		if (wmm_idx <= 3)
+			MAC_IO_WRITE32(ad->hdev_ctrl, bn1_agg_cnt_array[wmm_idx], value);
+		else {
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AALCR0_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AALCR1_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AALCR2_ADDR, value);
+			MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AALCR3_ADDR, value);
+		}
+
+		value = 0x0;
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AWSCR0_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AWSCR1_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AWSCR2_ADDR, value);
+		MAC_IO_WRITE32(ad->hdev_ctrl, BN1_WF_AGG_TOP_AWSCR3_ADDR, value);
 	}
-
-	value = 0x0;
-	MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR0_ADDR, value);
-	MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR1_ADDR, value);
-	MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR2_ADDR, value);
-	MAC_IO_WRITE32(ad->hdev_ctrl, BN0_WF_AGG_TOP_AWSCR3_ADDR, value);
 
 	return 0;
 }

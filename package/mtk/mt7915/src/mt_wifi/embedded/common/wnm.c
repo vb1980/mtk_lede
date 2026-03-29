@@ -32,6 +32,9 @@
 #define IP_PROTO_FRAGMENT       44      /* IP6 fragmentation header */
 #define IP_PROTO_AH             51      /* Authentication Header for IPv6 - RFC2402*/
 #define IP_PROTO_DSTOPTS        60      /* IP6 destination options - RFC1883 */
+#define IP_PROTO_ICMP           58      /* ICMP header type */
+#define IP_PROTO_V6TCP          6       /* TCP header type */
+#define IP_PROTO_V6UDP          17      /* UDP header type */
 
 #ifndef MAT_SUPPORT
 #define IS_UNSPECIFIED_IPV6_ADDR(_addr)	\
@@ -463,6 +466,9 @@ BOOLEAN IsIpv6DuplicateAddrDetect(PRTMP_ADAPTER pAd,
 		UCHAR	IsExtenHeader = 0;
 		NdisMoveMemory(&PayloadLen, (Pos + 4), 2);
 		PayloadLen = OS_NTOHS(PayloadLen);
+		if (PayloadLen <= 0 || PayloadLen > MAX_RX_PKT_LEN)
+			return FALSE;
+
 		Pos += 8;
 		pIPv6Addr = (RT_IPV6_ADDR *)Pos;
 
@@ -474,6 +480,11 @@ BOOLEAN IsIpv6DuplicateAddrDetect(PRTMP_ADAPTER pAd,
 
 				if ((NextHeader == IP_PROTO_HOPOPTS) || (NextHeader == IP_PROTO_ROUTING) || (NextHeader == IP_PROTO_FRAGMENT) || (NextHeader == IP_PROTO_AH) || (NextHeader == IP_PROTO_DSTOPTS)) {
 					IsExtenHeader = 1;
+
+					if (PayloadLen > MAX_AGGREGATION_SIZE) {
+						MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_WARN, "invalid payload len:%d.\n", PayloadLen);
+						return FALSE;
+					}
 
 					do {
 						printk("IsIpv6DuplicateAddrDetect: nextheader=0x%x, %d, %d\n", NextHeader, PayloadLen, IsExtenHeader);
@@ -504,16 +515,18 @@ BOOLEAN IsIpv6DuplicateAddrDetect(PRTMP_ADAPTER pAd,
 							Pos += AHLen;
 						}
 						break;
-
+						case IP_PROTO_ICMP:
+							IsExtenHeader = 0;/* found */
+						break;
 						default:
-							IsExtenHeader = 0;
-							break;
+							return FALSE;
 						}
 					} while ((PayloadLen > 0) && (IsExtenHeader == 1));
 
 					if (PayloadLen <= 0)
 						return FALSE;
-				}
+				} else if (NextHeader != IP_PROTO_ICMP)
+					return FALSE;
 
 				/* Check if neighbor solicitation */
 				if (*Pos == 0x87) {
@@ -542,11 +555,18 @@ BOOLEAN IsIPv6ProxyARPCandidate(IN PRTMP_ADAPTER pAd,
 	Pos += 2;
 
 	if (ProtoType == ETH_P_IPV6) {
-		INT32	PayloadLen = 0; /* ((*(Pos+5) & 0xff) << 8) | (*(Pos+4) & 0xff); */
-		UCHAR	NextHeader = *(Pos + 6);
-		UCHAR	IsExtenHeader = 0;
-		NdisMoveMemory(&PayloadLen, (Pos + 4), 2);
-		PayloadLen = OS_NTOHS(PayloadLen);
+		UINT16  ProtoType_temp;/* ((*(Pos+5) & 0xff) << 8) | (*(Pos+4) & 0xff); */
+		INT16   PayloadLen;
+		UCHAR   NextHeader = *(Pos + 6);
+		UCHAR   IsExtenHeader = 0;
+		NdisMoveMemory(&ProtoType_temp, (Pos + 4), 2);
+		ProtoType_temp = OS_NTOHS(ProtoType_temp);
+		if (ProtoType_temp > (1500 - IPV6_HDR_LEN))
+			return FALSE;
+		PayloadLen = (INT16)ProtoType_temp;
+		if (PayloadLen <= 0 || PayloadLen > MAX_RX_PKT_LEN)
+			return FALSE;
+
 		Pos += 8;
 		pIPv6Addr = (RT_IPV6_ADDR *)Pos;
 		/* if (!IS_UNSPECIFIED_IPV6_ADDR(*pIPv6Addr)) */
@@ -588,16 +608,18 @@ BOOLEAN IsIPv6ProxyARPCandidate(IN PRTMP_ADAPTER pAd,
 						Pos += AHLen;
 					}
 					break;
-
+					case IP_PROTO_ICMP:
+						IsExtenHeader = 0;/* found */
+					break;
 					default:
-						IsExtenHeader = 0;
-						break;
+						return FALSE;
 					}
 				} while ((PayloadLen > 0) && (IsExtenHeader == 1));
 
 				if (PayloadLen <= 0)
 					return FALSE;
-			}
+			} else if (NextHeader != IP_PROTO_ICMP)
+				return FALSE;
 
 			/* Check if neighbor solicitation */
 			if (*Pos == 0x87) {
@@ -627,15 +649,22 @@ BOOLEAN IsIPv6DHCPv6Solicitation(IN PRTMP_ADAPTER pAd,
 		UCHAR   IsExtenHeader = 0;
 		NdisMoveMemory(&PayloadLen, (Pos + 4), 2);
 		PayloadLen = OS_NTOHS(PayloadLen);
+		if (PayloadLen <= 0 || PayloadLen > MAX_RX_PKT_LEN)
+			return FALSE;
 
 		if ((NextHeader != IP_PROTO_HOPOPTS) && (NextHeader != IP_PROTO_ROUTING) &&  (NextHeader != IP_PROTO_FRAGMENT) &&  (NextHeader != IP_PROTO_AH) && (NextHeader != IP_PROTO_DSTOPTS)) {
-			if (NextHeader == 0x11)
+			if (NextHeader == IP_PROTO_V6UDP)
 				Pos += 40;
 			else
 				return FALSE;
 		} else {
 			IsExtenHeader = 1;
 			Pos += 40;
+
+			if (PayloadLen > MAX_AGGREGATION_SIZE) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_WARN, "invalid payload len:%d.\n", PayloadLen);
+				return FALSE;
+			}
 
 			do {
 				printk("IsIPv6DHCPv6Solicitation: nextheader=0x%x, %d, %d\n", NextHeader, PayloadLen, IsExtenHeader);
@@ -666,10 +695,11 @@ BOOLEAN IsIPv6DHCPv6Solicitation(IN PRTMP_ADAPTER pAd,
 					Pos += AHLen;
 				}
 				break;
-
+				case IP_PROTO_V6UDP:
+					IsExtenHeader = 0;/* found */
+				break;
 				default:
-					IsExtenHeader = 0;
-					break;
+					return FALSE;
 				}
 			} while ((PayloadLen > 0) && (IsExtenHeader == 1));
 
@@ -714,12 +744,26 @@ BOOLEAN IsIPv6RouterSolicitation(IN PRTMP_ADAPTER pAd,
 		UCHAR	IsExtenHeader = 0;
 		NdisMoveMemory(&PayloadLen, (Pos + 4), 2);
 		PayloadLen = OS_NTOHS(PayloadLen);
+		if (PayloadLen <= 0 || PayloadLen > MAX_RX_PKT_LEN)
+			return FALSE;
 
-		if ((NextHeader != IP_PROTO_HOPOPTS) && (NextHeader != IP_PROTO_ROUTING) &&  (NextHeader != IP_PROTO_FRAGMENT) &&  (NextHeader != IP_PROTO_AH) && (NextHeader != IP_PROTO_DSTOPTS))
+		if ((NextHeader != IP_PROTO_HOPOPTS) &&
+			(NextHeader != IP_PROTO_ROUTING) &&
+			(NextHeader != IP_PROTO_FRAGMENT) &&
+			(NextHeader != IP_PROTO_AH) &&
+			(NextHeader != IP_PROTO_DSTOPTS)) {
+			/* This maybe new EXT header and return FALSE */
+			if (NextHeader != IP_PROTO_ICMP)
+				return FALSE;
 			Pos += 40;
-		else {
+		} else {
 			IsExtenHeader = 1;
 			Pos += 40;
+
+			if (PayloadLen > MAX_AGGREGATION_SIZE) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_WARN, "invalid payload len:%d.\n", PayloadLen);
+				return FALSE;
+			}
 
 			do {
 				printk("IsIPv6RouterSolicitation: nextheader=0x%x, %d, %d\n", NextHeader, PayloadLen, IsExtenHeader);
@@ -750,10 +794,11 @@ BOOLEAN IsIPv6RouterSolicitation(IN PRTMP_ADAPTER pAd,
 					Pos += AHLen;
 				}
 				break;
-
+				case IP_PROTO_ICMP:
+					IsExtenHeader = 0;/* found */
+				break;
 				default:
-					IsExtenHeader = 0;
-					break;
+					return FALSE;
 				}
 			} while ((PayloadLen > 0) && (IsExtenHeader == 1));
 
@@ -784,17 +829,24 @@ BOOLEAN IsIPv6RouterAdvertisement(IN PRTMP_ADAPTER pAd,
 	Pos += 2;
 
 	if (ProtoType == ETH_P_IPV6) {
-		INT32	PayloadLen = 0;
+		UINT16 ProtoType_temp;/* ((*(Pos+5) & 0xff) << 8) | (*(Pos+4) & 0xff); */
+		INT16	PayloadLen = 0;
 		UCHAR	NextHeader = *(Pos + 6);
 		UCHAR	IsExtenHeader = 0;
-		NdisMoveMemory(&PayloadLen, (Pos + 4), 2);
-		PayloadLen = OS_NTOHS(PayloadLen);
+		NdisMoveMemory(&ProtoType_temp, (Pos + 4), 2);
+		ProtoType_temp = OS_NTOHS(ProtoType_temp);
+		if (ProtoType_temp > (1500 - IPV6_HDR_LEN))
+			return FALSE;
+		PayloadLen = (INT16)ProtoType_temp;
 
 		if ((NextHeader != IP_PROTO_HOPOPTS) &&
 			(NextHeader != IP_PROTO_ROUTING) &&
 			(NextHeader != IP_PROTO_FRAGMENT) &&
 			(NextHeader != IP_PROTO_AH) &&
 			(NextHeader != IP_PROTO_DSTOPTS)) {
+			/* This maybe new EXT header and return FALSE */
+			if (NextHeader != IP_PROTO_ICMP)
+				return FALSE;
 			Pos += 40;
 			pData_offset = Pos;
 		} else {
@@ -831,10 +883,11 @@ BOOLEAN IsIPv6RouterAdvertisement(IN PRTMP_ADAPTER pAd,
 					Pos += AHLen;
 				}
 				break;
-
+				case IP_PROTO_ICMP:
+					IsExtenHeader = 0;/* found */
+				break;
 				default:
-					IsExtenHeader = 0;
-					break;
+					return FALSE;
 				}
 			} while ((PayloadLen > 0) && (IsExtenHeader == 1));
 
@@ -1364,9 +1417,20 @@ VOID WNMIPv6ProxyARPCheck(
 			Pos += 52 + Offset;
 			PayloadLen -= (16 + Offset);
 
+			if (PayloadLen > MAX_AGGREGATION_SIZE) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_WARN, "invalid payload len:%d.\n", PayloadLen);
+				return;
+			}
+
 			while (PayloadLen > 0) {
 				UINT8 OptionsLen = (*(Pos + 1)) * 8;
 
+				/* FATAL error, OUT to avoid infinite loop */
+				if (OptionsLen == 0) {
+					MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
+							"RouterAdvertisement len is 0!\n");
+					break;
+				}
 				/* Prefix information */
 				if (*Pos == 0x03) {
 					UCHAR *Prefix;
@@ -1505,7 +1569,7 @@ static VOID ReceiveBTMQuery(IN PRTMP_ADAPTER pAd,
 static VOID ReceiveBTMRsp(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 {
 	WNM_FRAME *WNMFrame = (WNM_FRAME *)Elem->Msg;
-	BTM_PEER_ENTRY *BTMPeerEntry;
+	BTM_PEER_ENTRY *BTMPeerEntry = NULL;
 	PWNM_CTRL pWNMCtrl = NULL;
 	UCHAR APIndex;
 	UINT16 VarLen = 0;
@@ -1544,7 +1608,7 @@ static VOID ReceiveBTMRsp(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	}
 	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
 
-	if (!IsFound) {
+	if (!IsFound || BTMPeerEntry == NULL) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
 			("Not found peer entry in list\n"));
 		return;
@@ -1556,7 +1620,7 @@ static VOID ReceiveBTMRsp(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
 	DlListDel(&BTMPeerEntry->List);
 	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-	os_free_mem(BTMPeerEntry);
+	BTM_free_Entry(BTMPeerEntry);
 
 	NetDev = pAd->ApCfg.MBSSID[APIndex].wdev.if_dev;
 	/* Send BTM confirm to daemon */
@@ -1734,15 +1798,15 @@ int check_btm_custom_params(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(p_btm_req_data->sta_mac)));
+			("%s() STA("MACSTR") not associates with AP!\n",
+			__func__, MAC2STR(p_btm_req_data->sta_mac)));
 		goto error;
 	}
 
 	if (!pEntry->BssTransitionManmtSupport) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not support btm!\n",
-			__func__, PRINT_MAC(p_btm_req_data->sta_mac)));
+			("%s() STA("MACSTR") not support btm!\n",
+			__func__, MAC2STR(p_btm_req_data->sta_mac)));
 		goto error;
 	}
 
@@ -1801,6 +1865,12 @@ static VOID SendBTMReq(
 			break;
 	}
 	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
+
+	if (BTMPeerEntry == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, "BTMPeerEntry is NULL\n");
+		return;
+	}
+
 	os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*WNMFrame) + VarLen);
 
 	if (!Buf) {
@@ -1826,10 +1896,12 @@ static VOID SendBTMReq(
 	BTMSetPeerCurrentState(pAd, Elem, WAIT_PEER_BTM_RSP);
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);
 
-	RTMPCancelTimer(&BTMPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
-	RTMPReleaseTimer(&BTMPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
+	if (BTMPeerEntry) {
+		RTMPCancelTimer(&BTMPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
+		RTMPReleaseTimer(&BTMPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
 
-	RTMPSetTimer(&BTMPeerEntry->WaitPeerBTMRspTimer, WaitPeerBTMRspTimeoutVale);
+		RTMPSetTimer(&BTMPeerEntry->WaitPeerBTMRspTimer, WaitPeerBTMRspTimeoutVale);
+	}
 #if (defined (CONFIG_HOTSPOT_R2) || defined (CONFIG_DOT11V_WNM))
 	{
 		MAC_TABLE_ENTRY  *pEntry;
@@ -1837,7 +1909,8 @@ static VOID SendBTMReq(
 		if (pEntry != NULL) {
 			UINT8 *BTMData = (UINT8 *)Event->u.BTM_REQ_DATA.BTMReq;
 			if ((*(BTMData) & 0x1C) != 0) {
-				pEntry->BTMDisassocCount = (((*(BTMData + 2) << 8) | (*(BTMData + 1))) * pAd->CommonCfg.BeaconPeriod) / 1000;
+				pEntry->BTMDisassocCount = (((*(BTMData + 2) << 8) | (*(BTMData + 1))) *
+					pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(&(pAd->ApCfg.MBSSID[Event->ControlIndex].wdev))]) / 1000;
 				printk("bss discount sec=%d\n", pEntry->BTMDisassocCount);
 
 				if (pEntry->BTMDisassocCount < 1)
@@ -1889,8 +1962,8 @@ static VOID SendBTMReqIE(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(Event->PeerMACAddr)));
+			("%s() STA("MACSTR") not associates with AP!\n",
+			__func__, MAC2STR(Event->PeerMACAddr)));
 		goto error;
 	}
 
@@ -1930,7 +2003,8 @@ static VOID SendBTMReqIE(
 
 	if (p_btm_req_data[0] & 0x04) {
 		pEntry->BTMDisassocCount =
-			(p_btm_req_data[1] | p_btm_req_data[2]<<8) * pAd->CommonCfg.BeaconPeriod / 1000;
+			(p_btm_req_data[1] | p_btm_req_data[2]<<8) *
+				pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(&(pAd->ApCfg.MBSSID[Event->ControlIndex].wdev))] / 1000;
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_OFF,
 			("%s() bss discount sec=%d\n", __func__, pEntry->BTMDisassocCount));
 		if (pEntry->BTMDisassocCount < 1)
@@ -1954,7 +2028,7 @@ error:
 		RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
 		DlListDel(&BTMPeerEntry->List);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-		os_free_mem(BTMPeerEntry);
+		BTM_free_Entry(BTMPeerEntry);
 	}
 }
 
@@ -2043,7 +2117,8 @@ static VOID SendBTMReqParam(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	if (pEntry != NULL) {
 		if (p_btm_req_data->reqmode & 0x04) {
 			pEntry->BTMDisassocCount =
-				p_btm_req_data->disassoc_timer * pAd->CommonCfg.BeaconPeriod / 1000;
+				p_btm_req_data->disassoc_timer *
+				pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(&(pAd->ApCfg.MBSSID[Event->ControlIndex].wdev))] / 1000;
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_OFF,
 				("%s() bss discount sec=%d\n", __func__, pEntry->BTMDisassocCount));
 			if (pEntry->BTMDisassocCount < 1)
@@ -2068,7 +2143,7 @@ error:
 		RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
 		DlListDel(&BTMPeerEntry->List);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-		os_free_mem(BTMPeerEntry);
+		BTM_free_Entry(BTMPeerEntry);
 	}
 }
 
@@ -2089,7 +2164,7 @@ static VOID SendBTMConfirm(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	DlListForEachSafe(BTMPeerEntry, BTMPeerEntryTmp, &pWNMCtrl->BTMPeerList, BTM_PEER_ENTRY, List) {
 		if (MAC_ADDR_EQUAL(BTMPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
 			DlListDel(&BTMPeerEntry->List);
-			os_free_mem(BTMPeerEntry);
+			BTM_free_Entry(BTMPeerEntry);
 			break;
 		}
 	}
@@ -2134,7 +2209,7 @@ static VOID BTMReqTimeout(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 		DlListDel(&BTMPeerEntry->List);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
 		RTMPReleaseTimer(&BTMPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
-		os_free_mem(BTMPeerEntry);
+		BTM_free_Entry(BTMPeerEntry);
 	}
 }
 
@@ -2177,7 +2252,7 @@ static VOID ReceiveBTMRspTimeout(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem
 	DlListDel(&BTMPeerEntry->List);
 	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
 	RTMPReleaseTimer(&BTMPeerEntry->WaitPeerBTMRspTimer, &Cancelled);
-	os_free_mem(BTMPeerEntry);
+	BTM_free_Entry(BTMPeerEntry);
 
 }
 #endif
@@ -2293,7 +2368,7 @@ int send_btm_req_ie(
 			RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
 			DlListDel(&BTMPeerEntry->List);
 			RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-			os_free_mem(BTMPeerEntry);
+			BTM_free_Entry(BTMPeerEntry);
 		}
 	}
 	os_free_mem(Buf);
@@ -2425,7 +2500,7 @@ int send_btm_req_param(
 			RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
 			DlListDel(&BTMPeerEntry->List);
 			RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-			os_free_mem(BTMPeerEntry);
+			BTM_free_Entry(BTMPeerEntry);
 		}
 	}
 
@@ -2659,6 +2734,12 @@ static VOID SendBTMRsp(
 			break;
 	}
 	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
+
+	if (BTMPeerEntry == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, "BTMPeerEntry is NULL\n");
+		return;
+	}
+
 	os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*WNMFrame) + VarLen);
 
 	if (!Buf) {
@@ -2683,13 +2764,15 @@ static VOID SendBTMRsp(
 			Event->u.BTM_RSP_DATA.BTMRspLen);
 	FrameLen += Event->u.BTM_RSP_DATA.BTMRspLen;
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);
-	/* Cancel WaitAPBTMRspTimer*/
-	RTMPCancelTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
-	RTMPReleaseTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
-	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
-	DlListDel(&BTMPeerEntry->List);
-	RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
-	os_free_mem(BTMPeerEntry);
+	if (BTMPeerEntry) {
+		/* Cancel WaitAPBTMRspTimer*/
+		RTMPCancelTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
+		RTMPReleaseTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
+		RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
+		DlListDel(&BTMPeerEntry->List);
+		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
+		BTM_free_Entry(BTMPeerEntry);
+	}
 	os_free_mem(Buf);
 }
 #endif /* CONFIG_STA_SUPPORT */
@@ -2785,10 +2868,11 @@ VOID WNMCtrlInit(IN PRTMP_ADAPTER pAd)
 		RTMP_SEM_EVENT_INIT(&pWNMCtrl->BTMPeerListLock, &pAd->RscSemMemList);
 		NdisAllocateSpinLock(pAd, &pWNMCtrl->ProxyARPListLock);
 		NdisAllocateSpinLock(pAd, &pWNMCtrl->ProxyARPIPv6ListLock);
+		NdisAllocateSpinLock(pAd, &pWNMCtrl->IeLock);
 		DlListInit(&pWNMCtrl->BTMPeerList);
 		DlListInit(&pWNMCtrl->IPv4ProxyARPList);
 		DlListInit(&pWNMCtrl->IPv6ProxyARPList);
-#ifdef CONFIG_HOTSPOT_R2
+#if defined(CONFIG_HOTSPOT_R2) || defined(CONFIG_DOT11V_WNM)
 		RTMP_SEM_EVENT_INIT(&pWNMCtrl->WNMNotifyPeerListLock, &pAd->RscSemMemList);
 		DlListInit(&pWNMCtrl->WNMNotifyPeerList);
 #endif
@@ -2804,12 +2888,14 @@ VOID WNMCtrlInit(IN PRTMP_ADAPTER pAd)
 		DlListInit(&pWNMCtrl->BTMPeerList);
 
 		pWNMCtrl->WNMBTMEnable = WNMBTMEnable;
+		NdisAllocateSpinLock(pAd, &pWNMCtrl->IeLock);
 	}
 #endif /* CONFIG_STA_SUPPORT */
 }
 
 static VOID WNMCtrlRemoveAllIE(PWNM_CTRL pWNMCtrl)
 {
+	RTMP_SEM_LOCK(&pWNMCtrl->IeLock);
 	if (pWNMCtrl->TimeadvertisementIELen) {
 		pWNMCtrl->TimeadvertisementIELen = 0;
 		os_free_mem(pWNMCtrl->TimeadvertisementIE);
@@ -2819,6 +2905,7 @@ static VOID WNMCtrlRemoveAllIE(PWNM_CTRL pWNMCtrl)
 		pWNMCtrl->TimezoneIELen = 0;
 		os_free_mem(pWNMCtrl->TimezoneIE);
 	}
+	RTMP_SEM_UNLOCK(&pWNMCtrl->IeLock);
 }
 
 VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
@@ -2832,7 +2919,7 @@ VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
 	PROXY_ARP_IPV4_ENTRY *ProxyARPIPv4Entry, *ProxyARPIPv4EntryTmp;
 	PROXY_ARP_IPV6_ENTRY *ProxyARPIPv6Entry, *ProxyARPIPv6EntryTmp;
 #endif /* CONFIG_AP_SUPPORT */
-#ifdef CONFIG_HOTSPOT_R2
+#if defined(CONFIG_HOTSPOT_R2) || defined(CONFIG_DOT11V_WNM)
 	WNM_NOTIFY_PEER_ENTRY *WNMNotifyPeerEntry, *WNMNotifyPeerEntryTmp;
 #endif
 
@@ -2850,9 +2937,9 @@ VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
 			RTMPCancelTimer(&BTMPeerEntry->WaitPeerBTMRspTimer, &Cancelled);
 			RTMPReleaseTimer(&BTMPeerEntry->WaitPeerBTMRspTimer, &Cancelled);
 			DlListDel(&BTMPeerEntry->List);
-			os_free_mem(BTMPeerEntry);
+			BTM_free_Entry(BTMPeerEntry);
 		}
-		DlListInit(&pWNMCtrl->BTMPeerList);
+		DlListDel(&pWNMCtrl->BTMPeerList);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
 		RTMP_SEM_EVENT_DESTORY(&pWNMCtrl->BTMPeerListLock);
 		RTMP_SEM_LOCK(&pWNMCtrl->ProxyARPListLock);
@@ -2862,7 +2949,7 @@ VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
 			DlListDel(&ProxyARPIPv4Entry->List);
 			os_free_mem(ProxyARPIPv4Entry);
 		}
-		DlListInit(&pWNMCtrl->IPv4ProxyARPList);
+		DlListDel(&pWNMCtrl->IPv4ProxyARPList);
 		RTMP_SEM_UNLOCK(&pWNMCtrl->ProxyARPListLock);
 		RTMP_SEM_LOCK(&pWNMCtrl->ProxyARPIPv6ListLock);
 		DlListForEachSafe(ProxyARPIPv6Entry, ProxyARPIPv6EntryTmp,
@@ -2870,24 +2957,27 @@ VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
 			DlListDel(&ProxyARPIPv6Entry->List);
 			os_free_mem(ProxyARPIPv6Entry);
 		}
-		DlListInit(&pWNMCtrl->IPv6ProxyARPList);
+		DlListDel(&pWNMCtrl->IPv6ProxyARPList);
 		RTMP_SEM_UNLOCK(&pWNMCtrl->ProxyARPIPv6ListLock);
 		NdisFreeSpinLock(&pWNMCtrl->ProxyARPListLock);
 		NdisFreeSpinLock(&pWNMCtrl->ProxyARPIPv6ListLock);
-#ifdef CONFIG_HOTSPOT_R2
+#if defined(CONFIG_HOTSPOT_R2) || defined(CONFIG_DOT11V_WNM)
 		RTMP_SEM_EVENT_WAIT(&pWNMCtrl->WNMNotifyPeerListLock, Ret);
 		/* Remove all wnm notify peer entry */
 		DlListForEachSafe(WNMNotifyPeerEntry, WNMNotifyPeerEntryTmp,
 						  &pWNMCtrl->WNMNotifyPeerList, WNM_NOTIFY_PEER_ENTRY, List) {
 			DlListDel(&WNMNotifyPeerEntry->List);
+			RTMPCancelTimer(&WNMNotifyPeerEntry->WaitPeerWNMNotifyRspTimer, &Cancelled);
+			RTMPReleaseTimer(&WNMNotifyPeerEntry->WaitPeerWNMNotifyRspTimer, &Cancelled);
 			os_free_mem(WNMNotifyPeerEntry);
 		}
-		DlListInit(&pWNMCtrl->WNMNotifyPeerList);
+		DlListDel(&pWNMCtrl->WNMNotifyPeerList);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->WNMNotifyPeerListLock);
 		RTMP_SEM_EVENT_DESTORY(&pWNMCtrl->WNMNotifyPeerListLock);
 #endif
 		/* Remove all WNM IEs */
 		WNMCtrlRemoveAllIE(pWNMCtrl);
+		NdisFreeSpinLock(&pWNMCtrl->IeLock);
 	}
 
 #endif /* CONFIG_AP_SUPPORT */
@@ -2902,13 +2992,14 @@ VOID WNMCtrlExit(IN PRTMP_ADAPTER pAd)
 			RTMPCancelTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
 			RTMPReleaseTimer(&BTMPeerEntry->WaitAPBTMRspTimer, &Cancelled);
 			DlListDel(&BTMPeerEntry->List);
-			os_free_mem(BTMPeerEntry);
+			BTM_free_Entry(BTMPeerEntry);
 		}
 		DlListDel(&pWNMCtrl->BTMPeerList);
 		RTMP_SEM_EVENT_UP(&pWNMCtrl->BTMPeerListLock);
 		RTMP_SEM_EVENT_DESTORY(&pWNMCtrl->BTMPeerListLock);
 		/* Remove all WNM IEs */
 		WNMCtrlRemoveAllIE(pWNMCtrl);
+		NdisFreeSpinLock(&pWNMCtrl->IeLock);
 	}
 #endif /* CONFIG_STA_SUPPORT */
 }
@@ -3283,12 +3374,12 @@ VOID ReceiveWNMNotifyReq(IN PRTMP_ADAPTER pAd,
 	COPY_MAC_ADDR(MboStaInfoNPC.mac_addr, WNMFrame->Hdr.Addr2);
 	NdisZeroMemory(&MboStaInfoCDC, sizeof(MBO_STA_CH_PREF_CDC_INFO));
 	COPY_MAC_ADDR(MboStaInfoCDC.mac_addr, WNMFrame->Hdr.Addr2);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s sta mac %02x:%02x:%02x:%02x:%02x:%02x\n",
-		__func__, PRINT_MAC(WNMFrame->Hdr.Addr2)));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s sta mac "MACSTR"\n",
+		__func__, MAC2STR(WNMFrame->Hdr.Addr2)));
 #endif /* MBO_SUPPORT */
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s MsgLen %ld MBSS %02x:%02x:%02x:%02x:%02x:%02x\n",
-		__func__, Elem->MsgLen, PRINT_MAC(WNMFrame->Hdr.Addr1)));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s MsgLen %ld MBSS "MACSTR"\n",
+		__func__, Elem->MsgLen, MAC2STR(WNMFrame->Hdr.Addr1)));
 #ifdef MAP_R2
 	for (APIndex = 0; APIndex < MAX_MBSSID_NUM(pAd); APIndex++) {
 		if (MAC_ADDR_EQUAL(WNMFrame->Hdr.Addr3, pAd->ApCfg.MBSSID[APIndex].wdev.bssid)) {
@@ -3336,9 +3427,9 @@ VOID ReceiveWNMNotifyReq(IN PRTMP_ADAPTER pAd,
 							, ElementLen, &MboStaInfoNPC, MBO_FRAME_TYPE_WNM_REQ);
 						bIndicateNPC = TRUE;
 						MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR
-							, ("%s, %u npc_num %d mac_addr %02X:%02X:%02X:%02X:%02X:%02X bIndicateNPC %d\n"
+							, ("%s, %u npc_num %d mac_addr "MACSTR" bIndicateNPC %d\n"
 							, __func__, __LINE__, MboStaInfoNPC.npc_num
-							, PRINT_MAC(MboStaInfoNPC.mac_addr)
+							, MAC2STR(MboStaInfoNPC.mac_addr)
 							, bIndicateNPC));
 						break;
 					case MBO_OUI_CELLULAR_DATA_CAPABILITY:
@@ -3419,10 +3510,10 @@ VOID ReceiveWNMNotifyRsp(IN PRTMP_ADAPTER pAd,
 		{
 			unsigned char *tmp1 = (unsigned char *)WNMFrame->Hdr.Addr2;
 			unsigned char *tmp2;
-			printk("client mac:%02x:%02x:%02x:%02x:%02x:%02x\n", *(tmp1), *(tmp1 + 1), *(tmp1 + 2), *(tmp1 + 3), *(tmp1 + 4), *(tmp1 + 5));
+			printk("client mac:"MACSTR"\n", MAC2STR(tmp1));
 			DlListForEach(WNMNotifyPeerEntry, &pWNMCtrl->WNMNotifyPeerList, WNM_NOTIFY_PEER_ENTRY, List) {
 				tmp2 = (unsigned char *)WNMNotifyPeerEntry->PeerMACAddr;
-				printk("list=> %02x:%02x:%02x:%02x:%02x:%02x\n", *(tmp2), *(tmp2 + 1), *(tmp2 + 2), *(tmp2 + 3), *(tmp2 + 4), *(tmp2 + 5));
+				printk("list=> "MACSTR"\n", MAC2STR(tmp2));
 			}
 			printk("\n");
 		}
@@ -3593,6 +3684,7 @@ VOID SendWNMNotifyConfirm(
 	WNM_NOTIFY_EVENT_DATA *Event = (WNM_NOTIFY_EVENT_DATA *)Elem->Msg;
 	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
 	INT32 Ret;
+	BOOLEAN Cancelled;
 	printk("%s\n", __func__);
 	printk("Receive WNM Notify Response Status:%d\n", Event->u.WNM_NOTIFY_RSP_DATA.WNMNotifyRsp[0]);
 	/* Delete BTM peer entry */
@@ -3600,6 +3692,8 @@ VOID SendWNMNotifyConfirm(
 	DlListForEachSafe(WNMNotifyPeerEntry, WNMNotifyPeerEntryTmp, &pWNMCtrl->WNMNotifyPeerList, WNM_NOTIFY_PEER_ENTRY, List) {
 		if (MAC_ADDR_EQUAL(WNMNotifyPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
 			DlListDel(&WNMNotifyPeerEntry->List);
+			RTMPCancelTimer(&WNMNotifyPeerEntry->WaitPeerWNMNotifyRspTimer, &Cancelled);
+			RTMPReleaseTimer(&WNMNotifyPeerEntry->WaitPeerWNMNotifyRspTimer, &Cancelled);
 			os_free_mem(WNMNotifyPeerEntry);
 			break;
 		}

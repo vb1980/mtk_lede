@@ -626,4 +626,7 @@ INT mtd_set_air_monitor_rule(struct _RTMP_ADAPTER *pAd, UCHAR *rule, UCHAR band_
 INT mtd_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR mnt_idx, UCHAR band_idx);
 #endif
 
+#ifdef PLE_MONITOR_SUPPORT
+INT32 mt_asic_flush_ac_queue_by_fw(struct _RTMP_ADAPTER *ad, UINT16 wcid, UINT16 pkt_cnt, BOOLEAN ps_check);
+#endif
 

@@ -144,8 +144,19 @@ struct wmm_entry *wmm_ctrl_acquire_entry(struct hdev_obj *obj, struct _EDCA_PARM
 	os_zero_mem(&ReleaseEdca, sizeof(EDCA_PARM));
 
 	/*if input edca is all zero, assign default APEdca parameter*/
-	if (!os_cmp_mem(&ReleaseEdca, pEdcaParm, sizeof(EDCA_PARM)) || pEdcaParm->bValid != TRUE)
-		set_default_sta_edca_param(pEdcaParm);
+	if (!os_cmp_mem(&ReleaseEdca, pEdcaParm, sizeof(EDCA_PARM)) || pEdcaParm->bValid != TRUE) {
+		switch (obj->Type) {
+		case WDEV_TYPE_AP:
+		case WDEV_TYPE_WDS:
+			set_default_ap_edca_param(pEdcaParm);
+			break;
+
+		case WDEV_TYPE_STA:
+		default:
+			set_default_sta_edca_param(pEdcaParm);
+			break;
+		}
+	}
 
 	/*if can't search and WmmAcquired is not found*/
 	if (obj->bWmmAcquired) {

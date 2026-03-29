@@ -859,7 +859,7 @@ VOID rx_peer_beacon_check(RTMP_ADAPTER *pAd, BCN_IE_LIST *ie_list, MLME_QUEUE_EL
 	SubType = (UCHAR)pFrame->Hdr.FC.SubType;
 
 	if (SubType == SUBTYPE_BEACON) {
-		UCHAR BandIdx = HcGetBandInfoByChannel(pAd, Elem->Channel);
+		UCHAR BandIdx = HcGetBandByChannelRange(pAd, Elem->Channel);
 
 		if (pAd->BssChkCtrl[BandIdx].bEnable) {
 			BSS_CHECK_CTRL *pBssChkCtrl = &pAd->BssChkCtrl[BandIdx];
@@ -885,7 +885,7 @@ VOID rx_peer_beacon_check(RTMP_ADAPTER *pAd, BCN_IE_LIST *ie_list, MLME_QUEUE_EL
 						}
 
 						MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-								("%s: New BSS MAC:%02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(pBss->BssMAC)));
+								("%s: New BSS MAC:"MACSTR"\n", __func__, MAC2STR(pBss->BssMAC)));
 					} else {
 						if (BSS_CHECK_BEACON_SN_ON(pAd->BssChkCtrl[BandIdx])) {
 							pBss->BssLastBeaconSN = pBss->BssCurrentBeaconSN;

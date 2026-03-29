@@ -77,6 +77,7 @@ BOOLEAN RRM_PeerNeighborReqSanity(
 		case RRM_NEIGHBOR_REQ_SSID_SUB_ID:
 			*pSsid = (PCHAR)eid_ptr->Octet;
 			*pSsidLen = eid_ptr->Len;
+			*(*pSsid + eid_ptr->Len) = '\0';
 			break;
 		case RRM_NEIGHBOR_REQ_MEASUREMENT_REQUEST_SUB_ID:
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -180,8 +181,8 @@ BOOLEAN RRM_PeerBeaconReqSanity(
 	PUCHAR ptr = NULL;
 	UINT16 RandomInterval = 0;
 	UINT16 MeasureDuration = 0;
-	UINT8 report_info = -1;
-	enum beacon_report_detail report_detail = BEACON_REPORT_DETAIL_ALL_FIELDS_AND_ELEMENTS;
+	UINT8 report_info = 0;
+	enum beacon_report_detail report_detail = BEACON_REPORT_DETAIL_NONE;
 	PRRM_SUBFRAME_INFO pBcnReqSubElem = NULL;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -225,6 +226,7 @@ BOOLEAN RRM_PeerBeaconReqSanity(
 		default:
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("unhandled PeerMeasurementType: %d\n", pMeasureReqInfo->ReqType));
+			break;
 		}
 		ptr = (PUCHAR)(eid_ptr->Octet + 3);
 
@@ -235,6 +237,7 @@ BOOLEAN RRM_PeerBeaconReqSanity(
 		NdisMoveMemory(&MeasureDuration, ptr + 4, 2);
 		pBeaconReq->MeasureDuration = SWAP16(MeasureDuration);
 		NdisMoveMemory(&pBeaconReq->MeasureMode, ptr + 6, 1);
+
 		if (pBeaconReq->MeasureMode != RRM_BCN_REQ_MODE_PASSIVE &&
 				pBeaconReq->MeasureMode != RRM_BCN_REQ_MODE_ACTIVE &&
 				pBeaconReq->MeasureMode != RRM_BCN_REQ_MODE_BCNTAB)
@@ -256,13 +259,14 @@ BOOLEAN RRM_PeerBeaconReqSanity(
 		default:
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("unknown PeerMeasurementMode: %d\n", pBeaconReq->MeasureMode));
+			break;
 		}
 		COPY_MAC_ADDR(&pBeaconReq->Bssid, ptr + 7);
 
 		result = TRUE;
 		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-				("%s BSSID: (%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__,
-				 PRINT_MAC(pBeaconReq->Bssid)));
+				("%s BSSID: ("MACSTR")\n", __func__,
+				 MAC2STR(pBeaconReq->Bssid)));
 
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 				("%s - IE_MEASUREMENT_REQUEST., RegClass=%d ChNum=%d RandTime=%d Duration=%d Mode %d\n",
@@ -288,8 +292,11 @@ BOOLEAN RRM_PeerBeaconReqSanity(
 					return FALSE;
 				}
 
-				*pSsid = (PCHAR)pBcnReqSubElem->Oct;
-				*pSsidLen = pBcnReqSubElem->Length;
+				if (*pSsidLen == 0) {
+					*pSsid = (PCHAR)pBcnReqSubElem->Oct;
+					*pSsidLen = pBcnReqSubElem->Length;
+					*(*pSsid + pBcnReqSubElem->Length) = '\0';
+				}
 				result = TRUE;
 				break;
 

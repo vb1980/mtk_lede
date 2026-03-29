@@ -125,7 +125,7 @@ INT vie_oper_proc(struct _RTMP_ADAPTER *pAd, RTMP_STRING * arg)
 	UINT32 input_argument = 0;
 	UINT32 frm_map = 0;
 	UINT32 oui_oitype = 0;
-	UCHAR oui[OUI_LEN * 2] = {0};
+	UCHAR oui[(OUI_LEN * 2) + 1] = {0};
 	UCHAR *ctnt;
 	UCHAR *ie_hex_ctnt;
 
@@ -280,6 +280,13 @@ static INT32 insert_vie(struct wifi_dev *wdev,
 
 	current_frm_tail_vie = vie_ctrl->vie_in_frm;
 	if (vie_ctrl->vie_num > 0) {
+		if (!current_frm_tail_vie) {
+			ret = NDIS_STATUS_FAILURE;
+			os_free_mem(vie->ie_ctnt);
+			os_free_mem(vie);
+			return ret;
+		}
+
 		while (current_frm_tail_vie) {
 			if (current_frm_tail_vie->next_vie)
 				current_frm_tail_vie = current_frm_tail_vie->next_vie;
@@ -728,12 +735,14 @@ VOID check_vendor_ie(struct _RTMP_ADAPTER *pAd,
 			vendor_ie->ldpc = TRUE;
 			vendor_ie->sgi = TRUE;
 #ifdef MWDS
-			/* We can't be covered by easy setup customized mtk ie. */
-			vendor_ie->mtk_cap_found = TRUE;
-			if (MWDS_SUPPORT(vendor_ie->mtk_cap))
-				vendor_ie->support_mwds = TRUE;
-			else
-				vendor_ie->support_mwds = FALSE;
+			if (!MAP_TURNKEY_IE(info_elem->Octet[4])) {
+				/* We can't be covered by easy setup customized mtk ie. */
+				vendor_ie->mtk_cap_found = TRUE;
+				if (MWDS_SUPPORT(vendor_ie->mtk_cap))
+					vendor_ie->support_mwds = TRUE;
+				else
+					vendor_ie->support_mwds = FALSE;
+			}
 #endif /* MWDS */
 		} else {
 			vendor_ie->ldpc = FALSE;

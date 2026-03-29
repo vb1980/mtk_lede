@@ -108,7 +108,7 @@ VOID PaserSecurityIE(
 	USHORT Count;
 	SHORT Length;
 	UCHAR end_field = 0;
-	UCHAR res = TRUE;
+	UCHAR res;
 	/* WepStatus will be reset later, if AP announce TKIP or AES on the beacon frame.*/
 	CLEAR_SEC_AKM(*AKMMap);
 	CLEAR_CIPHER(*PairwiseCipher);

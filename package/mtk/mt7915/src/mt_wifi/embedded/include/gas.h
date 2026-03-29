@@ -99,8 +99,10 @@ typedef struct _GAS_PEER_ENTRY {
 #ifdef CONFIG_AP_SUPPORT
 	RALINK_TIMER_STRUCT PostReplyTimer;
 	BOOLEAN PostReplyTimerRunning;
+	BOOLEAN InitPostReplyTimer;
 	RALINK_TIMER_STRUCT GASRspBufferingTimer;
 	BOOLEAN GASRspBufferingTimerRunning;
+	BOOLEAN InitGASRspBufferingTimer;
 	BOOLEAN peer_use_protected_dual;
 #endif /* CONFIG_AP_SUPPORT */
 
@@ -112,8 +114,6 @@ typedef struct _GAS_PEER_ENTRY {
 #endif /* CONFIG_STA_SUPPORT */
 	UCHAR GASRspFragNum;
 	UCHAR CurrentGASFragNum;
-	UINT32 AllocResource;
-	UINT32 FreeResource;
 	UCHAR QueryNum;
 	DL_LIST GASQueryRspFragList;
 } GAS_PEER_ENTRY, *PGAS_PEER_ENTRY;
@@ -129,6 +129,7 @@ typedef struct _GAS_CTRL {
 	UINT32 AdvertisementProtoIELen;
 	PUCHAR InterWorkingIE;
 	PUCHAR AdvertisementProtoIE;
+	NDIS_SPIN_LOCK IeLock;
 } GAS_CTRL, *PGAS_CTRL;
 
 /*
@@ -221,6 +222,8 @@ VOID SendGASRsp(
 	IN PRTMP_ADAPTER    pAd,
 	GAS_EVENT_DATA *Event);
 
+VOID GASCtrlRemoveAllIE(PGAS_CTRL pGasCtrl);
+
 VOID GASCtrlExit(IN PRTMP_ADAPTER pAd);
 
 #ifdef CONFIG_STA_SUPPORT
@@ -250,6 +253,9 @@ void SendLocationElementEvent(PNET_DEV net_dev, const char *location_buf,
 VOID ReceiveGASInitReq(
 	IN PRTMP_ADAPTER pAd,
 	IN MLME_QUEUE_ELEM * Elem);
+
+VOID FreeGasPeerEntry(
+	IN GAS_PEER_ENTRY *GASPeerEntry);
 
 VOID ReceiveGASCBReq(
 	IN PRTMP_ADAPTER pAd,

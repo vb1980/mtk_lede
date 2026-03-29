@@ -106,8 +106,8 @@ VOID TRTableEntryDump(RTMP_ADAPTER *pAd, INT tr_idx, const RTMP_STRING *caller, 
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\twdev=%p\n", tr_entry->wdev));
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\twcid=%d\n", tr_entry->wcid));
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tfunc_tb_idx=%d\n", tr_entry->func_tb_idx));
-	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tAddr=%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(tr_entry->Addr)));
-	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tBSSID=%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(tr_entry->bssid)));
+	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tAddr="MACSTR"\n", MAC2STR(tr_entry->Addr)));
+	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tBSSID="MACSTR"\n", MAC2STR(tr_entry->bssid)));
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\tFlags\n"));
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("\t\tbIAmBadAtheros=%d, isCached=%d, PortSecured=%d, PsMode=%d, LockEntryTx=%d\n",
 			 tr_entry->bIAmBadAtheros, tr_entry->isCached, tr_entry->PortSecured, tr_entry->PsMode, tr_entry->LockEntryTx));
@@ -137,7 +137,6 @@ VOID TRTableResetEntry(RTMP_ADAPTER *pAd, UINT16 tr_tb_idx)
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
 	struct _STA_TR_ENTRY *tr_entry;
 	INT qidx;
-	struct qm_ops *ops = pAd->qm_ops;
 
 	if (!IS_TR_WCID_VALID(pAd, tr_tb_idx))
 		return;
@@ -149,9 +148,6 @@ VOID TRTableResetEntry(RTMP_ADAPTER *pAd, UINT16 tr_tb_idx)
 
 	tr_entry->enq_cap = FALSE;
 	tr_entry->deq_cap = FALSE;
-
-	if (ops->sta_clean_queue)
-		ops->sta_clean_queue(pAd, tr_entry->wcid);
 
 	SET_ENTRY_NONE(tr_entry);
 
@@ -312,9 +308,12 @@ VOID TRTableInsertMcastEntry(RTMP_ADAPTER *pAd, UINT16 tr_tb_idx, struct wifi_de
 
 VOID MgmtTableSetMcastEntry(RTMP_ADAPTER *pAd, UINT16 wcid)
 {
-	MAC_TABLE_ENTRY *pEntry = &pAd->MacTab.Content[wcid];
-	if (!pEntry)
+	MAC_TABLE_ENTRY *pEntry = NULL;
+
+	if (wcid >= MAX_LEN_OF_MAC_TABLE)
 		return;
+
+	pEntry = &pAd->MacTab.Content[wcid];
 	pEntry->EntryType = ENTRY_CAT_MCAST;
 	pEntry->Sst = SST_ASSOC;
 	pEntry->Aid = wcid;/*FIXME: why BCMC entry needs AID?*/
@@ -506,8 +505,8 @@ MAC_TABLE_ENTRY *MacTableLookup(RTMP_ADAPTER *pAd, UCHAR *pAddr)
 
 		if (seek_cnt >= MAX_LEN_OF_MAC_TABLE) {
 			MTWF_LOG(DBG_CAT_CLIENT, CATMLME_WTBL, DBG_LVL_ERROR,
-					 ("%s(): !!ERROR!! (%02x-%02x-%02x-%02x-%02x-%02x) search fail, seek_cnt(%d)\n",
-					 __func__, PRINT_MAC(pAddr), seek_cnt));
+					 ("%s(): !!ERROR!! ("MACSTR") search fail, seek_cnt(%d)\n",
+					 __func__, MAC2STR(pAddr), seek_cnt));
 			break;
 		}
 	}
@@ -536,8 +535,8 @@ MAC_TABLE_ENTRY *MacTableLookup2(RTMP_ADAPTER *pAd, UCHAR *pAddr, struct wifi_de
 
 			if (seek_cnt >= MAX_LEN_OF_MAC_TABLE) {
 				MTWF_LOG(DBG_CAT_CLIENT, CATMLME_WTBL, DBG_LVL_ERROR,
-						 ("%s(): !!ERROR!! (%02x-%02x-%02x-%02x-%02x-%02x) search fail, seek_cnt(%d)\n",
-						 __func__, PRINT_MAC(pAddr), seek_cnt));
+						 ("%s(): !!ERROR!! ("MACSTR") search fail, seek_cnt(%d)\n",
+						 __func__, MAC2STR(pAddr), seek_cnt));
 				break;
 			}
 		}
@@ -554,8 +553,8 @@ MAC_TABLE_ENTRY *MacTableLookup2(RTMP_ADAPTER *pAd, UCHAR *pAddr, struct wifi_de
 
 			if (seek_cnt >= MAX_LEN_OF_MAC_TABLE) {
 				MTWF_LOG(DBG_CAT_CLIENT, CATMLME_WTBL, DBG_LVL_ERROR,
-						 ("%s(): !!ERROR!! (%02x-%02x-%02x-%02x-%02x-%02x) search fail, seek_cnt(%d)\n",
-						 __func__, PRINT_MAC(pAddr), seek_cnt));
+						 ("%s(): !!ERROR!! ("MACSTR") search fail, seek_cnt(%d)\n",
+						 __func__, MAC2STR(pAddr), seek_cnt));
 				break;
 			}
 		}
@@ -595,7 +594,7 @@ BOOLEAN StaUpdateMacTableEntry(
 	IN IE_LISTS * ie_list,
 	IN USHORT cap_info)
 {
-	UCHAR MaxSupportedRate = RATE_11;
+	UCHAR MaxSupportedRate;
 	BOOLEAN bSupportN = FALSE;
 #ifdef TXBF_SUPPORT
 	BOOLEAN supportsETxBf = FALSE;
@@ -608,6 +607,7 @@ BOOLEAN StaUpdateMacTableEntry(
 	struct _RTMP_CHIP_CAP *cap;
 	struct common_ies *cmm_ies = &ie_list->cmm_ies;
 	struct _HT_CAPABILITY_IE *ht_cap = &cmm_ies->ht_cap;
+	UCHAR i = 0;
 
 	if (!pEntry)
 		return FALSE;
@@ -688,7 +688,8 @@ BOOLEAN StaUpdateMacTableEntry(
 		if (WMODE_CAP_AC(wdev->PhyMode) &&
 			HAS_VHT_CAPS_EXIST(cmm_ies->ie_exists) &&
 			HAS_VHT_OP_EXIST(cmm_ies->ie_exists)) {
-			vht_mode_adjust(pAd, pEntry, &cmm_ies->vht_cap, &cmm_ies->vht_op);
+			vht_mode_adjust(pAd, pEntry, &cmm_ies->vht_cap, &cmm_ies->vht_op,
+			(cmm_ies->operating_mode_len == 0) ? NULL :  &cmm_ies->operating_mode);
 			dot11_vht_mcs_to_internal_mcs(pAd, wdev,
 					&cmm_ies->vht_cap, &pEntry->MaxHTPhyMode);
 			set_vht_cap(pAd, pEntry, &cmm_ies->vht_cap);
@@ -703,6 +704,31 @@ BOOLEAN StaUpdateMacTableEntry(
 			update_peer_he_caps(pEntry, cmm_ies);
 			update_peer_he_operation(pEntry, cmm_ies);
 			he_mode_adjust(wdev, pEntry);
+
+			for (i = 0; i < DOT11AX_MAX_STREAM; i++) {
+				if (pEntry->cap.rate.he80_rx_nss_mcs[i] == 3)
+					break;
+			}
+			if (i != 0) {
+				i = i <= wlan_operate_get_tx_stream(wdev) ? i : wlan_operate_get_tx_stream(wdev);
+				pEntry->MaxHTPhyMode.field.MCS = ((i-1) << 4);
+			} else
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"STA antenna information provided is incorrect");
+
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"he80_rx_nss_mcs=%d, MCS: %x\n", pEntry->cap.rate.he80_rx_nss_mcs[0],
+				pEntry->MaxHTPhyMode.field.MCS);
+
+			if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 2)
+				pEntry->MaxHTPhyMode.field.MCS += HE_MCS_11;
+			else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 1)
+				pEntry->MaxHTPhyMode.field.MCS += HE_MCS_9;
+			else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 0)
+				pEntry->MaxHTPhyMode.field.MCS += HE_MCS_7;
+			else
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"STA MCS information provided is incorrect");
 		}
 #endif /*DOT11_HE_AX*/
 	} else
@@ -879,16 +905,6 @@ static VOID oui_mgroup_update(MAC_TABLE *mtb, UCHAR *addr, UCHAR act)
 #ifdef MT7626_REDUCE_TX_OVERHEAD
 extern UINT8 cached_flag_ar[];
 #endif /* MT7626_REDUCE_TX_OVERHEAD */
-
-#ifdef IGMP_SNOOP_SUPPORT
-extern VOID IgmpMdnsGroupAddMembers(
-            IN PRTMP_ADAPTER pAd,
-            IN PUCHAR pMemberAddr,
-            IN struct wifi_dev *wdev,
-            UCHAR ifIndex,
-            UINT8 Wcid);
-#endif
-
 MAC_TABLE_ENTRY *MacTableInsertEntry(
 	IN RTMP_ADAPTER *pAd,
 	IN UCHAR *pAddr,
@@ -899,6 +915,9 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 {
 	UCHAR HashIdx;
 	UINT16 i;
+#ifdef MT7915
+	UCHAR BandIdx = DBDC_BAND0;
+#endif
 	MAC_TABLE_ENTRY *pEntry = NULL, *pCurrEntry;
 	/* ASIC_SEC_INFO Info = {0}; */
 #ifdef CONFIG_STA_SUPPORT
@@ -925,9 +944,7 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 		return NULL;
 	}
 	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_ERROR,
-			 ("%s(): wcid %d EntryType:%d =====\n", __func__, i, pAd->MacTab.Content[i].EntryType));
-	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_TRACE,
-			 ("\t(caller:%pS)\n", OS_TRACE));
+			 ("%s(caller:%pS): wcid %d EntryType:%d-%d =====\n", __func__, OS_TRACE, i, ent_type, pAd->MacTab.Content[i].EntryType));
 
 	/* pick up the first available vacancy*/
 	if (IS_ENTRY_NONE(&pAd->MacTab.Content[i])) {
@@ -984,6 +1001,7 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 		tr_ctl->tr_entry[i].PsDeQWaitCnt = 0;
 		pEntry->SecConfig.pmkid = NULL;
 		pEntry->SecConfig.pmk_cache = NULL;
+		pEntry->SecConfig.Handshake.ReasonCode = REASON_4_WAY_TIMEOUT;
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 		pEntry->bTxPktChk = FALSE;
 		pEntry->TotalTxSuccessCnt = 0;
@@ -1157,7 +1175,20 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 					NdisReleaseSpinLock(&pAd->MacTabLock);
 					return NULL;
 				}
-
+#ifdef MT7915
+				BandIdx = HcGetBandByWdev(wdev);
+				if ((pAd->CommonCfg.dbdc_mode) &&
+					(pAd->ApCfg.BandMaxStaNum[BandIdx] != 0) &&
+					(pAd->ApCfg.perBandStaCount[BandIdx] >= pAd->ApCfg.BandMaxStaNum[BandIdx])) {
+					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_WARN,
+						("%s: The connection table is full in band%d.\n", __func__, BandIdx));
+					HcReleaseUcastWcid(pAd, wdev, pEntry->wcid);
+					aid_clear(&pAd->MacTab.aid_info, pEntry->Aid);
+					MacTableResetEntry(pAd, pEntry, CleanAll);
+					NdisReleaseSpinLock(&pAd->MacTabLock);
+					return NULL;
+				}
+#endif
 				if (!VALID_MBSS(pAd, pEntry->func_tb_idx)) {
 					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF,
 						("%s: The func_tb_idx is over cap = %d\n",
@@ -1202,11 +1233,13 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 
 				pEntry->PrivacyFilter = Ndis802_11PrivFilterAcceptAll;
 				pEntry->StaIdleTimeout = pAd->ApCfg.StaIdleTimeout;
-#ifdef IGMP_SNOOP_SUPPORT
-				IgmpMdnsGroupAddMembers(pAd, (PUCHAR)pEntry->Addr, wdev, pEntry->func_tb_idx, pEntry->wcid);
-#endif /* IGMP_SNOOP_SUPPORT */
 				pAd->ApCfg.MBSSID[pEntry->func_tb_idx].StaCount++;
 				pAd->ApCfg.EntryClientCount++;
+#ifdef MT7915
+				if ((pAd->CommonCfg.dbdc_mode) &&
+					(pAd->ApCfg.BandMaxStaNum[BandIdx] != 0))
+					pAd->ApCfg.perBandStaCount[BandIdx]++;
+#endif
 #ifdef VOW_SUPPORT
 
 				/* vow_set_client(pAd, pEntry->func_tb_idx, pEntry->wcid); */
@@ -1252,6 +1285,10 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 		} while (FALSE);
 
 		RTMP_SET_TR_ENTRY(pAd, pEntry);
+
+		if (get_starec_by_wcid(pAd, i))
+			del_starec(pAd, &tr_ctl->tr_entry[i]);
+
 #ifdef CONFIG_STA_SUPPORT
 #ifdef ADHOC_WPA2PSK_SUPPORT
 		IF_DEV_CONFIG_OPMODE_ON_STA(pAd) {
@@ -1340,7 +1377,7 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 
 #ifdef MTFWD
 			if (IS_ENTRY_CLIENT(pEntry)) {
-				MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("New Sta:%pM\n", pEntry->Addr));
+				MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("New Sta:"MACSTR"\n", MAC2STR(pEntry->Addr)));
 				RtmpOSWrielessEventSend(pEntry->wdev->if_dev,
 							RT_WLAN_EVENT_CUSTOM,
 							FWD_CMD_ADD_TX_SRC,
@@ -1395,8 +1432,8 @@ static INT32 MacTableDelEntryFromHash(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry
 
 	if (!pProbeEntry) {
 		MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_ERROR,
-			("%s:pProbeEntry==NULL,pEntry->wcid=%d,MAC=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			__func__, pEntry->wcid, PRINT_MAC(pEntry->Addr)));
+			("%s:pProbeEntry==NULL,pEntry->wcid=%d,MAC="MACSTR"\n",
+			__func__, pEntry->wcid, MAC2STR(pEntry->Addr)));
 	}
 
 
@@ -1455,10 +1492,6 @@ static VOID mac_entry_disconn_act(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_E
 #ifdef CONFIG_STA_SUPPORT
 	/* snowpin for ap/sta */
 	pStaCfg = GetStaCfgByWdev(pAd, wdev);
-	if (pStaCfg && pStaCfg->pAssociatedAPEntry)
-			if (pStaCfg->pAssociatedAPEntry == pEntry) {
-				pStaCfg->pAssociatedAPEntry = NULL;
-			}
 
 #if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) || defined(MT_WOW_SUPPORT)
 
@@ -1490,15 +1523,24 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 	STA_TR_ENTRY *tr_entry;
 	BOOLEAN Cancelled;
 	BOOLEAN	bDeleteEntry = FALSE;
+#ifdef CONFIG_STA_SUPPORT
+	PSTA_ADMIN_CONFIG pStaCfg = NULL;
+#endif /* CONFIG_STA_SUPPORT */
+#ifdef DATA_TXPWR_CTRL
+	UINT8 u1BwIdx = 0, u1McsIdx = 0;
+#endif
 #ifdef SMART_ANTENNA
 	unsigned long irqflags;
 #endif /* SMART_ANTENNA */
 #ifdef CONFIG_AP_SUPPORT
 	BSS_STRUCT *mbss = NULL;
 #endif /*CONFIG_AP_SUPPORT*/
-	struct wifi_dev *wdev;
+	struct wifi_dev *wdev = NULL;
 	ADD_HT_INFO_IE *addht;
 	UCHAR i;
+#ifdef MT7915
+	UCHAR BandIdx = DBDC_BAND0;
+#endif
 #ifdef CONFIG_AP_SUPPORT
 #if defined(RT_CFG80211_SUPPORT) || defined(MBO_SUPPORT) || defined(WAPP_SUPPORT)
 	UCHAR TmpAddrForIndicate[MAC_ADDR_LEN] = {0};
@@ -1522,10 +1564,8 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 	if (!(VALID_UCAST_ENTRY_WCID(pAd, wcid)))
 		return FALSE;
 
-	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_ERROR,
-			 ("%s(): wcid %d =====\n", __func__, wcid));
-	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_TRACE,
-			 ("\t(caller:%pS)\n", OS_TRACE));
+	MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF,
+			 ("%s(caller:%pS): wcid %d =====\n", __func__, OS_TRACE, wcid));
 
 	cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
@@ -1569,7 +1609,7 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 #endif /* CONFIG_WIFI_PKT_FWD */
 
 #ifdef MTFWD
-		MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("Del Sta:%pM\n", pEntry->Addr));
+		MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_OFF, ("Del Sta:"MACSTR"\n", MAC2STR(pEntry->Addr)));
 		if (pEntry->wdev)
 			if_dev = pEntry->wdev->if_dev;
 #ifdef MAC_REPEATER_SUPPORT
@@ -1583,7 +1623,6 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 					(PUCHAR)pEntry->Addr,
 					MAC_ADDR_LEN);
 #endif
-		pEntry->sta_rec_valid = FALSE;
 
 		if (MAC_ADDR_EQUAL(pEntry->Addr, pAddr)) {
 
@@ -1643,7 +1682,14 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 #ifdef IGMP_SNOOP_SUPPORT
 				IgmpGroupDelMembers(pAd, (PUCHAR)pEntry->Addr, wdev, pEntry->wcid);
 #endif /* IGMP_SNOOP_SUPPORT */
-				pAd->ApCfg.MBSSID[pEntry->func_tb_idx].StaCount--;
+				if (pAd->ApCfg.MBSSID[pEntry->func_tb_idx].StaCount > 0)
+					pAd->ApCfg.MBSSID[pEntry->func_tb_idx].StaCount--;
+#ifdef MT7915
+				BandIdx = HcGetBandByWdev(wdev);
+				if ((pAd->CommonCfg.dbdc_mode) &&
+					(pAd->ApCfg.perBandStaCount[BandIdx] > 0))
+					pAd->ApCfg.perBandStaCount[BandIdx]--;
+#endif
 				pAd->ApCfg.EntryClientCount--;
 #ifdef MAC_REPEATER_SUPPORT
 				if (pEntry->ProxySta) {
@@ -1656,6 +1702,12 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 			}
 
 #endif /* CONFIG_AP_SUPPORT */
+#ifdef CONFIG_STA_SUPPORT
+			pStaCfg = GetStaCfgByWdev(pAd, wdev);
+			if (pStaCfg && pStaCfg->pAssociatedAPEntry)
+				if (pStaCfg->pAssociatedAPEntry == pEntry)
+					pStaCfg->pAssociatedAPEntry = NULL;
+#endif /* CONFIG_STA_SUPPORT */
 			MacTableDelEntryFromHash(pAd, pEntry);
 #ifdef CONFIG_AP_SUPPORT
 			APCleanupPsQueue(pAd, &tr_entry->ps_queue); /* return all NDIS packet in PSQ*/
@@ -1815,6 +1867,22 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 	/* rtmp_tx_burst_set(pAd); */
 
 	if (bDeleteEntry) {
+#ifdef PLE_MONITOR_SUPPORT
+		PCI_HIF_T *hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
+
+		if (hif->PleBufferMonitorEn) {
+			i = wcid / 64;
+			tr_entry->ps_time = 0;
+			pAd->MacTab.StationPsBitMap[i] &= ~(UINT64)(1 << (wcid % 64));
+			MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_TRACE, ("%s(), idx=%d, value=0x%llx\n",
+							__func__, i, pAd->MacTab.StationPsBitMap[i]));
+		}
+#endif
+
+		if (pAd->FragFrame.wcid == wcid) {
+			MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n%s: Clear Wcid = %d FragBuffer !!!!!\n", __func__, wcid));
+			RESET_FRAGFRAME(pAd->FragFrame);
+		}
 
 		/*release ucast wcid*/
 		HcReleaseUcastWcid(pAd, pEntry->wdev, wcid);
@@ -1842,7 +1910,7 @@ BOOLEAN MacTableDeleteEntry(RTMP_ADAPTER *pAd, USHORT wcid, UCHAR *pAddr)
 		/* mbo - indicate daemon to remve this sta */
 		if (IS_MBO_ENABLE(pEntry->wdev)) {
 			MBO_EVENT_STA_DISASSOC evt_sta_disassoc;
-
+			pEntry->is_mbo_bndstr_sta = 0;
 			COPY_MAC_ADDR(evt_sta_disassoc.mac_addr, TmpAddrForIndicate);
 			MboIndicateStaDisassocToDaemon(pAd, &evt_sta_disassoc, MBO_MSG_REMOVE_STA);
 		}
@@ -1972,8 +2040,8 @@ VOID MacTableResetWdev(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 					}
 
 					Reason = REASON_NO_LONGER_VALID;
-					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_WARN, ("Send DeAuth (Reason=%d) to %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 Reason, PRINT_MAC(pMacEntry->Addr)));
+					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_WARN, ("Send DeAuth (Reason=%d) to "MACSTR"\n",
+							 Reason, MAC2STR(pMacEntry->Addr)));
 					MgtMacHeaderInit(pAd, &DeAuthHdr, SUBTYPE_DEAUTH, 0, pMacEntry->Addr,
 									 wdev->if_addr,
 									 wdev->bssid);
@@ -2007,7 +2075,6 @@ VOID MacTableResetWdev(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 				mbss->wdev.WscControl.EapMsgRunning = FALSE;
 			}
 #endif /* WSC_AP_SUPPORT */
-			mbss->StaCount = 0;
 		}
 	}
 #endif /* CONFIG_AP_SUPPORT */
@@ -2085,8 +2152,12 @@ VOID MacTableReset(RTMP_ADAPTER *pAd)
 					if (IS_ENTRY_CLIENT(pMacEntry) && IS_MAP_ENABLE(pAd) && IS_MAP_R2_ENABLE(pAd))
 						wapp_handle_sta_disassoc(pAd, pMacEntry->wcid, Reason);
 #endif
-					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_WARN, ("Send DeAuth (Reason=%d) to %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 Reason, PRINT_MAC(pMacEntry->Addr)));
+#ifdef ENHANCE_STAT_SUPPORT
+					WirelessEventSendDiassoc(pAd, pMacEntry, Reason);
+#endif
+
+					MTWF_LOG(DBG_CAT_MLME, CATMLME_WTBL, DBG_LVL_WARN, ("Send DeAuth (Reason=%d) to "MACSTR"\n",
+							 Reason, MAC2STR(pMacEntry->Addr)));
 					MgtMacHeaderInit(pAd, &DeAuthHdr, SUBTYPE_DEAUTH, 0, pMacEntry->Addr,
 									 pAd->ApCfg.MBSSID[pMacEntry->func_tb_idx].wdev.if_addr,
 									 pAd->ApCfg.MBSSID[pMacEntry->func_tb_idx].wdev.bssid);
@@ -2402,7 +2473,7 @@ UINT16 entrytb_aid_aquire(struct _aid_info *aid_info)
 INT show_aid_info(struct _RTMP_ADAPTER *ad, RTMP_STRING *arg)
 {
 	struct _aid_info *aid_info = &ad->MacTab.aid_info;
-	UINT32 aid = INVALID_AID;
+	UINT32 aid;
 
 	if (arg && strlen(arg)) {
 		aid = simple_strtol(arg, NULL, 10);
@@ -2440,6 +2511,8 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 	ULONG DataRate_r = 0;
 	UCHAR	tmp_str[30];
 	INT	temp_str_len = sizeof(tmp_str);
+	int ret;
+	UINT tmp_str_left = 0;
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(ad->hdev_ctrl);
 #endif
@@ -2467,17 +2540,22 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 		DataRate = 0;
 		getRate(entry->HTPhyMode, &DataRate);
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
-			("%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(entry->Addr)));
+			(MACSTR, MAC2STR(entry->Addr)));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-7d", (int)entry->wcid));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-4d", (int)entry->func_tb_idx));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-4d", (int)entry->PsMode));
-		snprintf(tmp_str, temp_str_len, "%d/%d/%d/%d", entry->RssiSample.AvgRssi[0],
+		ret = snprintf(tmp_str, temp_str_len, "%d/%d/%d/%d", entry->RssiSample.AvgRssi[0],
 				entry->RssiSample.AvgRssi[1],
 				entry->RssiSample.AvgRssi[2],
 				entry->RssiSample.AvgRssi[3]);
+		if (os_snprintf_error(temp_str_len, ret)) {
+			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+				("[%d]os_snprintf fail!\n", __LINE__));
+			return FALSE;
+		}
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-20s", tmp_str));
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
@@ -2490,7 +2568,7 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 #endif
 			UINT32 RawData;
 			UINT32 RawData_r;
-			UINT32 lastTxRate = entry->LastTxRate;
+			UINT32 lastTxRate;
 			UINT32 lastRxRate = entry->LastRxRate;
 
 			if (entry->bAutoTxRateSwitch == TRUE) {
@@ -2498,6 +2576,7 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 				HTTRANSMIT_SETTING LastTxRate;
 				HTTRANSMIT_SETTING LastRxRate;
 
+				os_zero_mem(&rTxStatResult, sizeof(rTxStatResult));
 				MtCmdGetTxStatistic(ad,
 						    GET_TX_STAT_ENTRY_TX_RATE,
 						    0/*Don't Care*/,
@@ -2533,14 +2612,24 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 				bw_r = (RawData_r >> 7) & 0x3;
 				sgi_r = (RawData_r >> 9) & 0x1;
 				stbc_r = ((RawData_r >> 10) & 0x1);
-				snprintf(tmp_str,
+				ret = snprintf(tmp_str,
 					 temp_str_len,
 					 "%s/%s",
 					 get_phymode_str(phy_mode),
 					 get_phymode_str(phy_mode_r));
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+					("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-12s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%s/%s", get_bw_str(bw), get_bw_str(bw_r));
+				ret = snprintf(tmp_str, temp_str_len, "%s/%s", get_bw_str(bw), get_bw_str(bw_r));
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+					("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-9s", tmp_str));
 #ifdef DOT11_VHT_AC
@@ -2548,29 +2637,53 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 				if (phy_mode >= MODE_VHT) {
 					vht_nss = ((rate & (0x3 << 4)) >> 4) + 1;
 					rate = rate & 0xF;
-					snprintf(tmp_str, temp_str_len, "%dS-M%d/", vht_nss, rate);
+					ret = snprintf(tmp_str, temp_str_len, "%dS-M%d/", vht_nss, rate);
+					if (os_snprintf_error(temp_str_len, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else
 #endif /* DOT11_VHT_AC */
-					snprintf(tmp_str, temp_str_len, "%d/", rate);
+				{
+					ret = snprintf(tmp_str, temp_str_len, "%d/", rate);
+					if (os_snprintf_error(temp_str_len, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
+				}
 #ifdef DOT11_VHT_AC
 
 				if (phy_mode_r >= MODE_VHT) {
 					vht_nss_r = ((rate_r & (0x3 << 4)) >> 4) + 1;
 					rate_r = rate_r & 0xF;
-					snprintf(tmp_str + strlen(tmp_str),
-						temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						tmp_str_left,
 						"%dS-M%d",
 						vht_nss_r,
 						rate_r);
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else
 #endif /* DOT11_VHT_AC */
 #if DOT11_N_SUPPORT
-				if (phy_mode_r >= MODE_HTMIX)
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+				if (phy_mode_r >= MODE_HTMIX) {
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 rate_r);
-				else
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
+				} else
 #endif
 				if (phy_mode_r == MODE_OFDM) {
 					if (rate_r == TMI_TX_RATE_OFDM_6M)
@@ -2592,10 +2705,16 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 					else
 						LastRxRate.field.MCS = 0;
 
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 LastRxRate.field.MCS);
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else if (phy_mode_r == MODE_CCK) {
 					if (rate_r == TMI_TX_RATE_CCK_1M_LP)
 						LastRxRate.field.MCS = 0;
@@ -2614,18 +2733,34 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 					else
 						LastRxRate.field.MCS = 0;
 
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 LastRxRate.field.MCS);
+					 if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				}
 
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-12s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%d/%d", sgi, sgi_r);
+				ret = snprintf(tmp_str, temp_str_len, "%d/%d", sgi, sgi_r);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-9s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%d/%d",  stbc, stbc_r);
+				ret = snprintf(tmp_str, temp_str_len, "%d/%d",  stbc, stbc_r);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-10s", tmp_str));
 				getRate(LastTxRate, &DataRate);
@@ -2640,12 +2775,24 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 				("%-9s", get_bw_str(entry->HTPhyMode.field.BW)));
 #ifdef DOT11_VHT_AC
 
-			if (entry->HTPhyMode.field.MODE >= MODE_VHT)
-				snprintf(tmp_str, temp_str_len, "%dS-M%d", ((entry->HTPhyMode.field.MCS >> 4) + 1),
+			if (entry->HTPhyMode.field.MODE >= MODE_VHT) {
+				ret = snprintf(tmp_str, temp_str_len, "%dS-M%d", ((entry->HTPhyMode.field.MCS >> 4) + 1),
 						(entry->HTPhyMode.field.MCS & 0xf));
-			else
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
+			} else
 #endif /* DOT11_VHT_AC */
-				snprintf(tmp_str, temp_str_len, "%d", entry->HTPhyMode.field.MCS);
+			{
+				ret = snprintf(tmp_str, temp_str_len, "%d", entry->HTPhyMode.field.MCS);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
+			}
 
 			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 				("%-12s", tmp_str));
@@ -2655,7 +2802,12 @@ UINT32 traversal_func_dump_entry_associated_to_bss(struct _MAC_TABLE_ENTRY *entr
 				("%-10d", entry->HTPhyMode.field.STBC));
 		}
 
-		snprintf(tmp_str, temp_str_len, "%d/%d", (int)DataRate, (int)DataRate_r);
+		ret = snprintf(tmp_str, temp_str_len, "%d/%d", (int)DataRate, (int)DataRate_r);
+		if (os_snprintf_error(temp_str_len, ret)) {
+			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+				("[%d]os_snprintf fail!\n", __LINE__));
+			return FALSE;
+		}
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-10s", tmp_str));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
@@ -2683,7 +2835,7 @@ UINT32 traversal_func_dump_entry_psm_by_aid(struct _MAC_TABLE_ENTRY *entry, void
 			"MAC", "WCID", "BSS", "PSM", "NoRxData", "SLEEP TIME(msec)"));
 
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
-			("%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(entry->Addr)));
+			(MACSTR, MAC2STR(entry->Addr)));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("\t%d", (int)entry->wcid));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
@@ -2713,6 +2865,8 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 	ULONG DataRate_r = 0;
 	UCHAR	tmp_str[30];
 	INT		temp_str_len = sizeof(tmp_str);
+	int ret;
+	UINT tmp_str_left = 0;
 
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)entry->pAd;
 
@@ -2740,17 +2894,22 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 		DataRate = 0;
 		getRate(entry->HTPhyMode, &DataRate);
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
-			("%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(entry->Addr)));
+			(MACSTR, MAC2STR(entry->Addr)));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-7d", (int)entry->wcid));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-4d", (int)entry->func_tb_idx));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-4d", (int)entry->PsMode));
-		snprintf(tmp_str, temp_str_len, "%d/%d/%d/%d", entry->RssiSample.AvgRssi[0],
+		ret = snprintf(tmp_str, temp_str_len, "%d/%d/%d/%d", entry->RssiSample.AvgRssi[0],
 				entry->RssiSample.AvgRssi[1],
 				entry->RssiSample.AvgRssi[2],
 				entry->RssiSample.AvgRssi[3]);
+		if (os_snprintf_error(temp_str_len, ret)) {
+			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+				("[%d]os_snprintf fail!\n", __LINE__));
+			return FALSE;
+		}
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-20s", tmp_str));
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
@@ -2763,7 +2922,7 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 #endif
 			UINT32 RawData;
 			UINT32 RawData_r;
-			UINT32 lastTxRate = entry->LastTxRate;
+			UINT32 lastTxRate;
 			UINT32 lastRxRate = entry->LastRxRate;
 
 			if (entry->bAutoTxRateSwitch == TRUE) {
@@ -2771,6 +2930,7 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 				HTTRANSMIT_SETTING LastTxRate;
 				HTTRANSMIT_SETTING LastRxRate;
 
+				os_zero_mem(&rTxStatResult, sizeof(rTxStatResult));
 				MtCmdGetTxStatistic(ad,
 						    GET_TX_STAT_ENTRY_TX_RATE,
 						    0/*Don't Care*/,
@@ -2806,14 +2966,24 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 				bw_r = (RawData_r >> 7) & 0x3;
 				sgi_r = (RawData_r >> 9) & 0x1;
 				stbc_r = ((RawData_r >> 10) & 0x1);
-				snprintf(tmp_str,
+				ret = snprintf(tmp_str,
 					 temp_str_len,
 					 "%s/%s",
 					 get_phymode_str(phy_mode),
 					 get_phymode_str(phy_mode_r));
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-12s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%s/%s", get_bw_str(bw), get_bw_str(bw_r));
+				ret = snprintf(tmp_str, temp_str_len, "%s/%s", get_bw_str(bw), get_bw_str(bw_r));
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-9s", tmp_str));
 #ifdef DOT11_VHT_AC
@@ -2821,29 +2991,53 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 				if (phy_mode >= MODE_VHT) {
 					vht_nss = ((rate & (0x3 << 4)) >> 4) + 1;
 					rate = rate & 0xF;
-					snprintf(tmp_str, temp_str_len, "%dS-M%d/", vht_nss, rate);
+					ret = snprintf(tmp_str, temp_str_len, "%dS-M%d/", vht_nss, rate);
+					if (os_snprintf_error(temp_str_len, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else
 #endif /* DOT11_VHT_AC */
-					snprintf(tmp_str, temp_str_len, "%d/", rate);
+				{
+					ret = snprintf(tmp_str, temp_str_len, "%d/", rate);
+					if (os_snprintf_error(temp_str_len, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
+				}
 #ifdef DOT11_VHT_AC
 
 				if (phy_mode_r >= MODE_VHT) {
 					vht_nss_r = ((rate_r & (0x3 << 4)) >> 4) + 1;
 					rate_r = rate_r & 0xF;
-					snprintf(tmp_str + strlen(tmp_str),
-						temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						tmp_str_left,
 						"%dS-M%d",
 						vht_nss_r,
 						rate_r);
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else
 #endif /* DOT11_VHT_AC */
 #if DOT11_N_SUPPORT
-				if (phy_mode_r >= MODE_HTMIX)
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+				if (phy_mode_r >= MODE_HTMIX) {
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 rate_r);
-				else
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
+				} else
 #endif
 				if (phy_mode_r == MODE_OFDM) {
 					if (rate_r == TMI_TX_RATE_OFDM_6M)
@@ -2865,10 +3059,16 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 					else
 						LastRxRate.field.MCS = 0;
 
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 LastRxRate.field.MCS);
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				} else if (phy_mode_r == MODE_CCK) {
 					if (rate_r == TMI_TX_RATE_CCK_1M_LP)
 						LastRxRate.field.MCS = 0;
@@ -2887,18 +3087,34 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 					else
 						LastRxRate.field.MCS = 0;
 
-					snprintf(tmp_str + strlen(tmp_str),
-						 temp_str_len - strlen(tmp_str),
+					tmp_str_left = temp_str_len - strlen(tmp_str);
+					ret = snprintf(tmp_str + strlen(tmp_str),
+						 tmp_str_left,
 						 "%d",
 						 LastRxRate.field.MCS);
+					if (os_snprintf_error(tmp_str_left, ret)) {
+						MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+							("[%d]os_snprintf fail!\n", __LINE__));
+						return FALSE;
+					}
 				}
 
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-12s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%d/%d", sgi, sgi_r);
+				ret = snprintf(tmp_str, temp_str_len, "%d/%d", sgi, sgi_r);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-9s", tmp_str));
-				snprintf(tmp_str, temp_str_len, "%d/%d",  stbc, stbc_r);
+				ret = snprintf(tmp_str, temp_str_len, "%d/%d",  stbc, stbc_r);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
 				MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 					("%-10s", tmp_str));
 				getRate(LastTxRate, &DataRate);
@@ -2913,12 +3129,24 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 				("%-9s", get_bw_str(entry->HTPhyMode.field.BW)));
 #ifdef DOT11_VHT_AC
 
-			if (entry->HTPhyMode.field.MODE >= MODE_VHT)
-				snprintf(tmp_str, temp_str_len, "%dS-M%d", ((entry->HTPhyMode.field.MCS >> 4) + 1),
+			if (entry->HTPhyMode.field.MODE >= MODE_VHT) {
+				ret = snprintf(tmp_str, temp_str_len, "%dS-M%d", ((entry->HTPhyMode.field.MCS >> 4) + 1),
 						(entry->HTPhyMode.field.MCS & 0xf));
-			else
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
+			} else
 #endif /* DOT11_VHT_AC */
-				snprintf(tmp_str, temp_str_len, "%d", entry->HTPhyMode.field.MCS);
+			{
+				ret = snprintf(tmp_str, temp_str_len, "%d", entry->HTPhyMode.field.MCS);
+				if (os_snprintf_error(temp_str_len, ret)) {
+					MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+						("[%d]os_snprintf fail!\n", __LINE__));
+					return FALSE;
+				}
+			}
 
 			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 				("%-12s", tmp_str));
@@ -2928,7 +3156,12 @@ UINT32 traversal_func_dump_entry_rate_by_aid(struct _MAC_TABLE_ENTRY *entry, voi
 				("%-10d", entry->HTPhyMode.field.STBC));
 		}
 
-		snprintf(tmp_str, temp_str_len, "%d/%d", (int)DataRate, (int)DataRate_r);
+		ret = snprintf(tmp_str, temp_str_len, "%d/%d", (int)DataRate, (int)DataRate_r);
+		if (os_snprintf_error(temp_str_len, ret)) {
+			MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_ERROR,
+				("[%d]os_snprintf fail!\n", __LINE__));
+			return FALSE;
+		}
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,
 			("%-10s", tmp_str));
 		MTWF_LOG(DBG_CAT_AP, CATMLME_WTBL, DBG_LVL_OFF,

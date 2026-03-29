@@ -84,11 +84,6 @@ INT show_wtbl_state(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_WiDiEnable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif /* WIDI_SUPPORT */
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef LED_CONTROL_SUPPORT
-INT Set_WlanLed_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-#endif /* LED_CONTROL_SUPPORT */
-#endif /* RTMP_RBUS_SUPPORT */
 
 
 #ifdef CARRIER_DETECTION_SUPPORT
@@ -174,7 +169,6 @@ INT set_monitor_channel(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				vht_bw = VHT_BW_8080;
 				cen_ch_2 = vht_cent_ch_freq(pri_idx, VHT_BW_8080, ch_band);
 			}
-
 #endif /* DOT11_VHT_AC */
 #endif /*SNIFFER_MT7615*/
 		} else if (rv == 2) {
@@ -557,11 +551,6 @@ static struct {
 	{"SiteSurvey",					Set_SiteSurvey_Proc},
 	{"ForceTxBurst",				Set_ForceTxBurst_Proc},
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef LED_CONTROL_SUPPORT
-	{"WlanLed",					Set_WlanLed_Proc},
-#endif /* LED_CONTROL_SUPPORT */
-#endif /* RTMP_RBUS_SUPPORT */
 
 	{"tpc",						set_thermal_protection_criteria_proc},
 	{"tpc_duty",					set_thermal_protection_admin_ctrl_duty_proc},
@@ -1505,13 +1494,13 @@ INT Set_CfgTdlsChannelSwitchRequest_Proc(
 		link_id = cfg_tdls_search_ValidLinkIndex(pAd, peermacAddr);
 
 		if (link_id == -1) {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\nCan't find TDLS Peer %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 peermacAddr[0], peermacAddr[1], peermacAddr[2], peermacAddr[3], peermacAddr[4], peermacAddr[5]));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\nCan't find TDLS Peer "MACSTR"\n",
+					 MAC2STR(peermacAddr)));
 			return FALSE;
 		}
 
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\nChannel Switch Peer %02x:%02x:%02x:%02x:%02x:%02x-%d\n",
-				 peermacAddr[0], peermacAddr[1], peermacAddr[2], peermacAddr[3], peermacAddr[4], peermacAddr[5], TargetChannel));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\nChannel Switch Peer "MACSTR"-%d\n",
+				 MAC2STR(peermacAddr), TargetChannel));
 		/* pStaCfg->wpa_supplicant_info.CFG_Tdls_info.bDoingPeriodChannelSwitch = TRUE;  //Wait util rcv CHSW resp to set this true */
 		pStaCfg->wpa_supplicant_info.CFG_Tdls_info.BaseChannel = wdev->channel;
 		pStaCfg->wpa_supplicant_info.CFG_Tdls_info.BaseChannelBW = wlan_operate_get_ht_bw(wdev);
@@ -1727,7 +1716,7 @@ INT	 Set_WscConfMode_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 INT	Set_WscConfStatus_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-	UCHAR     IsAPConfigured = 1;
+	UCHAR     IsAPConfigured = 0;
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	PWSC_CTRL	pWscControl;
 	UINT32 staidx = 0;
@@ -1809,8 +1798,8 @@ INT Set_WscBssid_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	RTMPZeroMemory(pStaCfg->wdev.WscControl.WscBssid, MAC_ADDR_LEN);
 	RTMPMoveMemory(pStaCfg->wdev.WscControl.WscBssid, MacAddr, MAC_ADDR_LEN);
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set_WscBssid_Proc:: %02x:%02x:%02x:%02x:%02x:%02x\n",
-			 MacAddr[0], MacAddr[1], MacAddr[2], MacAddr[3], MacAddr[4], MacAddr[5]));
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set_WscBssid_Proc:: "MACSTR"\n",
+			 MAC2STR(MacAddr)));
 	return TRUE;
 }
 
@@ -1900,7 +1889,7 @@ INT	Set_WscPinCode_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 INT	Set_WscUUIDE_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	PWSC_CTRL           pWscControl;
-	int i, UUIDLen;
+	int i, UUIDLen, ret;
 	UCHAR				tmp_Uuid_Str[UUID_LEN_STR];
 	UCHAR				Wsc_Uuid_E[UUID_LEN_HEX];
 	UCHAR				uuidTmpStr[UUID_LEN_STR + 2];
@@ -1928,9 +1917,13 @@ INT	Set_WscUUIDE_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	AtoH(tmp_Uuid_Str, Wsc_Uuid_E, UUID_LEN_HEX);
 	NdisMoveMemory(&uuid_t, Wsc_Uuid_E, UUID_LEN_HEX);
 	NdisZeroMemory(uuidTmpStr, sizeof(uuidTmpStr));
-	sprintf(uuidTmpStr, "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+	ret = snprintf(uuidTmpStr, sizeof(uuidTmpStr), "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 			(unsigned int)uuid_t.timeLow, uuid_t.timeMid, uuid_t.timeHi_Version, uuid_t.clockSeqHi_Var, uuid_t.clockSeqLow,
 			uuid_t.node[0], uuid_t.node[1], uuid_t.node[2], uuid_t.node[3], uuid_t.node[4], uuid_t.node[5]);
+	if (os_snprintf_error(sizeof(uuidTmpStr), ret)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "uuidTmpStr snprintf error!\n");
+		return FALSE;
+		}
 
 	if (strlen(uuidTmpStr) > UUID_LEN_STR)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("ERROR:UUID String size too large!\n"));
@@ -2053,7 +2046,7 @@ INT	Set_WscGetConf_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				BCN_UPDATE_IF_STATE_CHG);
 			AsicEnableIbssSync(
 				pAd,
-				pAd->CommonCfg.BeaconPeriod,
+				pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 				HW_BSSID_0,
 				OPMODE_ADHOC);
 		} else {
@@ -2429,18 +2422,29 @@ INT	Show_Adhoc_MacTable_Proc(
 	IN	RTMP_STRING *extra,
 	IN	UINT32			size)
 {
-	INT i;
+	INT i, ret;
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	PSTA_ADMIN_CONFIG pStaCfg = &pAd->StaCfg[pObj->ioctl_if];
 	struct wifi_dev *wdev = &pStaCfg->wdev;
 	ADD_HT_INFO_IE *addht = wlan_operate_get_addht(wdev);
+	UINT32 extra_left;
 
-	sprintf(extra, "\n");
+	extra_left = size - strlen(extra);
+	ret = snprintf(extra, extra_left, "\n");
+	if (os_snprintf_error(extra_left, ret))
+		goto error;
+
 #ifdef DOT11_N_SUPPORT
-	sprintf(extra, "%sHT Operating Mode : %d\n", extra, addht->AddHtInfo2.OperaionMode);
+	extra_left = size - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "HT Operating Mode : %d\n", addht->AddHtInfo2.OperaionMode);
+	if (os_snprintf_error(extra_left, ret))
+		goto error;
 #endif /* DOT11_N_SUPPORT */
-	sprintf(extra + strlen(extra), "\n%-19s%-4s%-4s%-7s%-7s%-7s%-10s%-6s%-6s%-6s%-6s\n",
+	extra_left = size - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "\n%-19s%-4s%-4s%-7s%-7s%-7s%-10s%-6s%-6s%-6s%-6s\n",
 			"MAC", "AID", "BSS", "RSSI0", "RSSI1", "RSSI2", "PhMd", "BW", "MCS", "SGI", "STBC");
+	if (os_snprintf_error(extra_left, ret))
+		goto error;
 
 	for (i = 0; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
 		PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
@@ -2449,26 +2453,72 @@ INT	Show_Adhoc_MacTable_Proc(
 			break;
 
 		if ((IS_ENTRY_CLIENT(pEntry) || IS_ENTRY_PEER_AP(pEntry)) && (pEntry->Sst == SST_ASSOC)) {
-			sprintf(extra + strlen(extra), "%02X:%02X:%02X:%02X:%02X:%02X  ",
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%02X:%02X:%02X:%02X:%02X:%02X  ",
 					pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
 					pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]);
-			sprintf(extra + strlen(extra), "%-4d", (int)pEntry->Aid);
-			sprintf(extra + strlen(extra), "%-4d", (int)pEntry->func_tb_idx);
-			sprintf(extra + strlen(extra), "%-7d", pEntry->RssiSample.AvgRssi[0]);
-			sprintf(extra + strlen(extra), "%-7d", pEntry->RssiSample.AvgRssi[1]);
-			sprintf(extra + strlen(extra), "%-7d", pEntry->RssiSample.AvgRssi[2]);
-			sprintf(extra + strlen(extra), "%-10s", get_phymode_str(pEntry->HTPhyMode.field.MODE));
-			sprintf(extra + strlen(extra), "%-6s", get_bw_str(pEntry->HTPhyMode.field.BW));
-			sprintf(extra + strlen(extra), "%-6d", pEntry->HTPhyMode.field.MCS);
-			sprintf(extra + strlen(extra), "%-6d", pEntry->HTPhyMode.field.ShortGI);
-			sprintf(extra + strlen(extra), "%-6d", pEntry->HTPhyMode.field.STBC);
-			sprintf(extra + strlen(extra), "%-10d, %d, %d%%\n", pEntry->DebugFIFOCount, pEntry->DebugTxCount,
-					(pEntry->DebugTxCount) ? ((pEntry->DebugTxCount - pEntry->DebugFIFOCount) * 100 / pEntry->DebugTxCount) : 0);
-			sprintf(extra + strlen(extra), "\n");
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-4d", (int)pEntry->Aid);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-4d", (int)pEntry->func_tb_idx);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-7d", pEntry->RssiSample.AvgRssi[0]);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-7d", pEntry->RssiSample.AvgRssi[1]);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-7d", pEntry->RssiSample.AvgRssi[2]);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-10s",
+												get_phymode_str(pEntry->HTPhyMode.field.MODE));
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-6s", get_bw_str(pEntry->HTPhyMode.field.BW));
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-6d", pEntry->HTPhyMode.field.MCS);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-6d", pEntry->HTPhyMode.field.ShortGI);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-6d", pEntry->HTPhyMode.field.STBC);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%-10d, %d, %d%%\n",
+					pEntry->DebugFIFOCount, pEntry->DebugTxCount,
+					(pEntry->DebugTxCount) ? ((pEntry->DebugTxCount - pEntry->DebugFIFOCount) * 100 /
+					pEntry->DebugTxCount) : 0);
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
+			extra_left = size - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "\n");
+			if (os_snprintf_error(extra_left, ret))
+				goto error;
 		}
 	}
 
 	return TRUE;
+
+error:
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Show_Adhoc_MacTable_Proc snprintf error!\n");
+	return FALSE;
 }
 
 
@@ -2899,26 +2949,26 @@ INT RTMPSetInformation(
 	RTMP_IOCTL_INPUT_STRUCT *wrq = (RTMP_IOCTL_INPUT_STRUCT *) rq;
 	NDIS_802_11_SSID Ssid;
 	NDIS_802_11_MAC_ADDRESS Bssid;
-	RT_802_11_PHY_MODE PhyMode;
+	RT_802_11_PHY_MODE PhyMode = PHY_MODE_MAX;
 	RT_802_11_STA_CONFIG StaConfig;
 	NDIS_802_11_RATES aryRates;
-	RT_802_11_PREAMBLE Preamble;
-	NDIS_802_11_WEP_STATUS WepStatus;
+	RT_802_11_PREAMBLE Preamble = Rt802_11PreambleAuto;
+	NDIS_802_11_WEP_STATUS WepStatus = Ndis802_11WEPEnabled;
 	NDIS_802_11_AUTHENTICATION_MODE AuthMode = Ndis802_11AuthModeMax;
-	NDIS_802_11_NETWORK_INFRASTRUCTURE  BssType;
+	NDIS_802_11_NETWORK_INFRASTRUCTURE  BssType = Ndis802_11InfrastructureMax;
 	NDIS_802_11_RTS_THRESHOLD RtsThresh = 0;
-	NDIS_802_11_FRAGMENTATION_THRESHOLD FragThresh;
-	NDIS_802_11_POWER_MODE PowerMode;
+	NDIS_802_11_FRAGMENTATION_THRESHOLD FragThresh = 0;
+	NDIS_802_11_POWER_MODE PowerMode = Ndis802_11PowerModeMax;
 	PNDIS_802_11_KEY pKey = NULL;
 	PNDIS_802_11_WEP pWepKey = NULL;
 	PNDIS_802_11_REMOVE_KEY pRemoveKey = NULL;
 	NDIS_802_11_CONFIGURATION *pConfig = NULL;
-	NDIS_802_11_NETWORK_TYPE NetType;
+	NDIS_802_11_NETWORK_TYPE NetType = Ndis802_11NetworkTypeMax;
 	ULONG Now;
 	UINT KeyIdx = 0;
 	INT Status = NDIS_STATUS_SUCCESS, MaxPhyMode;
-	UINT8 PowerTemp;
-	BOOLEAN RadioState;
+	UINT8 PowerTemp = 0;
+	BOOLEAN RadioState = FALSE;
 	BOOLEAN StateMachineTouched = FALSE;
 	PNDIS_802_11_PASSPHRASE ppassphrase = NULL;
 #ifdef DOT11_N_SUPPORT
@@ -2953,7 +3003,7 @@ INT RTMPSetInformation(
 			Status = -EINVAL;
 		/* Only avaliable when EEPROM not programming */
 		else if (!(pAd->CommonCfg.CountryRegion & 0x80) && !(pAd->CommonCfg.CountryRegionForABand & 0x80)) {
-			ULONG   Country, sz;
+			ULONG   Country = 0, sz;
 
 			sz = (wrq->u.data.length > sizeof(Country) ? sizeof(Country) : wrq->u.data.length);
 			Status = copy_from_user(&Country, wrq->u.data.pointer, sz);
@@ -3022,7 +3072,7 @@ INT RTMPSetInformation(
 			Status = -EINVAL;
 		else {
 			RTMP_STRING *pSsidString = NULL;
-
+			NdisZeroMemory(&Ssid, sizeof(NDIS_802_11_SSID));
 			Status = copy_from_user(&Ssid, wrq->u.data.pointer, wrq->u.data.length);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set::OID_802_11_SSID (Len=%d,Ssid=%s)\n", Ssid.SsidLength,
 					 Ssid.Ssid));
@@ -3084,6 +3134,7 @@ INT RTMPSetInformation(
 		if (wrq->u.data.length != sizeof(NDIS_802_11_MAC_ADDRESS))
 			Status  = -EINVAL;
 		else {
+			NdisZeroMemory(&Bssid, sizeof(NDIS_802_11_MAC_ADDRESS));
 			Status = copy_from_user(&Bssid, wrq->u.data.pointer, wrq->u.data.length);
 			if (Status) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -3099,8 +3150,8 @@ INT RTMPSetInformation(
 
 			Status = NDIS_STATUS_SUCCESS;
 			StateMachineTouched = TRUE;
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set::OID_802_11_BSSID %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 PRINT_MAC(Bssid)));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set::OID_802_11_BSSID "MACSTR"\n",
+					 MAC2STR(Bssid)));
 		}
 
 		break;
@@ -3160,6 +3211,7 @@ INT RTMPSetInformation(
 		if (wrq->u.data.length != sizeof(RT_802_11_STA_CONFIG))
 			Status  = -EINVAL;
 		else {
+			NdisZeroMemory(&StaConfig, sizeof(RT_802_11_STA_CONFIG));
 			Status = copy_from_user(&StaConfig, wrq->u.data.pointer, wrq->u.data.length);
 			pAd->CommonCfg.bEnableTxBurst = StaConfig.EnableTxBurst;
 			pAd->CommonCfg.UseBGProtection = StaConfig.UseBGProtection;
@@ -3183,7 +3235,7 @@ INT RTMPSetInformation(
 						BCN_UPDATE_IF_STATE_CHG);
 					AsicEnableIbssSync(
 						pAd,
-						pAd->CommonCfg.BeaconPeriod,
+						pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 						HW_BSSID_0,
 						OPMODE_ADHOC);
 				}
@@ -3203,6 +3255,7 @@ INT RTMPSetInformation(
 		if (wrq->u.data.length != sizeof(NDIS_802_11_RATES))
 			Status  = -EINVAL;
 		else {
+			NdisZeroMemory(&aryRates, sizeof(NDIS_802_11_RATES));
 			Status = copy_from_user(&aryRates, wrq->u.data.pointer, wrq->u.data.length);
 			NdisZeroMemory(wdev->rate.DesireRate, MAX_LEN_OF_SUPPORTED_RATES);
 			NdisMoveMemory(wdev->rate.DesireRate, &aryRates, sizeof(NDIS_802_11_RATES));
@@ -3622,7 +3675,7 @@ INT RTMPSetInformation(
 				/*                pConfig = &Config; */
 
 				if ((pConfig->BeaconPeriod >= 20) && (pConfig->BeaconPeriod <= 400))
-					pAd->CommonCfg.BeaconPeriod = (USHORT) pConfig->BeaconPeriod;
+					pAd->CommonCfg.BeaconPeriod[DBDC_BAND0] = (USHORT) pConfig->BeaconPeriod;
 
 				pStaCfg->StaActive.AtimWin = (USHORT) pConfig->ATIMWindow;
 				MAP_KHZ_TO_CHANNEL_ID(pConfig->DSConfig, wdev->channel);
@@ -3647,7 +3700,7 @@ INT RTMPSetInformation(
 			Status = -EINVAL;
 		else {
 			POID_SET_HT_PHYMODE	pHTPhyMode = &HT_PhyMode;
-
+			NdisZeroMemory(&HT_PhyMode, sizeof(OID_SET_HT_PHYMODE));
 			Status = copy_from_user(&HT_PhyMode, wrq->u.data.pointer, wrq->u.data.length);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					 ("Set::pHTPhyMode	(PhyMode = %d,TransmitNo = %d, HtMode =	%d,	ExtOffset =	%d , MCS = %d, BW =	%d,	STBC = %d, SHORTGI = %d)\n",
@@ -3671,7 +3724,7 @@ INT RTMPSetInformation(
 		if (wrq->u.data.length != sizeof(ULONG))
 			Status = -EINVAL;
 		else {
-			ULONG apsd;
+			ULONG apsd = 0;
 
 			Status = copy_from_user(&apsd, wrq->u.data.pointer,	wrq->u.data.length);
 			/*-------------------------------------------------------------------
@@ -3819,6 +3872,7 @@ INT RTMPSetInformation(
 			OID_BACAP_STRUC Orde;
 			UINT16 ba_tx_wsize = 0, ba_rx_wsize = 0;
 
+			NdisZeroMemory(&Orde, sizeof(OID_BACAP_STRUC));
 			Status = copy_from_user(&Orde, wrq->u.data.pointer, wrq->u.data.length);
 
 			ba_tx_wsize = wlan_config_get_ba_tx_wsize(wdev);
@@ -3867,6 +3921,7 @@ INT RTMPSetInformation(
 			OID_ADD_BA_ENTRY    BA;
 			MAC_TABLE_ENTRY     *pEntry;
 
+			NdisZeroMemory(&BA, sizeof(OID_ADD_BA_ENTRY));
 			Status = copy_from_user(&BA, wrq->u.data.pointer, wrq->u.data.length);
 
 			if (BA.TID > (NUM_OF_TID - 1)) {
@@ -3895,9 +3950,8 @@ INT RTMPSetInformation(
 				}
 
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						 ("Set::RT_OID_802_11_ADD_IMME_BA. Rec = %d. Mac = %x:%x:%x:%x:%x:%x .\n",
-						  BA.IsRecipient, BA.MACAddr[0], BA.MACAddr[1], BA.MACAddr[2], BA.MACAddr[2]
-						  , BA.MACAddr[4], BA.MACAddr[5]));
+						 ("Set::RT_OID_802_11_ADD_IMME_BA. Rec = %d. Mac = "MACSTR" .\n",
+						  BA.IsRecipient, MAC2STR(BA.MACAddr)));
 			}
 		}
 
@@ -3923,7 +3977,7 @@ INT RTMPSetInformation(
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Set :: RT_OID_802_11_TEAR_IMME_BA(TID=%d, bAllTid=%d)\n",
 						 pBA->TID, pBA->bAllTid));
 
-				if (!pBA->bAllTid && (pBA->TID > (NUM_OF_TID - 1))) {
+				if (pBA->TID > (NUM_OF_TID - 1)) {
 					Status = NDIS_STATUS_INVALID_DATA;
 					os_free_mem(pBA);
 					break;
@@ -3977,6 +4031,10 @@ INT RTMPSetInformation(
 				Status  = -EINVAL;
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						 ("Set::OID_802_11_ADD_WEP, Failed (KeyIdx must be smaller than 4)!!\n"));
+			} else if (pWepKey->KeyLength > sizeof(wdev->SecConfig.WepKey->Key)) {
+				Status  = -EINVAL;
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 ("Set::OID_802_11_ADD_WEP, Failed (KeyLength only support 5 or 13)!!\n"));
 			} else {
 				UCHAR CipherAlg = 0;
 				PUCHAR Key;
@@ -4688,7 +4746,9 @@ INT RTMPQueryInformation(
 	PUCHAR pBuf = NULL, pPtr;
 	INT Status = NDIS_STATUS_SUCCESS;
 	UINT we_version_compiled;
-	UCHAR i, Padding = 0;
+	UCHAR Padding = 0;
+	UINT i;
+	INT ret;
 	BOOLEAN RadioState;
 	RTMP_STRING driverVersion[8];
 	OID_SET_HT_PHYMODE *pHTPhyMode = NULL;
@@ -4717,7 +4777,7 @@ INT RTMPQueryInformation(
 	MAC_TABLE_ENTRY *pEntry = NULL;
 	UCHAR BandIdx;
 	CHANNEL_CTRL *pChCtrl;
-	UINT32 Freq;
+	UINT32 Freq = 0;
 	ULONG TxPowerPercentage;
 	/* pEntry = GetAssociatedAPByWdev(pAd, wdev); */
 	pEntry = &pAd->MacTab.Content[BSSID_WCID_TO_REMOVE];
@@ -4733,7 +4793,11 @@ INT RTMPQueryInformation(
 	case RT_OID_VERSION_INFO:
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::RT_OID_VERSION_INFO\n"));
 		wrq->u.data.length = 8 * sizeof(CHAR);
-		snprintf(&driverVersion[0], sizeof(driverVersion), "%s", STA_DRIVER_VERSION);
+		ret = snprintf(&driverVersion[0], sizeof(driverVersion), "%s", STA_DRIVER_VERSION);
+		if (os_snprintf_error(sizeof(driverVersion), ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "driverVersion snprintf error!\n");
+			return NDIS_STATUS_FAILURE;
+		}
 		driverVersion[7] = '\0';
 
 		if (copy_to_user(wrq->u.data.pointer, &driverVersion[0], wrq->u.data.length))
@@ -4923,10 +4987,10 @@ INT RTMPQueryInformation(
 
 		if (pConfiguration) {
 			pConfiguration->Length = sizeof(NDIS_802_11_CONFIGURATION);
-			pConfiguration->BeaconPeriod = pAd->CommonCfg.BeaconPeriod;
+			pConfiguration->BeaconPeriod = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 			pConfiguration->ATIMWindow = pStaCfg->StaActive.AtimWin;
 			MAP_CHANNEL_ID_TO_KHZ(wdev->channel, Freq);
-			pBss->Configuration.DSConfig = (ULONG)Freq;
+			pConfiguration->DSConfig = (ULONG)Freq;
 			wrq->u.data.length = sizeof(NDIS_802_11_CONFIGURATION);
 			Status = copy_to_user(wrq->u.data.pointer, pConfiguration, wrq->u.data.length);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -5169,7 +5233,7 @@ INT RTMPQueryInformation(
 		break;
 
 	case OID_802_11_WEP_STATUS:
-		AuthMode = SecEncryModeNewToOld(pStaCfg->wdev.SecConfig.PairwiseCipher);
+		WepStatus = SecEncryModeNewToOld(pStaCfg->wdev.SecConfig.PairwiseCipher);
 		wrq->u.data.length = sizeof(WepStatus);
 		Status = copy_to_user(wrq->u.data.pointer, &WepStatus, wrq->u.data.length);
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_WEP_STATUS(=%d)\n", WepStatus));
@@ -5538,6 +5602,7 @@ INT RTMPQueryInformation(
 			pHTPhyMode->MCS = (UCHAR)pStaCfg->wdev.DesiredTransmitSetting.field.MCS;
 			pHTPhyMode->SHORTGI = (UCHAR)wlan_config_get_ht_gi(wdev);
 			pHTPhyMode->STBC = wlan_config_get_ht_stbc(wdev);
+			pHTPhyMode->ExtOffset = wlan_operate_get_ext_cha(wdev);
 			wrq->u.data.length = sizeof(OID_SET_HT_PHYMODE);
 
 			if (copy_to_user(wrq->u.data.pointer, pHTPhyMode, wrq->u.data.length))
@@ -5933,14 +5998,6 @@ INT RTMPQueryInformation(
 	break;
 #endif /* WFD_SUPPORT */
 #endif /* DOT11Z_TDLS_SUPPORT */
-#ifdef RTMP_RBUS_SUPPORT
-
-	case OID_802_11_QUERY_WirelessMode:
-		wrq->u.data.length = sizeof(UCHAR);
-		Status = copy_to_user(wrq->u.data.pointer, &wdev->PhyMode, wrq->u.data.length);
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Query::OID_802_11_QUERY_WirelessMode(=%d)\n", wdev->PhyMode));
-		break;
-#endif /* RTMP_RBUS_SUPPORT */
 #ifdef DOT11R_FT_SUPPORT
 
 	case OID_802_11R_SUPPORT:
@@ -6043,12 +6100,13 @@ VOID RTMPIoctlE2PROM(
 	USHORT				eepAddr = 0;
 	UCHAR				temp[16];
 	RTMP_STRING temp2[16];
-	USHORT				eepValue = 0;
-	int					Status;
+	USHORT				eepValue = 0, string_size = 1024;
+	int					Status, ret;
 	BOOLEAN				bIsPrintAllE2P = FALSE;
 	BOOLEAN				bIsRange = FALSE;
+	UINT32 msg_left;
 	/* allocate memory */
-	os_alloc_mem(NULL, (UCHAR **)&msg, sizeof(RTMP_STRING) * 1024);
+	os_alloc_mem(NULL, (UCHAR **)&msg, sizeof(RTMP_STRING) * string_size);
 
 	if (msg == NULL) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Allocate memory fail!!!\n", __func__));
@@ -6062,12 +6120,17 @@ VOID RTMPIoctlE2PROM(
 		goto LabelOK;
 	}
 
-	memset(msg, 0x00, 1024);
+	memset(msg, 0x00, string_size);
 	memset(arg, 0x00, 255);
 
 	if (wrq->u.data.length > 1) { /*No parameters. */
 		Status = copy_from_user(arg, wrq->u.data.pointer, (wrq->u.data.length > 255) ? 255 : wrq->u.data.length);
-		sprintf(msg, "\n");
+		msg_left = string_size - strlen(msg);
+		ret = snprintf(msg, msg_left, "\n");
+		if (os_snprintf_error(msg_left, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+			goto LabelOK;
+		}
 		arg[254] = 0x00;
 		/*Parsing Read or Write */
 		this_char = arg;
@@ -6116,7 +6179,12 @@ VOID RTMPIoctlE2PROM(
 
 				if (eepAddr < 0xFFFF) {
 					RT28xx_EEPROM_READ16(pAd, eepAddr, eepValue);
-					sprintf(msg + strlen(msg), "[0x%04X]:0x%04X  ", eepAddr, eepValue);
+					msg_left = string_size - strlen(msg);
+					ret = snprintf(msg + strlen(msg), msg_left, "[0x%04X]:0x%04X  ", eepAddr, eepValue);
+					if (os_snprintf_error(msg_left, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+						goto LabelOK;
+					}
 				} else {
 					/*Invalid parametes, so default printk all bbp */
 					bIsPrintAllE2P = TRUE;
@@ -6164,7 +6232,12 @@ VOID RTMPIoctlE2PROM(
 			AtoH(temp2, temp, 2);
 			eepValue = *temp * 256 + temp[1];
 			RT28xx_EEPROM_WRITE16(pAd, eepAddr, eepValue);
-			sprintf(msg + strlen(msg), "[0x%02X]:%02X  ", eepAddr, eepValue);
+			msg_left = string_size - strlen(msg);
+			ret = snprintf(msg + strlen(msg), msg_left, "[0x%02X]:%02X	", eepAddr, eepValue);
+			if (os_snprintf_error(msg_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+				goto LabelOK;
+			}
 		}
 	} else
 		bIsPrintAllE2P = TRUE;
@@ -6175,7 +6248,12 @@ range:
 		USHORT *pMacContent, *pMacIndex, e2pAddrStart = 0, e2pAddrEnd = 0;
 		UINT32 ContentLen;
 		/* DBGPRINT(RT_DEBUG_ERROR, ("[Jason]Range: this_char=%s, strlen(value)=%d, value=%s\n", this_char, (INT32)strlen(value), value)); */
-		sprintf(msg + strlen(msg), "printing range e2p value\n");
+		msg_left = string_size - strlen(msg);
+		ret = snprintf(msg + strlen(msg), msg_left, "printing range e2p value\n");
+		if (os_snprintf_error(msg_left, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+			goto LabelOK;
+		}
 		if (strlen(value) <= sizeof(temp2))
 			memcpy(&temp2, value, strlen(value));
 		else {
@@ -6246,9 +6324,15 @@ range:
 				/* print content to a file */
 				/* RtmpDrvRangeE2PPrint(pAd, pMacContent, e2pAddrStart, e2pAddrEnd, 2); */
 				os_free_mem(pMacContent);
+			    }
+			} else {
+				msg_left = string_size - strlen(msg);
+				ret = snprintf(msg + strlen(msg), msg_left, "wrong input range!\n");
+				if (os_snprintf_error(msg_left, ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+					goto LabelOK;
+				}
 			}
-		} else
-			sprintf(msg + strlen(msg), "wrong input range!\n");
 	}
 
 next:
@@ -6284,8 +6368,14 @@ next:
 
 	}
 
-	if (strlen(msg) == 1)
-		sprintf(msg + strlen(msg), "===>Error command format!");
+	if (strlen(msg) == 1) {
+		msg_left = string_size - strlen(msg);
+		ret = snprintf(msg + strlen(msg), msg_left, "===>Error command format!");
+		if (os_snprintf_error(msg_left, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlE2PROM snprintf error!\n");
+		goto LabelOK;
+		}
+	}
 
 	/* Copy the information into the user buffer */
 	wrq->u.data.length = strlen(msg);
@@ -6357,44 +6447,82 @@ void	getBaInfo(
 	IN	RTMP_STRING *pOutBuf,
 	IN	UINT32			size)
 {
-	INT i, j;
+	INT i, j, ret;
 	BA_ORI_ENTRY *pOriBAEntry;
 	BA_REC_ENTRY *pRecBAEntry;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
 	struct ba_control *ba_ctl = &tr_ctl->ba_ctl;
+	UINT32 pOutBuf_left;
 
 	for (i = 0; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
 		PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
 
 		if (((IS_ENTRY_CLIENT(pEntry) || IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_TDLS(pEntry)) && (pEntry->Sst == SST_ASSOC))
 			|| IS_ENTRY_WDS(pEntry) || IS_ENTRY_MESH(pEntry)) {
-			sprintf(pOutBuf, "%s\n%02X:%02X:%02X:%02X:%02X:%02X (Aid = %d) (AP) -\n",
-					pOutBuf,
+			pOutBuf_left = size - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left,
+					"\n%02X:%02X:%02X:%02X:%02X:%02X (Aid = %d) (AP) -\n",
 					pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
 					pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5], pEntry->Aid);
-			sprintf(pOutBuf, "%s[Recipient]\n", pOutBuf);
+			if (os_snprintf_error(pOutBuf_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+				return;
+				}
+			pOutBuf_left = size - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left, "[Recipient]\n");
+			if (os_snprintf_error(pOutBuf_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+				return;
+				}
 
 			for (j = 0; j < NUM_OF_TID; j++) {
 				if (pEntry->BARecWcidArray[j] != 0) {
 					pRecBAEntry = &ba_ctl->BARecEntry[pEntry->BARecWcidArray[j]];
-					sprintf(pOutBuf, "%sTID=%d, BAWinSize=%d, LastIndSeq=%d, ReorderingPkts=%d\n",
-							pOutBuf, j, pRecBAEntry->BAWinSize, pRecBAEntry->LastIndSeq, pRecBAEntry->list.qlen);
+					pOutBuf_left = size - strlen(pOutBuf);
+					ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left,
+							"TID=%d, BAWinSize=%d, LastIndSeq=%d, ReorderingPkts=%d\n",
+							j, pRecBAEntry->BAWinSize, pRecBAEntry->LastIndSeq, pRecBAEntry->list.qlen);
+					if (os_snprintf_error(pOutBuf_left, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+						return;
+					}
 				}
 			}
 
-			sprintf(pOutBuf, "%s\n", pOutBuf);
-			sprintf(pOutBuf, "%s[Originator]\n", pOutBuf);
+			pOutBuf_left = size - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left, "\n");
+			if (os_snprintf_error(pOutBuf_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+				return;
+			}
+			pOutBuf_left = size - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left, "[Originator]\n");
+			if (os_snprintf_error(pOutBuf_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+				return;
+			}
 
 			for (j = 0; j < NUM_OF_TID; j++) {
 				if (pEntry->BAOriWcidArray[j] != 0) {
 					pOriBAEntry = &ba_ctl->BAOriEntry[pEntry->BAOriWcidArray[j]];
-					sprintf(pOutBuf, "%sTID=%d, BAWinSize=%d, StartSeq=%d, CurTxSeq=%d\n",
-							pOutBuf, j, pOriBAEntry->BAWinSize, pOriBAEntry->Sequence,
+					pOutBuf_left = size - strlen(pOutBuf);
+					ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left,
+							"TID=%d, BAWinSize=%d, StartSeq=%d, CurTxSeq=%d\n",
+							j, pOriBAEntry->BAWinSize, pOriBAEntry->Sequence,
 							tr_ctl->tr_entry[pEntry->wcid].TxSeq[j]);
+					if (os_snprintf_error(pOutBuf_left, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+						return;
+					}
 				}
 			}
 
-			sprintf(pOutBuf, "%s\n\n", pOutBuf);
+			pOutBuf_left = size - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf), pOutBuf_left, "\n\n");
+			if (os_snprintf_error(size - pOutBuf_left, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "getBaInfo snprintf error!\n");
+				return;
+			}
 		}
 
 		if (strlen(pOutBuf) > (size - 30))
@@ -6414,7 +6542,7 @@ VOID RTMPIoctlShow(
 	IN	ULONG					Data)
 {
 	RT_CMD_STA_IOCTL_SHOW *pIoctlShow = (RT_CMD_STA_IOCTL_SHOW *)pData;
-	INT Status = 0;
+	INT Status = 0, ret;
 	char *extra = (char *)pIoctlShow->pData;
 	UINT32 size = (UINT32)(pIoctlShow->MaxSize);
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
@@ -6422,11 +6550,17 @@ VOID RTMPIoctlShow(
 	RTMP_STRING *this_char;
 	struct wifi_dev *wdev = &pStaCfg->wdev;
 
-	os_alloc_mem(NULL, (PUCHAR *)&this_char, wrq->u.data.length);
+	os_alloc_mem(NULL, (PUCHAR *)&this_char, wrq->u.data.length + 1);
+	if (this_char == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Allocate memory fail!\n");
+		return;
+	}
+	NdisZeroMemory(this_char,  wrq->u.data.length + 1);
 	if (copy_from_user(this_char, wrq->u.data.pointer, wrq->u.data.length)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): copy from user failed\n"
 											, __func__));
-	   }
+	}
+	this_char[wrq->u.data.length] = '\0';
 		switch (subcmd) {
 #ifdef ETH_CONVERT_SUPPORT
 #ifdef MAT_SUPPORT
@@ -6446,12 +6580,14 @@ VOID RTMPIoctlShow(
 		break;
 
 		case SHOW_ETH_CLONE_MAC:
-			snprintf(extra, size, "%02X:%02X:%02X:%02X:%02X:%02X\n", pAd->EthConvert.EthCloneMac[0],
+			ret = snprintf(extra, size, "%02X:%02X:%02X:%02X:%02X:%02X\n", pAd->EthConvert.EthCloneMac[0],
 					 pAd->EthConvert.EthCloneMac[1],
 					 pAd->EthConvert.EthCloneMac[2],
 					 pAd->EthConvert.EthCloneMac[3],
 					 pAd->EthConvert.EthCloneMac[4],
 					 pAd->EthConvert.EthCloneMac[5]);
+			if (os_snprintf_error(size, ret))
+				goto err_out;
 			wrq->u.data.length = strlen(extra) + 1; /* 1: size of '\0' */
 			break;
 #endif /* MAT_SUPPORT */
@@ -6462,16 +6598,21 @@ VOID RTMPIoctlShow(
 #ifdef DOT11_N_SUPPORT
 
 				if (WMODE_CAP_N(wdev->PhyMode) &&
-					wlan_operate_get_ht_bw(wdev))
-					snprintf(extra, size, "Monitor Mode(CentralChannel %d)\n",
+					wlan_operate_get_ht_bw(wdev)) {
+					ret = snprintf(extra, size, "Monitor Mode(CentralChannel %d)\n",
 						wlan_operate_get_cen_ch_1(wdev));
-				else
+					if (os_snprintf_error(size, ret))
+						goto err_out;
+				} else {
 #endif /* DOT11_N_SUPPORT */
-					snprintf(extra, size, "Monitor Mode(Channel %d)\n", wdev->channel);
+					ret = snprintf(extra, size, "Monitor Mode(Channel %d)\n", wdev->channel);
+					if (os_snprintf_error(size, ret))
+						goto err_out;
+					}
 			} else {
 				if (pAd->IndicateMediaState == NdisMediaStateConnected) {
 					if (INFRA_ON(pStaCfg)) {
-						snprintf(extra, size, "Connected(AP: %s[%02X:%02X:%02X:%02X:%02X:%02X])\n",
+						ret = snprintf(extra, size, "Connected(AP: %s[%02X:%02X:%02X:%02X:%02X:%02X])\n",
 								 pStaCfg->Ssid,
 								 pStaCfg->Bssid[0],
 								 pStaCfg->Bssid[1],
@@ -6479,12 +6620,19 @@ VOID RTMPIoctlShow(
 								 pStaCfg->Bssid[3],
 								 pStaCfg->Bssid[4],
 								 pStaCfg->Bssid[5]);
-						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Ssid=%s ,Ssidlen = %d\n", pStaCfg->Ssid, pStaCfg->SsidLen));
-					} else if (ADHOC_ON(pAd))
-						snprintf(extra, size, "Connected\n");
+						if (os_snprintf_error(size, ret))
+							goto err_out;
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Ssid=%s ,Ssidlen = %d\n", pStaCfg->Ssid, pStaCfg->SsidLen);
+					} else if (ADHOC_ON(pAd)) {
+						ret = snprintf(extra, size, "Connected\n");
+						if (os_snprintf_error(size, ret))
+							goto err_out;
+						}
 				} else {
-					snprintf(extra, size, "Disconnected\n");
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("ConnStatus is not connected\n"));
+					ret = snprintf(extra, size, "Disconnected\n");
+					if (os_snprintf_error(size, ret))
+						goto err_out;
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "ConnStatus is not connected\n");
 				}
 			}
 
@@ -6493,7 +6641,9 @@ VOID RTMPIoctlShow(
 
 		case SHOW_DRVIER_VERION:
 			/* remove __DATE__, __TIME/__ for checkpatch.pl check*/
-			snprintf(extra, size, "Driver version-%s\n", STA_DRIVER_VERSION);
+			ret = snprintf(extra, size, "Driver version-%s\n", STA_DRIVER_VERSION);
+			if (os_snprintf_error(size, ret))
+				goto err_out;
 			wrq->u.data.length = strlen(extra) + 1; /* 1: size of '\0' */
 			break;
 #ifdef DOT11_N_SUPPORT
@@ -6538,7 +6688,9 @@ VOID RTMPIoctlShow(
 				}
 			}
 
-			snprintf(extra, size, "Radio Off\n");
+			ret = snprintf(extra, size, "Radio Off\n");
+			if (os_snprintf_error(size, ret))
+				goto err_out;
 			wrq->u.data.length = strlen(extra) + 1; /* 1: size of '\0' */
 			break;
 
@@ -6554,7 +6706,9 @@ VOID RTMPIoctlShow(
 					pAd->ExtraInfo = EXTRA_INFO_CLEAR;
 				}
 			}
-			snprintf(extra, size, "Radio On\n");
+			ret = snprintf(extra, size, "Radio On\n");
+			if (os_snprintf_error(size, ret))
+				goto err_out;
 			wrq->u.data.length = strlen(extra) + 1; /* 1: size of '\0' */
 			break;
 #if defined(DOT11Z_TDLS_SUPPORT) || defined(CFG_TDLS_SUPPORT)
@@ -6731,6 +6885,11 @@ VOID RTMPIoctlShow(
 			break;
 		}
 	os_free_mem((PUCHAR)this_char);
+	return;
+
+err_out:
+	os_free_mem((PUCHAR)this_char);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RTMPIoctlShow snprintf error!\n");
 }
 
 
@@ -7291,7 +7450,7 @@ RtmpIoctl_rt_ioctl_giwscan(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Allocate memory fail!\n"));
 		return NDIS_STATUS_FAILURE;
 	}
-
+	NdisZeroMemory(pIoctlScan->pBssTable, sizeof(RT_CMD_STA_IOCTL_BSS_TABLE));
 	for (IdBss = 0; IdBss < ScanTab->BssNr; IdBss++) {
 		HT_CAP_INFO capInfo = ScanTab->BssEntry[IdBss].HtCapability.HtCapInfo;
 
@@ -7708,7 +7867,7 @@ INT RtmpIoctl_rt_ioctl_siwencode(RTMP_ADAPTER *pAd, VOID *pData, ULONG Data)
 		}
 
 		/* Check key index */
-		if ((keyIdx < 0) || (keyIdx >= NR_WEP_KEYS)) {
+		if (keyIdx >= NR_WEP_KEYS) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					 ("==>rt_ioctl_siwencode::Wrong keyIdx=%d! Using default key instead (%d)\n",
 					  keyIdx, wdev->SecConfig.PairwiseKeyId));
@@ -9301,23 +9460,51 @@ static VOID ShowAmpduCounter(RTMP_ADAPTER *pAd, UCHAR BandIdx, RTMP_STRING *msg)
 {
 	COUNTER_802_11 *WlanCounter = &pAd->WlanCounters[BandIdx];
 	ULONG per;
+	INT ret;
+	UINT32 msg_left;
 
-	sprintf(msg + strlen(msg), "BandIdx: %d\n", BandIdx);
-	sprintf(msg + strlen(msg), "TX AGG Range 1 (1)              = %ld\n", (LONG)(WlanCounter->TxAggRange1Count.u.LowPart));
-	sprintf(msg + strlen(msg), "TX AGG Range 2 (2~5)            = %ld\n", (LONG)(WlanCounter->TxAggRange2Count.u.LowPart));
-	sprintf(msg + strlen(msg), "TX AGG Range 3 (6~15)           = %ld\n", (LONG)(WlanCounter->TxAggRange3Count.u.LowPart));
-	sprintf(msg + strlen(msg), "TX AGG Range 4 (>15)            = %ld\n", (LONG)(WlanCounter->TxAggRange4Count.u.LowPart));
+	msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+	ret = snprintf(msg + strlen(msg), msg_left, "BandIdx: %d\n", BandIdx);
+	if (os_snprintf_error(msg_left, ret))
+		goto err_out;
+	msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+	ret = snprintf(msg + strlen(msg), msg_left, "TX AGG Range 1 (1) 			 = %ld\n", (LONG)(WlanCounter->TxAggRange1Count.u.LowPart));
+	if (os_snprintf_error(msg_left, ret))
+		goto err_out;
+	msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+	ret = snprintf(msg + strlen(msg), msg_left, "TX AGG Range 2 (2~5)			 = %ld\n", (LONG)(WlanCounter->TxAggRange2Count.u.LowPart));
+	if (os_snprintf_error(msg_left, ret))
+		goto err_out;
+	msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+	ret = snprintf(msg + strlen(msg), msg_left, "TX AGG Range 3 (6~15)			 = %ld\n", (LONG)(WlanCounter->TxAggRange3Count.u.LowPart));
+	if (os_snprintf_error(msg_left, ret))
+		goto err_out;
+	msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+	ret = snprintf(msg + strlen(msg), msg_left, "TX AGG Range 4 (>15)			 = %ld\n", (LONG)(WlanCounter->TxAggRange4Count.u.LowPart));
+	if (os_snprintf_error(msg_left, ret))
+		goto err_out;
 	{
 		ULONG mpduTXCount;
 
 		mpduTXCount = WlanCounter->AmpduSuccessCount.u.LowPart;
-		sprintf(msg + strlen(msg), "AMPDU Tx success                = %ld\n", mpduTXCount);
+		msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+		ret = snprintf(msg + strlen(msg), msg_left, "AMPDU Tx success				 = %ld\n", mpduTXCount);
+		if (os_snprintf_error(msg_left, ret))
+			goto err_out;
 		per = mpduTXCount == 0 ? 0 : 1000 * (WlanCounter->AmpduFailCount.u.LowPart) / (WlanCounter->AmpduFailCount.u.LowPart +
 				mpduTXCount);
-		sprintf(msg + strlen(msg), "AMPDU Tx fail count             = %ld, PER=%ld.%1ld%%\n",
+		msg_left = IW_PRIV_SIZE_MASK - strlen(msg);
+		ret = snprintf(msg + strlen(msg), msg_left, "AMPDU Tx fail count			 = %ld, PER=%ld.%1ld%%\n",
 				(ULONG)WlanCounter->AmpduFailCount.u.LowPart,
 				per / 10, per % 10);
+		if (os_snprintf_error(msg_left, ret))
+			goto err_out;
 	}
+	return;
+
+err_out:
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+	return;
 }
 
 
@@ -9327,6 +9514,8 @@ RtmpIoctl_rt_private_get_statistics(
 	IN	VOID					*pData,
 	IN	ULONG					Data)
 {
+	INT ret;
+	UINT32 extra_left;
 	char *extra = (char *)pData;
 	ULONG txCount = 0;
 #ifdef ENHANCED_STAT_DISPLAY
@@ -9348,7 +9537,10 @@ RtmpIoctl_rt_private_get_statistics(
 	if (wdev != NULL)
 		ucBand = HcGetBandByWdev(wdev);
 
-	snprintf(extra, IW_PRIV_SIZE_MASK - strlen(extra), "\n\n");
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra, extra_left, "\n\n");
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 
 	if (cap->fgRateAdaptFWOffload == TRUE) {
@@ -9385,57 +9577,112 @@ RtmpIoctl_rt_private_get_statistics(
 
 	RTMP_GET_TEMPERATURE(pAd, ucBand, &pAd->temperature);
 	/* Sanity check for calculation of sucessful count */
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "CurrentTemperature              = %d\n", pAd->temperature);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx success                      = %lu\n", txCount);
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "CurrentTemperature			   = %d\n", pAd->temperature);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Tx success					   = %lu\n", txCount);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+
 #ifdef ENHANCED_STAT_DISPLAY
 
 	if (IS_HIF_TYPE(pAd, HIF_MT)) {
 		per = txCount == 0 ? 0 : 1000 * (pAd->WlanCounters[0].FailedCount.u.LowPart) /
 			  (pAd->WlanCounters[0].FailedCount.u.LowPart + txCount);
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx fail count                   = %ld, PER=%ld.%1ld%%\n",
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "Tx fail count				   = %ld, PER=%ld.%1ld%%\n",
 				(ULONG)pAd->WlanCounters[0].FailedCount.u.LowPart,
 				per / 10, per % 10);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 	} else {
 		per = txCount == 0 ? 0 : 1000 * (pAd->WlanCounters[0].RetryCount.u.LowPart +
 										 pAd->WlanCounters[0].FailedCount.u.LowPart) / (pAd->WlanCounters[0].RetryCount.u.LowPart +
 												 pAd->WlanCounters[0].FailedCount.u.LowPart + txCount);
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx retry count                  = %lu, PER=%ld.%1ld%%\n",
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "Tx retry count				   = %lu, PER=%ld.%1ld%%\n",
 				(ULONG)pAd->WlanCounters[0].RetryCount.u.LowPart,
 				per / 10, per % 10);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 		plr = txCount == 0 ? 0 : 10000 * pAd->WlanCounters[0].FailedCount.u.LowPart /
 			  (pAd->WlanCounters[0].FailedCount.u.LowPart + txCount);
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx fail to Rcv ACK after retry  = %lu, PLR=%ld.%02ld%%\n",
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "Tx fail to Rcv ACK after retry  = %lu, PLR=%ld.%02ld%%\n",
 				(ULONG)pAd->WlanCounters[0].FailedCount.u.LowPart, plr / 100, plr % 100);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 	}
 
 #else
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx retry count			  = %lu\n", (ULONG)pAd->WlanCounters[0].RetryCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Tx fail to Rcv ACK after retry  = %lu\n",
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Tx retry count			  = %lu\n", (ULONG)pAd->WlanCounters[0].RetryCount.u.LowPart);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Tx fail to Rcv ACK after retry  = %lu\n",
 			(ULONG)pAd->WlanCounters[0].FailedCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RTS Success Rcv CTS             = %lu\n",
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "RTS Success Rcv CTS			   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].RTSSuccessCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RTS Fail Rcv CTS                = %lu\n",
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "RTS Fail Rcv CTS 			   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].RTSFailureCount.u.LowPart);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #endif /* ENHANCED_STAT_DISPLAY */
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx success                      = %lu\n",
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx success					   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].ReceivedFragmentCount.QuadPart);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #ifdef ENHANCED_STAT_DISPLAY
 	per = pAd->WlanCounters[0].ReceivedFragmentCount.u.LowPart == 0 ? 0 : 1000 *
 		  (pAd->WlanCounters[0].FCSErrorCount.u.LowPart) / (pAd->WlanCounters[0].FCSErrorCount.u.LowPart +
 				  pAd->WlanCounters[0].ReceivedFragmentCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx with CRC                     = %ld, PER=%ld.%1ld%%\n",
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx with CRC					   = %ld, PER=%ld.%1ld%%\n",
 			(ULONG)pAd->WlanCounters[0].FCSErrorCount.u.LowPart, per / 10, per % 10);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx drop due to out of resource  = %lu\n", (ULONG)pAd->Counters8023.RxNoBuffer);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx duplicate frame              = %lu\n",
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx drop due to out of resource  = %lu\n", (ULONG)pAd->Counters8023.RxNoBuffer);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx duplicate frame			   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].FrameDuplicateCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "False CCA                       = %lu\n", (ULONG)pAd->RalinkCounters.FalseCCACnt);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "False CCA					   = %lu\n", (ULONG)pAd->RalinkCounters.FalseCCACnt);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #else
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx with CRC                     = %lu\n",
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx with CRC					   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].FCSErrorCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx drop due to out of resource  = %lu\n", (ULONG)pAd->Counters8023.RxNoBuffer);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Rx duplicate frame              = %lu\n",
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx drop due to out of resource  = %lu\n", (ULONG)pAd->Counters8023.RxNoBuffer);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "Rx duplicate frame			   = %lu\n",
 			(ULONG)pAd->WlanCounters[0].FrameDuplicateCount.u.LowPart);
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "False CCA (one second)          = %lu\n", (ULONG)pAd->RalinkCounters.OneSecFalseCCACnt);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "False CCA (one second)		   = %lu\n", (ULONG)pAd->RalinkCounters.OneSecFalseCCACnt);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #endif /* ENHANCED_STAT_DISPLAY */
 #ifdef CONFIG_ATE
 
@@ -9446,11 +9693,14 @@ RtmpIoctl_rt_private_get_statistics(
 #endif /* CONFIG_ATE */
 	{
 #ifdef ENHANCED_STAT_DISPLAY
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RSSI                            = %ld %ld %ld %ld\n",
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RSSI 						   = %ld %ld %ld %ld\n",
 				(LONG)(pStaCfg->RssiSample.LastRssi[0] - pAd->BbpRssiToDbmDelta),
 				(LONG)(pStaCfg->RssiSample.LastRssi[1] - pAd->BbpRssiToDbmDelta),
 				(LONG)(pStaCfg->RssiSample.LastRssi[2] - pAd->BbpRssiToDbmDelta),
 				(LONG)(pStaCfg->RssiSample.LastRssi[3] - pAd->BbpRssiToDbmDelta));
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 
 		/* Display Last Rx Rate and BF SNR of first Associated entry in MAC table */
 		if (pAd->MacTab.Size > 0) {
@@ -9470,6 +9720,7 @@ RtmpIoctl_rt_private_get_statistics(
 							EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
 							HTTRANSMIT_SETTING LastTxRate;
 
+							NdisZeroMemory(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
 							MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, pEntry->wcid, &rTxStatResult);
 							LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
 							LastTxRate.field.BW = rTxStatResult.rEntryTxRate.BW;
@@ -9495,16 +9746,22 @@ RtmpIoctl_rt_private_get_statistics(
 					} else
 #endif /* MT_MAC */
 					{
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Last TX Rate                    = MCS%d, %2dM, %cGI, %s%s\n",
-								lastTxRate & 0x7F,  ((lastTxRate >> 7) & 0x1) ? 40 : 20,
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "Last TX Rate 				   = MCS%d, %2dM, %cGI, %s%s\n",
+								lastTxRate & 0x7F,	((lastTxRate >> 7) & 0x1) ? 40 : 20,
 								((lastTxRate >> 8) & 0x1) ? 'S' : 'L',
 								phyMode[(lastTxRate >> 14) & 0x3],
 								((lastTxRate >> 9) & 0x3) ? ", STBC" : " ");
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Last RX Rate                    = MCS %d, %2dM, %cGI, %s%s\n",
-								lastRxRate & 0x7F,  ((lastRxRate >> 7) & 0x1) ? 40 : 20,
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "Last RX Rate 				   = MCS %d, %2dM, %cGI, %s%s\n",
+								lastRxRate & 0x7F,	((lastRxRate >> 7) & 0x1) ? 40 : 20,
 								((lastRxRate >> 8) & 0x1) ? 'S' : 'L',
 								phyMode[(lastRxRate >> 14) & 0x3],
 								((lastRxRate >> 9) & 0x3) ? ", STBC" : " ");
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
 					}
 
 					break;
@@ -9519,9 +9776,13 @@ RtmpIoctl_rt_private_get_statistics(
 				ShowAmpduCounter(pAd, i, extra);
 
 			if (pAd->CommonCfg.bTXRX_RXV_ON) {
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "/* Condition Number should enable mode4 of 0x6020_426c */\n");
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra),
-						"--10 packets Condition Number   = [%d|%d|%d|%d|%d|%d|%d|%d|%d|%d]\n",
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "/* Condition Number should enable mode4 of 0x6020_426c */\n");
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left,
+						"--10 packets Condition Number	 = [%d|%d|%d|%d|%d|%d|%d|%d|%d|%d]\n",
 						(UINT8)(pAd->rxv2_cyc3[0] & 0xff),
 						(UINT8)(pAd->rxv2_cyc3[1] & 0xff),
 						(UINT8)(pAd->rxv2_cyc3[2] & 0xff),
@@ -9533,38 +9794,67 @@ RtmpIoctl_rt_private_get_statistics(
 						(UINT8)(pAd->rxv2_cyc3[8] & 0xff),
 						(UINT8)(pAd->rxv2_cyc3[9] & 0xff)
 					   );
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
 			}
 		}
 
 #endif /* MT_MAC */
 #else
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RSSI-A                          = %ld\n",
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RSSI-A						   = %ld\n",
 				(LONG)(pStaCfg->RssiSample.AvgRssi[0] - pAd->BbpRssiToDbmDelta));
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RSSI-B (if available)           = %ld\n",
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RSSI-B (if available)		   = %ld\n",
 				(LONG)(pStaCfg->RssiSample.AvgRssi[1] - pAd->BbpRssiToDbmDelta));
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RSSI-C (if available)           = %ld\n\n",
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RSSI-C (if available)		   = %ld\n\n",
 				(LONG)(pStaCfg->RssiSample.AvgRssi[2] - pAd->BbpRssiToDbmDelta));
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 #endif /* ENHANCED_STAT_DISPLAY */
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "SNR-A                          = %ld\n", (LONG)(pStaCfg->RssiSample.AvgSnr[0]));
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "SNR-B (if available)           = %ld\n\n", (LONG)(pStaCfg->RssiSample.AvgSnr[1]));
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "SNR-A						  = %ld\n", (LONG)(pStaCfg->RssiSample.AvgSnr[0]));
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "SNR-B (if available) 		  = %ld\n\n", (LONG)(pStaCfg->RssiSample.AvgSnr[1]));
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 	}
 
 #ifdef WPA_SUPPLICANT_SUPPORT
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WpaSupplicantUP                 = %d\n\n",
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "WpaSupplicantUP				   = %d\n\n",
 			pStaCfg->wpa_supplicant_info.WpaSupplicantUP);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #endif /* WPA_SUPPLICANT_SUPPORT */
 #ifdef DOT11R_FT_SUPPORT
-	snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "FtSupport                       = %d\n\n", pStaCfg->Dot11RCommInfo.bFtSupport);
+	extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+	ret = snprintf(extra + strlen(extra), extra_left, "FtSupport					   = %d\n\n", pStaCfg->Dot11RCommInfo.bFtSupport);
+	if (os_snprintf_error(extra_left, ret))
+		goto err_out;
 #endif /* DOT11R_FT_SUPPORT */
 #ifdef WSC_STA_SUPPORT
 	wsc_ctrl = &pStaCfg->wdev.WscControl;
 
 	/* display pin code */
-	if (wsc_ctrl->WscEnrolleePinCodeLen == 8)
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RT2860 Linux STA PinCode\t%08u\n", wsc_ctrl->WscEnrolleePinCode);
-	else
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "RT2860 Linux STA PinCode\t%04u\n", wsc_ctrl->WscEnrolleePinCode);
-
+	if (wsc_ctrl->WscEnrolleePinCodeLen == 8) {
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RT2860 Linux STA PinCode\t%08u\n", wsc_ctrl->WscEnrolleePinCode);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+	} else {
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "RT2860 Linux STA PinCode\t%04u\n", wsc_ctrl->WscEnrolleePinCode);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		}
 	{
 		char	mode_str[16] = {0};
 		ULONG	wps_status, wps_state;
@@ -9573,40 +9863,77 @@ RtmpIoctl_rt_private_get_statistics(
 		wps_state = wsc_ctrl->WscState;
 		wps_status = wsc_ctrl->WscStatus;
 
-		if (wsc_ctrl->WscMode == WSC_PIN_MODE)
-			snprintf(mode_str, IW_PRIV_SIZE_MASK - strlen(extra), "PIN -");
-		else
-			snprintf(mode_str, IW_PRIV_SIZE_MASK - strlen(extra), "PBC -");
-
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WPS Information(Driver Auto-Connect is %s - %d):\n",
+		if (wsc_ctrl->WscMode == WSC_PIN_MODE) {
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(mode_str, extra_left, "PIN -");
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+		} else {
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret =  snprintf(mode_str, extra_left, "PBC -");
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+			}
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "WPS Information(Driver Auto-Connect is %s - %d):\n",
 				wsc_ctrl->WscDriverAutoConnect ? "Enabled" : "Disabled",
 				wsc_ctrl->WscDriverAutoConnect);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 
 		/* display pin code */
 		/*sprintf(extra+strlen(extra), "RT2860 Linux STA PinCode\t%08u\n", pStaCfg->WscControl.WscEnrolleePinCode); */
 		/* display status */
 		if ((wps_state == WSC_STATE_OFF) || (wps_status & 0xff00)) {
-			if (wps_status == STATUS_WSC_CONFIGURED)
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WPS messages exchange successfully !!!\n");
-			else if (wps_status == STATUS_WSC_NOTUSED)
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WPS not used.\n");
-			else if (wps_status & 0xff00) {	/* error message */
-				if (wps_status == STATUS_WSC_PBC_TOO_MANY_AP)
-					snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "%s Too many PBC AP. Stop WPS.\n", mode_str);
-				else if (wps_status == STATUS_WSC_PBC_NO_AP)
-					snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "%s No available PBC AP. Please wait...\n", mode_str);
-				else if (wps_status & 0x0100)
-					snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "%s Proceed to get the Registrar profile. Please wait...\n", mode_str);
-				else	/* status of eap failed */
-					snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WPS didn't complete !!!\n");
+			if (wps_status == STATUS_WSC_CONFIGURED) {
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "WPS messages exchange successfully !!!\n");
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+			} else if (wps_status == STATUS_WSC_NOTUSED) {
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "WPS not used.\n");
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+			} else if (wps_status & 0xff00) {	/* error message */
+				if (wps_status == STATUS_WSC_PBC_TOO_MANY_AP) {
+					extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+					ret = snprintf(extra + strlen(extra), extra_left, "%s Too many PBC AP. Stop WPS.\n", mode_str);
+					if (os_snprintf_error(extra_left, ret))
+						goto err_out;
+				} else if (wps_status == STATUS_WSC_PBC_NO_AP) {
+					extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+					ret = snprintf(extra + strlen(extra), extra_left, "%s No available PBC AP. Please wait...\n", mode_str);
+					if (os_snprintf_error(extra_left, ret))
+						goto err_out;
+				} else if (wps_status & 0x0100) {
+					extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+					ret = snprintf(extra + strlen(extra), extra_left, "%s Proceed to get the Registrar profile. Please wait...\n", mode_str);
+					if (os_snprintf_error(extra_left, ret))
+						goto err_out;
+				} else {	/* status of eap failed */
+					extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+					ret = snprintf(extra + strlen(extra), extra_left, "WPS didn't complete !!!\n");
+					if (os_snprintf_error(extra_left, ret))
+						goto err_out;
+					}
 			} else {
 				/* wrong state */
 			}
-		} else
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "%s WPS Proceed. Please wait...\n", mode_str);
-
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "\n");
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "WPS Profile Count               = %d\n", wsc_ctrl->WscProfile.ProfileCnt);
+		} else {
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "%s WPS Proceed. Please wait...\n", mode_str);
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+			}
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "\n");
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "WPS Profile Count			   = %d\n", wsc_ctrl->WscProfile.ProfileCnt);
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
 
 		for (idx = 0; idx < wsc_ctrl->WscProfile.ProfileCnt ; idx++) {
 			PWSC_CREDENTIAL pCredential = &wsc_ctrl->WscProfile.Profile[idx];
@@ -9617,44 +9944,80 @@ RtmpIoctl_rt_private_get_statistics(
 			if (strlen(extra) + sizeof(WSC_CREDENTIAL) >= MaxSize)
 				break;
 
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Profile[%d]:\n", idx);
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "Profile[%d]:\n", idx);
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
 			NdisMoveMemory(&ssid_print[0], pCredential->SSID.Ssid, pCredential->SSID.SsidLength);
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "SSID                            = %s\n", ssid_print);
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "MAC                             = %02X:%02X:%02X:%02X:%02X:%02X\n",
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "SSID 						   = %s\n", ssid_print);
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "MAC							   = %02X:%02X:%02X:%02X:%02X:%02X\n",
 					pCredential->MacAddr[0],
 					pCredential->MacAddr[1],
 					pCredential->MacAddr[2],
 					pCredential->MacAddr[3],
 					pCredential->MacAddr[4],
 					pCredential->MacAddr[5]);
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "AuthType                        = %s\n", WscGetAuthTypeStr(pCredential->AuthType));
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "EncrypType                      = %s\n", WscGetEncryTypeStr(pCredential->EncrType));
-			snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "KeyIndex                        = %d\n", pCredential->KeyIndex);
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "AuthType 					   = %s\n", WscGetAuthTypeStr(pCredential->AuthType));
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "EncrypType					   = %s\n", WscGetEncryTypeStr(pCredential->EncrType));
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
+			extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+			ret = snprintf(extra + strlen(extra), extra_left, "KeyIndex 					   = %d\n", pCredential->KeyIndex);
+			if (os_snprintf_error(extra_left, ret))
+				goto err_out;
 
 			if (pCredential->KeyLength != 0) {
 				if (pCredential->AuthType & (WSC_AUTHTYPE_WPAPSK | WSC_AUTHTYPE_WPA2PSK | WSC_AUTHTYPE_WPANONE)) {
-					if (pCredential->KeyLength < 64)
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Key                             = %s\n", pCredential->Key);
-					else {
+					if (pCredential->KeyLength < 64) {
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "Key							   = %s\n", pCredential->Key);
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
+					} else {
 						char key_print[65] = {0};
 
 						NdisMoveMemory(key_print, pCredential->Key, 64);
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Key                             = %s\n", key_print);
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "Key							   = %s\n", key_print);
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
 					}
 				} else if ((pCredential->AuthType == WSC_AUTHTYPE_OPEN) ||
 						   (pCredential->AuthType == WSC_AUTHTYPE_SHARED)) {
 					/*check key string is ASCII or not */
-					if (RTMPCheckStrPrintAble((PCHAR)pCredential->Key, (UCHAR)pCredential->KeyLength))
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Key                             = %s\n", pCredential->Key);
-					else {
+					if (RTMPCheckStrPrintAble((PCHAR)pCredential->Key, (UCHAR)pCredential->KeyLength)) {
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "Key							   = %s\n", pCredential->Key);
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
+					} else {
 						int idx;
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left,  "Key 							= ");
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
 
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra),  "Key                             = ");
-
-						for (idx = 0; idx < pCredential->KeyLength && idx < sizeof(pCredential->Key); idx++)
-							snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "%02X", pCredential->Key[idx]);
-
-						snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "\n");
+						for (idx = 0; idx < pCredential->KeyLength && idx < sizeof(pCredential->Key); idx++) {
+							extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+							ret = snprintf(extra + strlen(extra), extra_left, "%02X", pCredential->Key[idx]);
+							if (os_snprintf_error(extra_left, ret))
+								goto err_out;
+						}
+						extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+						ret = snprintf(extra + strlen(extra), extra_left, "\n");
+						if (os_snprintf_error(extra_left, ret))
+							goto err_out;
 					}
 				}
 			}
@@ -9664,34 +10027,51 @@ RtmpIoctl_rt_private_get_statistics(
 			if (pStaCfg->BssType == BSS_ADHOC) {
 				PIWSC_INFO	pIWscInfo = &pStaCfg->IWscInfo;
 
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Credential Registrar IPv4 Addr  = %d:%d:%d:%d\n",
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "Credential Registrar IPv4 Addr  = %d:%d:%d:%d\n",
 						(pCredential->RegIpv4Addr & 0xFF000000) >> 24,
 						(pCredential->RegIpv4Addr & 0x00FF0000) >> 16,
 						(pCredential->RegIpv4Addr & 0x0000FF00) >> 8,
 						(pCredential->RegIpv4Addr & 0x000000FF));
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "Credential Entrollee IPv4 Addr  = %d:%d:%d:%d\n",
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "Credential Entrollee IPv4 Addr  = %d:%d:%d:%d\n",
 						(pCredential->EnrIpv4Addr & 0xFF000000) >> 24,
 						(pCredential->EnrIpv4Addr & 0x00FF0000) >> 16,
 						(pCredential->EnrIpv4Addr & 0x0000FF00) >> 8,
 						(pCredential->EnrIpv4Addr & 0x000000FF));
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "\nSelf IPv4 Addr                  = %d:%d:%d:%d\n",
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "\nSelf IPv4 Addr 				 = %d:%d:%d:%d\n",
 						(pIWscInfo->SelfIpv4Addr & 0xFF000000) >> 24,
 						(pIWscInfo->SelfIpv4Addr & 0x00FF0000) >> 16,
 						(pIWscInfo->SelfIpv4Addr & 0x0000FF00) >> 8,
 						(pIWscInfo->SelfIpv4Addr & 0x000000FF));
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "IPv4 Subnet Mask                = %d:%d:%d:%d\n",
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "IPv4 Subnet Mask 			   = %d:%d:%d:%d\n",
 						(pIWscInfo->Ipv4SubMask & 0xFF000000) >> 24,
 						(pIWscInfo->Ipv4SubMask & 0x00FF0000) >> 16,
 						(pIWscInfo->Ipv4SubMask & 0x0000FF00) >> 8,
 						(pIWscInfo->Ipv4SubMask & 0x000000FF));
-				snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "AvaSubMaskListCount             = %d", pIWscInfo->AvaSubMaskListCount);
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
+				extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+				ret = snprintf(extra + strlen(extra), extra_left, "AvaSubMaskListCount			   = %d", pIWscInfo->AvaSubMaskListCount);
+				if (os_snprintf_error(extra_left, ret))
+					goto err_out;
 			}
 
 #endif /* IWSC_SUPPORT */
 		}
-
-		snprintf(extra + strlen(extra), IW_PRIV_SIZE_MASK - strlen(extra), "\n");
-	}
+		extra_left = IW_PRIV_SIZE_MASK - strlen(extra);
+		ret = snprintf(extra + strlen(extra), extra_left, "\n");
+		if (os_snprintf_error(extra_left, ret))
+			goto err_out;
+		}
 #endif /* WSC_STA_SUPPORT */
 #ifdef DOT11_N_SUPPORT
 
@@ -9702,6 +10082,10 @@ RtmpIoctl_rt_private_get_statistics(
 
 #endif /* DOT11_N_SUPPORT */
 	return NDIS_STATUS_SUCCESS;
+
+err_out:
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "RtmpIoctl_rt_private_get_statistics snprintf error!\n");
+	return NDIS_STATUS_FAILURE;
 }
 
 #ifdef CONFIG_DOT11V_WNM
@@ -9802,7 +10186,7 @@ INT RTMP_STA_IoctlHandle(
 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 	PSTA_ADMIN_CONFIG pStaCfg = &pAd->StaCfg[pObj->ioctl_if];
 	struct wifi_dev *wdev = NULL;
-	SCAN_INFO *ScanInfo = &wdev->ScanInfo;
+	SCAN_INFO *ScanInfo = NULL;
 	INT Status = NDIS_STATUS_SUCCESS;
 	BSS_TABLE *ScanTab = NULL;
 
@@ -9912,7 +10296,7 @@ INT RTMP_STA_IoctlHandle(
 			pStaCfg->bSkipAutoScanConn = TRUE;
 			return NDIS_STATUS_FAILURE;
 		}
-
+			ScanInfo = &wdev->ScanInfo;
 			if (ScanInfo->bImprovedScan) {
 			/*
 			 * Fast scanning doesn't complete yet.

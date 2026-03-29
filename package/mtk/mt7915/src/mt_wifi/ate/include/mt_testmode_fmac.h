@@ -25,7 +25,7 @@
 INT32 mtf_ate_ipg_cr_restore(RTMP_ADAPTER *ad, UCHAR band_idx);
 INT32 mtf_ate_mac_cr_restore(struct _RTMP_ADAPTER *ad);
 INT32 mtf_ate_mac_cr_backup_and_set(struct _RTMP_ADAPTER *ad);
-INT32 mtf_ate_ampdu_ba_limit(struct _RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 agg_limit);
+INT32 mtf_ate_ampdu_ba_limit(struct _RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 agg_limit, UINT8 control_band_idx);
 INT32 mtf_ate_set_sta_pause_cr(struct _RTMP_ADAPTER *ad, UINT8 ac_idx);
 INT32 mtf_ate_set_ifs_cr(struct _RTMP_ADAPTER *pAd, UINT8 band_idx);
 

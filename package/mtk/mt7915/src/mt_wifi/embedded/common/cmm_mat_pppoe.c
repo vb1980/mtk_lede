@@ -191,8 +191,8 @@ NDIS_STATUS dumpSesMacTb(
 
 		while (pHead) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("SesMac[%d]:\n", startIdx));
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\tsesID=%d,inMac=%02x:%02x:%02x:%02x:%02x:%02x,outMac=%02x:%02x:%02x:%02x:%02x:%02x,lastTime=0x%lx, pNext=%p\n",
-					 pHead->sessionID, PRINT_MAC(pHead->inMacAddr), PRINT_MAC(pHead->outMacAddr), pHead->lastTime, pHead->pNext));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\tsesID=%d,inMac="MACSTR",outMac="MACSTR",lastTime=0x%lx, pNext=%p\n",
+					 pHead->sessionID, MAC2STR(pHead->inMacAddr), MAC2STR(pHead->outMacAddr), pHead->lastTime, pHead->pNext));
 			pHead = pHead->pNext;
 		}
 	}
@@ -231,8 +231,8 @@ NDIS_STATUS dumpUidMacTb(MAT_STRUCT *pMatCfg, int hashIdx)
 
 		while (pHead) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("UidMac[%d]:\n", startIdx));
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\tisSrv=%d, uIDAddbyUs=%d, Mac=%02x:%02x:%02x:%02x:%02x:%02x, lastTime=0x%lx, pNext=%p\n",
-					 pHead->isServer, pHead->uIDAddByUs, PRINT_MAC(pHead->macAddr), pHead->lastTime, pHead->pNext));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\tisSrv=%d, uIDAddbyUs=%d, Mac="MACSTR", lastTime=0x%lx, pNext=%p\n",
+					 pHead->isServer, pHead->uIDAddByUs, MAC2STR(pHead->macAddr), pHead->lastTime, pHead->pNext));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\tuIDStr="));
 
 			for (i = 0; i < PPPOE_DIS_UID_LEN; i++)
@@ -373,7 +373,8 @@ static PUidMacMappingEntry UidMacTableUpdate(
 						pEntry = NULL;
 						pPrev = NULL;
 					}
-					pMatCfg->nodeCount--;
+					if (pMatCfg->nodeCount > 0)
+						pMatCfg->nodeCount--;
 					pEntry = (pPrev == NULL ? NULL : pPrev->pNext);
 				} else {
 					pPrev = pEntry;
@@ -446,9 +447,8 @@ static PUidMacMappingEntry UidMacTableLookUp(
 
 	while (pEntry) {
 		if (NdisEqualMemory(pEntry->uIDStr, pTagInfo, tagLen)) {
-			/*			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s(): dstMac=%02x:%02x:%02x:%02x:%02x:%02x for mapped dstIP(%d.%d.%d.%d)\n",
-								__func__, pEntry->macAddr[0],pEntry->macAddr[1],pEntry->macAddr[2],
-								pEntry->macAddr[3],pEntry->macAddr[4],pEntry->macAddr[5],
+			/*			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s(): dstMac="MACSTR" for mapped dstIP(%d.%d.%d.%d)\n",
+								__func__, MAC2STR(pEntry->macAddr),
 								(ipAddr>>24) & 0xff, (ipAddr>>16) & 0xff, (ipAddr>>8) & 0xff, ipAddr & 0xff));
 			*/
 			/*Update the lastTime to prevent the aging before pDA processed! */
@@ -482,9 +482,8 @@ static PUCHAR getInMacByOutMacFromSesMacTb(
 
 	while (pEntry) {
 		if ((pEntry->sessionID == sesID) &&  IS_EQUAL_MAC(pEntry->outMacAddr, outMac)) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): find it! dstMac=%02x:%02x:%02x:%02x:%02x:%02x\n",
-					 __func__, pEntry->inMacAddr[0], pEntry->inMacAddr[1], pEntry->inMacAddr[2],
-					 pEntry->inMacAddr[3], pEntry->inMacAddr[4], pEntry->inMacAddr[5]));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): find it! dstMac="MACSTR"\n",
+					 __func__, MAC2STR(pEntry->inMacAddr)));
 			/*Update the lastTime to prevent the aging before pDA processed! */
 			NdisGetSystemUpTime(&pEntry->lastTime);
 			return pEntry->inMacAddr;
@@ -517,10 +516,8 @@ static NDIS_STATUS SesMacTableUpdate(
 
 	hashIdx = sesID % MAT_MAX_HASH_ENTRY_SUPPORT;
 	/*
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s():sesID=0x%04x,inMac=%02x%02x:%02x:%02x:%02x:%02x,
-				outMac=%02x:%02x:%02x:%02x:%02x:%02x\n", __func__, sesID,
-				inMacAddr[0],inMacAddr[1],inMacAddr[2],inMacAddr[3],inMacAddr[4],inMacAddr[5],
-				outMacAddr[0],outMacAddr[1],outMacAddr[2],outMacAddr[3],outMacAddr[4],outMacAddr[5]));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s():sesID=0x%04x,inMac="MACSTR",
+				outMac="MACSTR"\n", __func__, sesID, MAC2STR(inMacAddr), MAC2STR(outMacAddr)));
 	*/
 	pEntry = pPrev = pSesMacTable->sesHash[hashIdx];
 
@@ -549,7 +546,8 @@ static NDIS_STATUS SesMacTableUpdate(
 					pEntry = NULL;
 					pPrev = NULL;
 				}
-				pMatCfg->nodeCount--;
+				if (pMatCfg->nodeCount > 0)
+					pMatCfg->nodeCount--;
 				pEntry = (pPrev == NULL ? NULL : pPrev->pNext);
 			} else {
 				pPrev = pEntry;

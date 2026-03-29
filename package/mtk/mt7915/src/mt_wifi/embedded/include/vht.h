@@ -83,7 +83,7 @@ void update_vht_op_info(UINT8 cap_bw, struct vht_opinfo *vht_op_info, struct _op
 UCHAR vht_prim_ch_idx(UCHAR vht_cent_ch, UCHAR prim_ch, UINT8 rf_bw);
 UCHAR vht_cent_ch_freq(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band);
 UCHAR vht_cent_ch_freq_40mhz(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band);
-INT vht_mode_adjust(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_ENTRY *pEntry, VHT_CAP_IE *cap, VHT_OP_IE *op);
+INT vht_mode_adjust(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_ENTRY *pEntry, VHT_CAP_IE *cap, VHT_OP_IE *op, OPERATING_MODE *op_mode);
 INT dot11_vht_mcs_to_internal_mcs(
 	struct _RTMP_ADAPTER *pAd,
 	struct wifi_dev *wdev,

@@ -104,7 +104,7 @@ UINT32 MtAsicGetChBusyCnt(RTMP_ADAPTER *pAd, UCHAR BandIdx)
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 						("[%d][%s]: Scan time : %u \n", __LINE__, __func__,
 						ScanCtrl->ScanTime[ScanCtrl->CurrentGivenChan_Index]));
-		if ((pAd->CommonCfg.dbdc_mode) && (pAd->ChannelInfo.bandidx == DBDC_BAND1)) {
+		if ((pAd->CommonCfg.dbdc_mode) && (BandIdx == DBDC_BAND1)) {
 
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("[%d][%s]: Band 1\n", __LINE__, __func__));
 			HW_IO_READ32(pAd->hdev_ctrl, RMAC_MIBTIME6, &CrValue);
@@ -117,6 +117,9 @@ UINT32 MtAsicGetChBusyCnt(RTMP_ADAPTER *pAd, UCHAR BandIdx)
 			/*My Rx Air time*/
 			HW_IO_READ32(pAd->hdev_ctrl, MIB_M1SDR37, &CrValue);
 			MyRxAirtime = (CrValue & 0xffffff);
+			pAd->ChannelInfo.ChStats[DBDC_BAND1].Tx_Time = MyTxAirtime;
+			pAd->ChannelInfo.ChStats[DBDC_BAND1].Rx_Time = MyRxAirtime;
+			pAd->ChannelInfo.ChStats[DBDC_BAND1].Obss_Time = OBSSAirtime;
 		} else{ /*band 0*/
 			/*OBSS Air time*/
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("[%d][%s]: Band 0\n", __LINE__, __func__));
@@ -130,10 +133,10 @@ UINT32 MtAsicGetChBusyCnt(RTMP_ADAPTER *pAd, UCHAR BandIdx)
 			/*My Rx Air time*/
 			HW_IO_READ32(pAd->hdev_ctrl, MIB_M0SDR37, &CrValue);
 			MyRxAirtime = (CrValue & 0xffffff);
+			pAd->ChannelInfo.ChStats[DBDC_BAND0].Tx_Time = MyTxAirtime;
+			pAd->ChannelInfo.ChStats[DBDC_BAND0].Rx_Time = MyRxAirtime;
+			pAd->ChannelInfo.ChStats[DBDC_BAND0].Obss_Time = OBSSAirtime;
 		}
-		pAd->ChannelInfo.ChStats.Tx_Time = MyTxAirtime;
-		pAd->ChannelInfo.ChStats.Rx_Time = MyRxAirtime;
-		pAd->ChannelInfo.ChStats.Obss_Time = OBSSAirtime;
 		/*Ch Busy time*/
 		ChBusytime = OBSSAirtime + MyTxAirtime + MyRxAirtime;
 
@@ -251,13 +254,12 @@ VOID MtAsicSwitchChannel(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 	/* TODO: Need to fix */
 	/* TODO: shiang-usw, unify the ops */
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(pAd->hdev_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("MtAsicSwitchChannel in\n"));
 
 	if (ops->ChipSwitchChannel)
 		ops->ChipSwitchChannel(pAd, SwChCfg);
 	else
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("For this chip, no specified channel switch function!\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("MtAsicSwitchChannel out\n"));
+
 	/* TODO: shiang-7615 */
 	if (SwChCfg.BandIdx)
 		reg = RMAC_CHFREQ1;
@@ -311,8 +313,8 @@ VOID MtAsicInsertRepeaterEntryByDriver(
 	RMAC_MAR1_STRUC rmac_mcbcs1;
 
 	COPY_MAC_ADDR(tempMAC, pAddr);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n%s %02x:%02x:%02x:%02x:%02x:%02x-%02x\n",
-			 __func__, tempMAC[0], tempMAC[1], tempMAC[2], tempMAC[3], tempMAC[4], tempMAC[5], CliIdx));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n%s "MACSTR"\n",
+			 __func__, MAC2STR(tempMAC), CliIdx));
 	NdisZeroMemory(&rmac_mcbcs0, sizeof(RMAC_MAR0_STRUC));
 	rmac_mcbcs0.addr_31_0 = tempMAC[0] + (tempMAC[1] << 8) + (tempMAC[2] << 16) + (tempMAC[3] << 24);
 	MAC_IO_WRITE32(pAd->hdev_ctrl, RMAC_MAR0, rmac_mcbcs0.addr_31_0);
@@ -1661,12 +1663,6 @@ UINT32 MtAsicGetRxStat(RTMP_ADAPTER *pAd, UINT type)
 			value = value & 0xFFFF;
 			break;
 
-#ifdef MT7622
-		case HQA_RX_STAT_MAC_FCS_OK_COUNT:
-			MAC_IO_READ32(pAd->hdev_ctrl, MIB_M0SDR51, &value);
-			value = value & 0xFFFF;
-			break;
-#endif /* MT7622 */
 
 		case HQA_RX_STAT_PHY_MDRDYCNT:
 			/* [31:16] OFDM [15:0] CCK */
@@ -2632,9 +2628,9 @@ VOID MtAsicGetTxTscByDriver(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UINT32 pn_
 	HW_IO_READ32(pAd->hdev_ctrl, tb_entry.wtbl_addr + (4 * 10), &val);
 	*(pTxTsc+4) = val & 0xff;
 	*(pTxTsc+5) = (val >> 8) & 0xff;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): WCID(%d) TxTsc 0x%02x-0x%02x-0x%02x-0x%02x-0x%02x-0x%02x\n",
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): WCID(%d) TxTsc "MACSTR"\n",
 			 __func__, Wcid,
-			 *pTxTsc, *(pTxTsc+1), *(pTxTsc+2), *(pTxTsc+3), *(pTxTsc+4), *(pTxTsc+5)));
+			 MAC2STR(pTxTsc)));
 }
 
 INT mt_asic_rts_on_off(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT32 rts_num, UINT32 rts_len, BOOLEAN rts_en)
@@ -2833,8 +2829,8 @@ INT mtd_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 
 						if (pMacEntry->mnt_band == 0) { /* no more use for other band */
 							MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-									 ("%s::call MacTableDeleteEntry(WCID=%d)- %02X:%02X:%02X:%02X:%02X:%02X\n",
-									  __func__, pMacEntry->wcid, PRINT_MAC(pMacEntry->Addr)));
+									 ("%s::call MacTableDeleteEntry(WCID=%d)- "MACSTR"\n",
+									  __func__, pMacEntry->wcid, MAC2STR(pMacEntry->Addr)));
 							MacTableDeleteEntry(pAd, pMacEntry->wcid, pMacEntry->Addr);
 						}
 					}
@@ -3096,7 +3092,7 @@ INT mtd_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("index: %d\n", mnt_idx));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("entry: %02X:%02X:%02X:%02X:%02X:%02X\n", PRINT_MAC(p)));
+			 ("entry: "MACSTR"\n", MAC2STR(p)));
 	u4MAR0 = ((UINT32)p[0]) | ((UINT32)p[1]) << 8 |
 			 ((UINT32)p[2]) << 16 | ((UINT32)p[3]) << 24;
 	u4MAR1 = ((UINT32)p[4]) | ((UINT32)p[5]) << 8;
@@ -3129,7 +3125,7 @@ INT mtd_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 	p[4] = u4MAR1 & 0xFF;
 	p[5] = (u4MAR1 & 0xFF00) >> 8;
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("entry: %02X:%02X:%02X:%02X:%02X:%02X\n", PRINT_MAC(p)));
+				 ("entry: "MACSTR"\n", MAC2STR(p)));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("<-- %s()\n", __func__));
 
 	return ret;

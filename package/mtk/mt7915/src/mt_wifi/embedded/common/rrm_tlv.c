@@ -385,7 +385,6 @@ VOID RRM_InsertBssAvailableACIE(
 					  sizeof(RRM_BSS_AVAILABLE_AC_INFO),	&AvailableAcInfo,
 					  END_OF_ARGS);
 	*pFrameLen += TempLen;
-	pFrameBuf += TempLen;
 	return;
 }
 
@@ -476,6 +475,7 @@ VOID RRM_EnqueueBcnReq(
 	PUCHAR pOutBuffer = NULL;
 	NDIS_STATUS NStatus;
 	ULONG FrameLen;
+	PMEASURE_REQ_ENTRY pMeasureReqEntry = NULL;
 
 	NStatus = MlmeAllocateMemory(pAd, (PVOID)&pOutBuffer);  /*Get an unused nonpaged memory */
 
@@ -522,9 +522,7 @@ VOID RRM_EnqueueBcnReq(
 					   &FrameLen, (PUCHAR)&BcnReq);
 	TotalLen += sizeof(RRM_BEACON_REQ_INFO);
 	/* insert SSID sub field. */
-	/* Fix Voice Enterprise : Item V-E-4.3, case2 still need to include the SSID sub filed even SsidLen is 0 */
-	/* if (pMlmeBcnReq->SsidLen != 0) */
-	{
+	if (pMlmeBcnReq->SsidLen != 0) {
 		RRM_InsertBcnReqSsidSubIE(pAd, (pOutBuffer + FrameLen),
 								  &FrameLen, (PUCHAR)pMlmeBcnReq->pSsid, pMlmeBcnReq->SsidLen);
 		TotalLen += (pMlmeBcnReq->SsidLen + 2); /* SSID sub field. */
@@ -576,7 +574,7 @@ VOID RRM_EnqueueBcnReq(
 		TotalLen += (FrameLen - FramelenTmp);
 	}
 
-	{
+	if (pMlmeBcnReq->LastBcnRptInd) {
 		/* Adjust TotalLen of the Measurement Req while inserting
 		 * Bcn Report Indication*/
 		ULONG FramelenTmp = FrameLen;
@@ -599,9 +597,20 @@ VOID RRM_EnqueueBcnReq(
 								TotalLen, CATEGORY_RM, RRM_MEASURE_REQ, MeasureReqToken,
 								MeasureReqMode.word, MeasureReqType, 0);
 	}
-	MeasureReqInsert(pAd, MeasureReqToken);
+	pMeasureReqEntry = MeasureReqInsert(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pOutBuffer, FrameLen);
-
+	if (!pMeasureReqEntry) {
+		MlmeFreeMemory(pOutBuffer);
+		return;
+	}
+	pMeasureReqEntry->BcnCurrentState = WAIT_BCN_REP;
+	pMeasureReqEntry->skip_time_check = TRUE;
+	pMeasureReqEntry->Priv = pAd;
+	pMeasureReqEntry->ControlIndex = IfIdx;
+	//COPY_MAC_ADDR(pMeasureReqEntry->StaMac, pBcnReq->peer_address);
+	RTMPInitTimer(pAd, &pMeasureReqEntry->WaitBCNRepTimer,
+		GET_TIMER_FUNCTION(WaitPeerBCNRepTimeout), pMeasureReqEntry, FALSE);
+	RTMPSetTimer(&pMeasureReqEntry->WaitBCNRepTimer, 2000);
 	if (pOutBuffer)
 		MlmeFreeMemory(pOutBuffer);
 
@@ -727,7 +736,7 @@ INT rrm_send_beacon_req_param(
 	if (k == 0)
 		k = 1;
 	MeasureReqToken = k;
-	pEntry = MeasureReqInsert(pAd, MeasureReqToken);
+	pEntry = MeasureReqInsert(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s, Fail to Insert MesureReq Token(%d)!\n", __func__, MeasureReqToken));
@@ -735,7 +744,7 @@ INT rrm_send_beacon_req_param(
 		return NDIS_STATUS_FAILURE;
 	}
 	pEntry->skip_time_check = TRUE;
-	pEntry->CurrentState = WAIT_BCN_REQ;
+	pEntry->BcnCurrentState = WAIT_BCN_REQ;
 	pEntry->Priv = pAd;
 	pEntry->ControlIndex = IfIdx;
 	COPY_MAC_ADDR(pEntry->StaMac, pBcnReq->peer_address);
@@ -743,13 +752,14 @@ INT rrm_send_beacon_req_param(
 	Event = (PBCN_EVENT_DATA)pBuf;
 	Event->ControlIndex = IfIdx;
 	Event->MeasureReqToken = MeasureReqToken;
+	Event->measuretype = BCN_MEASURE_REQ;
 	RTMPMoveMemory(Event->stamac, pBcnReq->peer_address, MAC_ADDR_LEN);
 	Event->DataLen = BcnReqLen;
 	NdisMoveMemory(Event->Data, pBcnReq, BcnReqLen);
 
 	if (MlmeEnqueue(pAd, BCN_STATE_MACHINE, BCN_REQ, Len, pBuf, 0) == FALSE) {
 		NStatus = NDIS_STATUS_FAILURE;
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	}
 
 	/*free memory*/
@@ -834,7 +844,7 @@ VOID RRM_EnqueueNeighborRep(
 	IN PCHAR pSsid,
 	IN UINT8 SsidLen)
 {
-#define MIN(_x, _y) ((_x) > (_y) ? (_x) : (_y))
+#define MTk_MIN(_x, _y) ((_x) > (_y) ? (_x) : (_y))
 	INT loop;
 	HEADER_802_11 ActHdr;
 	PUCHAR pOutBuffer = NULL;
@@ -892,7 +902,7 @@ VOID RRM_EnqueueNeighborRep(
 
 		if (SsidLen != 0)
 			BssMatch = RTMPEqualMemory(pBssEntry->Ssid, pSsid,
-									   MIN(SsidLen, pBssEntry->SsidLen));
+									   MTk_MIN(SsidLen, pBssEntry->SsidLen));
 		else
 			BssMatch = TRUE;
 
@@ -922,6 +932,9 @@ VOID RRM_EnqueueNeighborRep(
 #ifdef DOT11_VHT_AC
 			BssidInfo.field.VHT = HAS_VHT_CAPS_EXIST(pBssEntry->ie_exists) ? 1 : 0;
 #endif /* DOT11_VHT_AC */
+#ifdef DOT11_HE_AX
+			BssidInfo.field.HE = HAS_HE_CAPS_EXIST(pBssEntry->ie_exists) ? 1 : 0;
+#endif /*DOT11_HE_AX*/
 
 			/*
 			reference spec:
@@ -941,6 +954,11 @@ VOID RRM_EnqueueNeighborRep(
 
 			if (pBssEntry->Channel > 14) { /* 5G case */
 				if (HAS_HT_CAPS_EXIST(pBssEntry->ie_exists)) { /* HT or Higher case */
+#ifdef DOT11_HE_AX
+					if (HAS_HE_CAPS_EXIST(pBssEntry->ie_exists))
+						pBssEntry->CondensedPhyType = 14;
+					else
+#endif /*DOT11_HE_AX*/
 #ifdef DOT11_VHT_AC
 					if (HAS_VHT_CAPS_EXIST(pBssEntry->ie_exists))
 						pBssEntry->CondensedPhyType = 9;
@@ -950,6 +968,11 @@ VOID RRM_EnqueueNeighborRep(
 				} else /* OFDM case */
 					pBssEntry->CondensedPhyType = 4;
 			} else { /* 2.4G case */
+#ifdef DOT11_HE_AX
+				if (HAS_HE_CAPS_EXIST(pBssEntry->ie_exists))
+					pBssEntry->CondensedPhyType = 14;
+				else
+#endif /*DOT11_HE_AX*/
 				if (HAS_HT_CAPS_EXIST(pBssEntry->ie_exists)) /* HT case */
 					pBssEntry->CondensedPhyType = 7;
 				else if (ERP_IS_NON_ERP_PRESENT(pBssEntry->Erp)) /* ERP case */
@@ -1059,7 +1082,7 @@ VOID RRM_EnqueueLinkMeasureReq(
 						  END_OF_ARGS);
 		FrameLen += TempLen;
 	}
-	MeasureReqInsert(pAd, DialogToken);
+	/* MeasureReqInsert(pAd, DialogToken); */
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pOutBuffer, FrameLen);
 
 	if (pOutBuffer)
@@ -1161,7 +1184,7 @@ VOID RRM_EnqueueTxStreamMeasureReq(
 								TotalLen, CATEGORY_RM, RRM_MEASURE_REQ, MeasureReqToken,
 								MeasureReqMode.word, MeasureReqType, 0xffff);
 	}
-	MeasureReqInsert(pAd, MeasureReqToken);
+	/* MeasureReqInsert(pAd, MeasureReqToken); */
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pOutBuffer, FrameLen);
 
 	if (pOutBuffer)
@@ -1224,7 +1247,7 @@ int EnqueueBeaconRepFrame(RTMP_ADAPTER *pAd,
 		return NDIS_STATUS_FAILURE;
 	}
 	if (Token != DialogToken) {
-		pEntry = MeasureReqInsert(pAd, DialogToken);
+		pEntry = MeasureReqInsert(pAd, DialogToken, BCN_MEASURE_REP);
 		Token = DialogToken;
 		if (!pEntry) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
@@ -1237,7 +1260,7 @@ int EnqueueBeaconRepFrame(RTMP_ADAPTER *pAd,
 
 	if (pEntry) {
 		pEntry->skip_time_check = TRUE;
-		pEntry->CurrentState = WAIT_BCN_REP;
+		pEntry->BcnCurrentState = WAIT_BCN_REP;
 		pEntry->Priv = pAd;
 		pEntry->ControlIndex = ifIndex;
 	}
@@ -1245,6 +1268,7 @@ int EnqueueBeaconRepFrame(RTMP_ADAPTER *pAd,
 	Event = (BCN_EVENT_DATA *)pBuf;
 	Event->ControlIndex = ifIndex;
 	Event->MeasureReqToken = DialogToken;
+	Event->measuretype = BCN_MEASURE_REP;
 	RTMPMoveMemory(Event->stamac, bssid, MAC_ADDR_LEN);
 	Event->DataLen = FrameLen;
 
@@ -1252,7 +1276,7 @@ int EnqueueBeaconRepFrame(RTMP_ADAPTER *pAd,
 	bcn_rep_cnt++;
 	if (!MlmeEnqueue(pAd, BCN_STATE_MACHINE, BCN_REP, EventLen, pBuf, 0)) {
 		NStatus = NDIS_STATUS_FAILURE;
-		MeasureReqDelete(pAd, DialogToken);
+		MeasureReqDelete(pAd, DialogToken, BCN_MEASURE_REP);
 		bcn_rep_cnt--;
 	}
 
@@ -1338,6 +1362,8 @@ VOID RRM_EnqueuePeerBeaconRep(
 		BcnRep.RCPI = rssi_to_rcpi(pBssEntry->Rssi);
 		BcnRep.RSNI = pBssEntry->RSNI; /* 255 indicates that RSNI is not available */
 		COPY_MAC_ADDR(BcnRep.Bssid, pBssEntry->Bssid);
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, "%s::RegulatoryClass=%d,ChNumber=%d,RCPI=%d,Rssi=%d\n",
+			__func__, BcnRep.RegulatoryClass, BcnRep.ChNumber, BcnRep.RCPI, pBssEntry->Rssi);
 
 		BcnRep.AnntaId = 0; /* unknown */
 		ptsf = (UINT32)(pBssEntry->PTSF[3] << 24)
@@ -1367,6 +1393,9 @@ VOID RRM_EnqueuePeerBeaconRep(
 
 	}
 	NStatus = EnqueueBeaconRepFrame(pAd, pOutBuffer, FrameLen, DialogToken, pDA);
+	if (NStatus != NDIS_STATUS_SUCCESS)
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+		"%s:: Beacon Request frame Enqueue failed\n", __func__);
 
 	if (pOutBuffer)
 		MlmeFreeMemory(pOutBuffer);

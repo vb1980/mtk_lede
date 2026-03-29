@@ -33,6 +33,8 @@
 
 #define TWT_IFNO_FRAME_EN			0
 
+#define TWT_PROFILE_SUPPORT_ITWT    1
+
 /* TWT definitions for protocol */
 #define TWT_SUPPORT_DISABLE         0
 #define TWT_SUPPORT_ENABLE          1
@@ -120,6 +122,11 @@
 #define TWT_CTRL_INFO_FRM_DIS_OFFSET                4
 #define TWT_CTRL_WAKE_DUR_UNIT_OFFSET               5
 
+#define TWT_CTRL_NEGO_TYPE_ITWT                     0
+#define TWT_CTRL_NEGO_TYPE_NEXT_WAKE_TBTT           1
+#define TWT_CTRL_NEGO_TYPE_BTWT_ANNOUNCE            2
+#define TWT_CTRL_NEGO_TYPE_BTWT_MBR_MGMT            3
+
 /* TWT element -> bTWT */
 #define BTWT_INFO_BTWT_ID                           BITS(3, 7)
 #define BTWT_INFO_BTWT_P                            BITS(8, 15)
@@ -195,10 +202,12 @@ struct GNU_PACKED frame_twt_information {
 	struct _HEADER_802_11 hdr;
 	UINT8 category;
 	UINT8 s1g_action;
-	UINT8 token;
 	UINT8 twt_info;
 	UINT32 next_twt[2];
 };
+
+#define TWT_SUPPORT_ITWT(profile_value) \
+	(((profile_value) & TWT_PROFILE_SUPPORT_ITWT) ? TRUE : FALSE)
 
 /* Macro to set TWT element -> control field */
 #define SET_TWT_CTRL_NDP_PAGING_INDICATOR(ndp_paging) \

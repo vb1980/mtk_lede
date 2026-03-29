@@ -57,9 +57,9 @@ INT32 MtAsicSetBssidByFw(
 /* STARec Info */
 INT32 MtAsicSetStaRecByFw(
 	RTMP_ADAPTER * pAd,
-	STA_REC_CFG_T StaCfg)
+	STA_REC_CFG_T *pStaCfg)
 {
-	return CmdExtStaRecUpdate(pAd, StaCfg);
+	return CmdExtStaRecUpdate(pAd, pStaCfg);
 }
 
 INT32 MtAsicUpdateStaRecBaByFw(
@@ -126,15 +126,36 @@ VOID MtAsicSetWcidAAD_OMByFw(
 /*
 	CONNAC F/W CMD PATH:
 */
-INT32 MtAsicUpdateStaRecAadOmByFw(
+VOID MtAsicUpdateStaRecAadOmByFw(
 	IN PRTMP_ADAPTER pAd,
 	IN UINT16 Wcid,
 	IN UINT8 AadOm)
 {
-	return CmdExtStaRecAADOmUpdate(pAd, Wcid, AadOm);
+	CmdExtStaRecAADOmUpdate(pAd, Wcid, AadOm);
+	return;
 }
 
 #endif /* HTC_DECRYPT_IOT */
+
+VOID MtAsicSetWcidPsmByFw(
+	IN PRTMP_ADAPTER pAd,
+	IN UINT16 wcid_idx,
+	IN UCHAR value)
+{
+	struct _RTMP_CHIP_DBG *chip_dbg;
+
+	chip_dbg = hc_get_chip_dbg(pAd->hdev_ctrl);
+
+	if (chip_dbg->set_sta_psm)
+		chip_dbg->set_sta_psm(pAd, wcid_idx, value);
+	else
+		AsicNotSupportFunc(pAd, __func__);
+
+	MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"wcid_idx(%d), value(%d)\n", wcid_idx, value);
+
+	return;
+}
 
 #if defined(MBSS_AS_WDS_AP_SUPPORT) || defined(APCLI_AS_WDS_STA_SUPPORT)
 VOID MtAsicSetWcid4Addr_HdrTransByFw(
@@ -209,7 +230,7 @@ VOID MtAsicUpdateRxWCIDTableByFw(
 	CMD_WTBL_SPE_T          rWtblSpe = {0};
 	/* Allocate TLV msg */
 	Status = os_alloc_mem(pAd, (UCHAR **)&pTlvBuffer, MAX_BUF_SIZE_OF_WTBL_INFO);
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): %d,%d,%d,%d,%d,%d,%d,%d,%d,(%x:%x:%x:%x:%x:%x),%d,%d,%d,%d,%d,%d)\n", __func__,
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): %d,%d,%d,%d,%d,%d,%d,%d,%d,("MACSTR"),%d,%d,%d,%d,%d,%d)\n", __func__,
 			 WtblInfo.Wcid,
 			 WtblInfo.Aid,
 			 WtblInfo.BssidIdx,
@@ -219,7 +240,7 @@ VOID MtAsicUpdateRxWCIDTableByFw(
 			 WtblInfo.MpduDensity,
 			 WtblInfo.WcidType,
 			 WtblInfo.aad_om,
-			 PRINT_MAC(WtblInfo.Addr),
+			 MAC2STR(WtblInfo.Addr),
 			 WtblInfo.CipherSuit,
 			 WtblInfo.PfmuId,
 			 WtblInfo.SupportHT,
@@ -230,7 +251,6 @@ VOID MtAsicUpdateRxWCIDTableByFw(
 	if ((Status != NDIS_STATUS_SUCCESS) || (pTlvBuffer == NULL))
 		goto error;
 
-	pTempBuffer = pTlvBuffer;
 	rWtblRx.ucRv   = WtblInfo.rv;
 	rWtblRx.ucRca2 = WtblInfo.rca2;
 
@@ -644,6 +664,8 @@ INT32 MtAsicUpdateBASessionOffloadByFw(
 			rWtblBa.ucRstBaTid = BaCtrl.Tid;
 			rWtblBa.ucRstBaSel = RST_BA_MAC_TID_MATCH;
 			rWtblBa.ucStartRstBaSb = 1;
+			/* After AX chip, need RX Ba Win size to determine BA_MODE in WTBL */
+			rWtblBa.u2BaWinSize = BaCtrl.BaWinSize;
 			Status = CmdExtWtblUpdate(pAd, BaCtrl.Wcid, SET_WTBL, &rWtblBa, sizeof(rWtblBa));
 		}
 
@@ -767,6 +789,33 @@ VOID MtAsicGetTxTscByFw(
 		tsc_cnt++;
 	}
 }
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+UINT8 mtf_read_skip_tx(IN struct _RTMP_ADAPTER *pAd, UINT16 wcid)
+{
+	CMD_WTBL_GENERIC_T cmdWtblGeneric = {0};
+
+	cmdWtblGeneric.u2Tag = WTBL_GENERIC;
+	cmdWtblGeneric.u2Length = sizeof(CMD_WTBL_GENERIC_T);
+	/**read wtbl*/
+	CmdExtWtblUpdate(pAd, wcid, QUERY_WTBL, &cmdWtblGeneric, sizeof(CMD_WTBL_GENERIC_T));
+	return cmdWtblGeneric.ucSkipTx;
+}
+
+VOID mtf_update_skip_tx(IN struct _RTMP_ADAPTER *pAd, UINT16 wcid, UINT8 set)
+{
+	CMD_WTBL_GENERIC_T cmdWtblGeneric = {0};
+
+	cmdWtblGeneric.u2Tag = WTBL_GENERIC;
+	cmdWtblGeneric.u2Length = sizeof(CMD_WTBL_GENERIC_T);
+	/*read wtbl*/
+	CmdExtWtblUpdate(pAd, wcid, QUERY_WTBL, &cmdWtblGeneric, sizeof(CMD_WTBL_GENERIC_T));
+	/*update skip tx bit*/
+	cmdWtblGeneric.ucSkipTx = set;
+	/*write back to wtbl*/
+	CmdExtWtblUpdate(pAd, wcid, SET_WTBL, &cmdWtblGeneric, sizeof(CMD_WTBL_GENERIC_T));
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 VOID mt_wtbltlv_debug(RTMP_ADAPTER *pAd, UINT16 u2Wcid, UCHAR ucCmdId, UCHAR ucAtion, union _wtbl_debug_u *debug_u)
 {
@@ -1172,7 +1221,8 @@ VOID MtAsicUpdateRtsThldByFw(
 	rts_thld.band_idx = HcGetBandByWdev(wdev);
 	rts_thld.pkt_num_thld = pkt_num;
 	rts_thld.pkt_len_thld = length;
-	if (MTK_REV_GTE(pAd, MT7615, MT7615E1) && MTK_REV_LT(pAd, MT7615, MT7615E3) && pAd->CommonCfg.dbdc_mode) {
+
+	if (MTK_REV_LT(pAd, MT7615, MT7615E3) && pAd->CommonCfg.dbdc_mode) {
 		;/* DBDC does not support RTS setting */
 	} else {
 		struct _EXT_CMD_UPDATE_PROTECT_T fw_rts;
@@ -1190,6 +1240,8 @@ VOID MtAsicUpdateRtsThldByFw(
 INT MtAsicSetRDGByFw(RTMP_ADAPTER *pAd, MT_RDG_CTRL_T *Rdg)
 {
 	struct _EXT_CMD_RDG_CTRL_T fw_rdg;
+
+	memset(&fw_rdg, 0, sizeof(struct _EXT_CMD_RDG_CTRL_T));
 
 	fw_rdg.u4TxOP = Rdg->Txop;
 	fw_rdg.ucLongNav = Rdg->LongNav;
@@ -1359,7 +1411,7 @@ INT MtAsicSetWmmParam(RTMP_ADAPTER *pAd, UCHAR idx, UINT32 AcNum, UINT32 EdcaTyp
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(%d): Error type=%d\n", __func__, __LINE__, EdcaType));
 		break;
 	}
-	MtCmdEdcaParameterSet(pAd, EdcaParam);
+	MtCmdEdcaParameterSet(pAd, &EdcaParam);
 	return NDIS_STATUS_SUCCESS;
 }
 
@@ -1387,7 +1439,7 @@ VOID MtAsicSetEdcaParm(RTMP_ADAPTER *pAd, UCHAR idx, UCHAR tx_mode, PEDCA_PARM p
 			pAcParam->u2Txop = pEdcaParm->Txop[ac];
 		}
 	}
-	MtCmdEdcaParameterSet(pAd, EdcaParam);
+	MtCmdEdcaParameterSet(pAd, &EdcaParam);
 }
 
 INT MtAsicGetTsfTimeByFirmware(
@@ -1575,8 +1627,8 @@ VOID MtAsicInsertRepeaterEntryByFw(
 	muar_entry.ucMuarIdx = muar_idx;
 	COPY_MAC_ADDR(muar_entry.aucMacAddr, pAddr);
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("\n%s %02x:%02x:%02x:%02x:%02x:%02x-CliIdx(%d),MuarIdx(%d)\n",
-		 __func__, PRINT_MAC(pAddr), CliIdx, muar_entry.ucMuarIdx));
+		("\n%s "MACSTR"-CliIdx(%d),MuarIdx(%d)\n",
+		 __func__, MAC2STR(pAddr), CliIdx, muar_entry.ucMuarIdx));
 	NdisMoveMemory(pdata, &config_muar, sizeof(EXT_CMD_MUAR_T));
 	NdisMoveMemory(pdata + sizeof(EXT_CMD_MUAR_T),
 				   &muar_entry,
@@ -1611,7 +1663,6 @@ VOID MtAsicRemoveRepeaterEntryByFw(RTMP_ADAPTER *pAd, UCHAR CliIdx)
 				 (UCHAR **)&pdata,
 				 sizeof(EXT_CMD_MUAR_T) +
 				 (config_muar.ucEntryCnt * sizeof(EXT_CMD_MUAR_MULTI_ENTRY_T)));
-	ptr = pdata;
 	NdisMoveMemory(pdata, &config_muar, sizeof(EXT_CMD_MUAR_T));
 	ptr = pdata + sizeof(EXT_CMD_MUAR_T);
 
@@ -1663,8 +1714,8 @@ VOID MtAsicInsertRepeaterRootEntryByFw(
 		goto done;
 	muar_entry.ucMuarIdx = muar_idx + 1;
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("\n%s %02x:%02x:%02x:%02x:%02x:%02x-CliIdx(%d),MuarIdx(%d)\n",
-		__func__, PRINT_MAC(pAddr), ReptCliIdx, muar_entry.ucMuarIdx));
+		("\n%s "MACSTR"-CliIdx(%d),MuarIdx(%d)\n",
+		__func__, MAC2STR(pAddr), ReptCliIdx, muar_entry.ucMuarIdx));
 	COPY_MAC_ADDR(muar_entry.aucMacAddr, pAddr);
 	NdisMoveMemory(pdata, &config_muar, sizeof(EXT_CMD_MUAR_T));
 	NdisMoveMemory(pdata + sizeof(EXT_CMD_MUAR_T),
@@ -1697,5 +1748,12 @@ INT32 mt_asic_update_vlan_id_by_fw(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UIN
 INT32 mt_asic_update_vlan_priority_by_fw(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_idx, UINT8 priority)
 {
 	return cmd_vlan_update(ad, band_idx, omac_idx, BSS_INFO_SET_VLAN_PRIORITY, priority);
+}
+#endif
+
+#ifdef PLE_MONITOR_SUPPORT
+INT32 mt_asic_flush_ac_queue_by_fw(struct _RTMP_ADAPTER *ad, UINT16 wcid, UINT16 pkt_cnt, BOOLEAN ps_check)
+{
+	return cmd_flush_ac_queue(ad, wcid, pkt_cnt, ps_check);
 }
 #endif

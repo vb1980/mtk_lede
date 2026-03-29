@@ -148,6 +148,36 @@ typedef struct GNU_PACKED _HEADER_PS_POLL {
 /* 7.3.1.10 Timestamp field */
 #define TIMESTAMP_FIELD_LEN                         8
 
+#ifdef CONFIG_6G_SUPPORT
+/* Reduced Neighbor Report (RNR) */
+#define DOT11_RNR_TBTT_INFO_HDR_TYPE_MASK 0x3
+#define DOT11_RNR_TBTT_INFO_HDR_FILTERED_NEIGHBOR_AP (1 << 2)
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT_SHIFT 4
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT_MASK (0xF << 4)
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN_SHIFT 8
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN_MASK (0xFF << 8)
+struct GNU_PACKED neighbor_ap_info {
+	UINT16 tbtt_info_hdr;
+	UINT8 op_class;
+	UINT8 ch_num;
+};
+
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT(tbtt_info_hdr, count) \
+		((tbtt_info_hdr) |= ((count) << DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT_SHIFT));
+
+#define DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN(tbtt_info_hdr, len) \
+		((tbtt_info_hdr) |= ((len) << DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN_SHIFT));
+
+/*TBTT Information: BSS Parameter*/
+#define TBTT_INFO_BSS_PARAM_OCT 1
+#define TBTT_INFO_BSS_PARAM_SAME_SSID (1 << 1)
+#define TBTT_INFO_BSS_PARAM_MULTI_BSSID (1 << 2)
+#define TBTT_INFO_BSS_PARAM_TRANSMIT_BSSID (1 << 3)
+#define TBTT_INFO_BSS_PARAM_ESS_MEMBER_2G_5G_COLOCATED_AP (1 << 4)
+#define TBTT_INFO_BSS_PARAM_UNSOLICITED_PROBE_RSP_ACTIVE (1 << 5)
+#define TBTT_INFO_BSS_PARAM_COLOCATED_AP (1 << 6)
+#endif /* CONFIG_6G_SUPPORT */
+
 /*
     just a default assume value,
     if Bcn length has so many IEs, shall enlarge the value.

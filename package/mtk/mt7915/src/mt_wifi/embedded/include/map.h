@@ -27,6 +27,12 @@
 #define IS_MAP_BS_ENABLE(pAd) \
 	((pAd->MAPMode == MAP_BS_2_0))
 
+#define IS_MAP_API_ENABLE(pAd) \
+	((pAd->MAPMode == MAP_API_MODE))
+
+#define IS_MAP_CERT_ENABLE(pAd) \
+	((pAd->MAPMode == MAP_CERT_MODE))
+
 #ifdef MAP_R2
 #define IS_MAP_R2_ENABLE(pAd) \
 		(pAd->bMapR2Enable == TRUE)
@@ -195,12 +201,23 @@ UCHAR getNonOpChnNum(
 	IN UCHAR op_class
 );
 
+UCHAR getAutoChannelSkipListNum(
+		IN PRTMP_ADAPTER pAd,
+		IN struct wifi_dev *wdev
+);
+
 VOID setNonOpChnList(
 	IN PRTMP_ADAPTER pAd,
 	IN struct wifi_dev *wdev,
 	IN PCHAR nonOpChnList,
 	IN UCHAR op_class,
 	IN UCHAR nonOpChnNum
+);
+
+VOID setAutoChannelSkipList(
+		IN PRTMP_ADAPTER pAd,
+		IN struct wifi_dev *wdev,
+		IN wdev_chn_info * chn_list
 );
 
 INT map_send_bh_sta_wps_done_event(

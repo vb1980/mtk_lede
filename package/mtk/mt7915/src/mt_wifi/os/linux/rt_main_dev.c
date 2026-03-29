@@ -31,7 +31,7 @@
 #include "rtmp_comm.h"
 #include "rt_os_util.h"
 #include "rt_os_net.h"
-
+#include <linux/ethtool.h>
 /*---------------------------------------------------------------------*/
 /* Private Variables Used                                              */
 /*---------------------------------------------------------------------*/
@@ -77,6 +77,7 @@ INT rt28xx_send_packets(IN struct sk_buff *skb_p, IN struct net_device *net_dev)
 
 struct net_device_stats *RT28xx_get_ether_stats(struct net_device *net_dev);
 
+#if ((KERNEL_VERSION(2, 4, 23) <= LINUX_VERSION_CODE) && (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE))
 static int rt_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 {
 	struct iwreq req;
@@ -89,8 +90,9 @@ static int rt_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 }
 
 static const struct ethtool_ops rt_ethtool_ops = {
-	
+	.get_settings = rt_get_settings,
 };
+#endif
 
 /*
  * ========================================================================
@@ -231,10 +233,15 @@ int mt_wifi_close(VOID *dev)
 
 	if (pAd == NULL)
 		return 0;
+
+#ifdef WIFI_MD_COEX_SUPPORT
+	/* step1: notify coex module wifi down */
+	send_wifi_info_to_wifi_md_coex(pAd, FALSE);
+#endif /* WIFI_MD_COEX_SUPPORT */
+
 #ifdef CFG_SUPPORT_CSI
 	csi_support_deinit(pAd);
 #endif
-
 
 
 	RTMPDrvClose(pAd, net_dev);
@@ -243,9 +250,8 @@ int mt_wifi_close(VOID *dev)
 	mt_service_close(pAd);
 #endif /* CONFIG_WLAN_SERVICE */
 
-/* For wifi and md coex in colgin project*/
 #ifdef WIFI_MD_COEX_SUPPORT
-	unregister_wifi_md_coex(pAd);
+	deinit_wifi_md_coex(pAd);
 #endif /* WIFI_MD_COEX_SUPPORT */
 
 	/*system down hook point*/
@@ -405,10 +411,8 @@ int mt_wifi_open(VOID *dev)
 #endif
 
 
-/* For wifi and md coex in colgin project */
 #ifdef WIFI_MD_COEX_SUPPORT
-	register_wifi_md_coex(pAd);
-	send_idx_to_wifi_md_coex(pAd);
+	init_wifi_md_coex(pAd);
 #endif /* WIFI_MD_COEX_SUPPORT */
 
 	return retval;
@@ -437,8 +441,6 @@ int virtual_if_up_handler(VOID *dev)
 		return retval;
 	}
 
-	wdev_if_up_down(pAd, wdev, TRUE);
-
 #ifdef GREENAP_SUPPORT
 		/* This function will check and update allow status */
 		if (greenap_check_when_if_down_up(pAd) == FALSE)
@@ -463,6 +465,12 @@ int virtual_if_up_handler(VOID *dev)
 				 ("%s() wds_if bound to main dev!\n", __func__));
 	}
 #endif	/* WDS_SUPPORT */
+	wdev_if_up_down(pAd, wdev, TRUE);
+#if defined(WAPP_SUPPORT) && defined(LOW_POWER_SUPPORT)
+	if (VIRTUAL_IF_NUM(pAd) == 1) {
+		wapp_send_wifi_up_event(pAd);
+	}
+#endif
 
 	return retval;
 }
@@ -523,8 +531,9 @@ INT virtual_if_init_handler(VOID *dev)
 		retval = -1;
 		return retval;
 	}
-
+#if ((KERNEL_VERSION(2, 4, 23) <= LINUX_VERSION_CODE) && (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE))
 	net_dev->ethtool_ops = &rt_ethtool_ops;
+#endif
 
 	if (VIRTUAL_IF_NUM(pAd) == 0) {
 		VIRTUAL_IF_INC(pAd);
@@ -560,8 +569,13 @@ INT virtual_if_deinit_handler(VOID *dev)
 		return retval;
 	}
 
-	if (VIRTUAL_IF_NUM(pAd) == 0)
+	if (VIRTUAL_IF_NUM(pAd) == 0) {
 		mt_wifi_close(pAd->net_dev);
+
+#if defined(WAPP_SUPPORT) && defined(LOW_POWER_SUPPORT)
+		wapp_send_wifi_down_event(pAd);
+#endif
+	}
 
 	return retval;
 }
@@ -569,7 +583,7 @@ INT virtual_if_deinit_handler(VOID *dev)
 PNET_DEV RtmpPhyNetDevInit(VOID *pAd, RTMP_OS_NETDEV_OP_HOOK *pNetDevHook)
 {
 	struct net_device *net_dev = NULL;
-	ULONG InfId;
+	ULONG InfId = 0;
 	UINT32 OpMode;
 #if defined(CONFIG_CSO_SUPPORT) || defined(CONFIG_TSO_SUPPORT)
 	UCHAR flg;
@@ -735,11 +749,13 @@ struct iw_statistics *rt28xx_get_wireless_stats(struct net_device *net_dev)
 	VOID *pAd = NULL;
 	struct iw_statistics *pStats;
 	RT_CMD_IW_STATS DrvIwStats, *pDrvIwStats = &DrvIwStats;
+	os_zero_mem((unsigned char *)pDrvIwStats, sizeof(RT_CMD_IW_STATS));
 
 	GET_PAD_FROM_NET_DEV(pAd, net_dev);
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("rt28xx_get_wireless_stats --->\n"));
 	pDrvIwStats->priv_flags = RT_DEV_PRIV_FLAGS_GET(net_dev);
 	pDrvIwStats->dev_addr = (PUCHAR)net_dev->dev_addr;
+	pDrvIwStats->pStats = &((RTMP_ADAPTER *)pAd)->iw_stats;
 
 	if (RTMP_DRIVER_IW_STATS_GET(pAd, pDrvIwStats) != NDIS_STATUS_SUCCESS)
 		return NULL;
@@ -782,7 +798,6 @@ INT rt28xx_ioctl(PNET_DEV net_dev, struct ifreq *rq, INT cmd)
 
 	ASSERT(ops->ioctl);
 
-
 	if (ops->ioctl)
 		ret = ops->ioctl(net_dev, rq, cmd);
 	else
@@ -814,6 +829,7 @@ struct net_device_stats *RT28xx_get_ether_stats(struct net_device *net_dev)
 
 	if (pAd) {
 		RT_CMD_STATS DrvStats, *pDrvStats = &DrvStats;
+		os_zero_mem((unsigned char *)pDrvStats, sizeof(RT_CMD_STATS));
 		/* assign net device for RTMP_DRIVER_INF_STATS_GET() */
 		pDrvStats->pNetDev = net_dev;
 		RTMP_DRIVER_INF_STATS_GET(pAd, pDrvStats);

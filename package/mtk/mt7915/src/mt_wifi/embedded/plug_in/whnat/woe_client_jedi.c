@@ -203,7 +203,7 @@ char wifi_hw_tx_allow(void *cookie, unsigned char *tx_info)
 	if (!wdev)
 		return FALSE;
 
-	if (wlan_operate_get_frag_thld(wdev) != DEFAULT_FRAG_THLD)
+	if (mt7915_wlan_operate_get_frag_thld(wdev) != DEFAULT_FRAG_THLD)
 		return FALSE;
 
 	return TRUE;
@@ -277,7 +277,7 @@ void dump_wifi_value(struct wifi_entry *wifi, char *name, unsigned int addr)
 void wifi_dump_tx_ring_info(struct wifi_entry *wifi, unsigned char ring_id, unsigned int idx)
 {
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wifi->cookie;
-	struct _PCI_HIF_T *pci_cfg = hc_get_hif_ctrl(ad->hdev_ctrl);
+	struct _PCI_HIF_T *pci_cfg = mt7915_hc_get_hif_ctrl(ad->hdev_ctrl);
 	struct hif_pci_tx_ring *tx_ring = pci_get_tx_ring_by_ridx(pci_cfg, ring_id);
 	RTMP_DMACB *cb = &tx_ring->Cell[idx];
 
@@ -334,7 +334,7 @@ void *wifi_get_hw_ctrl(void *cookie)
 void wifi_chip_cr_mirror_set(struct wifi_entry *wifi, unsigned char enable)
 {
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wifi->cookie;
-	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(ad->hdev_ctrl);
+	struct _RTMP_CHIP_OP *ops = mt7915_hc_get_chip_ops(ad->hdev_ctrl);
 	if (enable) {
 		ops->hif_io_read32 = NULL;
 		ops->hif_io_write32 = NULL;
@@ -353,7 +353,7 @@ void wifi_chip_probe(struct wifi_entry *wifi, unsigned int irq)
 	struct os_cookie *os_cookie = (struct os_cookie *)ad->OS_Cookie;
 	struct pci_dev *pci_dev = os_cookie->pci_dev;
 	struct net_device *dev = ad->net_dev;
-	struct _PCI_HIF_T *pci_hif = hc_get_hif_ctrl(ad->hdev_ctrl);
+	struct _PCI_HIF_T *pci_hif = mt7915_hc_get_hif_ctrl(ad->hdev_ctrl);
 	struct pci_hif_chip *hif_chip = pci_hif->main_hif_chip;
 
 	WHNAT_DBG(WHNAT_DBG_OFF, "%s(): Chang CHIP IRQ: %d to WHNAT IRQ: %d\n", __func__, pci_dev->irq, irq);
@@ -376,7 +376,7 @@ void wifi_chip_remove(struct wifi_entry *wifi)
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wifi->cookie;
 	struct os_cookie *os_cookie = (struct os_cookie *)ad->OS_Cookie;
 	struct pci_dev *pci_dev = os_cookie->pci_dev;
-	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(ad->hdev_ctrl);
+	struct _RTMP_CHIP_OP *ops = mt7915_hc_get_chip_ops(ad->hdev_ctrl);
 
 	WHNAT_DBG(WHNAT_DBG_OFF, "%s(): Chang WED IRQ: %d to CHIP IRQ: %d\n", __func__, pci_dev->irq, wifi->irq);
 	/*revert pci irq as original irq*/
@@ -434,7 +434,7 @@ unsigned int wifi_wpdma_base_get(void *cookie)
 void wifi_cap_get(struct wifi_entry *wifi)
 {
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wifi->cookie;
-	struct	_PCI_HIF_T *pci_hif = hc_get_hif_ctrl(ad->hdev_ctrl);
+	struct	_PCI_HIF_T *pci_hif = mt7915_hc_get_hif_ctrl(ad->hdev_ctrl);
 	struct pci_hif_chip *hif_chip = pci_hif->main_hif_chip;
 	const struct hif_pci_tx_ring_desc *tx_ring_layout = hif_chip->ring_layout.tx_ring_layout;
 	unsigned int tx_ring_num = hif_chip->tx_res_num;
@@ -454,8 +454,8 @@ void wifi_cap_get(struct wifi_entry *wifi)
 
 	wifi->tx_ring_num = data_tx_ring_num;
 	wifi->tx_ring_len = data_tx_ring_len;
-	wifi->tx_token_nums = hc_get_chip_tx_token_nums(ad->hdev_ctrl);
-	wifi->sw_tx_token_nums = hc_get_chip_sw_tx_token_nums(ad->hdev_ctrl);
+	wifi->tx_token_nums = mt7915_hc_get_chip_tx_token_nums(ad->hdev_ctrl);
+	wifi->sw_tx_token_nums = mt7915_hc_get_chip_sw_tx_token_nums(ad->hdev_ctrl);
 }
 
 #endif /*MT7615*/

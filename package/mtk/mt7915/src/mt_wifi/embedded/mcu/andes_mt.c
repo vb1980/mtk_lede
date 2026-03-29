@@ -162,25 +162,20 @@ static VOID ExtEventBeaconLostHandler(RTMP_ADAPTER *pAd,
 #endif
 	struct _EXT_EVENT_BEACON_LOSS_T *pExtEventBeaconLoss =
 		(struct _EXT_EVENT_BEACON_LOSS_T *)Data;
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
-			 ("%s::FW EVENT (%02x:%02x:%02x:%02x:%02x:%02x), Reason 0x%x\n", __func__,
-			  pExtEventBeaconLoss->aucBssid[0],
-			  pExtEventBeaconLoss->aucBssid[1],
-			  pExtEventBeaconLoss->aucBssid[2],
-			  pExtEventBeaconLoss->aucBssid[3],
-			  pExtEventBeaconLoss->aucBssid[4],
-			  pExtEventBeaconLoss->aucBssid[5],
+	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			 ("%s::FW EVENT ("MACSTR"), Reason 0x%x\n", __func__,
+			  MAC2STR(pExtEventBeaconLoss->aucBssid),
 			  pExtEventBeaconLoss->ucReason));
 
 	switch (pExtEventBeaconLoss->ucReason) {
 #ifdef CONFIG_AP_SUPPORT
 
 	case ENUM_BCN_LOSS_AP_DISABLE:
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG, ("  AP Beacon OFF!!!\n"));
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  AP Beacon OFF!!!\n"));
 		break;
 
 	case ENUM_BCN_LOSS_AP_SER_TRIGGER:
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG, ("  SER happened!!!\n"));
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  SER happened!!!\n"));
 		break;
 
 	case ENUM_BCN_LOSS_AP_ERROR:
@@ -189,8 +184,8 @@ static VOID ExtEventBeaconLostHandler(RTMP_ADAPTER *pAd,
 		wdev = wdev_search_by_address(pAd, pExtEventBeaconLoss->aucBssid);
 		if (wdev == NULL) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s(): Wrong Addr1 - %02x:%02x:%02x:%02x:%02x:%02x\n",
-					  __func__, PRINT_MAC(pExtEventBeaconLoss->aucBssid)));
+					 ("%s(): Wrong Addr1 - "MACSTR"\n",
+					  __func__, MAC2STR(pExtEventBeaconLoss->aucBssid)));
 			break;
 		}
 
@@ -259,7 +254,6 @@ static VOID ExtEventRddReportHandler(RTMP_ADAPTER *pAd,
 	rddidx = pExtEventRddReport->rdd_idx;
 
 
-#if !(defined(MT7615) || defined(MT7622) || defined(MT7663))
 	/* update dbg pulse info */
 	dfs_update_radar_info(pExtEventRddReport);
 
@@ -273,7 +267,6 @@ static VOID ExtEventRddReportHandler(RTMP_ADAPTER *pAd,
 			(pExtEventRddReport->lng_pls_detected == TRUE) ||
 			(pExtEventRddReport->cr_pls_detected == TRUE) ||
 			(pExtEventRddReport->stgr_pls_detected == TRUE))
-#endif
 		WrapDfsRddReportHandle(pAd, rddidx);
 }
 
@@ -363,7 +356,7 @@ VOID ExtEventWifiSpectrumUnSolicitRawDataHandler(
 {
 	UINT32 i, CapNode, Data;
 	UINT8 msg_IQ[CAP_FILE_MSG_LEN], msg_Gain[CAP_FILE_MSG_LEN];
-	INT32 retval, Status;
+	INT32 retval, Status, n;
 	INT16 I_0, Q_0, LNA, LPF;
 	RTMP_OS_FS_INFO osFSInfo;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
@@ -420,12 +413,20 @@ VOID ExtEventWifiSpectrumUnSolicitRawDataHandler(
 				if (I_0 >= 512)
 					I_0 -= 1024;
 
-				sprintf(msg_IQ, "%+04d\t%+04d\n", I_0, Q_0);
+				n = snprintf(msg_IQ, sizeof(msg_IQ), "%+04d\t%+04d\n", I_0, Q_0);
+				if (n < 0 || n >= sizeof(msg_IQ)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"%s:%d snprintf Error\n", __func__, __LINE__);
+				}
 				retval = RtmpOSFileWrite(pAd->pSrcf_IQ, (RTMP_STRING *)msg_IQ, strlen(msg_IQ));
 				/* Parse and dump LNA/LPF data */
 				LNA = ((Data & (0x3 << 28)) >> 28);
 				LPF = ((Data & (0xF << 24)) >> 24);
-				sprintf(msg_Gain, "%+04d\t%+04d\n", LNA, LPF);
+				n = snprintf(msg_Gain, sizeof(msg_Gain), "%+04d\t%+04d\n", LNA, LPF);
+				if (n < 0 || n >= sizeof(msg_Gain)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"%s:%d snprintf Error\n", __func__, __LINE__);
+				}
 				retval = RtmpOSFileWrite(pAd->pSrcf_Gain, (RTMP_STRING *)msg_Gain, strlen(msg_Gain));
 			}
 		} else if ((CapNode == pChipCap->SpectrumWF0FIIQ) || (CapNode == pChipCap->SpectrumWF1FIIQ)
@@ -446,12 +447,20 @@ VOID ExtEventWifiSpectrumUnSolicitRawDataHandler(
 				if (I_0 >= 2048)
 					I_0 -= 4096;
 
-				sprintf(msg_IQ, "%+05d\t%+05d\n", I_0, Q_0);
+				n = snprintf(msg_IQ, sizeof(msg_IQ), "%+05d\t%+05d\n", I_0, Q_0);
+				if (n < 0 || n >= sizeof(msg_IQ)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"%s:%d snprintf Error\n", __func__, __LINE__);
+				}
 				retval = RtmpOSFileWrite(pAd->pSrcf_IQ, (RTMP_STRING *)msg_IQ, strlen(msg_IQ));
 				/* Parse and dump LNA/LPF data */
 				LNA = ((Data & (0x3 << 28)) >> 28);
 				LPF = ((Data & (0xF << 24)) >> 24);
-				sprintf(msg_Gain, "%+04d\t%+04d\n", LNA, LPF);
+				n = snprintf(msg_Gain, sizeof(msg_Gain), "%+04d\t%+04d\n", LNA, LPF);
+				if (n < 0 || n >= sizeof(msg_Gain)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"%s:%d snprintf Error\n", __func__, __LINE__);
+				}
 				retval = RtmpOSFileWrite(pAd->pSrcf_Gain, (RTMP_STRING *)msg_Gain, strlen(msg_Gain));
 			}
 		}
@@ -535,7 +544,7 @@ VOID ExtEventWifiSpectrumUnSolicitIQDataHandler(
 {
 	UINT32 Idxi, Type;
 	UINT8 msg_IQ[CAP_FILE_MSG_LEN], msg_Gain[CAP_FILE_MSG_LEN], msg_Data[CAP_FILE_MSG_LEN];
-	INT32 retval, Status, Data = 0, I = 0, Q = 0, LNA = 0, LPF = 0;
+	INT32 retval, Status, n, Data = 0, I = 0, Q = 0, LNA = 0, LPF = 0;
 	RTMP_OS_FS_INFO osFSInfo;
 	EXT_EVENT_RBIST_DUMP_DATA_T *pSpectrumEvent = NULL;
 
@@ -578,7 +587,11 @@ VOID ExtEventWifiSpectrumUnSolicitIQDataHandler(
 			if (Type == CAP_INPHYSNIFFER_TYPE) {
 				os_zero_mem(msg_Data, CAP_FILE_MSG_LEN);
 
-				sprintf(msg_Data, "%08x\n", Data);
+				n = snprintf(msg_Data, sizeof(msg_Data), "%08x\n", Data);
+				if (n < 0 || n >= sizeof(msg_Data)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"%s:%d snprintf Error\n", __func__, __LINE__);
+				}
 				retval = RtmpOSFileWrite(pAd->pSrcf_InPhySniffer, (RTMP_STRING *)msg_Data, strlen(msg_Data));
 			} else {
 				os_zero_mem(msg_IQ, CAP_FILE_MSG_LEN);
@@ -593,10 +606,18 @@ VOID ExtEventWifiSpectrumUnSolicitIQDataHandler(
 				if ((Idxi % 4) == 3) {
 					LNA = Data;
 
-					sprintf(msg_IQ, "%+05d\t%+05d\n", I, Q);
+					n = snprintf(msg_IQ, sizeof(msg_IQ), "%+05d\t%+05d\n", I, Q);
+					if (n < 0 || n >= sizeof(msg_IQ)) {
+						MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"%s:%d snprintf Error\n", __func__, __LINE__);
+					}
 					retval = RtmpOSFileWrite(pAd->pSrcf_IQ, (RTMP_STRING *)msg_IQ, strlen(msg_IQ));
 
-					sprintf(msg_Gain, "%+04d\t%+04d\n", LNA, LPF);
+					n = snprintf(msg_Gain, sizeof(msg_Gain), "%+04d\t%+04d\n", LNA, LPF);
+					if (n < 0 || n >= sizeof(msg_Gain)) {
+						MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"%s:%d snprintf Error\n", __func__, __LINE__);
+					}
 					retval = RtmpOSFileWrite(pAd->pSrcf_Gain, (RTMP_STRING *)msg_Gain, strlen(msg_Gain));
 				}
 			}
@@ -1614,13 +1635,14 @@ static VOID ExtEventBTCoexHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 #ifdef DOT11V_MBSSID_SUPPORT
 BOOLEAN MtUpdateBcnToMcuV2(
 	IN RTMP_ADAPTER *pAd,
-	VOID *wdev_void)
+	VOID *wdev_void, BOOLEAN BcnSntReq)
 {
 	struct wifi_dev *wdev = (struct wifi_dev *)wdev_void;
 	struct _BSS_INFO_ARGUMENT_T bss;
 
 	memcpy(&bss, &wdev->bss_info_argument, sizeof(bss));
 	bss.u4BssInfoFeature = BSS_INFO_BCN_OFFLOAD_FEATURE;
+	bss.bBcnSntReq = BcnSntReq;
 
 	MTWF_LOG(DBG_CAT_AP, CATAP_BCN, DBG_LVL_INFO,
 			("%s: wdev(%d) bssIdx %d, OM 0x%x, Band %d\n",
@@ -1633,7 +1655,7 @@ BOOLEAN MtUpdateBcnToMcuV2(
 #else
 BOOLEAN MtUpdateBcnToMcu(
 	IN RTMP_ADAPTER *pAd,
-	VOID *wdev_void)
+	VOID *wdev_void, BOOLEAN BcnSntReq)
 {
 	BCN_BUF_STRUCT *bcn_buf = NULL;
 	struct wifi_dev *wdev = (struct wifi_dev *)wdev_void;
@@ -1702,7 +1724,7 @@ BOOLEAN MtUpdateBcnToMcu(
 #endif
 	){
 		pkt = bcn_buf->BeaconPkt;
-		bSntReq = bcn_buf->bBcnSntReq;
+		bSntReq = BcnSntReq;
 		TimIELocation = bcn_buf->TimIELocationInBeacon;
 		CsaIELocation = bcn_buf->CsaIELocationInBeacon;
 #ifdef DOT11_HE_AX
@@ -1743,7 +1765,7 @@ BOOLEAN MtUpdateBcnToMcu(
 		bcn_offload.ucCsaCount = wdev->csa_count;
 #endif
 		NdisCopyMemory(bcn_offload.acPktContent, buf, len);
-		MtCmdBcnOffloadSet(pAd, bcn_offload);
+		MtCmdBcnOffloadSet(pAd, &bcn_offload);
 }
 #else
 	{
@@ -1765,7 +1787,7 @@ BOOLEAN MtUpdateBcnToMcu(
 #endif /* DOT11_HE_AX */
 #endif
 		NdisCopyMemory(bcn_offload.acPktContent, buf, len);
-		MtCmdBcnOffloadSet(pAd, bcn_offload);
+		MtCmdBcnOffloadSet(pAd, &bcn_offload);
 }
 #endif /* BCN_V2_SUPPORT */
 	} else {
@@ -1797,39 +1819,6 @@ static VOID ExtEventPretbttIntHandler(RTMP_ADAPTER *pAd,
 #endif
 
 
-#if defined(MT7615) || defined(MT7622)
-VOID EventThermalProtectHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
-{
-	EXT_EVENT_THERMAL_PROTECT_T *EvtThermalProtect;
-	UINT8 HLType;
-	UINT8 Reason;
-	struct wifi_dev *wdev;
-	POS_COOKIE pObj;
-
-	pObj = (POS_COOKIE) pAd->OS_Cookie;
-#ifdef CONFIG_STA_SUPPORT
-	wdev = &pAd->StaCfg[pObj->ioctl_if].wdev;
-#endif
-#ifdef CONFIG_AP_SUPPORT
-	wdev = &pAd->ApCfg.MBSSID[pObj->ioctl_if].wdev;
-#endif
-	EvtThermalProtect = (EXT_EVENT_THERMAL_PROTECT_T *)Data;
-	HLType = EvtThermalProtect->ucHLType;
-	Reason = EvtThermalProtect->ucReason;
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("%s: HLType = %d, CurrentTemp = %d, Reason = %d\n",
-			  __func__, HLType, EvtThermalProtect->cCurrentTemp, Reason));
-
-	if (Reason == THERAML_PROTECTION_REASON_RADIO) {
-		/* AsicRadioOnOffCtrl(pAd, HcGetBandByWdev(wdev), WIFI_RADIO_OFF); */
-		/* Set Radio off Process*/
-		/* Set_RadioOn_Proc(pAd, "0"); */
-		RTMP_SET_THERMAL_RADIO_OFF(pAd);
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Radio Off due to too high temperature.\n"));
-	}
-
-}
-#else
 VOID EventThermalProtDutyNotify(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
 	struct _EXT_EVENT_THERMAL_PROTECT_DUTY_NOTIFY *event_buf = NULL;
@@ -1848,14 +1837,13 @@ VOID EventThermalProtDutyNotify(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		 event_buf->band_idx,
 		 event_buf->level_idx,
 		 event_buf->duty_percent));
-	if (event_buf->temp || event_buf->act_type) {
-		if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_TRIG)
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
-				("Trigger Temp = %d\n", event_buf->temp));
-		else
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("Restore Temp = %d\n", event_buf->temp));
-	}
+	if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_TRIG && event_buf->temp)
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("Trigger Temp = %d\n", event_buf->temp));
+	else if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_RESTORE)
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("Restore Temp = %d\n", event_buf->temp));
+
 }
 
 VOID EventThermalRadioNotify(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
@@ -1875,14 +1863,11 @@ VOID EventThermalRadioNotify(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		("band_idx: %d, level_idx: %d\n",
 		 event_buf->band_idx,
 		 event_buf->level_idx));
-	if (event_buf->temp || event_buf->act_type) {
-		if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_TRIG)
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("Trigger Temp = %d\n", event_buf->temp));
-		else
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("Restore Temp = %d\n", event_buf->temp));
-	}
+	if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_TRIG && event_buf->temp)
+		MTWF_PRINT("Trigger Temp = %d\n", event_buf->temp);
+	else if (event_buf->act_type == THERMAL_PROTECT_ACT_TYPE_RESTORE)
+		MTWF_PRINT("Restore Temp = %d\n", event_buf->temp);
+
 }
 
 VOID EventThermalProtInfo(RTMP_ADAPTER *pAd, char *Data, UINT16 Len)
@@ -2020,7 +2005,6 @@ VOID EventThermalProtectInfo(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		u1ThermalProtItemIdx, prEventThermalProtectInfo->u2AdmitDutyLevel[u1ThermalProtItemIdx] * u2AvrgPeriod[prEventThermalProtectInfo->u1AvrgPeriod]/2));
 	}
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 #ifdef CFG_TDLS_SUPPORT
 static VOID ExtEventTdlsBackToBaseHandler(RTMP_ADAPTER *pAd,
@@ -2143,6 +2127,18 @@ static VOID ExtEventCswNotifyHandler(
 	pDot11h = wdev->pDot11_H;
 	if (pDot11h == NULL)
 		return;
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	/*switch channel at CSA count = ChannelSwitchTriggerCSACount*/
+	if (pAd->Zero_Loss_Enable) {
+		if (csa_notify_event->ucChannelSwitchCount == pDot11h->ChannelSwitchTriggerCSACount) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "%s:csa_count:%d reset\n",  wdev->if_dev->name, wdev->csa_count);
+			wdev->csa_count = 0;
+			/*reset CsaIELoc in beacon*/
+			wdev->bcn_buf.CsaIELocationInBeacon = 0;
+		}
+	}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	for (Index = 0; Index < WDEV_NUM_MAX; Index++) {
 		wdevEach = pAd->wdev_list[Index];
 		if (wdevEach == NULL)
@@ -2154,15 +2150,71 @@ static VOID ExtEventCswNotifyHandler(
 		}
 	}
 
-	if ((HcIsRfSupport(pAd, RFIC_5GHZ))
+	if (((HcIsRfSupport(pAd, RFIC_5GHZ))
 		&& (pAd->CommonCfg.bIEEE80211H == 1)
-		&& (pDot11h->RDMode == RD_SWITCHING_MODE)) {
+		&& (pDot11h->RDMode == RD_SWITCHING_MODE))
+		|| ((wdev->channel <= 14) && (pAd->CommonCfg.ChannelSwitchFor2G.CHSWMode == CHANNEL_SWITCHING_MODE))) {
 #ifdef CONFIG_AP_SUPPORT
 		pDot11h->CSCount = pDot11h->CSPeriod;
 		ChannelSwitchingCountDownProc(pAd, wdev);
 #endif /*CONFIG_AP_SUPPORT*/
 	}
 }
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+static VOID ExtEventBcnTxNotifyHandler(
+		RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+{
+	P_EXT_EVENT_BCN_TX_NOTIFY_T bcn_tx_notify_event = (P_EXT_EVENT_BCN_TX_NOTIFY_T)Data;
+	struct wifi_dev *wdev = NULL;
+	struct DOT11_H *pDot11h = NULL;
+
+	wdev = wdev_search_by_band_omac_idx(pAd,
+				bcn_tx_notify_event->ucBandIdx,
+				bcn_tx_notify_event->ucOwnMacIdx);
+
+	if (!wdev) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "no wdev\n");
+		return;
+	}
+
+	pDot11h = wdev->pDot11_H;
+
+	/*Bcn tx event only enable during CSA,
+	* Channel switch on bcn with CSA Count =1
+	*/
+	if (bcn_tx_notify_event->ucChannelSwitchCount == pDot11h->ChannelSwitchTriggerCSACount) {
+		BOOLEAN Cancelled;
+
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						"band idx:%d wdev_idx:%d CSA count:%d Bcn sent\n",
+						bcn_tx_notify_event->ucBandIdx, bcn_tx_notify_event->ucOwnMacIdx,
+						bcn_tx_notify_event->ucChannelSwitchCount);
+
+		pAd->chan_switch_time[2] = jiffies_to_msecs(jiffies);
+		if (timer_pending(&pDot11h->CSALastBcnTxEventTimer.TimerObj)) {
+			RTMPCancelTimer(&pDot11h->CSALastBcnTxEventTimer, &Cancelled);
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+							"CSALastBcnTxEventTimer cancel:%d\n", Cancelled);
+			/*(Bcn0 + 5ms * n) where n is Mbsscount, intermbss bcn time is 5ms
+			  *(Bcn0 + 1ms * n) where n is Mbsscount, intermbss bcn time is 1ms,
+			  * thus 5 mbss bcn time is aroud 7
+			  * for safety side, time is kept 8ms, try 1 ms work till 3 Mbss
+			*/
+			RTMPSetTimer(&pDot11h->CSALastBcnTxEventTimer, 1);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						"CSALastBcnTxEventTimeout caused channel switch already\n");
+	}
+}
+
+static VOID ExtEventWcidNullAckHandler(
+		RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+{
+	/*break interrupt context and schedule hwcmd*/
+	HANDLE_NULL_ACK_EVENT(pAd, Data);
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 #ifdef DOT11_HE_AX
 static VOID ExtEventBccNotifyHandler(
@@ -2397,53 +2449,239 @@ static VOID ext_event_get_igmp_multicast_table(RTMP_ADAPTER *pAd, UINT8 *data, U
 }
 #endif /* IGMP_TVM_SUPPORT */
 
+static VOID ExtEventEDCCA(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+{
+	P_EXT_EVENT_EDCCA_T EDCCAresult = (P_EXT_EVENT_EDCCA_T)Data;
+
+	switch (EDCCAresult->u1CmdIdx) {
+	case GET_EDCCA_CTRL_EN:
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("BAND%d: %d\n",
+			EDCCAresult->u1BandIdx, EDCCAresult->i1CrVal[0]));
+		break;
+	case GET_EDCCA_CTRL_THRES:
+		{
+			UINT8 i = 0;
+
+			for (i = 0 ; i < 3 ; i++) {
+				if (!EDCCAresult->fginit)
+						MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("BAND%d:BW%d0 %d\n",
+							EDCCAresult->u1BandIdx, 1<<(i+1),  EDCCAresult->i1CrVal[i]));
+					else {
+						if (pAd->CommonCfg.u1EDCCAThreshold[EDCCAresult->u1BandIdx][i] == 0x7f)
+							pAd->CommonCfg.u1EDCCAThreshold[EDCCAresult->u1BandIdx][i] = (UINT8) EDCCAresult->i1CrVal[i];
+						MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+							("recording BAND%d:BW%d0 %d\n", EDCCAresult->u1BandIdx, 1<<(i+1),  EDCCAresult->i1CrVal[i]));
+					}
+				}
+			break;
+		}
+	}
+}
 
 static VOID ExtEventNFAvgPwr(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
 	UINT32 avgpwr[4];
-	INT8 dBm[4];
+	INT8 dBm[IPI_ANT_NUM];
 	UINT8 i, msb, u1Shift = 0x1;
 	UINT32 u4Mask = 0x000000FE;
 
+	UINT8 u1Ipi_Idx = 0;
+	UINT32 total = 0;
+	INT_32 i4NF_Ipi;
+	INT16 NF_Power[] = {-92, -89, -86, -83, -80, -75, -70, -65, -60, -55, -52};
+#ifdef ENHANCE_STAT_SUPPORT
+	CHANNEL_CTRL *ch_ctrl = NULL;
+	INT8 ch_idx = -1;
+#endif
+
 	P_EXT_EVENT_ENABLE_NOISE_FLOOR_T prEventExtCmdResult = (P_EXT_EVENT_ENABLE_NOISE_FLOOR_T)Data;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Average Power\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("WF0 \tWF1 \tWF2 \tWF3"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n"));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Average Power, u1mode:%d\n", prEventExtCmdResult->u1mode));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"));
 
-	for (i = 0; i < 4; i++) {
-		avgpwr[i] = prEventExtCmdResult->au4avgpwr[i];
-		dBm[i] = (INT8)((avgpwr[i] & u4Mask) >> u1Shift);
-		msb = ((avgpwr[i] & 0x00000100) >> 8);
-		dBm[i] = (dBm[i] & 0x7f);
-		dBm[i] = ((0x7f ^ dBm[i]) + 1);
+	if (prEventExtCmdResult->u1mode == 0) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Idle Power\n"));
+		for (i = 0; i < 4; i++) {
+			avgpwr[i] = prEventExtCmdResult->au4avgpwr[i];
+			dBm[i] = (INT8)((avgpwr[i] & u4Mask) >> u1Shift);
+			msb = ((avgpwr[i] & 0x00000100) >> 8);
+			dBm[i] = (dBm[i] & 0x7f);
+			dBm[i] = ((0x7f ^ dBm[i]) + 1);
 
-		if (msb)
-			dBm[i] = dBm[i] * (-1);
+			if (msb)
+				dBm[i] = dBm[i] * (-1);
 
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%d \t", dBm[i]));
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%d \t", dBm[i]));
+		}
+	} else {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IPI\n"));
+		for (i = 0; i < IPI_ANT_NUM; i++) {
+			total = 0;
+			i4NF_Ipi = 0;
+			for (u1Ipi_Idx = 0; u1Ipi_Idx <= 10; u1Ipi_Idx++) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%d-", prEventExtCmdResult->au4avgPIHist[i][u1Ipi_Idx]));
+				total += prEventExtCmdResult->au4avgPIHist[i][u1Ipi_Idx];
+				i4NF_Ipi += (NF_Power[u1Ipi_Idx] * (INT32) prEventExtCmdResult->au4avgPIHist[i][u1Ipi_Idx]);
+			}
+			dBm[i] = (i4NF_Ipi/(INT32)total);
+
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%d \t", dBm[i]));
+		}
 	}
-#ifdef NF_SUPPORT_V2
-	pAd->Avg_NF[BAND0] = (dBm[0]+dBm[1])/2;
+
+/* OffChScan_Ongoing True during off-channel and full scan*/
+#ifdef OFFCHANNEL_SCAN_FEATURE
+	if (pAd->ScanCtrl[BAND0].OffChScan_Ongoing
 #ifdef DBDC_MODE
-	if (pAd->CommonCfg.dbdc_mode)
-		pAd->Avg_NF[BAND1] = (dBm[2]+dBm[3])/2;
+		|| pAd->ScanCtrl[BAND1].OffChScan_Ongoing
 #endif
+		) {
+#ifdef DBDC_MODE
+		if (pAd->CommonCfg.dbdc_mode) {
+			if (pAd->ScanCtrl[BAND0].OffChScan_Ongoing)
+#ifdef ENHANCE_STAT_SUPPORT
+			{
+				pAd->ChannelInfo.AvgNF[BAND0] = (dBm[0] + dBm[1])/2;
+
+				ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BAND0);
+				/* For Full Scan Case*/
+				if (pAd->ScanCtrl[BAND0].state == OFFCHANNEL_SCAN_INVALID)
+					ch_idx = Channel2Index(pAd, pAd->ScanCtrl[BAND0].Channel, BAND0);
+				else	/* OFF Channel Scan */
+					ch_idx = Channel2Index(pAd, pAd->ChannelInfo.ChannelNo[BAND0], BAND0);
+
+				if (ch_ctrl && ch_idx >= 0)
+					ch_ctrl->ChList[ch_idx].Channel_Stat.Avg_NF = pAd->ChannelInfo.AvgNF[BAND0];
+
+				/* Make NF_Enabled false, MlmePeriodic will start NF calculation Again */
+				pAd->NF_Enabled = FALSE;
+			} else {
+				pAd->ChannelInfo.AvgNF[BAND1] = (dBm[2] + dBm[3])/2;
+
+				/* For Full Scan Case*/
+				if (pAd->ScanCtrl[BAND1].state == OFFCHANNEL_SCAN_INVALID)
+					ch_idx = Channel2Index(pAd, pAd->ScanCtrl[BAND1].Channel, BAND1);
+				else	/* OFF Channel Scan */
+					ch_idx = Channel2Index(pAd, pAd->ChannelInfo.ChannelNo[BAND1], BAND1);
+
+				ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BAND1);
+				if (ch_ctrl && ch_idx >= 0)
+					ch_ctrl->ChList[ch_idx].Channel_Stat.Avg_NF = pAd->ChannelInfo.AvgNF[BAND1];
+
+				/* Make NF_Enabled false, MlmePeriodic will start NF calculation Again */
+				pAd->NF_Enabled = FALSE;
+			}
+#else
+				pAd->ChannelInfo.AvgNF[BAND0] = (dBm[0] + dBm[1])/2;
+			else
+				pAd->ChannelInfo.AvgNF[BAND1] = (dBm[2] + dBm[3])/2;
+#endif /* ENHANCE_STAT_SUPPORT */
+		} else
 #endif
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n"));
+#ifdef ENHANCE_STAT_SUPPORT
+		{
+			pAd->ChannelInfo.AvgNF[BAND0] = (dBm[0] + dBm[1] + dBm[2] + dBm[3])/4;
+
+			/* For Full Scan Case*/
+			if (pAd->ScanCtrl[BAND0].state == OFFCHANNEL_SCAN_INVALID)
+				ch_idx = Channel2Index(pAd, pAd->ScanCtrl[BAND0].Channel, BAND0);
+			else	/* OFF Channel Scan */
+				ch_idx = Channel2Index(pAd, pAd->ChannelInfo.ChannelNo[BAND0], BAND0);
+
+			ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BAND0);
+			if (ch_ctrl && ch_idx >= 0)
+				ch_ctrl->ChList[ch_idx].Channel_Stat.Avg_NF = pAd->ChannelInfo.AvgNF[BAND0];
+
+			/* Make NF_Enabled false, MlmePeriodic will start NF calculation Again */
+			pAd->NF_Enabled = FALSE;
+		}
+#else
+			pAd->ChannelInfo.AvgNF[BAND0] = (dBm[0] + dBm[1] + dBm[2] + dBm[3])/4;
+#endif /* ENHANCE_STAT_SUPPORT */
+	} else
+#endif
+	{
+#ifdef NF_SUPPORT_V2
+#ifdef DBDC_MODE
+		if (pAd->CommonCfg.dbdc_mode) {
+#ifdef ENHANCE_STAT_SUPPORT
+			struct wifi_dev *wdev = NULL;
+			UCHAR Channel = 0;
+			UCHAR BandIdx;
+#endif
+
+			pAd->Avg_NF[BAND0] = (dBm[0] + dBm[1])/2;
+			pAd->Avg_NF[BAND1] = (dBm[2] + dBm[3])/2;
+
+#ifdef ENHANCE_STAT_SUPPORT
+			for (BandIdx = 0; BandIdx < DBDC_BAND_NUM; BandIdx++) {
+				if (BandIdx == BAND0) {
+					wdev = &pAd->ApCfg.MBSSID[0].wdev;
+				} else {
+					for (i = 0; i < pAd->ApCfg.BssidNum; i++) {
+						wdev = &pAd->ApCfg.MBSSID[i].wdev;
+						if (wdev && WMODE_CAP_5G(wdev->PhyMode))
+							break;
+					}
+				}
+				if (wdev == NULL)
+					break;
+				Channel = wdev->channel;
+				ch_idx = Channel2Index(pAd, Channel, BandIdx);
+				ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
+				if (ch_ctrl && ch_idx >= 0)
+						ch_ctrl->ChList[ch_idx].Channel_Stat.Avg_NF = pAd->Avg_NF[BandIdx];
+			}
+			/* In OID ASSOLIST, Per Antenna Noise is Required*/
+			for (i = 0; i < IPI_ANT_NUM; i++)
+				pAd->NF[i] = dBm[i];
+#endif /* ENHANCE_STAT_SUPPORT */
+		} else
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+		{
+			UCHAR Channel = 0;
+			struct wifi_dev *wdev = &pAd->ApCfg.MBSSID[0].wdev;;
+
+			pAd->Avg_NF[BAND0] = (dBm[0] + dBm[1] + dBm[2] + dBm[3])/4;
+
+			if (wdev) {
+				Channel = wdev->channel;
+				ch_idx = Channel2Index(pAd, Channel, BAND0);
+				ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BAND0);
+				if (ch_ctrl && ch_idx >= 0)
+						ch_ctrl->ChList[ch_idx].Channel_Stat.Avg_NF = pAd->Avg_NF[BAND0];
+			}
+			for (i = 0; i < IPI_ANT_NUM; i++)
+				pAd->NF[i] = dBm[i];
+		}
+#else
+			pAd->Avg_NF[BAND0] = (dBm[0] + dBm[1] + dBm[2] + dBm[3])/4;
+#endif /* ENHANCE_STAT_SUPPORT */
+#endif
+	}
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"));
 }
 
 #ifdef WIFI_MD_COEX_SUPPORT
-static NTSTATUS ExtEventFw2apccciMsgHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+NTSTATUS ExtEventFw2apccciMsgHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
 	struct _EXT_EVENT_FW2APCCCI_T *fw2apccci_msg;
 
-	os_alloc_mem(pAd, (UINT8 **)&fw2apccci_msg, sizeof(fw2apccci_msg) + Length);
+	if (ATE_ON(pAd)) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("ATE ON, FW cannot send msg to MD.\n"));
+		return STATUS_SUCCESS;
+	}
+
+	os_alloc_mem(pAd, (UINT8 **)&fw2apccci_msg, sizeof(struct _EXT_EVENT_FW2APCCCI_T) + Length);
 	if (fw2apccci_msg == NULL)
 		return STATUS_UNSUCCESSFUL;
 	os_zero_mem(fw2apccci_msg, sizeof(fw2apccci_msg) + Length);
 
-	fw2apccci_msg->dtb_idx = pAd->fw2apccci_msg.dtb_idx;
+	fw2apccci_msg->pci_slot_id = pAd->fw2apccci_msg.pci_slot_id;
+	fw2apccci_msg->card_type = pAd->fw2apccci_msg.card_type;
 	fw2apccci_msg->len = Length;
 	os_move_mem((UINT8 *)fw2apccci_msg->data, Data, Length);
 
@@ -2467,15 +2705,16 @@ static VOID ExtEventGetAllStaStats(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length
 #ifdef CONFIG_MAP_SUPPORT
 		P_EXT_EVENT_TX_RATE_RESULT_T prEventExtCmdResult = (P_EXT_EVENT_TX_RATE_RESULT_T)Data;
 		HTTRANSMIT_SETTING LastTxRate;
-		HETRANSMIT_SETTING HELastTxRate;
+		HE_TRANSMIT_SETTING HELastTxRate;
 		HTTRANSMIT_SETTING LastRxRate;
-		HETRANSMIT_SETTING HELastRxRate;
+		HE_TRANSMIT_SETTING HELastRxRate;
 
 		for (Idx = 0; Idx < prEventExtCmdResult->ucStaNum; Idx++) {
 			pEntry = &pAd->MacTab.Content[prEventExtCmdResult->rAllTxRateResult[Idx].ucWlanIdx];
 			if (pEntry && pEntry->wdev &&  IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
 /*For TX rate*/
-				if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU_REMAPPING) {
+				if ((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU_REMAPPING) ||
+					(prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU)) {
 					HELastTxRate.field.MODE = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE;
 					HELastTxRate.field.BW = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.BW;
 					HELastTxRate.field.ldpc = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.ldpc ? 1 : 0;
@@ -2491,12 +2730,13 @@ static VOID ExtEventGetAllStaStats(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length
 					LastTxRate.field.STBC = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.STBC;
 				}
 
-				if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU_REMAPPING) {
+				if ((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU_REMAPPING) ||
+					(prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE == MODE_HE_SU)) {
 					HELastTxRate.field.MCS =
 						(((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.VhtNss - 1)
 						& 0x3) << 5) +
 						prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MCS;
-					pEntry->map_LastTxRate = (UINT32)HELastTxRate.word;
+					pEntry->map_LastTxRate = (UINT32)HELastTxRate.Dword;
 				} else if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.MODE  == MODE_VHT) {
 					LastTxRate.field.MCS =
 						(((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.VhtNss - 1)
@@ -2513,7 +2753,8 @@ static VOID ExtEventGetAllStaStats(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length
 					pEntry->map_LastTxRate = (UINT32)LastTxRate.word;
 				}
 /*For RX rate */
-				if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU_REMAPPING) {
+				if ((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU_REMAPPING) ||
+					(prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU)) {
 					HELastRxRate.field.MODE = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode;
 					HELastRxRate.field.BW = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxBW;
 					HELastRxRate.field.ldpc = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxCoding ? 1 : 0;
@@ -2529,12 +2770,13 @@ static VOID ExtEventGetAllStaStats(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length
 					LastRxRate.field.STBC = prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxStbc;
 				}
 
-				if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU_REMAPPING) {
+				if ((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU_REMAPPING) ||
+					(prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode == MODE_HE_SU)) {
 					HELastRxRate.field.MCS =
 						(((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxNsts - 1)
 						& 0x3) << 5) +
 						prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxRate;
-					pEntry->map_LastRxRate = (UINT32)HELastRxRate.word;
+					pEntry->map_LastRxRate = (UINT32)HELastRxRate.Dword;
 				} else if (prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxMode  == MODE_VHT) {
 					LastRxRate.field.MCS =
 						(((prEventExtCmdResult->rAllTxRateResult[Idx].rEntryTxRate.u1RxNsts - 1)
@@ -2601,6 +2843,27 @@ static VOID ExtEventGetAllStaStats(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length
 #endif
 	}
 	break;
+#ifdef ENHANCE_STAT_SUPPORT
+	case EVENT_PHY_AVG_AMPDU_CNT:
+		{
+			P_EXT_EVENT_AVG_AMPDU_SIZE_RESULT_T prEventExtCmdResult = (P_EXT_EVENT_AVG_AMPDU_SIZE_RESULT_T)Data;
+			/*MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("ampdu_avg event\n"));*/
+			prEventExtCmdResult->u2StaNum = le2cpu16(prEventExtCmdResult->u2StaNum);
+			for (Idx = 0; Idx < prEventExtCmdResult->u2StaNum; Idx++) {
+				P_EXT_EVENT_PER_STA_AVG_AMPDU_SIZE_STAT_T rAvgAmpduSizeStatResult = &prEventExtCmdResult->rAvgAmpduSizeStatResult[Idx];
+
+				rAvgAmpduSizeStatResult->u2WlanIdx = le2cpu16(rAvgAmpduSizeStatResult->u2WlanIdx);
+				pEntry = &pAd->MacTab.Content[rAvgAmpduSizeStatResult->u2WlanIdx];
+				if (pEntry && pEntry->wdev &&  IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
+					pEntry->AvgAmpduSize = le2cpu32(rAvgAmpduSizeStatResult->u1AvgAmpduCnt);
+					pEntry->LastAmpduSize = le2cpu32(rAvgAmpduSizeStatResult->u1LastAmpduCnt);
+					/*MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("wcid:%d:Ampdu_avg:%d\n",
+						rAvgAmpduSizeStatResult->u2WlanIdx, rAvgAmpduSizeStatResult->u2AvgAmpduCnt));*/
+				}
+			}
+		}
+		break;
+#endif
 	case EVENT_PHY_TXRX_AIR_TIME:
 	{
 		int k;
@@ -2701,6 +2964,30 @@ static VOID ExtEventGetStaTxStat(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	}
 }
 #endif
+static VOID ExtEventGetWtblTxCounter(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+{
+	EXT_EVENT_WTBL_TX_COUNTER_RESULT_T *CmdWtblTxCounterResult = (EXT_EVENT_WTBL_TX_COUNTER_RESULT_T *)Data;
+
+#ifdef RT_BIG_ENDIAN
+	CmdWtblTxCounterResult->u4Field = cpu2le32(CmdWtblTxCounterResult->u4Field);
+#endif
+
+	if (CmdWtblTxCounterResult->u4Field & GET_WTBL_PER_STA_TX_COUNT) {
+		UINT32 WcidIdx;
+		PMAC_TABLE_ENTRY pEntry = NULL;
+		for (WcidIdx = 0; WcidIdx < MAX_LEN_OF_MAC_TABLE; WcidIdx++) {
+			pEntry = &pAd->MacTab.Content[WcidIdx];
+			if (pEntry && IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
+#ifdef RT_BIG_ENDIAN
+				pEntry->TxRetriedPktCount += cpu2le32(CmdWtblTxCounterResult->PerStaRetriedPktCnt[WcidIdx]);
+#else
+				pEntry->TxRetriedPktCount += CmdWtblTxCounterResult->PerStaRetriedPktCnt[WcidIdx];
+#endif
+			}
+
+		}
+	}
+}
 
 static UINT_8 getTxNss(TX_MODE_RATE eTxRate)
 {
@@ -3493,6 +3780,20 @@ static VOID EventExtEventHandler(RTMP_ADAPTER *pAd, UINT8 ExtEID, UINT8 *Data,
 		ExtEventCswNotifyHandler(pAd, Data, Length);
 		break;
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	case EXT_EVENT_BCN_TX_NOTIFY:
+		if (pAd->Zero_Loss_Enable) {
+			ExtEventBcnTxNotifyHandler(pAd, Data, Length);
+		}
+		break;
+
+	case EXT_EVENT_ID_SEND_WCID:
+		if (pAd->Zero_Loss_Enable) {
+			ExtEventWcidNullAckHandler(pAd, Data, Length);
+		}
+		break;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 	case EXT_EVENT_TMR_CALCU_INFO:
 		ExtEventTmrCalcuInfoHandler(pAd, Data, Length);
 		break;
@@ -3523,12 +3824,9 @@ static VOID EventExtEventHandler(RTMP_ADAPTER *pAd, UINT8 ExtEID, UINT8 *Data,
 		break;
 #endif /* defined(RLM_CAL_CACHE_SUPPORT) || defined(PRE_CAL_TRX_SET2_SUPPORT) */
 
-#if defined(MT7615) || defined(MT7622)
-#else
 	case EXT_EVENT_ID_THERMAL_FEATURE_CTRL:
 		EventThermalHandler(pAd, Data, Length);
 		break;
-#endif /* defined(MT7615) || defined(MT7622) */
 
 	case EXT_EVENT_ID_TX_POWER_FEATURE_CTRL:
 		EventTxPowerHandler(pAd, Data, Length);
@@ -3596,7 +3894,9 @@ static VOID EventExtEventHandler(RTMP_ADAPTER *pAd, UINT8 ExtEID, UINT8 *Data,
 	case EXT_EVENT_ID_ENABLE_NOISEFLOOR:
 		ExtEventNFAvgPwr(pAd, Data, Length);
 		break;
-
+	case EXT_EVENT_ID_EDCCA:
+		ExtEventEDCCA(pAd, Data, Length);
+		break;
 #ifdef CFG_SUPPORT_FALCON_SR
 	case EXT_EVENT_ID_SR_INFO:
 		EventSrHandler(pAd, Data, Length);
@@ -3620,7 +3920,7 @@ static VOID EventExtEventHandler(RTMP_ADAPTER *pAd, UINT8 ExtEID, UINT8 *Data,
 		ExtEventFw2apccciMsgHandler(pAd, Data, Length);
 		break;
 
-	case EXT_EVENT_ID_LTE_IDC_REPORT:
+	case EXT_EVENT_ID_LTE_UNSAFE_CHN_REPORT:
 		ExtEventLteSafeChnHandler(pAd, Data, Length);
 		break;
 #endif /* WIFI_MD_COEX_SUPPORT */
@@ -3630,7 +3930,9 @@ static VOID EventExtEventHandler(RTMP_ADAPTER *pAd, UINT8 ExtEID, UINT8 *Data,
 		ExtEventCSICtrl(pAd, Data, Length);
 		break;
 #endif
-
+	case EXT_EVENT_ID_GET_WTBL_TX_COUNTER:
+		ExtEventGetWtblTxCounter(pAd, Data, Length);
+		break;
 	default:
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				 ("%s: Unknown Ext Event(%x)\n", __func__, ExtEID));
@@ -3992,8 +4294,6 @@ VOID AndesMTRxEventHandler(RTMP_ADAPTER *pAd, UCHAR *data)
 	AndesFreeCmdMsg(msg);
 }
 
-#if defined(MT7615) || defined(MT7622)
-#else
 
 VOID EventThermalHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
@@ -4062,7 +4362,6 @@ VOID EventThermalSensorShowInfo(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 															));
 	}
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 VOID EventTxPowerHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
@@ -4071,44 +4370,6 @@ VOID EventTxPowerHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	/* Get Event Category ID */
 	ucEventCategoryID = *Data;
 
-#if defined(MT7615) || defined(MT7622)
-	/* Event Handle for different Category ID */
-	switch (ucEventCategoryID) {
-	case TXPOWER_EVENT_SHOW_INFO:
-		EventTxPowerShowInfo(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_UPDATE_COMPENSATE_TABLE:
-		EventTxPowerCompTable(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_UPDATE_EPA_STATUS:
-		EventTxPowerEPAInfo(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_THERMAL_SENSOR_SHOW_INFO:
-		EventThermalStateShowInfo(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_POWER_BACKUP_TABLE_SHOW_INFO:
-		EventPowerTableShowInfo(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_TARGET_POWER_INFO_GET:
-		break;
-
-	case TXPOWER_EVENT_THERMAL_COMPENSATE_TABLE_SHOW_INFO:
-		EventThermalCompTableShowInfo(pAd, Data, Length);
-		break;
-
-	case TXPOWER_EVENT_TXV_BBP_POWER_SHOW_INFO:
-		EventTxvBbpPowerInfo(pAd, Data, Length);
-		break;
-
-	default:
-		break;
-	}
-#else
 /* Event Handle for different Category ID */
 	switch (ucEventCategoryID) {
 	case TXPOWER_EVENT_SHOW_INFO:
@@ -4145,7 +4406,6 @@ VOID EventTxPowerHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	default:
 		break;
 	}
-#endif /* defined(MT7615) || defined(MT7622) */
 }
 
 VOID EventTxPowerShowInfo(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
@@ -4547,30 +4807,47 @@ VOID EventRxFeCompHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 #ifdef WIFI_MD_COEX_SUPPORT
 VOID ExtEventLteSafeChnHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
-	P_EVENT_LTE_SAFE_CHN_T pEventLteSafeChn = NULL;
+	EVENT_LTE_SAFE_CHN_T *pEventLteSafeChn = NULL;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s, pAd:%p, Data:%p, Lenght:%d\n", __func__, pAd, Data, Length));
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pAd:%p, Data:%p, Lenght:%d\n", pAd, Data, Length);
 
-	if (Data && Length >= sizeof(P_EVENT_LTE_SAFE_CHN_T)) {
-		pEventLteSafeChn = (P_EVENT_LTE_SAFE_CHN_T)Data;
-
-	if (!pEventLteSafeChn || !pEventLteSafeChn->u4SafeChannelBitmask) {
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("%s:: Error!!! Null pointer!!!\n", __func__));
+	if (!pAd->LteSafeChCtrl.bEnabled || !pAd->idcState) {
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "unsafe channel feature is disabled.\n");
 		return;
 	}
-		/* Notify wapp */
-#ifdef CONFIG_MAP_SUPPORT
-		if (IS_MAP_ENABLE(pAd) || IS_MAP_TURNKEY_ENABLE(pAd)) {
-			wapp_send_lte_safe_chn_event(pAd, pEventLteSafeChn->u4SafeChannelBitmask);
+
+	if (Data && Length >= sizeof(EVENT_LTE_SAFE_CHN_T)) {
+		pEventLteSafeChn = (EVENT_LTE_SAFE_CHN_T *)Data;
+
+		if (!pEventLteSafeChn || !pEventLteSafeChn->u4SafeChannelBitmask) {
+			MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				" Error!!! Null pointer!!!\n");
+			return;
 		}
-#endif
+
+		LteSafeChnEventHandle(pAd, pEventLteSafeChn->u4SafeChannelBitmask);
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "end.\n");
 	}
 
-	LteSafeChnEventHandle(pAd, pEventLteSafeChn->u4SafeChannelBitmask);
-	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s end.\n", __func__));
-
 }
+
+VOID ExtEventIdcEventHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
+{
+	COEX_IDC_INFO *pEventIdcInfo = NULL;
+
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pAd:%p, Data:%p, Length:%d\n", pAd, Data, Length);
+
+	if (Data && Length >= sizeof(COEX_IDC_INFO)) {
+		pEventIdcInfo = (COEX_IDC_INFO *)Data;
+
+		Coex_IDC_Info_Handle(pAd, pEventIdcInfo);
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "end.\n");
+	} else {
+		MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"Error! Null pointer or length not match!\n");
+	}
+}
+
 #endif
 
 VOID EventTpcDownLinkTbl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
@@ -5061,7 +5338,7 @@ VOID ExtEventMpduTimeHandler_avg(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	PMAC_TABLE_ENTRY pEntry;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
 	STA_TR_ENTRY *tr_entry;
-	P_RED_STA_T prRedSta = &pAd->red_sta[0];
+	P_RED_STA_T prRedSta;
 	UINT16 i;
 	UINT8 ucInUseSta = 0;
 	UINT8 ucPhyMode = 0;
@@ -5443,10 +5720,7 @@ VOID ExtEventRedTxReportHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	P_RED_TX_RPT_T prTxRpt  = NULL;
 	UINT32 *staInUseBitmap;
 	PMAC_TABLE_ENTRY pEntry = NULL;
-#ifdef VOW_SUPPORT
-	UINT32 multi_tcp_nums[DBDC_BAND_NUM] = {0};
-	UINT32 mcli_sch_th = pAd->vow_cfg.mcli_sch_cfg.tcp_cnt_th;
-#endif
+
 	prTxRptEvt = (P_EXT_EVENT_RED_TX_RPT_T) Data;
 	staInUseBitmap = &prTxRptEvt->staInUseBitmap[0];
 	prTxRpt = (P_RED_TX_RPT_T)(Data + sizeof(EXT_EVENT_RED_TX_RPT_T));
@@ -5467,26 +5741,18 @@ VOID ExtEventRedTxReportHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 			if (WMODE_CAP_2G(pEntry->wdev->PhyMode))
 				th = VERIWAVE_2G_PKT_CNT_TH;
 
-			if ((prTxRpt->u4TCPCnt > th) || (prTxRpt->u4TCPAckCnt > th)) {
-				pEntry = &pAd->MacTab.Content[i];
-				BandIdx = HcGetBandByWdev(pEntry->wdev);
+			if ((prTxRpt->u4TCPCnt > th) || (prTxRpt->u4TCPAckCnt > th))
 				pAd->txop_ctl[BandIdx].multi_tcp_nums++;
+
 #ifdef VOW_SUPPORT
-				if (pAd->vow_cfg.mcli_schedule_en && prTxRpt->u4TCPCnt > mcli_sch_th) {
-					multi_tcp_nums[BandIdx]++;
-					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s(), Band%d, u4TCPCnt = %d, multi_tcp_nums = %d !!\n",
-						__func__, BandIdx, prTxRpt->u4TCPCnt, multi_tcp_nums[BandIdx]));
-				}
-#endif
+			if (pAd->vow_cfg.mcli_schedule_en) {
+				pEntry->mcliTcpCnt += prTxRpt->u4TCPCnt;
+				pEntry->mcliTcpAckCnt += prTxRpt->u4TCPAckCnt;
 			}
+#endif
 		}
 		prTxRpt++;
 	}
-
-#ifdef VOW_SUPPORT
-	if (multi_tcp_nums[BandIdx] > pAd->multi_cli_nums_eap_th)
-		pAd->vow_cfg.mcli_sch_cfg.schedule_cond_en[BandIdx] = TRUE;
-#endif
 
 	MtCmdSetRedTxReport(pAd, 0, Data, Length);
 }
@@ -5501,7 +5767,7 @@ VOID ExtEventMpduTimeHandler(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	PMAC_TABLE_ENTRY pEntry;
 	STA_TR_ENTRY *tr_entry;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
-	P_RED_STA_T prRedSta = &pAd->red_sta[0];
+	P_RED_STA_T prRedSta;
 	UINT16 i;
 	UINT8 ucInUseSta = 0;
 	UINT8 ucPhyMode = 0;
@@ -5740,7 +6006,7 @@ error:
 
 VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 {
-	UINT_32 u4IsCck = 0;
+	UINT_32 u4FWver = 0;
 	UINT_32 u4cbw = 0;
 	UINT_32 u4Rssi = 0;
 	UINT_32 u4SNR = 0;
@@ -5753,10 +6019,15 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 	UINT_16 *pru2Tmp = NULL;
 	UINT_32 *p32tmp = NULL;
 	INT_16 i2Idx = 0;
+	INT32 offset_tmp = 0;
+	UINT32 expected_TS = 0;
+	UINT32 chain_idx = 0;
+	UINT32 chain_end = 0;
+	UINT32 seq = 0;
+	UINT8 need_push = 0;
 	struct CSI_DATA_T *prCSIData = NULL;
 	TLV_ELEMENT_T *prCSITlvData = NULL;
 	struct CSI_INFO_T *prCSIInfo = &pAd->rCSIInfo;
-	ULONG time_jiff = 0;
 	UINT8 *prBuf = Data;
 	/* u2Offset is 8 bytes currently, tag 4 bytes + length 4 bytes */
 	UINT_16 u2Offset = Offsetof(TLV_ELEMENT_T, aucbody);
@@ -5774,10 +6045,6 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 
 	os_zero_mem(prCSIData, sizeof(struct CSI_DATA_T));
 
-	/*TimesStamp: msec*/
-	NdisGetSystemUpTime(&time_jiff);
-	prCSIData->u8TimeStamp = jiffies_to_msecs(time_jiff);
-
 	while (Length >= u2Offset) {
 		prCSITlvData = (struct TLV_ELEMENT *)prBuf;
 		prCSITlvData->tag_type = le2cpu32(prCSITlvData->tag_type);
@@ -5786,14 +6053,14 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		prCSITlvData->tag_type, prCSITlvData->body_len, Length));
 
 		switch (prCSITlvData->tag_type) {
-		case CSI_EVENT_IS_CCK:
+		case CSI_EVENT_FW_VER:
 			if (prCSITlvData->body_len != sizeof(UINT_32)) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Invalid IS_CCK len %u", prCSITlvData->body_len));
+					("Invalid FW VER len %u", prCSITlvData->body_len));
 				goto out;
 			}
-			u4IsCck = le2cpu32(*((UINT32 *)prCSITlvData->aucbody));
-			prCSIData->bIsCck = (u4IsCck) ? TRUE : FALSE;
+			u4FWver = le2cpu32(*((UINT32 *)prCSITlvData->aucbody));
+			prCSIData->FWVer = (UINT8)u4FWver;
 			break;
 		case CSI_EVENT_CBW:
 			if (prCSITlvData->body_len != sizeof(UINT_32)) {
@@ -5963,14 +6230,25 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 			if (prCSITlvData->body_len != sizeof(UINT_32)) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("Invalid Antenna_pattern len %u", prCSITlvData->body_len));
-			goto out;
+				goto out;
 			}
 			prCSIData->Antenna_pattern = le2cpu32(*((UINT_32 *)prCSITlvData->aucbody));
-
-			/*to drop pkt that usr do not need*/
-			if ((prCSIInfo->Matrix_Get_Bit) &&
-				!(prCSIInfo->Matrix_Get_Bit & (1 << (prCSIData->Antenna_pattern & 0xf))))
+			break;
+		case CSI_EVENT_TX_RX_IDX:
+			if (prCSITlvData->body_len != sizeof(UINT_32)) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					("Invalid TX_RX_IDX len %u", prCSITlvData->body_len));
 				goto out;
+			}
+			prCSIData->Tx_Rx_Idx = le2cpu32(*((UINT_32 *)prCSITlvData->aucbody));
+			break;
+		case CSI_EVENT_TS:
+			if (prCSITlvData->body_len != sizeof(UINT_32)) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					("Invalid TS len %u", prCSITlvData->body_len));
+				goto out;
+			}
+			prCSIData->u4TimeStamp = le2cpu32(*((UINT_32 *)prCSITlvData->aucbody));
 			break;
 		default:
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unsupported CSI tag %d\n",
@@ -5987,8 +6265,7 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		if ((prCSIInfo->ucValue1[CSI_CONFIG_OUTPUT_FORMAT] ==
 			CSI_OUTPUT_TONE_MASKED ||
 			prCSIInfo->ucValue1[CSI_CONFIG_OUTPUT_FORMAT] ==
-			CSI_OUTPUT_TONE_MASKED_SHIFTED) &&
-			!prCSIData->bIsCck) {
+			CSI_OUTPUT_TONE_MASKED_SHIFTED)) {
 			wlanApplyCSIToneMask(prCSIData->ucRxMode,
 				prCSIData->ucBw, prCSIData->ucDataBw,
 				prCSIData->ucPrimaryChIdx,
@@ -5996,8 +6273,7 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 		}
 		/*reoder the tone */
 		if (prCSIInfo->ucValue1[CSI_CONFIG_OUTPUT_FORMAT] ==
-			CSI_OUTPUT_TONE_MASKED_SHIFTED &&
-			!prCSIData->bIsCck) {
+			CSI_OUTPUT_TONE_MASKED_SHIFTED) {
 			os_move_mem(prCSIInfo->ai2TempIData,
 				prCSIData->ac2IData,
 				sizeof(INT_16) * prCSIData->u2DataCount);
@@ -6022,9 +6298,78 @@ VOID ExtEventCSICtrl(RTMP_ADAPTER *pAd, UINT8 *Data, UINT32 Length)
 
 			}
 
-	wlanPushCSIData(pAd, prCSIData);
-	wake_up_interruptible(&(pAd->rCSIInfo.waitq));
+	/*	|-------------------usr_offset--------------------|				*/
+	/*	|--------------(1)--------------|------(2)--------|--------(3)-------|-----(4)----*/
+	/*cur_TS(t0)				t1 -offset*1/10 		expected TS(t1)	  t1 +offset*1/10*/
+	if (prCSIInfo->usr_offset) {
 
+		chain_idx = PARSE_CHAIN_IDX(prCSIData->Antenna_pattern);
+		chain_end = PARSE_CHAIN_END_FLAG(prCSIData->Antenna_pattern);
+		seq = PARSE_CSI_SEQ_NUM(prCSIData->Antenna_pattern);
+
+		if (prCSIInfo->cur_TS == 0) {	/*init the cur_TS with first pkt*/
+			wlanPushCSIData(pAd, prCSIData);
+			if (chain_end) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("Init PKT=> seq:%d ts:%u\n", seq, prCSIData->u4TimeStamp));
+				prCSIInfo->cur_TS = prCSIData->u4TimeStamp;
+				prCSIInfo->ExpTs_offset = prCSIInfo->usr_offset/CSI_TS_FILTER_RATIO;
+			}
+		} else {	/*after init, filter the expected pkt*/
+			expected_TS = prCSIInfo->cur_TS + prCSIInfo->usr_offset;
+			offset_tmp = (INT32)(expected_TS - prCSIData->u4TimeStamp);
+			if (offset_tmp > (INT32)(prCSIInfo->usr_offset/CSI_TS_FILTER_RATIO)) { /*for case(1)*/
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOISY,
+				("case 1 => seq:%d ts:%u\n", seq, prCSIData->u4TimeStamp));
+				goto out;
+			} else if ((offset_tmp < 0) &&
+				(abs(offset_tmp) >= prCSIInfo->usr_offset/CSI_TS_FILTER_RATIO)) {/*for case(4)*/
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOISY, ("case 4 => seq:%d ts:%u\n",
+				seq, prCSIData->u4TimeStamp));
+				need_push = 1;
+			} else {	/*for case(2) &&(3)*/
+				/*to store the pkt which is closest to expected TS*/
+				if (abs(offset_tmp) <= prCSIInfo->ExpTs_offset) {
+					prCSIInfo->ExpTs_offset = abs(offset_tmp);
+					/*store the tmp data*/
+					os_move_mem(&prCSIInfo->TS_filter_pkt[chain_idx], prCSIData, sizeof(struct CSI_DATA_T));
+					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOISY,
+					("case 2&3 buffer => seq:%d ts:%u\n", seq, prCSIData->u4TimeStamp));
+				} else {
+					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOISY,
+					("case 2&3 push => seq:%d ts:%u\n", seq, prCSIData->u4TimeStamp));
+					need_push = 1;
+				}
+			}
+
+			if (need_push) {
+				/*push the the most proper pkt, if exist*/
+				for (chain_idx = 0; chain_idx < CSI_MAX_CHAIN_NUM; chain_idx++) {
+					/*if the tmp pkt is not null, then push the pkt into buffer*/
+					if (prCSIInfo->TS_filter_pkt[chain_idx].u4TimeStamp) {
+						wlanPushCSIData(pAd, &prCSIInfo->TS_filter_pkt[chain_idx]);
+						prCSIInfo->cur_TS = prCSIInfo->TS_filter_pkt[chain_idx].u4TimeStamp;
+						prCSIInfo->ExpTs_offset = prCSIInfo->usr_offset/CSI_TS_FILTER_RATIO;
+					}
+				}
+				need_push = 0;
+				os_zero_mem(prCSIInfo->TS_filter_pkt, CSI_MAX_CHAIN_NUM * sizeof(struct CSI_DATA_T));
+			}
+
+			/*if pkt delay too long, then init*/
+			if (prCSIData->u4TimeStamp >=
+				(prCSIInfo->cur_TS + prCSIInfo->usr_offset + prCSIInfo->usr_offset/CSI_TS_FILTER_RATIO)) {
+				prCSIInfo->cur_TS = 0; /*new cur_TS*/
+				wlanPushCSIData(pAd, prCSIData);
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOISY,
+				("Delay too long, to init => seq:%d ts:%u\n", seq, prCSIData->u4TimeStamp));
+			}
+		}
+	} else
+		wlanPushCSIData(pAd, prCSIData);
+
+	if (prCSIInfo->CSI_report_mode == CSI_PROC)
+		wake_up_interruptible(&(pAd->rCSIInfo.waitq));
 out:
 	if (prCSIData)
 		os_free_mem(prCSIData);

@@ -108,10 +108,8 @@ VOID dumpIPMacTb(
 
 		while (pHead) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("IPMac[%d]:\n", startIdx));
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\t:IP=0x%x,Mac=%02x:%02x:%02x:%02x:%02x:%02x, lastTime=0x%lx, next=%p\n",
-					 pHead->ipAddr, pHead->macAddr[0], pHead->macAddr[1], pHead->macAddr[2],
-					 pHead->macAddr[3], pHead->macAddr[4], pHead->macAddr[5], pHead->lastTime,
-					 pHead->pNext));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\t:IP=0x%x,Mac="MACSTR", lastTime=0x%lx, next=%p\n",
+					 pHead->ipAddr, MAC2STR(pHead->macAddr), pHead->lastTime, pHead->pNext));
 			pHead = pHead->pNext;
 		}
 	}
@@ -169,9 +167,8 @@ static NDIS_STATUS IPMacTableUpdate(
 
 		/* Find a existed IP-MAC Mapping entry */
 		if (ipAddr == pEntry->ipAddr) {
-			/*	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): Got the Mac(%02x:%02x:%02x:%02x:%02x:%02x) of mapped IP(%d.%d.%d.%d)\n",
-						__func__, pEntry->macAddr[0],pEntry->macAddr[1],pEntry->macAddr[2], pEntry->macAddr[3],pEntry->macAddr[4],
-						pEntry->macAddr[5], (ipAddr>>24) & 0xff, (ipAddr>>16) & 0xff, (ipAddr>>8) & 0xff, ipAddr & 0xff));
+			/*	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): Got the Mac("MACSTR") of mapped IP(%d.%d.%d.%d)\n",
+						__func__, MAC2STR(pEntry->macAddr), (ipAddr>>24) & 0xff, (ipAddr>>16) & 0xff, (ipAddr>>8) & 0xff, ipAddr & 0xff));
 			*/
 			/* compare is useless. So we directly copy it into the entry. */
 			NdisMoveMemory(pEntry->macAddr, pMacAddr, 6);
@@ -194,7 +191,8 @@ static NDIS_STATUS IPMacTableUpdate(
 					pPrev = NULL;
 				}
 				pEntry = (pPrev == NULL ? NULL :  pPrev->pNext);
-				pMatCfg->nodeCount--;
+				if (pMatCfg->nodeCount > 0)
+					pMatCfg->nodeCount--;
 			} else {
 				pPrev = pEntry;
 				pEntry = pEntry->pNext;
@@ -267,9 +265,8 @@ static PUCHAR IPMacTableLookUp(
 
 	while (pEntry) {
 		if (pEntry->ipAddr == ipAddr) {
-			/*			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): dstMac=%02x:%02x:%02x:%02x:%02x:%02x for mapped dstIP(%d.%d.%d.%d)\n",
-								__func__, pEntry->macAddr[0],pEntry->macAddr[1],pEntry->macAddr[2],
-								pEntry->macAddr[3],pEntry->macAddr[4],pEntry->macAddr[5],
+			/*			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s(): dstMac="MACSTR" for mapped dstIP(%d.%d.%d.%d)\n",
+								__func__, MAC2STR(pEntry->macAddr),
 								(ipAddr>>24) & 0xff, (ipAddr>>16) & 0xff, (ipAddr>>8) & 0xff, ipAddr & 0xff));
 			*/
 			/*Update the lastTime to prevent the aging before pDA processed! */
@@ -431,9 +428,8 @@ static PUCHAR MATProto_ARP_Tx(
 	isGoodIP = IS_GOOD_IP(get_unaligned32((PUINT) pSIP));
 
 	/*
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s(): ARP Pkt=>senderIP=%d.%d.%d.%d, senderMac=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				__func__, pSIP[0], pSIP[1], pSIP[2], pSIP[3],
-				pSMac[0],pSMac[1],pSMac[2],pSMac[3],pSMac[4],pSMac[5]));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,("%s(): ARP Pkt=>senderIP=%d.%d.%d.%d, senderMac="MACSTR"\n",
+				__func__, pSIP[0], pSIP[1], pSIP[2], pSIP[3], MAC2STR(pSMac)));
 	*/
 	if (isUcastMac && isGoodIP)
 		IPMacTableUpdate(pMatCfg, pSMac, get_unaligned32((PUINT) pSIP));
@@ -663,24 +659,21 @@ static PUCHAR MATProto_IP_Tx(
 				pReptEntry = RTMPLookupRepeaterCliEntry(pMatCfg->pPriv, FALSE, pDevMacAdr, TRUE);
 
 				if (pReptEntry != NULL) {
+					UINT16 udpLen = OS_NTOHS(get_unaligned((PUINT16)(udpHdr + 4)));
 					ASSERT(pReptEntry->CliValid == TRUE);
 					NdisMoveMemory((bootpHdr + 28), pDevMacAdr, MAC_ADDR_LEN);
 
-					if (NdisEqualMemory(dhcpHdr, DHCP_MAGIC, 4)) {
+					if (NdisEqualMemory(dhcpHdr, DHCP_MAGIC, 4) && (udpLen < 1500)) {
 						PUCHAR pOptCode, pOptLen;
-						UINT16 udpLen;
-						udpLen = OS_NTOHS(get_unaligned((PUINT16)(udpHdr + 4)));
 						pOptCode = (dhcpHdr + 4);
 
 						do {
 							pOptLen = pOptCode + 1;
 
-							if (*pOptCode == 61) {	/* Client Identifier */
+							if (*pOptCode == 61) {
 								MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE,
 										 ("Client Identifier found, change Hardware Address to "
-										  "%02x:%02x:%02x:%02x:%02x:%02x\n",
-										  pDevMacAdr[0], pDevMacAdr[1], pDevMacAdr[2],
-										  pDevMacAdr[3], pDevMacAdr[4], pDevMacAdr[5]));
+										  MACSTR"\n", MAC2STR(pDevMacAdr)));
 								/* Change Hardware Address */
 								NdisMoveMemory((pOptCode + 3), pDevMacAdr, MAC_ADDR_LEN);
 								break;
@@ -721,14 +714,35 @@ static NDIS_STATUS MATProto_IP_Init(
 static inline void IPintToIPstr(int ipint, char Ipstr[20], ULONG BufLen)
 {
 	int temp = 0;
+	int ret;
 	temp = ipint & 0x000FF;
-	snprintf(Ipstr, BufLen, "%d.", temp);
+	ret = snprintf(Ipstr, BufLen, "%d.", temp);
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 	temp = (ipint >> 8) & 0x000FF;
-	snprintf(Ipstr, BufLen, "%s%d.", Ipstr, temp);
+	ret = snprintf(Ipstr, BufLen, "%s%d.", Ipstr, temp);
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 	temp = (ipint >> 16) & 0x000FF;
-	snprintf(Ipstr, BufLen, "%s%d.", Ipstr, temp);
+	ret = snprintf(Ipstr, BufLen, "%s%d.", Ipstr, temp);
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 	temp = (ipint >> 24) & 0x000FF;
-	snprintf(Ipstr, BufLen, "%s%d", Ipstr, temp);
+	ret = snprintf(Ipstr, BufLen, "%s%d", Ipstr, temp);
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 }
 
 
@@ -741,18 +755,29 @@ VOID getIPMacTbInfo(
 	IPMacMappingEntry *pHead;
 	int startIdx, endIdx;
 	char Ipstr[20] = {0};
+	int ret;
 	pIPMacTable = (IPMacMappingTable *)pMatCfg->MatTableSet.IPMacTable;
 
 	if ((!pIPMacTable) || (!pIPMacTable->valid)) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, ("%s():IPMacTable not init yet!\n", __func__));
+		MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_TRACE, "IPMacTable not init yet!\n");
 		return;
 	}
 
 	/* dump all. */
 	startIdx = 0;
 	endIdx = MAT_MAX_HASH_ENTRY_SUPPORT;
-	sprintf(pOutBuf, "\n");
-	sprintf(pOutBuf + strlen(pOutBuf), "%-18s%-20s\n", "IP", "MAC");
+	ret = snprintf(pOutBuf, BufLen, "\n");
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
+	ret = snprintf(pOutBuf + strlen(pOutBuf), BufLen, "%-18s%-20s\n", "IP", "MAC");
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 
 	for (; startIdx <  endIdx; startIdx++) {
 		pHead = pIPMacTable->hash[startIdx];
@@ -764,9 +789,15 @@ VOID getIPMacTbInfo(
 
 			NdisZeroMemory(Ipstr, 20);
 			IPintToIPstr(pHead->ipAddr, Ipstr, sizeof(Ipstr));
-			sprintf(pOutBuf + strlen(pOutBuf), "%-18s%02x:%02x:%02x:%02x:%02x:%02x\n",
+			ret = snprintf(pOutBuf + strlen(pOutBuf),
+					BufLen, "%-18s%02x:%02x:%02x:%02x:%02x:%02x\n",
 					Ipstr, pHead->macAddr[0], pHead->macAddr[1], pHead->macAddr[2],
 					pHead->macAddr[3], pHead->macAddr[4], pHead->macAddr[5]);
+			if (os_snprintf_error(BufLen, ret)) {
+				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
 			pHead = pHead->pNext;
 		}
 	}

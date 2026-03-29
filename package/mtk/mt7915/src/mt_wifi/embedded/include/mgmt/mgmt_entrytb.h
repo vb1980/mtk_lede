@@ -48,12 +48,16 @@ struct _aid_info {
 /* static size about MacTab in compiler time */
 #if defined(MT7915)                      /* MT7915 */
 #if defined(CONFIG_COLGIN_MT6890)
-#define MAX_LEN_OF_MAC_TABLE    128
+#define MAX_LEN_OF_MAC_TABLE    139
 #else
 #define MAX_LEN_OF_MAC_TABLE    288
 #endif
 #elif defined(MT7626)                    /* MT7626 */
+#ifdef WIFI_EAP_FEATURE
+#define MAX_LEN_OF_MAC_TABLE    253
+#else /* WIFI_EAP_FEATURE */
 #define MAX_LEN_OF_MAC_TABLE    144
+#endif /* !WIFI_EAP_FEATURE */
 #elif defined(MT7663)                    /* MT7663 */
 #define MAX_LEN_OF_MAC_TABLE    136
 #else                                    /* else */

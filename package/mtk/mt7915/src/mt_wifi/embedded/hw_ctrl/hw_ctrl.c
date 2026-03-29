@@ -18,7 +18,7 @@
 	hw_ctrl.c
 */
 #include "rt_config.h"
-#include  "hw_ctrl.h"
+#include "hw_ctrl.h"
 #include "hw_ctrl_basic.h"
 #include "hw_ctrl/cmm_chip.h"
 
@@ -44,6 +44,12 @@ static NTSTATUS HwCtrlSetClientMACEntry(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 	PRT_SET_ASIC_WCID pInfo;
 
 	pInfo = (PRT_SET_ASIC_WCID)CMDQelmt->buffer;
+	if (!pInfo)
+		return NDIS_STATUS_FAILURE;
+
+	if (pInfo->WCID > WTBL_MAX_NUM(pAd))
+		return NDIS_STATUS_FAILURE;
+
 	AsicUpdateRxWCIDTable(pAd, (UINT16)pInfo->WCID, pInfo->Addr, pInfo->IsBMC, pInfo->IsReset);
 	return NDIS_STATUS_SUCCESS;
 }
@@ -163,7 +169,7 @@ static void tx_burst_arbiter(struct _RTMP_ADAPTER *pAd,
 	struct wifi_dev **wdev = pAd->wdev_list;
 	UINT32 idx = 0;
 	UINT32 _prio_bitmap = 0;
-	UINT16 txop_level = TXOP_0;
+	UINT16 txop_level;
 	UINT16 _txop_level[MAX_PRIO_NUM] = {0};
 	UINT8 prio;
 	UINT8 curr_prio = PRIO_DEFAULT;
@@ -339,6 +345,113 @@ static NTSTATUS HwCtrlUpdateMibCounters(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 	return NDIS_STATUS_SUCCESS;
 }
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+static VOID StaNullAckTimeoutHandler(
+		RTMP_ADAPTER *pAd, UCHAR BandIdx)
+{
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		if (
+			(pAd->ZeroLossSta[i].ChnlSwitchSkipTx)
+			&& (pAd->ZeroLossSta[i].wcid)
+			&& (pAd->ZeroLossSta[i].band == BandIdx)
+			&& (pAd->Dot11_H[BandIdx].ChnlSwitchState >= ASIC_CHANNEL_SWITCH_COMMAND_ISSUED)
+		) {
+			pAd->ZeroLossSta[i].ChnlSwitchSkipTx = 0;
+			AsicUpdateSkipTx(pAd, pAd->ZeroLossSta[i].wcid, 0); /*reset skip tx*/
+			pAd->ZeroLossSta[i].resume_time = jiffies_to_msecs(jiffies);
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						"Tx Enabled for wcid %d\n", pAd->ZeroLossSta[i].wcid);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"Tx Enable skipped for wcid %d\n", pAd->ZeroLossSta[i].wcid);
+	}
+
+	pAd->Dot11_H[BandIdx].ChnlSwitchState = SET_CHANNEL_IDLE;
+}
+
+static VOID WcidNullAckEventHandler(
+		RTMP_ADAPTER *pAd, UINT16 wcid)
+{
+	UINT16 i = 0, ZeroLossStaIndex = 0;
+	INT8 index = -1;
+	struct wifi_dev *wdev = wdev_search_by_wcid(pAd, wcid);
+	struct DOT11_H *pDot11h = (struct DOT11_H *)wdev->pDot11_H;
+
+	for (i = 0; i < 3; i++) {
+		if (pAd->ZeroLossSta[i].wcid == wcid) {
+			index = i;
+			break;
+		}
+	}
+
+	if (index < 0) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"Invalid wcid %d\n", wcid);
+		return;
+	} else
+		ZeroLossStaIndex = index;
+
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+				"null ack event for wcid:%d  ChnlSwitchSkipTx:%d  ChnlSwitchState:%d\n",
+				wcid, pAd->ZeroLossSta[ZeroLossStaIndex].ChnlSwitchSkipTx, pDot11h->ChnlSwitchState);
+
+	if ((pAd->ZeroLossSta[ZeroLossStaIndex].ChnlSwitchSkipTx)
+		&& (pDot11h->ChnlSwitchState >= ASIC_CHANNEL_SWITCH_COMMAND_ISSUED)) {
+		pAd->ZeroLossSta[ZeroLossStaIndex].ChnlSwitchSkipTx = 0;
+		pAd->chan_switch_time[15] = jiffies_to_msecs(jiffies);
+		AsicUpdateSkipTx(pAd, wcid, 0);	/*reset skip hw tx for wtbl entry*/
+		pAd->ZeroLossSta[ZeroLossStaIndex].resume_time = jiffies_to_msecs(jiffies);
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						"Tx Enabled for wcid %d after %lu msec\n", wcid,
+						(pAd->ZeroLossSta[ZeroLossStaIndex].resume_time
+							- pAd->ZeroLossSta[ZeroLossStaIndex].suspend_time));
+	}
+
+	if (pDot11h->ChnlSwitchState >= ASIC_CHANNEL_SWITCH_COMMAND_ISSUED) {
+		BOOLEAN Cancelled;
+
+		for (i = 0; i < 3; i++) {
+			if ((pAd->ZeroLossSta[i].wcid)
+				&& (HcGetBandByWdev(wdev) == pAd->ZeroLossSta[i].band)) {
+				if (pAd->ZeroLossSta[i].ChnlSwitchSkipTx == 1) {
+					return;		/*still pending null/ack for more stations*/
+				}
+			}
+		}
+
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					"rcv null/ack for all sta\n");
+		/*cancel and release last bcn timer*/
+		RTMPCancelTimer(&pDot11h->ChnlSwitchStaNullAckWaitTimer, &Cancelled);
+		pDot11h->ChnlSwitchState = SET_CHANNEL_IDLE;
+	}
+}
+
+static NTSTATUS HwCtrlHandleNullAckEvent(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
+{
+	P_EXT_EVENT_NULL_ACK_WCID_T p_null_ack_wcid_event = (P_EXT_EVENT_NULL_ACK_WCID_T)CMDQelmt->buffer;
+	UINT16 wcid;
+
+	wcid = p_null_ack_wcid_event->u2NullAckWcid;
+
+	MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "wcid:%d\n", wcid);
+	WcidNullAckEventHandler(pAd, wcid);
+	return NDIS_STATUS_SUCCESS;
+}
+
+static NTSTATUS HwCtrlHandleStaNullAckTimeout(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
+{
+	UCHAR BandIdx;
+
+	NdisMoveMemory(&BandIdx, CMDQelmt->buffer, sizeof(UCHAR));
+	MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "NULL ACK Timeout\n");
+	StaNullAckTimeoutHandler(pAd, BandIdx);
+	return NDIS_STATUS_SUCCESS;
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 static NTSTATUS HwCtrlAddRemoveKeyTab(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 {
 	ASIC_SEC_INFO *pInfo;
@@ -373,6 +486,22 @@ static NTSTATUS HwCtrlRemoveReptEntry(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 	return NDIS_STATUS_SUCCESS;
 }
 #endif /*MAC_REPEATER_SUPPORT*/
+
+#ifdef PLE_MONITOR_SUPPORT
+static NTSTATUS HwCtrlFlushPleAcQueue(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
+{
+	PFLUSH_PLE_AC_QUEUE_STRUC pInfo;
+	UINT16 wlan_idx, pkt_cnt;
+	BOOLEAN need_chk_ps = TRUE;
+
+	pInfo = (PFLUSH_PLE_AC_QUEUE_STRUC)CMDQelmt->buffer;
+	wlan_idx = pInfo->Wcid;
+	pkt_cnt = pInfo->PktCnt;
+	need_chk_ps = pInfo->NeedChkPs;
+	asic_flush_ac_queue(pAd, wlan_idx, pkt_cnt, need_chk_ps);
+	return NDIS_STATUS_SUCCESS;
+}
+#endif
 
 #ifdef MT_MAC
 #ifdef OCE_SUPPORT
@@ -494,7 +623,7 @@ static NTSTATUS HwCtrlSetBcnOffload(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 #endif
 	buf = (UCHAR *)GET_OS_PKT_DATAPTR(pkt);
 	NdisCopyMemory(bcn_offload.acPktContent, buf, pSetBcnOffload->WholeLength);
-	MtCmdBcnOffloadSet(pAd, bcn_offload);
+	MtCmdBcnOffloadSet(pAd, &bcn_offload);
 }
 #else
 {
@@ -511,7 +640,7 @@ static NTSTATUS HwCtrlSetBcnOffload(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 #endif
 	buf = (UCHAR *)GET_OS_PKT_DATAPTR(pkt);
 	NdisCopyMemory(bcn_offload.acPktContent, buf, pSetBcnOffload->WholeLength);
-	MtCmdBcnOffloadSet(pAd, bcn_offload);
+	MtCmdBcnOffloadSet(pAd, &bcn_offload);
 }
 #endif
 #ifdef BCN_V2_SUPPORT /* add bcn v2 support , 1.5k beacon support */
@@ -720,6 +849,19 @@ static INT ErrRecoverySetRecovStage(
 	return TRUE;
 }
 
+#ifdef WHNAT_SUPPORT
+static INT ErrRecoverySetStopRxDMA(
+	P_ERR_RECOVERY_CTRL_T pErrRecoveryCtl,
+	INT stop_rx_dma)
+{
+	if (pErrRecoveryCtl == NULL)
+		return FALSE;
+
+	pErrRecoveryCtl->stop_rx_dma = stop_rx_dma;
+	return TRUE;
+}
+#endif
+
 static UINT32 ErrRecoveryTimeDiff(UINT32 time1, UINT32 time2)
 {
 	UINT32 timeDiff = 0;
@@ -797,6 +939,11 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 	UINT32 dbg_lvl_orig;
 	UINT32 dbg_lvl_ser;
 	UINT32 dbg_subcat_orig[DBG_LVL_MAX + 1][32] = {0};
+	struct wifi_dev *wdev = NULL;
+	UCHAR i = 0;
+#ifdef WHNAT_SUPPORT
+	RTMP_CHIP_CAP *cap;
+#endif
 
 	if (!pAd)
 		return NDIS_STATUS_INVALID_DATA;
@@ -810,6 +957,9 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 	}
 
 #endif /* CONFIG_ATE */
+#ifdef WHNAT_SUPPORT
+	cap = hc_get_chip_cap(pAd->hdev_ctrl);
+#endif
 	pErrRecoveryCtrl = &pAd->ErrRecoveryCtl;
 	Status = pAd->HwCtrl.ser_status;
 	Stage = ErrRecoveryCurStage(pErrRecoveryCtrl);
@@ -834,12 +984,20 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 			PCI_HIF_T *pci_hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
 			ULONG flags = 0;
 
+			pAd->ErrRecoveryCtl.hostSerStep = 9;
 			os_zero_mem(pSerTimes,
 						(sizeof(pSerTimes[SER_TIME_ID_T0]) * SER_TIME_ID_END));
 			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
 			pSerTimes[SER_TIME_ID_T0] = Lowpart;
 			/* Stop access PDMA. */
 			ErrRecoverySetRecovStage(pErrRecoveryCtrl, ERR_RECOV_STAGE_STOP_IDLE_DONE);
+#ifdef WHNAT_SUPPORT
+			/* Continue to access host rx dma before reset WHNAT RX */
+			if (pAd->CommonCfg.whnat_en && (cap->tkn_info.feature & TOKEN_RX))
+				ErrRecoverySetStopRxDMA(pErrRecoveryCtrl, FALSE);
+			else
+				ErrRecoverySetStopRxDMA(pErrRecoveryCtrl, TRUE);
+#endif
 			/* send PDMA0 stop to N9 through interrupt. */
 			ErrRecoveryMcuIntEvent(pAd, MCU_INT_PDMA0_STOP_DONE);
 
@@ -866,7 +1024,23 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 	case ERR_RECOV_STAGE_STOP_PDMA0:		/* Stage 1 */
 		if (Status & ERROR_DETECT_RESET_DONE) {
 			ULONG flags = pAd->Flags;
+			pAd->ErrRecoveryCtl.hostSerStep = 10;
 
+#ifdef WHNAT_SUPPORT
+			/* Stop to access host rx dma after reset WHNAT RX */
+			if (pAd->CommonCfg.whnat_en && (cap->tkn_info.feature & TOKEN_RX))
+				ErrRecoverySetStopRxDMA(pErrRecoveryCtrl, TRUE);
+#endif
+#ifdef MTK_FE_RESET_RECOVER
+			if (atomic_read(&pErrRecoveryCtrl->notify_fe)) {
+				/*ser triggered by fe, need to wait fe reset*/
+				atomic_set(&pErrRecoveryCtrl->notify_fe, 0);
+				rtnl_lock();
+				call_netdevice_notifiers(MTK_WIFI_RESET_DONE, pAd->net_dev);
+				rtnl_unlock();
+				wait_for_completion(&pErrRecoveryCtrl->fe_reset_done);
+			}
+#endif
 			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
 			pSerTimes[SER_TIME_ID_T2] = Lowpart;
 
@@ -875,7 +1049,9 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 
 			tm_exit(pAd);
 			qm_exit(pAd);
+			chip_interrupt_disable(pAd);
 			hif_reset_task_group(pAd->hdev_ctrl);
+			hif_free_irq(pAd->hdev_ctrl);
 			hif_reset_txrx_mem(pAd->hdev_ctrl);
 			token_deinit((PKT_TOKEN_CB **)&pktTokenCb);
 
@@ -909,6 +1085,7 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 
 	case ERR_RECOV_STAGE_RESET_PDMA0:		/* Stage 2 */
 		if (Status & ERROR_DETECT_RECOVERY_DONE) {
+			pAd->ErrRecoveryCtl.hostSerStep = 11;
 			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
 			pSerTimes[SER_TIME_ID_T4] = Lowpart;
 			ErrRecoverySetRecovStage(pErrRecoveryCtrl, ERR_RECOV_STAGE_WAIT_N9_NORMAL);
@@ -923,23 +1100,7 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 		break;
 
 	case ERR_RECOV_STAGE_WAIT_N9_NORMAL:		/* Stage 4 */
-		if (Status & ERROR_DETECT_N9_NORMAL_STATE) {
-			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
-			pSerTimes[SER_TIME_ID_T6] = Lowpart;
-			ErrRecoverySetRecovStage(pErrRecoveryCtrl, ERR_RECOV_STAGE_STOP_IDLE);
-			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
-			pSerTimes[SER_TIME_ID_T7] = Lowpart;
-			ErrRecoveryEndDriverRestore(pAd);
-
-			/* send BAR to all STAs */
-			ba_refresh_bar_all(pAd);
-
-			/* update Beacon frame if operating in AP mode. */
-			UpdateBeaconHandler(
-				pAd,
-				get_default_wdev(pAd),
-				BCN_UPDATE_ALL_AP_RENEW);
-		} else if (Status & ERROR_DETECT_STOP_PDMA) {
+		if (Status & ERROR_DETECT_STOP_PDMA) {
 			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
 			pSerTimes[SER_TIME_ID_T6] = Lowpart;
 			MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_ERROR,
@@ -949,6 +1110,33 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 			pSerTimes[SER_TIME_ID_T7] = Lowpart;
 			ErrRecoverySetRecovStage(pErrRecoveryCtrl, ERR_RECOV_STAGE_EVENT_REENTRY);
 			HwRecoveryFromError(pAd);
+		} else if (Status & ERROR_DETECT_N9_NORMAL_STATE) {
+			pAd->ErrRecoveryCtl.hostSerStep = 12;
+			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
+			pSerTimes[SER_TIME_ID_T6] = Lowpart;
+			ErrRecoverySetRecovStage(pErrRecoveryCtrl, ERR_RECOV_STAGE_STOP_IDLE);
+#ifdef WHNAT_SUPPORT
+			ErrRecoverySetStopRxDMA(pErrRecoveryCtrl, FALSE);
+#endif
+			AsicGetTsfTime(pAd, &Highpart, &Lowpart, HW_BSSID_0);
+			pSerTimes[SER_TIME_ID_T7] = Lowpart;
+			ErrRecoveryEndDriverRestore(pAd);
+
+			/* send BAR to all STAs */
+			ba_refresh_bar_all(pAd);
+
+			/* update Beacon frame if operating in AP mode. */
+			for (i = 0; i < WDEV_NUM_MAX; i++) {
+				wdev = pAd->wdev_list[i];
+				if (wdev && HcIsRadioAcq(wdev) && (wdev->wdev_type == WDEV_TYPE_AP)) {
+					UpdateBeaconHandler(
+						pAd,
+						wdev,
+						BCN_UPDATE_ALL_AP_RENEW);
+					break;
+				}
+			}
+
 		} else {
 			MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_ERROR,
 					 ("!!! SER CurStage=%u Event=%x!!!\n", ErrRecoveryCurStage(pErrRecoveryCtrl), Status));
@@ -982,6 +1170,77 @@ NTSTATUS HwRecoveryFromError(RTMP_ADAPTER *pAd)
 	return NDIS_STATUS_SUCCESS;
 }
 #endif /* ERR_RECOVERY */
+
+#ifdef WF_RESET_SUPPORT
+NTSTATUS wf_reset_func(RTMP_ADAPTER *pAd)
+{
+	int idx;
+	struct wifi_dev *wdev;
+	PNET_DEV net_dev;
+
+	pAd->wf_reset_in_progress = TRUE;
+	for (idx = 0; idx < WDEV_NUM_MAX; idx++) {
+		wdev = pAd->wdev_list[idx];
+		if (wdev != NULL) {
+			net_dev = wdev->if_dev;
+			if (RTMP_OS_NETDEV_STATE_RUNNING(net_dev)) {
+				switch (RT_DEV_PRIV_FLAGS_GET(net_dev)) {
+				case INT_MAIN:
+					main_virtual_if_close(net_dev);
+					break;
+
+				case INT_MBSSID:
+					mbss_virtual_if_close(net_dev);
+					break;
+
+				case INT_WDS:
+					wds_virtual_if_close(net_dev);
+					break;
+
+				case INT_APCLI:
+					msta_virtual_if_close(net_dev);
+					break;
+
+				default:
+					break;
+				}
+			}
+		}
+	}
+	pAd->wf_reset_in_progress = FALSE;
+
+	for (idx = 0; idx < WDEV_NUM_MAX; idx++) {
+		wdev = pAd->wdev_list[idx];
+		if (wdev != NULL) {
+			net_dev = wdev->if_dev;
+			if (RTMP_OS_NETDEV_STATE_RUNNING(net_dev)) {
+				switch (RT_DEV_PRIV_FLAGS_GET(net_dev)) {
+				case INT_MAIN:
+					main_virtual_if_open(net_dev);
+					break;
+
+				case INT_MBSSID:
+					mbss_virtual_if_open(net_dev);
+					break;
+
+				case INT_WDS:
+					wds_virtual_if_open(net_dev);
+					break;
+
+				case INT_APCLI:
+					msta_virtual_if_open(net_dev);
+					break;
+
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	return NDIS_STATUS_SUCCESS;
+}
+#endif /* WF_RESET_SUPPORT */
 
 #endif
 
@@ -1329,6 +1588,13 @@ static NTSTATUS HwCtrlSetPbc(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 	ret = MtCmdPktBudgetCtrl(pAd, bssid, wcid, pbc->type);
 	return ret;
 }
+
+static NTSTATUS HwCtrlSetPbcQoS(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
+{
+	BOOLEAN *qos_enable = (BOOLEAN *)CMDQelmt->buffer;
+
+	return MtCmdPktBudgetCtrlQoS(pAd, *qos_enable);
+}
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
 
 /*
@@ -1502,7 +1768,7 @@ BOOLEAN hwctrl_cmd_q_empty(RTMP_ADAPTER *pAd)
 static NTSTATUS HwCtrlUpdateNF(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 {
 	UCHAR en = *((UCHAR *)CMDQelmt->buffer);
-	EnableNF(pAd, en, 100, 5); /*read CR per 100ms, 5 counts, about 500ms*/
+	EnableNF(pAd, en, 100, 5, 0); /*read CR per 100ms, 5 counts, about 500ms*/
 	return NDIS_STATUS_SUCCESS;
 }
 #endif
@@ -1521,7 +1787,7 @@ static NTSTATUS HwCtrlWifiCoexApccci2fw(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 #ifdef WIFI_MD_COEX_SUPPORT
 static NTSTATUS HwCtrlQueryLteSafeChannel(RTMP_ADAPTER *pAd, HwCmdQElmt *CMDQelmt)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "\n");
 	QueryLteSafeChannel(pAd);
 	return NDIS_STATUS_SUCCESS;
 }
@@ -1602,6 +1868,10 @@ static HW_CMD_TABLE_T HwCmdRadioTable[] = {
 #ifdef NF_SUPPORT_V2
 	{HWCMD_ID_GET_NF_BY_FW, HwCtrlUpdateNF, 0},
 #endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	{HWCMD_ID_HANDLE_NULL_ACK_EVENT, HwCtrlHandleNullAckEvent, 0},
+	{HWCMD_ID_HANDLE_STA_NULL_ACK_TIMEOUT, HwCtrlHandleStaNullAckTimeout, 0},
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #ifdef WIFI_MD_COEX_SUPPORT
 	{HWCMD_ID_WIFI_COEX_APCCCI2FW, HwCtrlWifiCoexApccci2fw, 0},
 	{HWCMD_ID_QUERY_LTE_SAFE_CHANNEL, HwCtrlQueryLteSafeChannel, 0},
@@ -1667,6 +1937,9 @@ static HW_CMD_TABLE_T HwCmdPsTable[] = {
 	{HWCMD_ID_TWT_AGRT_UPDATE, hw_ctrl_twt_agrt_update, 0},
 #endif /* WIFI_TWT_SUPPORT */
 #endif /* DOT11_HE_AX */
+#ifdef PLE_MONITOR_SUPPORT
+	{HWCMD_ID_FLUSH_PLE_AC_QUEUE, HwCtrlFlushPleAcQueue},
+#endif
 	{HWCMD_ID_END, NULL, 0}
 };
 
@@ -1689,6 +1962,7 @@ static HW_CMD_TABLE_T HwCmdWmmTable[] = {
 	{HWCMD_ID_PART_SET_WMM, HwCtrlSetPartWmmParam, 0},
 #ifdef PKT_BUDGET_CTRL_SUPPORT
 	{HWCMD_ID_PBC_CTRL, HwCtrlSetPbc, 0},
+	{HWCMD_ID_PBC_CTRL_QOS, HwCtrlSetPbcQoS, 0},
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
 #ifdef DABS_QOS
 	{HWCMD_ID_SET_DEL_QOS, HwCtrlSetQosParam, 0},

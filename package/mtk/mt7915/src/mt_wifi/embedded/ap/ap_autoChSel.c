@@ -47,10 +47,10 @@ static inline INT GetABandChOffset(
 #ifdef A_BAND_SUPPORT
 
 	if ((Channel == 36) || (Channel == 44) || (Channel == 52) || (Channel == 60) || (Channel == 100) || (Channel == 108) ||
-		(Channel == 116) || (Channel == 124) || (Channel == 132) || (Channel == 149) || (Channel == 157))
+		(Channel == 116) || (Channel == 124) || (Channel == 132) || (Channel == 149) || (Channel == 157) || (Channel == 165) || (Channel == 173))
 		return 1;
 	else if ((Channel == 40) || (Channel == 48) || (Channel == 56) || (Channel == 64) || (Channel == 104) || (Channel == 112) ||
-			 (Channel == 120) || (Channel == 128) || (Channel == 136) || (Channel == 153) || (Channel == 161))
+			 (Channel == 120) || (Channel == 128) || (Channel == 136) || (Channel == 153) || (Channel == 161) || (Channel == 169) || (Channel == 177))
 		return -1;
 
 #endif /* A_BAND_SUPPORT */
@@ -65,7 +65,7 @@ ULONG AutoChBssSearchWithSSID(
 	IN UCHAR Channel,
 	IN struct wifi_dev *pwdev)
 {
-	UCHAR i;
+	UINT i;
 	UCHAR BandIdx = HcGetBandByWdev(pwdev);
 	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
 	PBSSINFO pBssInfoTab = pAutoChCtrl->pBssInfoTab;
@@ -127,19 +127,28 @@ VOID UpdateChannelInfo(
 	UCHAR BandIdx = HcGetBandByWdev(pwdev);
 	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
 #ifdef ACS_CTCC_SUPPORT
-	CHANNEL_CTRL *ch_ctrl = NULL;
 	INT score = 0;
-
+#endif
+#if defined (ACS_CTCC_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
+	CHANNEL_CTRL *ch_ctrl = NULL;
 	ch_ctrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 #endif
+
 	if (pAutoChCtrl->pChannelInfo != NULL) {
 		UINT32 BusyTime = 0;
+#ifdef ENHANCE_STAT_SUPPORT
+		UINT32 NoiseTime = 0;
+		RTMP_MIB_PAIR Reg[2];
+#else
 		RTMP_MIB_PAIR Reg[1];
+#endif
 		UINT32 cca_cnt;
+		UINT32 current_cca_cnt;
 
 		NdisZeroMemory(Reg, sizeof(Reg));
 
-		cca_cnt = AsicGetCCACnt(pAd, BandIdx);
+		current_cca_cnt = AsicGetCCACnt(pAd, BandIdx);
+		cca_cnt = (UINT32)(current_cca_cnt - pAutoChCtrl->AutoChSelCtrl.pre_cca_nav_tx_time);
 		pAd->RalinkCounters.OneSecFalseCCACnt += cca_cnt;
 		pAutoChCtrl->pChannelInfo->FalseCCA[ch_index] = cca_cnt;
 #ifdef OFFCHANNEL_SCAN_FEATURE
@@ -152,8 +161,16 @@ VOID UpdateChannelInfo(
 		*/
 		/* M0SDR16 Primary Channel Busy Time */
 		Reg[0].Counter = MIB_CNT_P_CCA_TIME;
+#ifdef ENHANCE_STAT_SUPPORT
+		Reg[1].Counter = RMAC_CNT_NONWIFI_AIRTIME;
+		MtCmdMultipleMibRegAccessRead(pAd, BandIdx, Reg, 2);
+#else
 		MtCmdMultipleMibRegAccessRead(pAd, BandIdx, Reg, 1);
+#endif
 		BusyTime = (UINT32)(Reg[0].Value - pAutoChCtrl->AutoChSelCtrl.pre_pcca_time);
+#ifdef ENHANCE_STAT_SUPPORT
+		NoiseTime = (UINT32)(Reg[1].Value - pAutoChCtrl->AutoChSelCtrl.pre_noise_time);
+#endif
 
 #ifdef OFFCHANNEL_SCAN_FEATURE
 		if ((pAd->ScanCtrl[BandIdx].ScanTime[pAd->ScanCtrl[BandIdx].CurrentGivenChan_Index]) != 0) {
@@ -170,10 +187,13 @@ VOID UpdateChannelInfo(
 #endif
 
 #ifdef AP_QLOAD_SUPPORT
+		/* QLOAD ALARM, ever alarm from QLOAD module */
+	if (QLOAD_DOES_ALARM_OCCUR(pAd))
 		pAutoChCtrl->pChannelInfo->chanbusytime[ch_index] = (BusyTime * 100) / AUTO_CHANNEL_SEL_TIMEOUT;
+	else
+		pAutoChCtrl->pChannelInfo->chanbusytime[ch_index] = (BusyTime * 100) / 200;
 #else
 		pAutoChCtrl->pChannelInfo->chanbusytime[ch_index] = (BusyTime * 100) / 200;
-
 #endif/* AP_QLOAD_SUPPORT */
 
 #ifdef OFFCHANNEL_SCAN_FEATURE
@@ -187,6 +207,32 @@ VOID UpdateChannelInfo(
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("time_diff: %d Busytime: %d\n",
 				pAd->ScanCtrl[BandIdx].ScanTimeActualDiff, pAd->ChannelInfo.chanbusytime[ch_index]));
 		}
+#ifdef ENHANCE_STAT_SUPPORT
+		/* Update Channel Stats(noisetime, busytime,ScanTime) of Scanned Channel*/
+		if (pAd->ScanCtrl[BandIdx].OffChScan_Ongoing) {
+			/* Full Scan Case, Update ch_index*/
+			if (ch_index == 0 && pAd->ScanCtrl[BandIdx].state == OFFCHANNEL_SCAN_INVALID) {
+				SCAN_INFO *ScanInfo = &pwdev->ScanInfo;
+				int ch_idx = -1;
+
+				ch_idx = Channel2Index(pAd, ScanInfo->LastScanChannel, BandIdx);
+				ch_ctrl->ChList[ch_idx].Channel_Stat.channoisetime = NoiseTime;
+				ch_ctrl->ChList[ch_idx].Channel_Stat.chanbusytime = BusyTime;
+				pAd->ScanCtrl[BandIdx].ScanTimeActualEnd = ktime_get();
+				ch_ctrl->ChList[ch_idx].Channel_Stat.ScanDuration = ktime_to_ms(ktime_sub(pAd->ScanCtrl[BandIdx].ScanTimeActualEnd,
+				pAd->ScanCtrl[BandIdx].ScanTimeActualStart)) + 1;
+				MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("[%s] busy time[%d] = %d, noise time[%d] = %d \n", __func__, ch_idx, BusyTime, ch_idx, NoiseTime));
+			} else {	/*OFF CHANNEL Single Scan Case*/
+				ch_ctrl->ChList[ch_index].Channel_Stat.channoisetime = NoiseTime;
+				ch_ctrl->ChList[ch_index].Channel_Stat.chanbusytime = BusyTime;
+				ch_ctrl->ChList[ch_index].Channel_Stat.ScanDuration = ktime_to_ms(ktime_sub(pAd->ScanCtrl[BandIdx].ScanTimeActualEnd,
+				pAd->ScanCtrl[BandIdx].ScanTimeActualStart)) + 1;
+				MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("[%s] busy time[%d] = %d, noise time[%d] = %d\n", __func__, ch_index, BusyTime, ch_index, NoiseTime));
+			}
+		}
+#endif
 #endif
 
 #ifdef ACS_CTCC_SUPPORT
@@ -225,16 +271,21 @@ static inline VOID AutoChannelSkipListSetDirty(
 	IN PRTMP_ADAPTER	pAd)
 {
 	UCHAR i;
-	struct wifi_dev *wdev = &pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev;
-	UCHAR BandIdx = HcGetBandByWdev(wdev);
-	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
-	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
+	UCHAR BandIdx;
+	CHANNEL_CTRL *pChCtrl = NULL;
+	AUTO_CH_CTRL *pAutoChCtrl = NULL;
+	UCHAR channel_idx = 0;
 
-	for (i = 0; i < pAd->ApCfg.AutoChannelSkipListNum; i++) {
-		UCHAR channel_idx = GetChIdx(pAd, pAd->ApCfg.AutoChannelSkipList[i], BandIdx);
+	for (BandIdx = DBDC_BAND0; BandIdx < DBDC_BAND_NUM; BandIdx++) {
+		pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
+		pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
 
-		if (channel_idx != pChCtrl->ChListNum)
-			pAutoChCtrl->pChannelInfo->SkipList[channel_idx] = TRUE;
+		for (i = 0; i < pAd->ApCfg.AutoChannelSkipListNum; i++) {
+			channel_idx = GetChIdx(pAd, pAd->ApCfg.AutoChannelSkipList[i], BandIdx);
+
+			if (channel_idx != pChCtrl->ChListNum)
+				pAutoChCtrl->pChannelInfo->SkipList[channel_idx] = TRUE;
+		}
 	}
 }
 
@@ -429,8 +480,8 @@ static inline UCHAR SelectClearChannelCCA(RTMP_ADAPTER *pAd)
 					((9 - (channel_idx - loop)) * 4);
 			}
 		}
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, (" ch%d bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				 pBss->Channel, pBss->Bssid[0], pBss->Bssid[1], pBss->Bssid[2], pBss->Bssid[3], pBss->Bssid[4], pBss->Bssid[5]));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, (" ch%d bssid="MACSTR"\n",
+				 pBss->Channel, MAC2STR(pBss->Bssid)));
 	}
 
 	AutoChannelSkipListSetDirty(pAd);
@@ -509,7 +560,6 @@ static inline UCHAR SelectClearChannelCCA(RTMP_ADAPTER *pAd)
 					UCHAR ExChannel_idx = 0;
 
 					if (pChCtrl->ChList[channel_idx].Channel == 14) {
-						dirtyness = 0xFFFFFFFF;
 						break;
 					}
 					NdisZeroMemory(ExChannel, sizeof(ExChannel));
@@ -2073,7 +2123,7 @@ UCHAR SelectBestChannel(RTMP_ADAPTER *pAd, ChannelSel_Alg Alg, struct wifi_dev *
 
 	case ChannelAlgBusyTime:
 #ifdef ACS_CTCC_SUPPORT
-		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) || 
+		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) ||
 			(WMODE_CAP_5G(pwdev->PhyMode) && (cfg_vht_bw == VHT_BW_80)))
 			ch = select_clear_channel_busy_time(pAd, pwdev);
 		else
@@ -2085,7 +2135,7 @@ UCHAR SelectBestChannel(RTMP_ADAPTER *pAd, ChannelSel_Alg Alg, struct wifi_dev *
 
 	default:
 #ifdef ACS_CTCC_SUPPORT
-		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) || 
+		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) ||
 			(WMODE_CAP_5G(pwdev->PhyMode) && (cfg_vht_bw == VHT_BW_80)))
 			ch = select_clear_channel_busy_time(pAd, pwdev);
 		else
@@ -2428,7 +2478,9 @@ VOID AutoChSelBuildChannelListFor2G(
 	}
 
 	for (ChIdx = 0; ChIdx < pAutoChCtrl->AutoChSelCtrl.ChListNum; ChIdx++) {
-		if ((pACSChList[ChIdx].SkipChannel == TRUE) || (pACSChList[ChIdx].BwCap == FALSE))
+		if (((pACSChList[ChIdx].SkipChannel == TRUE)
+			&& pAd->ApCfg.AutoChannelAlg[BandIdx] == ChannelAlgBusyTime)
+			|| (pACSChList[ChIdx].BwCap == FALSE))
 			continue;
 		else {
 			pAutoChCtrl->AutoChSelCtrl.AutoChSelChList[ChListNum].Channel = pACSChList[ChIdx].Channel;
@@ -2483,6 +2535,28 @@ VOID AutoChSelBuildChannelListFor2G(
 	pAutoChCtrl->AutoChSelCtrl.ChListNum = ChListNum;
 	os_free_mem(pACSChList);
 }
+
+static VOID update_channel_bw_by_group(AUTOCH_SEL_CH_LIST *pACSChList, UCHAR ChIdx, UCHAR ChNum, UCHAR Bw, UCHAR CentralChannel)
+{
+	UCHAR idx;
+	BOOLEAN SkipChannel = FALSE;
+
+	for (idx = 0; idx < ChNum; idx++) {
+		if (pACSChList[ChIdx + idx].SkipChannel == TRUE) {
+			SkipChannel = TRUE;
+			break;
+		}
+	}
+
+	for (idx = 0; idx < ChNum; idx++) {
+		pACSChList[ChIdx + idx].BwCap = TRUE;
+		pACSChList[ChIdx + idx].Bw = Bw;
+		pACSChList[ChIdx + idx].SkipChannel = SkipChannel;
+		pACSChList[ChIdx + idx].CentralChannel = CentralChannel;
+		pACSChList[ChIdx + idx].BuildDone = TRUE;
+	}
+}
+
 /*
    ==========================================================================
    Description:
@@ -2514,9 +2588,10 @@ VOID AutoChSelBuildChannelListFor5G(
 	UCHAR BandIdx = HcGetBandByWdev(pwdev);
 	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
+	UCHAR CentralChannel;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[AutoChSelBuildChannelListFor5G] cfg_ht_bw = %d, cfg_vht_bw = %d\n", cfg_ht_bw, cfg_vht_bw));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s----------------->\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE, "cfg_ht_bw = %d, cfg_vht_bw = %d\n", cfg_ht_bw, cfg_vht_bw);
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE, "----------------->\n");
 
 	/* Initialize local ACS channel list*/
 	os_alloc_mem(NULL, (UCHAR **)&pACSChList, (MAX_NUM_OF_CHANNELS+1) * sizeof(AUTOCH_SEL_CH_LIST));
@@ -2525,19 +2600,21 @@ VOID AutoChSelBuildChannelListFor5G(
 	/*Skip Non occupancy channel*/
 	for (ChIdx = 0; ChIdx < pChCtrl->ChListNum; ChIdx++) {
 		if (CheckNonOccupancyChannel(pAd, pwdev, pChCtrl->ChList[ChIdx].Channel)) {
-			pACSChList[ChListNum5G++].Channel = pChCtrl->ChList[ChIdx].Channel;
+			pACSChList[ChListNum5G].Channel = pChCtrl->ChList[ChIdx].Channel;
+			pACSChList[ChListNum5G].BwCap = FALSE;
+			pACSChList[ChListNum5G].BuildDone = FALSE;
+			ChListNum5G++;
 		}
 	}
 
-
 	for (ChIdx = 0; ChIdx < ChListNum5G; ChIdx++) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s : Ch = %3d\n", __func__, pACSChList[ChIdx].Channel));
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE,
+				"Ch = %3d\n", pACSChList[ChIdx].Channel);
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s<-----------------\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE, "<-----------------\n");
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[AutoChSelBuildChannelListFor5G] ChListNum5G = %d\n", ChListNum5G));
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE, "ChListNum5G = %d\n", ChListNum5G);
 	/* Check for skip-channel list */
 	for (ChIdx = 0; ChIdx < ChListNum5G; ChIdx++) {
 		pACSChList[ChIdx].SkipChannel = AutoChannelSkipListCheck(pAd, pACSChList[ChIdx].Channel);
@@ -2550,10 +2627,14 @@ VOID AutoChSelBuildChannelListFor5G(
 	/* Set parameters (BW/BWCap/CentralChannel/..)of ACS channel list*/
 	for (ChIdx = 0; ChIdx < ChListNum5G; ChIdx++) {
 
+		if (pACSChList[ChIdx].BuildDone)
+			continue;
+
 		if (cfg_ht_bw == BW_20) {
 			pACSChList[ChIdx].Bw = BW_20;
 			pACSChList[ChIdx].BwCap = TRUE;
 			pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel;
+			pACSChList[ChIdx].BuildDone = TRUE;
 		}
 
 #ifdef DOT11_N_SUPPORT
@@ -2562,49 +2643,36 @@ VOID AutoChSelBuildChannelListFor5G(
 			&& (cfg_vht_bw == VHT_BW_2040)
 #endif /* DOT11_VHT_AC */
 			 ) && N_ChannelGroupCheck(pAd, pACSChList[ChIdx].Channel, pwdev)) {
-			pACSChList[ChIdx].Bw = BW_40;
 
 			/* Check that if there is a secondary channel in current BW40-channel group for BW40 capacity. */
 			if ((GetABandChOffset(pACSChList[ChIdx].Channel) == EXT_ABOVE)
-				&& (pACSChList[ChIdx + 1].Channel == (pACSChList[ChIdx].Channel + 4)))
-				pACSChList[ChIdx].BwCap = TRUE;
-			else if ((GetABandChOffset(pACSChList[ChIdx].Channel) == EXT_BELOW)
-				&& (pACSChList[ChIdx - 1].Channel == (pACSChList[ChIdx].Channel - 4)))
-				pACSChList[ChIdx].BwCap = TRUE;
+				&& ((ChIdx + 1) < ChListNum5G)
+				&& (pACSChList[ChIdx + 1].Channel == (pACSChList[ChIdx].Channel + 4))) {
+				/* Update whole VHT BW80 channel group */
+				CentralChannel = pACSChList[ChIdx].Channel + 2;
+				update_channel_bw_by_group(pACSChList, ChIdx, 2, BW_40, CentralChannel);
+				continue;
+			}
 			else {
+				pACSChList[ChIdx].Bw = BW_40;
+				pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel;
+
 #ifdef DFS_VENDOR10_CUSTOM_FEATURE
 				if ((IS_SUPPORT_V10_DFS(pAd) && pACSChList[ChIdx].Channel == 140 &&
 					pAd->CommonCfg.bCh144Enabled == FALSE) || (IS_SUPPORT_V10_DFS(pAd) &&
 					pACSChList[ChIdx].Channel == 144 && pAd->CommonCfg.bCh144Enabled == TRUE))
 					pACSChList[ChIdx].BwCap = TRUE;
-				else
 #endif
-				pACSChList[ChIdx].BwCap = FALSE;
+
+				pACSChList[ChIdx].BuildDone = TRUE;
 			}
 
-			/* Check that whether there is a skip-channel in current BW40-channel group */
-			/* If there is a skip-channel in BW40-channel group, just also skip secondary channel */
-			if (pACSChList[ChIdx].SkipChannel == TRUE) {
-				if ((GetABandChOffset(pACSChList[ChIdx].Channel) == EXT_ABOVE)
-					&& (pACSChList[ChIdx + 1].Channel == (pACSChList[ChIdx].Channel + 4)))
-					pACSChList[ChIdx + 1].SkipChannel = TRUE;
-				else if ((GetABandChOffset(pACSChList[ChIdx].Channel) == EXT_BELOW)
-					&& (pACSChList[ChIdx - 1].Channel == (pACSChList[ChIdx].Channel - 4)))
-					pACSChList[ChIdx - 1].SkipChannel = TRUE;
-			}
-
-			/* Fill in central-channel parameter */
-			if (GetABandChOffset(pACSChList[ChIdx].Channel) == EXT_ABOVE)
-				pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel + 2;
-			else
-				pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel - 2;
 		}
 #endif /* DOT11_N_SUPPORT */
 #ifdef DOT11_VHT_AC
 		else if (((cfg_vht_bw == VHT_BW_80) || (cfg_vht_bw == VHT_BW_8080))
 				 && (vht_ch_80M != NULL)
 				 && vht80_channel_group(pAd, pACSChList[ChIdx].Channel, pwdev)) {
-			pACSChList[ChIdx].Bw = BW_80;
 			idx = 0;
 			count = 0;
 
@@ -2617,42 +2685,32 @@ VOID AutoChSelBuildChannelListFor5G(
 			}
 
 			if (vht_ch_80M[idx].ch_up_bnd != 0) {
-				/* Count for secondary channels in current VHT BW80 channel group */
-				for (k = 1; k < 4; k++) {
-					if ((pACSChList[ChIdx + k].Channel >= vht_ch_80M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx + k].Channel <= vht_ch_80M[idx].ch_up_bnd))
-						count++;
+				if ((ChIdx + 3) < ChListNum5G) {
+					/* Count for secondary channels in current VHT BW80 channel group */
+					for (k = 1; k < 4; k++) {
+						if ((pACSChList[ChIdx + k].Channel >= vht_ch_80M[idx].ch_low_bnd) &&
+							(pACSChList[ChIdx + k].Channel <= vht_ch_80M[idx].ch_up_bnd))
+							count++;
+					}
 
-					if ((pACSChList[ChIdx - k].Channel >= vht_ch_80M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx - k].Channel <= vht_ch_80M[idx].ch_up_bnd))
-						count++;
+					/* Update whole VHT BW80 channel group */
+					if (count == 3) {
+						CentralChannel = vht_cent_ch_freq(pACSChList[ChIdx].Channel, VHT_BW_80, ch_band);
+						update_channel_bw_by_group(pACSChList, ChIdx, 4, BW_80, CentralChannel);
+						continue;
+					}
 				}
 
-#ifndef ACS_CTCC_SUPPORT
-				if (count == 3)
+#ifdef ACS_CTCC_SUPPORT
+				pACSChList[ChIdx].BwCap = TRUE;
 #endif
-				{
-					pACSChList[ChIdx].BwCap = TRUE;
-				}
-			}
-			/* Check that whether there is a skip-channel in BW80-channel group */
-			/* If there is a skip-channel in BW80-channel group, just also skip secondary channels */
-			if (pACSChList[ChIdx].SkipChannel == TRUE) {
-				for (k = 1; k < 4; k++) {
-					if ((pACSChList[ChIdx + k].Channel >= vht_ch_80M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx + k].Channel <= vht_ch_80M[idx].ch_up_bnd))
-						pACSChList[ChIdx + k].SkipChannel = TRUE;
-
-					if ((pACSChList[ChIdx - k].Channel >= vht_ch_80M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx - k].Channel <= vht_ch_80M[idx].ch_up_bnd))
-						pACSChList[ChIdx - k].SkipChannel = TRUE;
-				}
 			}
 
-			pACSChList[ChIdx].CentralChannel = vht_cent_ch_freq(pACSChList[ChIdx].Channel, VHT_BW_80, ch_band);
+			pACSChList[ChIdx].Bw = BW_80;
+			pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel;
+			pACSChList[ChIdx].BuildDone = TRUE;
 		} else if ((cfg_vht_bw == VHT_BW_160) && (vht_ch_160M != NULL)
 				   && vht80_channel_group(pAd, pACSChList[ChIdx].Channel, pwdev)) {
-			pACSChList[ChIdx].Bw = BW_160;
 			idx = 0;
 			count = 0;
 
@@ -2666,42 +2724,31 @@ VOID AutoChSelBuildChannelListFor5G(
 			}
 
 			if (vht_ch_160M[idx].ch_up_bnd != 0) {
-				/* Count for secondary channels in current VHT BW160 channel group */
-				for (k = 1; k < 8; k++) {
-					if ((pACSChList[ChIdx + k].Channel >= vht_ch_160M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx + k].Channel <= vht_ch_160M[idx].ch_up_bnd))
-						count++;
+				if ((ChIdx + 7) < ChListNum5G) {
+					/* Count for secondary channels in current VHT BW160 channel group */
+					for (k = 1; k < 8; k++) {
+						if ((pACSChList[ChIdx + k].Channel >= vht_ch_160M[idx].ch_low_bnd) &&
+							(pACSChList[ChIdx + k].Channel <= vht_ch_160M[idx].ch_up_bnd))
+							count++;
+					}
 
-					if ((pACSChList[ChIdx - k].Channel >= vht_ch_160M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx - k].Channel <= vht_ch_160M[idx].ch_up_bnd))
-						count++;
-				}
-
-				if (count == 7)
-					pACSChList[ChIdx].BwCap = TRUE;
-			}
-
-			/* Check that whether there is a skip-channel in BW160-channel group */
-			/* If there is a skip-channel in BW160-channel group, just also skip secondary channels */
-			if (pACSChList[ChIdx].SkipChannel == TRUE) {
-				for (k = 1; k < 8; k++) {
-					if ((pACSChList[ChIdx + k].Channel >= vht_ch_160M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx + k].Channel <= vht_ch_160M[idx].ch_up_bnd))
-						pACSChList[ChIdx + k].SkipChannel = TRUE;
-
-					if ((pACSChList[ChIdx - k].Channel >= vht_ch_160M[idx].ch_low_bnd) &&
-						(pACSChList[ChIdx - k].Channel <= vht_ch_160M[idx].ch_up_bnd))
-						pACSChList[ChIdx - k].SkipChannel = TRUE;
+					/* Update whole VHT BW160 channel group */
+					if (count == 7) {
+						CentralChannel = vht_cent_ch_freq(pACSChList[ChIdx].Channel, VHT_BW_160, ch_band);
+						update_channel_bw_by_group(pACSChList, ChIdx, 8, BW_160, CentralChannel);
+						continue;
+					}
 				}
 			}
 
-			pACSChList[ChIdx].CentralChannel = vht_cent_ch_freq(pACSChList[ChIdx].Channel, VHT_BW_160, ch_band);
+			pACSChList[ChIdx].Bw = BW_160;
+			pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel;
+			pACSChList[ChIdx].BuildDone = TRUE;
 		} else {
 
 			/* The channel is undefined */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("[%s] The channel:%d is undefined\n",
-			__func__, pACSChList[ChIdx].Channel));
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_ERROR,
+				"The channel:%d is undefined\n", pACSChList[ChIdx].Channel);
 
 			if ((cfg_ht_bw == BW_40) && (cfg_vht_bw == VHT_BW_2040))
 				pACSChList[ChIdx].Bw = BW_40;
@@ -2710,19 +2757,20 @@ VOID AutoChSelBuildChannelListFor5G(
 			else if (cfg_vht_bw == VHT_BW_160)
 				pACSChList[ChIdx].Bw = BW_160;
 
-			pACSChList[ChIdx].BwCap = FALSE;
 			pACSChList[ChIdx].CentralChannel = pACSChList[ChIdx].Channel;
+			pACSChList[ChIdx].BuildDone = TRUE;
 		}
 #endif /* DOT11_VHT_AC */
 	}
 
 	/*Show ACS channel list*/
 	for (ChIdx = 0; ChIdx < ChListNum5G; ChIdx++) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("%s:	PrimChannel =  %3d, CenChannel = %3d, BW= %d, BwCap= %d, SkipChannel= %d\n", __func__,
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_ACS, DBG_LVL_TRACE,
+				 "PrimChannel=%3d, CenChannel=%3d, BW=%d, BwCap=%d, SkipChannel=%d, BuildDone=%d\n",
 				  pACSChList[ChIdx].Channel, pACSChList[ChIdx].CentralChannel,
 				  pACSChList[ChIdx].Bw, pACSChList[ChIdx].BwCap,
-				  pACSChList[ChIdx].SkipChannel));
+				  pACSChList[ChIdx].SkipChannel,
+				  pACSChList[ChIdx].BuildDone);
 	}
 
 	/*Set channel list of auto channel selection*/
@@ -2759,7 +2807,7 @@ CHAR AutoChSelFindScanChIdx(
 	IN struct wifi_dev *pwdev,
 	IN CHAR LastScanChIdx)
 {
-	CHAR ScanChIdx = -1;
+	CHAR ScanChIdx;
 	UCHAR BandIdx = HcGetBandByWdev(pwdev);
 	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
 
@@ -2887,7 +2935,7 @@ VOID AutoChSelScanNextChannel(
 
 	if (pAutoChCtrl->AutoChSelCtrl.ScanChIdx == -1) {
 #ifdef ACS_CTCC_SUPPORT
-		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) || 
+		if((WMODE_CAP_2G(pwdev->PhyMode) && (cfg_ht_bw == BW_20)) ||
 			(WMODE_CAP_5G(pwdev->PhyMode) && (cfg_vht_bw == VHT_BW_80)))
 			NewCh = select_clear_channel_busy_time(pAd, pwdev);
 		else
@@ -2903,7 +2951,7 @@ VOID AutoChSelScanNextChannel(
 		scan_ch_restore(pAd, OPMODE_AP, pwdev); /* Restore original channel */
 #endif /* AP_SCAN_SUPPORT */
 #ifdef ACS_CTCC_SUPPORT
-		if (!pAd->ApCfg.auto_ch_score_flag)
+		if (!pAd->ApCfg.auto_ch_score_flag[BandIdx])
 #endif
 		{
 			if (NewCh != pwdev->channel) {
@@ -2939,7 +2987,7 @@ VOID AutoChSelScanNextChannel(
 				RTMP_OS_COMPLETE(&pAd->ApCfg.set_ch_aync_done);
 		}
 #ifdef ACS_CTCC_SUPPORT
-		pAd->ApCfg.auto_ch_score_flag = FALSE;
+		pAd->ApCfg.auto_ch_score_flag[BandIdx] = FALSE;
 #endif
 		/* Enable MibBucket after ACS done */
 		pAd->MsMibBucket.Enabled = TRUE;
@@ -3217,7 +3265,7 @@ VOID auto_ch_select_set_cfg(RTMP_ADAPTER *pAd, RTMP_STRING *buffer)
 	UINT8 band_idx = 0;
 	RTMP_STRING *ptr;
 	struct wifi_dev *pwdev = &pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev;
-	ChannelSel_Alg sel_alg = ChannelAlgBusyTime;
+	ChannelSel_Alg sel_alg;
 
 	for (band_idx = 0, ptr = rstrtok(buffer, ";"); ptr; ptr = rstrtok(NULL, ";"), band_idx++) {
 

@@ -98,6 +98,7 @@ typedef struct _RRM_MLME_BCN_REQ_INFO {
 	UINT8 report_detail;
 	UINT8 request_ie_num;
 	UINT8 request_ie[MAX_NUM_OF_REQ_IE];
+	bool LastBcnRptInd;
 } RRM_MLME_BCN_REQ_INFO, *PRRM_MLME_BCN_REQ_INFO;
 
 typedef struct _RRM_MLME_TRANSMIT_REQ_INFO {
@@ -137,6 +138,9 @@ enum BCN_EVENT {
 
 #define BCN_FUNC_SIZE (MAX_BCN_STATE * MAX_BCN_MSG)
 #define BCN_REP_TIMEOUT_VALUE (60*1000)
+#ifdef CONFIG_MAP_SUPPORT
+#define BCN_REP_TIMEOUT_VALUE_MAP (3*1000)
+#endif
 
 #define NR_MACHINE_BASE 0
 
@@ -161,6 +165,7 @@ enum NR_EVENT {
 typedef struct GNU_PACKED _BCN_EVENT_DATA {
 	UINT8 ControlIndex;
 	UINT8 MeasureReqToken;
+	UINT8 measuretype;
 	UINT8 stamac[MAC_ADDR_LEN];
 	UINT16 DataLen;
 	UCHAR Data[0];

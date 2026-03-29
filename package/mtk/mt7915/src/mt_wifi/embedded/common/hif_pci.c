@@ -22,7 +22,7 @@
 #include "mac/mac_mt/fmac/mt_fmac.h"
 #endif
 
-#ifdef CONFIG_WIFI_MSI_SUPPORT
+#if defined(CONFIG_WIFI_MSI_SUPPORT) || defined(PLE_MONITOR_SUPPORT)
 #include "chip/mt7915_cr.h"
 #endif
 
@@ -591,6 +591,109 @@ VOID pci_rx_all(struct _PCI_HIF_T *pci_hif)
 	}
 }
 
+#ifdef PLE_MONITOR_SUPPORT
+BOOLEAN wfdma_abnormal_check(struct _RTMP_ADAPTER *pAd)
+{
+	UINT8 num_of_tx_ring = hif_get_tx_res_num(pAd->hdev_ctrl);
+	PCI_HIF_T *hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
+	UINT32 tcnt[num_of_tx_ring], tcidx[num_of_tx_ring], tdidx[num_of_tx_ring];
+	struct hif_pci_tx_ring *tx_ring = NULL;
+	static UINT8 abnormal_cnt[] = {0};
+	UINT32 queue_cnt, idx;
+	BOOLEAN ret = FALSE;
+
+	memset(tcnt, 0,  num_of_tx_ring * sizeof(UINT32));
+	memset(tcidx, 0,  num_of_tx_ring * sizeof(UINT32));
+	memset(tdidx, 0,  num_of_tx_ring * sizeof(UINT32));
+
+	for (idx = 0; idx < num_of_tx_ring; idx++) {
+		tx_ring = pci_get_tx_ring_by_ridx(hif, idx);
+		HIF_IO_READ32(pAd->hdev_ctrl, tx_ring->hw_cnt_addr, &tcnt[idx]);
+		HIF_IO_READ32(pAd->hdev_ctrl, tx_ring->hw_cidx_addr, &tcidx[idx]);
+		HIF_IO_READ32(pAd->hdev_ctrl, tx_ring->hw_didx_addr, &tdidx[idx]);
+
+		queue_cnt = (tcidx[idx] >= tdidx[idx]) ? (tcidx[idx] - tdidx[idx]) : (tcidx[idx] - tdidx[idx] + tcnt[idx]);
+
+		if (queue_cnt && (tx_ring->TxDmaIdx_last == tdidx[idx])) {
+			abnormal_cnt[idx]++;
+		} else {
+			abnormal_cnt[idx] = 0;
+		}
+
+		tx_ring->TxDmaIdx_last = tdidx[idx];
+
+		MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_WARN,
+					("%s: tx_ring(%d) tcnt(%6x) CIDX(%6x) DIDX(%6x) DIDX_LA(%6x) QCnt(%6x) abcnt(%6x) !!\n",
+					__FUNCTION__, idx, tcnt[idx], tcidx[idx], tdidx[idx], tx_ring->TxDmaIdx_last, queue_cnt, abnormal_cnt[idx]));
+
+		/* wfdma abnormal lasts 10s(you can modify it), problem appeared!! */
+		if (abnormal_cnt[idx] > WF_WFDMA_ABNORMAL_MONITOR_TIME) {
+			abnormal_cnt[idx] = 0;
+			ret = TRUE;
+			MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF,
+				("%s: tx_ring(%d) abormal: CIDX(%6x) DIDX(%6x) QCnt(%6x) !!\n", __FUNCTION__, idx, tcidx[idx], tdidx[idx], queue_cnt));
+		}
+	}
+
+	return ret;
+}
+
+/* when WARP(WED) enabled, only check wfdma is not enough, so we check host_dma1 */
+BOOLEAN host_dma1_abnormal_check(struct _RTMP_ADAPTER *pAd)
+{
+	UINT32 cidx, didx, tcnt, qcnt;
+	UINT32 base_addr[DBDC_BAND_NUM];
+	int i;
+	BOOLEAN ret = FALSE;
+	PCI_HIF_T *hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
+
+#ifdef WFDMA_WED_COMPATIBLE
+	base_addr[0] = WF_WFDMA_EXT_WRAP_CSR_WED_TX0_CTRL0_ADDR;
+#else
+	base_addr[0] = WF_WFDMA_HOST_DMA1_WPDMA_TX_RING18_CTRL0_ADDR;
+#endif
+
+#ifdef DBDC_MODE
+#ifdef WFDMA_WED_COMPATIBLE
+	base_addr[1] = WF_WFDMA_EXT_WRAP_CSR_WED_TX1_CTRL0_ADDR;
+#else
+	base_addr[1] = WF_WFDMA_HOST_DMA1_WPDMA_TX_RING19_CTRL0_ADDR;
+#endif
+#endif
+
+	for (i = 0; i < DBDC_BAND_NUM; i++) {
+#ifdef DBDC_MODE
+		if (i == DBDC_BAND1 && !pAd->CommonCfg.dbdc_mode)
+			continue;
+#endif
+
+		RTMP_IO_READ32(pAd->hdev_ctrl, base_addr[i] + 4, &tcnt);
+		RTMP_IO_READ32(pAd->hdev_ctrl, base_addr[i] + 8, &cidx);
+		RTMP_IO_READ32(pAd->hdev_ctrl, base_addr[i] + 12, &didx);
+
+		qcnt = (cidx >= didx) ? (cidx - didx) : (cidx - didx + tcnt);
+
+		if (qcnt && (didx == hif->last_dma_idx[i])) {
+			hif->abnormal_cnt[i]++;
+		} else {
+			hif->abnormal_cnt[i] = 0;
+		}
+
+		hif->last_dma_idx[i] = didx;
+
+		/* wfdma abnormal lasts 10s(you can modify it), problem appeared!! */
+		if (hif->abnormal_cnt[i] > WF_WFDMA_ABNORMAL_MONITOR_TIME) {
+			hif->abnormal_cnt[i] = 0;
+			ret = TRUE;
+			MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_OFF,
+				("%s: band(%d) abormal: CIDX(%6x) DIDX(%6x) QCnt(%6x) !!\n", __FUNCTION__, i, cidx, didx, qcnt));
+		}
+	}
+
+	return ret;
+}
+#endif
+
 /*
 *
 */
@@ -607,7 +710,7 @@ static BOOLEAN pci_tx_dma_done_handle(RTMP_ADAPTER *pAd, UINT8 resource_idx)
 	if (free_num >= tx_ring->tx_ring_high_water_mark &&
 			pci_get_resource_state(pAd, resource_idx)) {
 		pci_set_resource_state(pAd, resource_idx, TX_RING_HIGH);
-		qm_ops->schedule_tx_que(pAd, tx_ring->band_idx);
+		qm_ops->schedule_tx_que(pAd, (tx_ring->band_idx ? DBDC_BAND1 : DBDC_BAND0));
 	}
 
 	return FALSE;
@@ -1038,6 +1141,11 @@ static INT rx_scatter_gather_dynamic_page(
 	}
 	buf_idx = pRxD->SDL0;
 
+	if (buf_idx > RX_BUFFER_AGGRESIZE) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+                         "%s: packet is too large, size:%d.\n", __func__, buf_idx);
+	}
+
 	pRxCell->pNdisPacket = expand_pkt_dynamic_page(pAd, rx_ring,
 					pRxCellPacket, buf_idx, gather_size, build_skb_len);
 
@@ -1217,7 +1325,7 @@ static INT rx_scatter_gather_pre_slab(
 #ifdef RT_BIG_ENDIAN
 	RXD_STRUC *pDestRxD;
 	UCHAR rx_hw_info[RXD_SIZE];
-#endif	
+#endif
 	PNDIS_PACKET pRxCellPacket;
 	struct _PCI_HIF_T *pci_hif = hc_get_hif_ctrl(pAd->hdev_ctrl);
 	struct hif_pci_rx_ring *rx_ring = pci_get_rx_ring_by_ridx(pci_hif, resource_idx);
@@ -1394,6 +1502,62 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_token(
 		goto done;
 	}
 
+	/* drop scatter packet in host driver, only handle by WO to avoid hang */
+	if (scatterCnt > 1) {
+		UINT LoopCnt;
+		for (LoopCnt = 0; LoopCnt < scatterCnt; LoopCnt++) {
+			RTMP_DMACB *pCurRxCell = NULL;
+			RXD_STRUC *pCurRxD;
+#ifdef RT_BIG_ENDIAN
+			RXD_STRUC *pDestRxD;
+			UCHAR rx_hw_info[RXD_SIZE];
+#endif
+			UINT32 tkn_rx_id, tkn_rx_id_pa;
+			INT32 search = -1;
+			PNDIS_PACKET cur_pkt = NULL;
+			VOID *cur_alloc_va;
+
+			pCurRxCell = &rx_ring->Cell[rx_ring->RxSwReadIdx];
+			/* flush dcache if no consistent memory is supported */
+			RTMP_DCACHE_FLUSH(pCurRxCell->AllocPa, RXD_SIZE);
+			/* Point to Rx indexed rx ring descriptor */
+#ifdef RT_BIG_ENDIAN
+			pDestRxD = (RXD_STRUC *)pCurRxCell->AllocVa;
+			NdisMoveMemory(&rx_hw_info[0], pDestRxD, RXD_SIZE);
+			pCurRxD = (RXD_STRUC *)&rx_hw_info[0];
+			RTMPDescriptorEndianChange((PUCHAR)pCurRxD, TYPE_RXD);
+#else
+			pCurRxD = (RXD_STRUC *)pCurRxCell->AllocVa;
+#endif
+			tkn_rx_id = (pCurRxD->SDP1 & RX_TOKEN_ID_MASK) >> RX_TOKEN_ID_SHIFT;
+			tkn_rx_id_pa = 0;
+			search = token_rx_dmad_lookup_pa(&cb->rx_que, &tkn_rx_id_pa, &cur_pkt,
+								&cur_alloc_va, pCurRxD->SDP0);
+			if (search == 0)
+				MTWF_DBG(pAd, DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+						 "\033[0;32;31m%s(): tkn_rx_id=%d, tkn_rx_id_pa=%d.\n\033[m",
+						 __func__, tkn_rx_id, tkn_rx_id_pa);
+			else
+				MTWF_DBG(pAd, DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"\033[0;32;31m map pa to tkn_rx_id failed!\nv\033[m");
+			/* reset DMAD content to initial value */
+			if (tkn_rx_id_pa)
+				pCurRxD->SDP1 = tkn_rx_id_pa << RX_TOKEN_ID_SHIFT;
+			pCurRxD->SDL0 = rx_ring->RxBufferSize;
+			pCurRxD->DDONE = 0;
+#ifdef RT_BIG_ENDIAN
+			RTMPDescriptorEndianChange((PUCHAR)pCurRxD, TYPE_RXD);
+			WriteBackToDescriptor((PUCHAR)pDestRxD, (PUCHAR)pCurRxD, FALSE, TYPE_RXD);
+#endif
+			INC_RING_INDEX(rx_ring->RxSwReadIdx, rx_ring->ring_size);
+		}
+		bReschedule = TRUE;
+		MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			("%s():drop scatter packet cnt=%d, RxSwReadIdx=%d\n",
+			__func__, scatterCnt, rx_ring->RxSwReadIdx));
+		goto done;
+	}
+
 	pNewPacket = RTMP_AllocateRxPacketBuffer(rx_ring,
 				((POS_COOKIE)(pAd->OS_Cookie))->pDev,
 				pRxCell->DmaBuf.AllocSize,
@@ -1410,7 +1574,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_token(
 		}
 
 		/* RXD+RXP buffer lookup according token */
-		token_rx_dmad_lookup(&cb->rx_que, tkn_rx_id, &cur_pkt,
+		mt7915_token_rx_dmad_lookup(&cb->rx_que, tkn_rx_id, &cur_pkt,
 								&cur_alloc_va, &cur_alloc_pa);
 
 		PCI_UNMAP_SINGLE(pAd, cur_alloc_pa,
@@ -1418,6 +1582,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_token(
 
 		RTMP_DCACHE_FLUSH(cur_alloc_pa, pRxCell->DmaBuf.AllocSize);
 
+		/* [coverity] remove dead code
 		if (scatterCnt > 1) {
 			if (rx_scatter_gather_dynamic_page(pAd, resource_idx, pRxCell,
 				pRxD, scatterCnt,
@@ -1427,6 +1592,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_token(
 				goto done;
 			}
 		}
+		*/
 
 		if (cur_pkt) {
 			build_rx_pkt_skb(&skb_pkt, (VOID *)cur_pkt,
@@ -1492,7 +1658,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_token(
 	}
 
 	pRxD->DDONE = 0;
-#ifdef RT_BIG_ENDIAN		
+#ifdef RT_BIG_ENDIAN
 	RTMPDescriptorEndianChange((PUCHAR)pRxD, TYPE_RXD);
 	WriteBackToDescriptor((PUCHAR)pDestRxD, (PUCHAR)pRxD, FALSE, TYPE_RXD);
 #endif
@@ -1533,7 +1699,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone(
 #if (defined (CONFIG_CSO_SUPPORT) || defined (RX_RPS_SUPPORT))
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT32 build_skb_len = 0;
 #ifdef CONFIG_TP_DBG
@@ -1708,7 +1874,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_io(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT32 build_skb_len = 0;
 	UINT16 rx_ring_size = rx_ring->ring_size;
@@ -1877,7 +2043,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_slab_ddone(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 #ifdef CONFIG_TP_DBG
 	struct tp_debug *tp_dbg = &pAd->tr_ctl.tp_dbg;
@@ -2012,7 +2178,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_slab_io(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT16 rx_ring_size = rx_ring->ring_size;
 
@@ -2170,7 +2336,7 @@ static PNDIS_PACKET pci_get_pkt_pre_slab_ddone(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 #ifdef CONFIG_TP_DBG
 	struct tp_debug *tp_dbg = &pAd->tr_ctl.tp_dbg;
@@ -2308,7 +2474,7 @@ static PNDIS_PACKET pci_get_pkt_pre_slab_io(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT16 rx_ring_size = rx_ring->ring_size;
 
@@ -2446,7 +2612,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_debug(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT32 build_skb_len = 0;
 	static UINT64 ring_round;
@@ -2493,7 +2659,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_debug(
 		/* flush dcache if no consistent memory is supported */
 		RTMP_DCACHE_FLUSH(pRxCell->DmaBuf.AllocPa, pRxCell->DmaBuf.AllocSize);
 
-		if (scatterCnt > 1) {
+		if (scatterCnt > 1 && pRxD->SDL0 <= RX_BUFFER_AGGRESIZE) {
 			if (rx_scatter_gather_dynamic_page(pAd, resource_idx, pRxCell,
 				(struct _RXD_STRUC *)pRxD, scatterCnt,
 				gather_size, &build_skb_len) == FALSE)	{
@@ -2517,7 +2683,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_ddone_debug(
 		}
 #endif
 
-		if (pRxPacket) {
+		if (pRxPacket && pRxD->SDL0 <= RX_BUFFER_AGGRESIZE) {
 			if (dump_rx_info(pAd, pRxCell, pRxD, resource_idx, pRxPacket) == NDIS_STATUS_FAILURE) {
 				RELEASE_NDIS_PACKET_IRQ(pAd, pRxPacket, NDIS_STATUS_SUCCESS);
 				pRxPacket = NULL;
@@ -2609,7 +2775,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_io_debug(
 	RX_CSO_STRUCT *prCso = NULL;
 	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
 #endif
-	UINT scatterCnt = 1;
+	UINT scatterCnt;
 	UINT32 gather_size = 0;
 	UINT32 build_skb_len = 0;
 	UINT16 rx_ring_size = rx_ring->ring_size;
@@ -2681,7 +2847,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_io_debug(
 		/* flush dcache if no consistent memory is supported */
 		RTMP_DCACHE_FLUSH(pRxCell->DmaBuf.AllocPa, pRxCell->DmaBuf.AllocSize);
 
-		if (scatterCnt > 1) {
+		if (scatterCnt > 1 && pRxD->SDL0 <= RX_BUFFER_AGGRESIZE) {
 
 			if (rx_scatter_gather_dynamic_page(pAd, resource_idx, pRxCell,
 				(struct _RXD_STRUC *)pRxD, scatterCnt,
@@ -2706,7 +2872,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_io_debug(
 		}
 #endif
 
-		if (pRxPacket) {
+		if (pRxPacket && pRxD->SDL0 <= RX_BUFFER_AGGRESIZE) {
 			if (dump_rx_info(pAd, pRxCell, pRxD, resource_idx, pRxPacket) == NDIS_STATUS_FAILURE) {
 				RELEASE_NDIS_PACKET_IRQ(pAd, pRxPacket, NDIS_STATUS_SUCCESS);
 				pRxPacket = NULL;
@@ -2755,7 +2921,7 @@ static PNDIS_PACKET pci_get_pkt_dynamic_page_io_debug(
 
 	pRxD->SW_INFO = ring_round;
 	pRxD->DDONE = 0;
-	
+
 #ifdef RT_BIG_ENDIAN
 	RTMPDescriptorEndianChange((PUCHAR)pRxD, TYPE_RXD);
 	WriteBackToDescriptor((PUCHAR)pDestRxD, (PUCHAR)pRxD, FALSE, TYPE_RXD);
@@ -2801,8 +2967,31 @@ static BOOLEAN pci_rx_dma_done_handle(RTMP_ADAPTER *pAd, UINT8 resource_idx)
 			break;
 
 #ifdef ERR_RECOVERY
+#ifdef WHNAT_SUPPORT
+		if (IsStopingPdma(&pAd->ErrRecoveryCtl)) {
+			if (IsStopingRxDma(&pAd->ErrRecoveryCtl))
+				break;
+
+			/* Process rx pkts for WHNAT RX */
+			if (RxProcessed++ > max_rx_process_cnt) {
+				bReschedule = TRUE;
+				break;
+			}
+
+			pkt = hif->get_pkt_from_rx_resource[rx_ring->buf_type][rx_ring->get_pkt_method]
+						(pAd, &bReschedule, &RxPending, resource_idx);
+			if (pkt) {
+				/* Drop rx pkts during error recovery */
+				RELEASE_NDIS_PACKET_IRQ(pAd, pkt, NDIS_STATUS_SUCCESS);
+				continue;
+			} else {
+				break;
+			}
+		}
+#else
 		if (IsStopingPdma(&pAd->ErrRecoveryCtl))
 			break;
+#endif
 #endif /* ERR_RECOVERY */
 
 		if (RxProcessed++ > max_rx_process_cnt) {
@@ -2881,8 +3070,31 @@ static BOOLEAN pci_rx_dma_done_rxq_handle(RTMP_ADAPTER *pAd, UINT8 resource_idx)
 			break;
 
 #ifdef ERR_RECOVERY
+#ifdef WHNAT_SUPPORT
+		if (IsStopingPdma(&pAd->ErrRecoveryCtl)) {
+			if (IsStopingRxDma(&pAd->ErrRecoveryCtl))
+				break;
+
+			/* Process rx pkts for WHNAT RX */
+			if (RxProcessed++ > max_rx_process_cnt) {
+				bReschedule = TRUE;
+				break;
+			}
+
+			pkt = hif->get_pkt_from_rx_resource[rx_ring->buf_type][rx_ring->get_pkt_method]
+						(pAd, &bReschedule, &RxPending, resource_idx);
+			if (pkt) {
+				/* Drop rx pkts during error recovery */
+				RELEASE_NDIS_PACKET_IRQ(pAd, pkt, NDIS_STATUS_SUCCESS);
+				continue;
+			} else {
+				break;
+			}
+		}
+#else
 		if (IsStopingPdma(&pAd->ErrRecoveryCtl))
 			break;
+#endif
 #endif /* ERR_RECOVERY */
 
 		if (RxProcessed++ > max_rx_process_cnt) {
@@ -3338,7 +3550,7 @@ static VOID pci_rx_dly_done_func(unsigned long data)
 	struct pci_schedule_task_ops *sched_ops = pci_hif_chip->schedule_task_ops;
 	struct ba_control *ba_ctl = &pAd->tr_ctl.ba_ctl;
 #ifdef CONFIG_TP_DBG
-	UINT32 timestamp;
+	UINT32 timestamp = 0;
 	struct tp_debug *tp_dbg = &pAd->tr_ctl.tp_dbg;
 #endif
 
@@ -3429,12 +3641,14 @@ static VOID pci_mac_recovery_func(unsigned long data)
 	if (IS_MT7663(pAd) || IS_AXE(pAd) || IS_MT7915(pAd))
 		INT_MCU_CMD = MT_INT_MCU2HOST_SW_INT_STS_BIT;
 #endif
+	pAd->ErrRecoveryCtl.hostSerStep = 6;
 
 	RTMP_SPIN_LOCK_IRQSAVE(&pci_hif_chip->LockInterrupt, &Flags);
 	status = pAd->ErrRecoveryCtl.status;
 	pAd->ErrRecoveryCtl.status = 0;
 	RTMP_SPIN_UNLOCK_IRQRESTORE(&pci_hif_chip->LockInterrupt, &Flags);
 
+	pAd->ErrRecoveryCtl.hostSerStep = 7;
 	RTMP_MAC_RECOVERY(pAd, status);
 
 	RTMP_INT_LOCK(&pci_hif_chip->LockInterrupt, Flags);
@@ -3480,8 +3694,22 @@ static VOID pci_sw_int_func(unsigned long data)
 	struct pci_hif_chip *pci_hif_chip = (struct pci_hif_chip *)data;
 	struct _RTMP_ADAPTER *pAd = RTMP_OS_NETDEV_GET_PRIV(pci_hif_chip->hif->net_dev);
 
+	pAd->ErrRecoveryCtl.hostSerStep = 2;
 	chip_sw_int_handler(pAd, pci_hif_chip);
 }
+
+/*
+*
+*/
+#ifdef WF_RESET_SUPPORT
+static VOID pci_wf_reset_func(unsigned long data)
+{
+	struct pci_hif_chip *pci_hif_chip = (struct pci_hif_chip *)data;
+	struct _RTMP_ADAPTER *pAd = RTMP_OS_NETDEV_GET_PRIV(pci_hif_chip->hif->net_dev);
+
+	RTCMDUp(&pAd->wf_reset_task);
+}
+#endif /* WF_RESET_SUPPORT */
 
 /*
 *
@@ -4169,9 +4397,12 @@ static NDIS_STATUS pci_hif_chip_merge_txrx_ring(struct _PCI_HIF_T *pci_hif)
 	os_alloc_mem(NULL, (UCHAR **)&pci_hif->tx_ring, pci_hif->tx_res_num * sizeof(struct hif_pci_tx_ring *));
 	if (pci_hif->tx_ring == NULL)
 		return NDIS_STATUS_FAILURE;
+	os_zero_mem(pci_hif->tx_ring, pci_hif->tx_res_num * sizeof(struct hif_pci_tx_ring *));
+
 	os_alloc_mem(NULL, (UCHAR **)&pci_hif->rx_ring, pci_hif->rx_res_num * sizeof(struct hif_pci_rx_ring *));
 	if (pci_hif->rx_ring == NULL)
 		return NDIS_STATUS_FAILURE;
+	os_zero_mem(pci_hif->rx_ring, pci_hif->rx_res_num * sizeof(struct hif_pci_rx_ring *));
 
 	for (i = 0; i < pci_hif->pci_hif_chip_num; i++) {
 		hif_chip = pci_hif->pci_hif_chip[i];
@@ -4511,7 +4742,7 @@ static NDIS_STATUS pci_init_txrx_ring_mem(void *hdev_ctrl)
 			if (whnat_en && (cap->tkn_info.feature & TOKEN_RX)
 					&& (attr == HIF_RX_DATA)) {
 				UINT32 tkn_rx_id;
-				tkn_rx_id = token_rx_dmad_init(&cb->rx_que, pPacket,
+				tkn_rx_id = mt7915_token_rx_dmad_init(&cb->rx_que, pPacket,
 										pDmaBuf->AllocSize, pDmaBuf->AllocVa, pDmaBuf->AllocPa);
 				pRxD->SDP1 |= (tkn_rx_id << RX_TOKEN_ID_SHIFT);
 				pRxD->SDL1 |= (1 << TO_HOST_SHIFT);
@@ -5129,6 +5360,14 @@ static INT tasklet_schedule_sw_int(struct pci_task_group *task_group)
 	return NDIS_STATUS_SUCCESS;
 }
 
+#ifdef WF_RESET_SUPPORT
+static INT tasklet_schedule_wf_reset(struct pci_task_group *task_group)
+{
+	RTMP_OS_TASKLET_SCHE(&task_group->wf_reset_task);
+	return NDIS_STATUS_SUCCESS;
+}
+#endif /* WF_RESET_SUPPORT */
+
 static struct pci_schedule_task_ops tasklet_schedule_ops = {
 	.schedule_tx_dma_done = tasklet_schedule_tx_done,
 	.schedule_rx_data_done = tasklet_schedule_rx_data_done,
@@ -5142,6 +5381,9 @@ static struct pci_schedule_task_ops tasklet_schedule_ops = {
 #endif
 	.schedule_subsys_int = tasklet_schedule_subsys_int,
 	.schedule_sw_int = tasklet_schedule_sw_int,
+#ifdef WF_RESET_SUPPORT
+	.schedule_wf_reset = tasklet_schedule_wf_reset,
+#endif /* WF_RESET_SUPPORT */
 };
 
 #ifndef PROPRIETARY_DRIVER_SUPPORT
@@ -5158,6 +5400,10 @@ static struct pci_schedule_task_ops tasklet_napi_schedule_ops = {
 #endif
 	.schedule_subsys_int = tasklet_schedule_subsys_int,
 	.schedule_sw_int = tasklet_schedule_sw_int,
+#ifdef WF_RESET_SUPPORT
+	.schedule_wf_reset = tasklet_schedule_wf_reset,
+#endif /* WF_RESET_SUPPORT */
+
 };
 #endif
 
@@ -5190,6 +5436,9 @@ static NDIS_STATUS pci_init_task_group(void *hdev_ctrl)
 #endif
 			RTMP_OS_TASKLET_INIT(NULL, &task_group->subsys_int_task, pci_subsys_int_func, (unsigned long)hif_chip);
 			RTMP_OS_TASKLET_INIT(NULL, &task_group->sw_int_task, pci_sw_int_func, (unsigned long)hif_chip);
+#ifdef WF_RESET_SUPPORT
+			RTMP_OS_TASKLET_INIT(NULL, &task_group->wf_reset_task, pci_wf_reset_func, (unsigned long)hif_chip);
+#endif /* WF_RESET_SUPPORT */
 		}
 #ifndef PROPRIETARY_DRIVER_SUPPORT
 		else if (cap->hif_tm == TASKLET_NAPI_METHOD) {
@@ -5212,6 +5461,9 @@ static NDIS_STATUS pci_init_task_group(void *hdev_ctrl)
 #endif
 			RTMP_OS_TASKLET_INIT(NULL, &task_group->subsys_int_task, pci_subsys_int_func, (unsigned long)hif_chip);
 			RTMP_OS_TASKLET_INIT(NULL, &task_group->sw_int_task, pci_sw_int_func, (unsigned long)hif_chip);
+#ifdef WF_RESET_SUPPORT
+			RTMP_OS_TASKLET_INIT(NULL, &task_group->wf_reset_task, pci_wf_reset_func, (unsigned long)hif_chip);
+#endif /* WF_RESET_SUPPORT */
 		}
 #endif
 	}
@@ -5323,9 +5575,19 @@ VOID pci_handle_irq(void *hif_chip)
 static VOID pci_hif_init(void *hdev_ctrl)
 {
 	struct _PCI_HIF_T *hif = hc_get_hif_ctrl(hdev_ctrl);
+#ifdef PLE_MONITOR_SUPPORT
+	int i;
+#endif
 
 	NdisAllocateSpinLock(NULL, &hif->io_remap_lock);
 	hif->bPCIclkOff = FALSE;
+#ifdef PLE_MONITOR_SUPPORT
+	hif->PleBufferMonitorEn = FALSE;
+	for (i = 0; i < DBDC_BAND_NUM; i++) {
+		hif->abnormal_cnt[i] = 0;
+		hif->last_dma_idx[i] = 0;
+	}
+#endif
 }
 
 /*

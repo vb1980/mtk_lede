@@ -558,7 +558,8 @@ const UINT8 BACKOFF_FILL_TABLE_BF_LENGTH[BACKOFF_PARAM_NUM_V1] = {
 	BACKOFF_TABLE_BF_ON_RU106_LENGTH_V1
 };
 
-const UINT32 hif_ownsership_cr[2][OWNERSHIP_CR_TYPE_NUM] = {
+#define HIF_PORT_MAX	2
+const UINT32 hif_ownsership_cr[HIF_PORT_MAX][OWNERSHIP_CR_TYPE_NUM] = {
 	{CONN_HOST_CSR_TOP_WF_BAND0_LPCTL_ADDR, CONN_HOST_CSR_TOP_WF_BAND0_IRQ_STAT_ADDR},
 	{CONN_HOST_CSR_TOP_WF_BAND1_LPCTL_ADDR, CONN_HOST_CSR_TOP_WF_BAND1_IRQ_STAT_ADDR},
 };
@@ -665,7 +666,11 @@ void mt7915_apply_dpd_flatness_data(
 			*/
 
 			if (SwChCfg.Bw == BW_20) {
-				CentralFreq = SwChCfg.CentralChannel * 5 + 5000;
+				if (SwChCfg.CentralChannel == 144) {
+					CentralFreq = (SwChCfg.CentralChannel - 4) * 5 + 5000;
+				} else {
+					CentralFreq = SwChCfg.CentralChannel * 5 + 5000;
+				}
 			} else if (SwChCfg.Bw == BW_160 || SwChCfg.Bw == BW_8080) {
 				UINT32 Central = BW160Central * 5 + 5000;
 				UINT32 CentralAdd10M = (BW160Central + 2) * 5 + 5000;
@@ -691,7 +696,7 @@ void mt7915_apply_dpd_flatness_data(
 			}
 		}
 	} else {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("%s: eeprom 0x%2x bit 0 is 0, do runtime cal\n",
 			__func__, PRECAL_INDICATION_BYTE));
 		return;
@@ -787,6 +792,9 @@ static void switch_channel(RTMP_ADAPTER *pAd, MT_SWITCH_CHANNEL_CFG SwChCfg)
 	MtCmdChannelSwitch(pAd, SwChCfg);
 	MtCmdSetTxRxPath(pAd, SwChCfg);
 	pAd->LatchRfRegs.Channel = SwChCfg.CentralChannel;
+	if (!SwChCfg.bScan) {
+		EDCCAInit(pAd, SwChCfg.BandIdx);
+	}
 }
 
 #ifdef NEW_SET_RX_STREAM
@@ -976,7 +984,7 @@ err_out:
 
 static inline VOID cal_free_data_get_from_addr(RTMP_ADAPTER *ad, UINT16 Offset)
 {
-	UINT16 value;
+	UINT16 value = 0;
 
 	if ((Offset % 2) != 0) {
 		rtmp_ee_efuse_read16(ad, Offset - 1, &value);
@@ -1029,21 +1037,9 @@ static VOID cal_free_data_get(RTMP_ADAPTER *ad)
 
 static VOID init_mac_cr(RTMP_ADAPTER *pAd)
 {
-	UCHAR bw_signal = 0;
-	struct wifi_dev *wdev = NULL;
-#ifdef CONFIG_AP_SUPPORT
-	IF_DEV_CONFIG_OPMODE_ON_AP(pAd) {
-		wdev = &pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev;
-	}
+#ifdef VLAN_SUPPORT
+	UINT32 mac_val = 0;
 #endif
-#ifdef CONFIG_STA_SUPPORT
-	IF_DEV_CONFIG_OPMODE_ON_STA(pAd) {
-		wdev = &pAd->StaCfg[MAIN_MBSSID].wdev;
-	}
-#endif
-	if (wdev)
-		bw_signal = wlan_config_get_vht_bw_sig(wdev);
-
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s()-->\n", __func__));
 #ifndef MAC_INIT_OFFLOAD
@@ -1065,10 +1061,23 @@ static VOID init_mac_cr(RTMP_ADAPTER *pAd)
 #endif
 	MtAsicSetTxSClassifyFilter(pAd, TXS2HOST, TXS2H_QID1, TXS2HOST_AGGNUMS, 0x00, 0);
 #endif /*MAC_INIT_OFFLOAD*/
-
-	/* RTS Bandwidth Signaling Setting */
-	if (bw_signal > BW_SIGNALING_DISABLE)
-		AsicSetRtsSignalTA(pAd, bw_signal);
+#ifdef VLAN_SUPPORT
+	if (MTK_REV_GTE(pAd, MT7915, MT7915E2))
+		pAd->CommonCfg.vlan2ethctl = TRUE;
+	else
+		pAd->CommonCfg.vlan2ethctl = FALSE;
+	/*
+	SingleVLAN : VLAN2ETH_OFST = 0x2
+	Double VLAN : VLAN2ETH_OFST = 0x4
+	Setting for SingleVlan.
+	*/
+	if (pAd->CommonCfg.vlan2ethctl == TRUE) {
+		HW_IO_READ32(pAd->hdev_ctrl, 0x820CD000, &mac_val);
+		mac_val &= ~(0x00000700);
+		mac_val |= 0x2 << 8;
+		HW_IO_WRITE32(pAd->hdev_ctrl, 0x820CD000, mac_val);
+	}
+#endif
 
 }
 
@@ -1115,14 +1124,10 @@ static void antenna_default_reset(
 	struct _RTMP_ADAPTER *pAd,
 	EEPROM_ANTENNA_STRUC *pAntenna)
 {
-#ifdef DBDC_MODE
 	USHORT value = 0;
+#ifdef DBDC_MODE
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 	UINT8 max_nss = cap->mcs_nss.max_nss;
-#else
-#ifdef TXBF_SUPPORT
-	USHORT value = 0;
-#endif
 #endif
 
 	/* TODO: shiang-MT7615 */
@@ -1570,12 +1575,15 @@ static UINT32 mt7915_rxv_get_byte_cnt(
 
 	/* sanity check for null pointer */
 	if (!ptr)
-		return FALSE;
+		goto error;
 
 	/* read byte count */
-	*byte_cnt = ((*ptr) & BITS(0, 15)) >> 0;
+	/* *byte_cnt = ((*ptr) & BITS(0, 15)) >> 0; */
 
-	return FALSE;
+error:
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		"(rxv) null pointer for rxv byte cnt\n");
+	return TRUE;
 }
 
 static UINT32 mt7915_rxv_get_content(
@@ -1590,8 +1598,6 @@ static UINT32 mt7915_rxv_get_content(
 	/* sanity check for null pointer */
 	if (!ptr)
 		goto error;
-
-	return FALSE;
 
 error:
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -1820,11 +1826,6 @@ static UINT32 mt7915_rxv_entry_parse(struct _RTMP_ADAPTER *pAd, VOID *Data)
 	for (i = WF0; i < WF_NUM; i++) {
 		if (rx_stat->FAGC_RSSI_WB[i] >= 128)
 			rx_stat->FAGC_RSSI_WB[i] -= 256;
-	}
-
-	for (i = WF0; i < WF_NUM; i++) {
-		rx_stat->FAGC_RSSI_IB[i] = rx_stat->FAGC_RSSI_IB[i] + i1RxFeLossComp[band_idx][i];
-		rx_stat->FAGC_RSSI_WB[i] = rx_stat->FAGC_RSSI_WB[i] + i1RxFeLossComp[band_idx][i];
 	}
 
 	/* pointer increment (CMN1) */
@@ -2831,6 +2832,8 @@ static UINT32 mt7915_rxv_dump_type_content_compose(
 		usr_num = rxv_dump_basic_entry_curr->usr_num;
 		data_list = rxv_dump_basic_entry_curr->data_list;
 	}
+	if (!data_list)
+		goto error0;
 
 	/* init length */
 	*len = 0;
@@ -3309,7 +3312,12 @@ VOID mt7915_update_mib_bucket(RTMP_ADAPTER *pAd)
 	UCHAR curr_idx = 0;
 	P_MT_MIB_COUNTER_STAT _prPrevMibCnt;
 	UCHAR concurrent_bands = HcGetAmountOfBand(pAd);
+#ifdef ENHANCE_STAT_SUPPORT
+	RTMP_MIB_PAIR Reg[7];
+	UINT64  TxOpInitTime;
+#else
 	RTMP_MIB_PAIR Reg[6];
+#endif
 
 	NdisZeroMemory(&Reg, sizeof(Reg));
 	pAd->MsMibBucket.CurIdx++;
@@ -3327,8 +3335,13 @@ VOID mt7915_update_mib_bucket(RTMP_ADAPTER *pAd)
 			Reg[3].Counter = RMAC_CNT_NONWIFI_AIRTIME;/* RMAC.AIRTIME13 Non Wifi Air time */
 			Reg[4].Counter = MIB_CNT_CCA_NAV_TX_TIME;/* M0SDR9 Channel Busy Time */
 			Reg[5].Counter = MIB_CNT_P_CCA_TIME;/* M0SDR16 Primary Channel Busy Time */
+#ifdef ENHANCE_STAT_SUPPORT
+			Reg[6].Counter = MIB_CNT_TXOP_INIT_COUNT; /*TxOpInit Count*/
 
+			MtCmdMultipleMibRegAccessRead(pAd, i, Reg, 7);
+#else
 			MtCmdMultipleMibRegAccessRead(pAd, i, Reg, 6);
+#endif
 
 			pAd->MsMibBucket.OBSSAirtime[i][curr_idx] =
 			(UINT32)(Reg[0].Value - _prPrevMibCnt->ObssAirtimeAcc[i]);
@@ -3343,12 +3356,21 @@ VOID mt7915_update_mib_bucket(RTMP_ADAPTER *pAd)
 			pAd->MsMibBucket.ChannelBusyTime[i][curr_idx] =
 			(UINT32)(Reg[5].Value - _prPrevMibCnt->PCcaTimeAcc[i]);
 
+#ifdef ENHANCE_STAT_SUPPORT
+			/* TxOpInitTime = ((TxOpInitCnt & 0x0000FFFF)*79)*/
+			TxOpInitTime = ((Reg[6].Value & 0x0000FFFF)*79);
+			pAd->MsMibBucket.TxOpInitTime[i][curr_idx] =
+			(UINT32)(TxOpInitTime - _prPrevMibCnt->TxOpInitTimeAcc[i]);
+#endif
 			_prPrevMibCnt->ObssAirtimeAcc[i] = Reg[0].Value;
 			_prPrevMibCnt->MyTxAirtimeAcc[i] = Reg[1].Value;
 			_prPrevMibCnt->MyRxAirtimeAcc[i] = Reg[2].Value;
 			_prPrevMibCnt->EdccaAirtimeAcc[i] = Reg[3].Value;
 			_prPrevMibCnt->CcaNavTxTimeAcc[i] = Reg[4].Value;
 			_prPrevMibCnt->PCcaTimeAcc[i] = Reg[5].Value;
+#ifdef ENHANCE_STAT_SUPPORT
+			_prPrevMibCnt->TxOpInitTimeAcc[i] = TxOpInitTime;
+#endif
 		}
 	}
 }
@@ -3457,26 +3479,48 @@ UCHAR *mt7915_get_default_bin_image(RTMP_ADAPTER *ad)
 
 INT32 mt7915_get_default_bin_image_file(RTMP_ADAPTER *ad, RTMP_STRING *path)
 {
-	if (strlen(get_dev_eeprom_binary(ad)) > 0)
-		snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
-	else
-		strncat(path, "/lib/firmware/e2p", strlen("/lib/firmware/e2p"));
+	INT ret;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("Use default BIN from:%s.\n", path));
+#ifdef CONFIG_COLGIN_MT6890
+	if (strlen(get_dev_eeprom_binary(ad)) > 0)
+		ret = snprintf(path, 100, "/mnt/vendor/nvcfg/%s", get_dev_eeprom_binary(ad));
+	else
+		ret = snprintf(path, 100, "%s", "/mnt/vendor/nvcfg/e2p");
+#else
+	if (strlen(get_dev_eeprom_binary(ad)) > 0)
+		ret = snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
+	else
+		ret = snprintf(path, 100, "%s", "/lib/firmware/e2p");
+#endif
+
+	if (ret < 0 || ret >= 100)
+		MTWF_PRINT("Unexpected error with default BIN.\n");
+	else
+		MTWF_PRINT("Use default BIN from:%s.\n", path);
 
 	return 0;
 }
 
 INT32 mt7915_get_prek_image_file(RTMP_ADAPTER *ad, RTMP_STRING *path)
 {
-	if (strlen(get_dev_eeprom_binary(ad)) > 0)
-		snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
-	else
-		strncat(path, "/lib/firmware/e2p", strlen("/lib/firmware/e2p"));
+	INT ret;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("Use PreCal BIN from:%s.\n", path));
+#ifdef CONFIG_COLGIN_MT6890
+	if (strlen(get_dev_eeprom_binary(ad)) > 0)
+		ret = snprintf(path, 100, "/mnt/vendor/nvcfg/%s", get_dev_eeprom_binary(ad));
+	else
+		ret = snprintf(path, 100, "%s", "/mnt/vendor/nvcfg/e2p");
+#else
+	if (strlen(get_dev_eeprom_binary(ad)) > 0)
+		ret = snprintf(path, 100, "/lib/firmware/%s", get_dev_eeprom_binary(ad));
+	else
+		ret = snprintf(path, 100, "%s", "/lib/firmware/e2p");
+#endif
+
+	if (ret < 0 || ret >= 100)
+		MTWF_PRINT("Unexpected error with PreCal BIN.\n");
+	else
+		MTWF_PRINT("Use PreCal BIN from:%s.\n", path);
 
 	return 0;
 }
@@ -3639,7 +3683,14 @@ static VOID fwdl_datapath_setup(RTMP_ADAPTER *pAd, BOOLEAN init)
 #ifdef CONFIG_STA_SUPPORT
 static VOID init_dev_nick_name(RTMP_ADAPTER *ad)
 {
-	snprintf((RTMP_STRING *) ad->nickname, sizeof(ad->nickname), "mt7915_sta");
+	int ret;
+
+	ret = snprintf((RTMP_STRING *) ad->nickname, sizeof(ad->nickname), "mt7915_sta");
+	if (os_snprintf_error(sizeof(ad->nickname), ret)) {
+		MTWF_DBG(ad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"nickname init error!\n");
+		return;
+	}
 }
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -4589,7 +4640,8 @@ void get_he_etxbf_cap(
 
 			if (wdev->wdev_type == WDEV_TYPE_AP) {
 				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_SU_BFER : 0;
-				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
+				if (wlan_config_get_mu_dl_mimo(wdev))
+					he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
 			}
 
 			he_bf_struct->bf_cap |= HE_SU_BFEE;
@@ -4631,7 +4683,8 @@ void get_he_etxbf_cap(
 
 			if (wdev->wdev_type == WDEV_TYPE_AP) {
 				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_SU_BFER : 0;
-				he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
+				if (wlan_config_get_mu_dl_mimo(wdev))
+					he_bf_struct->bf_cap |= (txbf_status->ucTxPathNum > 1) ? HE_MU_BFER : 0;
 			}
 
 			if (he_bf_struct->bf_cap & HE_SU_BFER) {
@@ -5195,6 +5248,9 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 	do {
 		retrycnt++;
 
+		if (port_idx >= HIF_PORT_MAX)
+			return NDIS_STATUS_FAILURE;
+
 		if (port_idx == 0)
 			drv_own = ad->bDrvOwn;
 		else
@@ -5214,26 +5270,21 @@ static INT32 pci_driver_own_by_port(RTMP_ADAPTER *ad, UINT8 port_idx)
 		counter = 0;
 		while (counter < FW_OWN_POLLING_COUNTER) {
 			RtmpusecDelay(1000);
-#ifdef CONFIG_COLGIN_MT6890
-            if ((ad->bIsLowPower == TRUE) && (0 == (counter%10))) {
-                cr_addr = hif_ownsership_cr[port_idx][OWNERSHIP_CR_TYPE_OWN];
-                RTMP_IO_READ32(ad->hdev_ctrl, cr_addr, &cr_val);
-                if (!(cr_val & HOST_FW_OWN_SYNC_MASK)) {
-                    /* Clear IRQ */
-                    cr_addr = hif_ownsership_cr[port_idx][OWNERSHIP_CR_TYPE_OWN_INT_STS];
-                    RTMP_IO_WRITE32(ad->hdev_ctrl, cr_addr, HOST_FW_OWN_CLR_STAT_MASK);
+			cr_addr = hif_ownsership_cr[port_idx][OWNERSHIP_CR_TYPE_OWN];
+			RTMP_IO_READ32(ad->hdev_ctrl, cr_addr, &cr_val);
+			if (!(cr_val & HOST_FW_OWN_SYNC_MASK)) {
+			/* Clear IRQ */
+			cr_addr = hif_ownsership_cr[port_idx][OWNERSHIP_CR_TYPE_OWN_INT_STS];
+			RTMP_IO_WRITE32(ad->hdev_ctrl, cr_addr, HOST_FW_OWN_CLR_STAT_MASK);
 
-                    drv_own = TRUE;
-                    drv_own_from = DRIVER_OWN_POLLING_MODE;
-                    if (port_idx == 0)
-                        ad->bDrvOwn = TRUE;
-                    else
-                        ad->bDrvOwn1 = TRUE;
-
-                    break;
-                }
-            }
-#endif
+			drv_own = TRUE;
+			drv_own_from = DRIVER_OWN_POLLING_MODE;
+			if (port_idx == 0)
+				ad->bDrvOwn = TRUE;
+			else
+				ad->bDrvOwn1 = TRUE;
+			break;
+			}
 			if (port_idx == 0)
 				drv_own = ad->bDrvOwn;
 			else
@@ -5459,6 +5510,7 @@ static VOID mt7915_isr(struct pci_hif_chip *hif_chip)
 	if (IntSource & MT_INT_MCU2HOST_SW_INT_STS) {
 		sched_ops->schedule_sw_int(task_group);
 		hif_chip->IntPending |= MT_INT_MCU2HOST_SW_INT_STS;
+		pAd->ErrRecoveryCtl.hostSerStep = 1;
 	}
 
 	HIF_IO_WRITE32(pAd->hdev_ctrl, MT_INT_SOURCE_CSR, IntSource);
@@ -5948,12 +6000,16 @@ static VOID pci_sw_int_handler(RTMP_ADAPTER *ad, void *hif_chip_ptr)
 	struct pci_schedule_task_ops *sched_ops = hif_chip->schedule_task_ops;
 	BOOLEAN en_sw_int = TRUE;
 
+	ad->ErrRecoveryCtl.hostSerStep = 3;
+
 	if (!(hif_chip->IntPending & MT_INT_MCU2HOST_SW_INT_STS))
 		return;
 
+	ad->ErrRecoveryCtl.hostSerStep = 4;
 #ifdef RTMP_MAC_PCI
 	RTMP_IO_READ32(ad->hdev_ctrl, WF_WFDMA_HOST_DMA1_MCU2HOST_SW_INT_STA_ADDR, &sw_int_sta);
 	MTWF_LOG(DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_WARN, ("%s::sw_int_sta=0x%x\n", __func__, sw_int_sta));
+	ad->ErrRecoveryCtl.mcuToHostState = sw_int_sta;
 
 #ifdef CONFIG_FWOWN_SUPPORT
 	if (sw_int_sta & MT_SW_INT_DRV_OWN) {
@@ -5972,6 +6028,7 @@ static VOID pci_sw_int_handler(RTMP_ADAPTER *ad, void *hif_chip_ptr)
 #ifdef ERR_RECOVERY
 	if (sw_int_sta & MT7663_ERROR_DETECT_MASK) {
 		/* updated ErrRecovery Status. */
+		ad->ErrRecoveryCtl.hostSerStep = 5;
 		RTMP_SPIN_LOCK_IRQSAVE(&hif_chip->LockInterrupt, &flags);
 		ad->ErrRecoveryCtl.status = sw_int_sta;
 		RTMP_SPIN_UNLOCK_IRQRESTORE(&hif_chip->LockInterrupt, &flags);
@@ -6124,6 +6181,8 @@ static VOID mt7915_dump_ser_stat(RTMP_ADAPTER *pAd, UINT8 dump_lvl)
 		UINT32 reg;
 	} cr_list[] = {
 		{"SER_STATUS       ", WF_SW_DEF_CR_SER_STATUS_ADDR},
+		{"SER_WA_STEP      ", WF_MCU_WA_SW_DEF_CR_SER_ADDR},
+		{"SER_WM_STEP      ", WF_SW_DEF_CR_SER_STEPS_ADDR},
 		{"SER_PLE_ERR      ", WF_SW_DEF_CR_PLE_STATUS_ADDR},
 		{"SER_PLE_ERR_1    ", WF_SW_DEF_CR_PLE1_STATUS_ADDR},
 		{"SER_PLE_ERR_AMSDU", WF_SW_DEF_CR_PLE_AMSDU_STATUS_ADDR},
@@ -6177,6 +6236,15 @@ static VOID mt7915_dump_ser_stat(RTMP_ADAPTER *pAd, UINT8 dump_lvl)
 	MAC_IO_READ32(pAd->hdev_ctrl, cr_list[0].reg, &reg_tmp_val);
 	MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_WARN,
 			("%s,::E  R , %s = 0x%08X\n", __func__, cr_list[0].name, reg_tmp_val));
+	MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_WARN,
+			("%s,::E  R , SER_HOST_STEP     = 0x%08X\n",
+				__func__, pAd->ErrRecoveryCtl.hostSerStep));
+	MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_WARN,
+			("%s,::E  R , SER_HOST_STAGE    = 0x%08X\n",
+				__func__, ErrRecoveryCurStage(&pAd->ErrRecoveryCtl)));
+	MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_WARN,
+			("%s,::E  R , SER_MCU_TO_HOST   = 0x%08X\n",
+				__func__, pAd->ErrRecoveryCtl.mcuToHostState));
 
 	/* dump level >= DBG_LVL_ERROR(1) */
 	if (dump_lvl >= DBG_LVL_ERROR) {
@@ -6702,6 +6770,11 @@ static VOID show_muru_local_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 		if (strlen(macptr) <= 25)
 			NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macprt is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr[i], "all", strlen("all"))))
 			muruparam = qleninfo = bsrpctrl = txcmdctrl = TRUE;
@@ -7724,6 +7797,11 @@ static VOID show_muru_tx_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 		if (strlen(macptr) <= 25)
 			NdisMoveMemory(InputStr[i], macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr[i], "all", strlen("all"))))
 			Globaldata = ProtectData = SxnTxData = SxnTrigData = TRUE;
@@ -9407,6 +9485,11 @@ static VOID show_muru_shared_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		if (i == 0) {
 			if (strlen(macptr) <= sizeof(InputStr))
 				NdisMoveMemory(InputStr, macptr, strlen(macptr));
+			else {
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Length of macptr is too long!\n");
+				return;
+			}
 
 			if (!(NdisCmpMemory(InputStr, "ShareData", strlen("ShareData"))))
 				ShareData = TRUE;
@@ -9789,6 +9872,11 @@ static VOID show_muru_mancfg_data(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 		if (strlen(macptr) <= sizeof(InputStr))
 			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		if (!(NdisCmpMemory(InputStr, "all", strlen("all"))))
 			ManCfg = TRUE;
@@ -9819,6 +9907,11 @@ static VOID show_muru_stacap_info(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 		if (strlen(macptr) <= 25)
 			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
 
 		WlanIdx = (UINT16)os_str_tol(macptr, 0, 10);
 	}
@@ -9962,6 +10055,12 @@ static VOID show_mumimo_group_entry_tbl(struct _RTMP_ADAPTER *pAd, RTMP_STRING *
 	for (i = 0, macptr = rstrtok(arg, "-"); macptr; macptr = rstrtok(NULL, "-"), i++) {
 		if (strlen(macptr) <= sizeof(InputStr))
 			NdisMoveMemory(InputStr, macptr, strlen(macptr));
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Length of macptr is too long!\n");
+			return;
+		}
+
 		GroupIdx = (UINT16)os_str_tol(macptr, 0, 10);
 	}
 
@@ -10357,7 +10456,7 @@ static VOID show_mumimo_groupidcli(struct _RTMP_ADAPTER *pAd)
 	addr = base + offset;
 
 	for (i = 0; i < MURU_MUM_MAX_PFID_NUM; i++) {
-		addr1 = addr + sizeof(UINT_16) * i;
+		addr = addr + sizeof(UINT_16) * i;
 		WlanIdx[i] = muru_io_r_u16(pAd, addr);
 		if (WlanIdx[i] > STA_REC_NUM)
 			WlanIdx[i] = 0;
@@ -10399,7 +10498,6 @@ static VOID show_mumimo_groupidcli(struct _RTMP_ADAPTER *pAd)
 	}
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n GroupID = %d", u1Gid));
-	if (u1NumUsr >= 0)
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		("| |-u1PFIDUser0  = %u WlanIdx = %u Mustream = %u\n", pDW0->rField.u1PFIDUser0, WlanIdx[pDW0->rField.u1PFIDUser0], pDW1->rField.u1NssUser0 + 1));
 	if (u1NumUsr >= 1)
@@ -10597,7 +10695,7 @@ static VOID show_muru_txc_tx_stats(struct _RTMP_ADAPTER *pAd, VOID *pData)
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_SU:      \t%u   \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeSuCnt, u2TxModeHeSu));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_EXT:     \t%u   \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeExtSuCnt, u2TxModeHeExt));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("HE_MU:      \t%u   \t\t%u%%\n", u4TotalDlHeMuCount, u2TxModeHeMu));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  OFDMA:    \t%u   \t         \t\t%u%%\n", u4TotalHeDlOfdmCount, u4TotalHeMuCount));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  OFDMA:    \t%u   \t         \t\t%u%%\n", u4TotalHeDlOfdmCount, u2SubModeHeOfdmCnt));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      2RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu2RuCnt, u2StaOfdm2Ru));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      3RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu3RuCnt, u2StaOfdm3Ru));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      4RU:  \t%u   \t         \t\t       \t\t%u%%\n", pDlTxStats->u4TxCmdTxModeHeMu4RuCnt, u2StaOfdm4Ru));
@@ -11349,10 +11447,10 @@ static VOID show_scs_info(struct _RTMP_ADAPTER *pAd)
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("|-rscsband%d (0x%08X)\n", j, base));
 
-		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u1SCSMinRssi);
+		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, i1SCSMinRssi);
 		addr = base + offset;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("| |-(0x%08X) u1SCSMinRssi = %d\n",
+			("| |-(0x%08X) i1SCSMinRssi = %d\n",
 			addr, muru_io_r_u8(pAd, addr)));
 
 		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u4OneSecTxByteCount);
@@ -11472,16 +11570,16 @@ static VOID show_scs_info(struct _RTMP_ADAPTER *pAd)
 			addr, i, muru_io_r_u16(pAd, addr)));
 		}
 
-		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u1LastTputIdx);
+		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u2LastTputIdx);
 		addr = base + offset;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("| |-(0x%08X) u1LastTputIdx\n", addr));
+			("| |-(0x%08X) u2LastTputIdx\n", addr));
 
 		addr_r = addr;
 		for (i = 0; i < SCS_STA_NUM; i++) {
 			addr = addr_r + sizeof(UINT_8) * i;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("| | |-(0x%08X) u1LastTputIdx[%d] = %d\n",
+			("| | |-(0x%08X) u2LastTputIdx[%d] = %d\n",
 			addr, i, muru_io_r_u8(pAd, addr)));
 		}
 
@@ -11511,16 +11609,16 @@ static VOID show_scs_info(struct _RTMP_ADAPTER *pAd)
 			addr, i, muru_io_r_u16(pAd, addr)));
 		}
 
-		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u1CurTputIdx);
+		offset = OFFSET_OF(SMART_CARRIER_SENSE_CTRL_GEN2_T, u2CurTputIdx);
 		addr = base + offset;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("| |-(0x%08X) u1CurTputIdx\n", addr));
+			("| |-(0x%08X) u2CurTputIdx\n", addr));
 
 		addr_r = addr;
 		for (i = 0; i < SCS_STA_NUM; i++) {
 			addr = addr_r + sizeof(UINT_8) * i;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("| | |-(0x%08X) u1CurTputIdx[%d] = %d\n",
+			("| | |-(0x%08X) u2CurTputIdx[%d] = %d\n",
 			addr, i, muru_io_r_u8(pAd, addr)));
 		}
 
@@ -11627,7 +11725,7 @@ INT32 show_hwcfg_info(RTMP_ADAPTER *pAd)
 #define WF_MDP_TOP_DCR1_ADDR	(0x820cd004)
 static inline BOOLEAN is_eco_vlan_tci_enable(struct _RTMP_ADAPTER *ad)
 {
-	UINT32 value;
+	UINT32 value = 0;
 
 	MAC_IO_READ32(ad->hdev_ctrl, WF_MDP_TOP_DCR1_ADDR, &value);
 	return (value & BIT16) ? TRUE : FALSE;
@@ -11636,14 +11734,49 @@ static inline BOOLEAN is_eco_vlan_tci_enable(struct _RTMP_ADAPTER *ad)
 
 VOID mt7915_update_chip_cap(RTMP_ADAPTER *ad)
 {
-#ifdef VLAN_SUPPORT
+	UINT32 pg_flow_ctrl = 0;
 	struct hdev_ctrl *ctrl = ad->hdev_ctrl;
 	RTMP_CHIP_CAP *chip_cap = hc_get_chip_cap(ctrl);
 
+#ifdef VLAN_SUPPORT
 	if (is_eco_vlan_tci_enable(ad))
 		chip_cap->vlan_rx_tag_mode = VLAN_RX_TAG_HW_MODE;
 #endif
+
+
+	HW_IO_READ32(ctrl, WF_PLE_TOP_PG_HIF_GROUP_ADDR, &pg_flow_ctrl);
+	chip_cap->hif_group_page_size = (pg_flow_ctrl & WF_PLE_TOP_PG_HIF_GROUP_HIF_MIN_QUOTA_MASK)
+					>> WF_PLE_TOP_PG_HIF_GROUP_HIF_MIN_QUOTA_SHFT;
 }
+
+#ifdef WF_RESET_SUPPORT
+static void mt7915_do_wifi_reset(RTMP_ADAPTER *ad)
+{
+	struct _PCI_HIF_T *hif = hc_get_hif_ctrl(ad->hdev_ctrl);
+	struct pci_hif_chip *hif_chip = hif->main_hif_chip;
+	struct pci_schedule_task_ops *sched_ops = hif_chip->schedule_task_ops;
+	struct pci_task_group *task_group = &hif_chip->task_group;
+
+	/* schedule wf reset task to do reset behavior */
+	sched_ops->schedule_wf_reset(task_group);
+}
+#endif /* WF_RESET_SUPPORT */
+
+#ifdef DBDC_MODE
+static UCHAR mt7915_BandGetByIdx(RTMP_ADAPTER *pAd, UCHAR BandIdx)
+{
+	switch (BandIdx) {
+	case 0:
+		return RFIC_24GHZ;
+
+	case 1:
+		return RFIC_5GHZ;
+
+	default:
+		return (RFIC_24GHZ | RFIC_5GHZ);
+	}
+}
+#endif
 
 static VOID mt7915_chipCap_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_CAP *chip_cap)
 {
@@ -11714,7 +11847,7 @@ static VOID mt7915_chipCap_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_CAP *chip_c
 	chip_cap->rf_type = RF_MT;
 	chip_cap->MaxNumOfRfId = 127;
 	chip_cap->MaxNumOfBbpId = 200;
-	chip_cap->ProbeRspTimes = 2;
+	chip_cap->ProbeRspTimes = 1;
 	chip_cap->FlgIsHwWapiSup = TRUE;
 	chip_cap->FlgIsHwAntennaDiversitySup = FALSE;
 #ifdef STREAM_MODE_SUPPORT
@@ -11778,7 +11911,11 @@ static VOID mt7915_chipCap_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_CAP *chip_c
 	chip_cap->ppdu.non_he_rx_ba_wsize = BA_WIN_SZ_64;
 	chip_cap->ppdu.he_tx_ba_wsize = BA_WIN_SZ_256;
 	chip_cap->ppdu.he_rx_ba_wsize = BA_WIN_SZ_256;
+#ifdef SHORTER_MAX_AMSDU_LEN
+	chip_cap->ppdu.max_amsdu_len = MPDU_3895_OCTETS;
+#else
 	chip_cap->ppdu.max_amsdu_len = MPDU_7991_OCTETS;
+#endif
 	chip_cap->ppdu.ht_max_ampdu_len_exp = 3;
 #ifdef DOT11_VHT_AC
 	chip_cap->ppdu.max_mpdu_len = MPDU_7991_OCTETS;
@@ -12138,6 +12275,13 @@ static VOID mt7915_chipOp_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_OP *chip_op)
 	chip_op->wps_led_control = mt7915_wps_led_control;
 #endif /*LED_CONTROL_SUPPORT*/
 	chip_op->update_chip_cap = mt7915_update_chip_cap;
+#ifdef WF_RESET_SUPPORT
+	chip_op->do_wifi_reset = mt7915_do_wifi_reset;
+#endif /* WF_RESET_SUPPORT */
+#ifdef DBDC_MODE
+	chip_op->BandGetByIdx = mt7915_BandGetByIdx;
+#endif /*DBDC_MODE*/
+
 }
 
 static VOID mt7915_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
@@ -12194,6 +12338,10 @@ static VOID mt7915_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->archInsertRepeaterRootEntry = MtAsicInsertRepeaterRootEntryByFw;
 #endif /* MAC_REPEATER_SUPPORT */
 #endif /* APCLI_SUPPORT */
+#ifdef HTC_DECRYPT_IOT
+	arch_ops->archSetWcidAAD_OM = MtAsicUpdateStaRecAadOmByFw;
+#endif
+	arch_ops->archSetWcidPsm = MtAsicSetWcidPsmByFw;
 	arch_ops->archGetTsfTime = MtfAsicGetTsfTimeByDriver;
 	arch_ops->archSetPreTbtt = NULL;
 	arch_ops->archSetGPTimer = MtfAsicSetGPTimer;
@@ -12249,13 +12397,20 @@ static VOID mt7915_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->update_vlan_id = mt_asic_update_vlan_id_by_fw;
 	arch_ops->update_vlan_priority = mt_asic_update_vlan_priority_by_fw;
 #endif
+#ifdef PLE_MONITOR_SUPPORT
+	arch_ops->flush_ac_queue = mt_asic_flush_ac_queue_by_fw;
+#endif
 	arch_ops->rx_pkt_process = mt_rx_pkt_process;
 	arch_ops->rx_event_handler = mtf_rx_event_handler;
 	arch_ops->fill_cmd_header = mtf_fill_cmd_header;
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+	arch_ops->trans_rxd_into_radiotap = mtf_trans_rxd_into_radiotap;
+#endif
 	arch_ops->trans_rxd_into_rxblk = mtf_trans_rxd_into_rxblk;
 #ifdef IGMP_SNOOP_SUPPORT
 	arch_ops->archMcastEntryInsert = CmdMcastEntryInsert;
 	arch_ops->archMcastEntryDelete = CmdMcastEntryDelete;
+	arch_ops->archMcastEntryDenyList = CmdMcastEntryDenyList;
 #ifdef IGMP_TVM_SUPPORT
 	arch_ops->archMcastConfigAgeout = CmdSetMcastEntryAgeOut;
 	arch_ops->archMcastGetMcastTable = CmdGetMcastEntryTable;
@@ -12320,6 +12475,12 @@ static VOID mt7915_archOp_init(RTMP_ADAPTER *ad, RTMP_ARCH_OP *arch_ops)
 	arch_ops->arch_set_air_mon_idx = mtf_set_air_monitor_idx;
 #endif
 
+#ifdef WIFI_MD_COEX_SUPPORT
+#ifdef COEX_DIRECT_PATH
+	arch_ops->set_conn_infra_sysram = mtf_set_conn_infra_sysram;
+	arch_ops->get_wm_pc_status = mtf_get_wm_pc_status;
+#endif/* COEX_DIRECT_PATH */
+#endif /* WIFI_MD_COEX_SUPPORT */
 }
 
 static VOID mt7915_chipOp_post_init(struct _RTMP_ADAPTER *pAd, RTMP_CHIP_OP *chip_op)
@@ -12383,6 +12544,14 @@ VOID mt7915_init(RTMP_ADAPTER *pAd)
 	/*VOW CR Address offset - Gen_FALCON*/
 	pAd->vow_gen.VOW_GEN = VOW_GEN_FALCON;
 #endif /* #ifdef CONFIG_AP_SUPPORT */
+	pAd->CommonCfg.ChannelSwitchFor2G.CHSWMode = NORMAL_MODE;
+	pAd->IsLimitProbeResp = FALSE;
+#ifdef DBDC_MODE
+	pAd->probe_rsp_max_per_b[DBDC_BAND0] = LIMIT_PROBE_RSP_THRESHOLD_BN0;
+	pAd->probe_rsp_max_per_b[DBDC_BAND1] = LIMIT_PROBE_RSP_THRESHOLD_BN1;
+#else
+	pAd->probe_rsp_max_per_b[0] = LIMIT_PROBE_RSP_THRESHOLD;
+#endif
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<--%s()\n", __func__));
 }

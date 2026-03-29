@@ -473,7 +473,7 @@ VOID MtAsicSetMbssWdevIfAddrGen3(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wde
 	}
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("\tif_addr = %02x-%02x-%02x-%02x-%02x-%02x\n", PRINT_MAC(if_addr)));
+			 ("\tif_addr = "MACSTR"\n", MAC2STR(if_addr)));
 }
 #endif /* DOT11V_MBSSID_SUPPORT */
 #endif /*CONFIG_AP_SUPPORT*/
@@ -540,7 +540,7 @@ VOID MtAsicSetApcliWdevIfAddr(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	} else {
 		UCHAR MacByte = 0;
 		UINT32 Value = 0;
-		MacByte = 2; /* snowpin test, TODO - check mode from MBSS to avoid using same mac address. 2016/2/5 */
+
 
 		HW_IO_READ32(pAd->hdev_ctrl, LPON_BTEIR, &Value);
 		MacByte = Value >> 29;

@@ -436,7 +436,8 @@ VOID AsicSleepAutoWakeup(PRTMP_ADAPTER pAd, PSTA_ADMIN_CONFIG pStaCfg)
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(%d): pStaCfg(0x%p)\n",
 			 __func__, __LINE__, pStaCfg));
 	NdisGetSystemUpTime(&Now);
-	NextDtim -= (USHORT)(Now - pStaCfg->LastBeaconRxTime) / pAd->CommonCfg.BeaconPeriod;
+	NextDtim -= (USHORT)(Now - pStaCfg->LastBeaconRxTime)
+		/ pAd->CommonCfg.BeaconPeriod[DBDC_BAND0];
 	pStaCfg->ThisTbttNumToNextWakeUp = pStaCfg->DefaultListenCount;
 
 	if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_RECEIVE_DTIM) && (TbttNumToNextWakeUp > NextDtim))
@@ -503,12 +504,30 @@ INT asic_rts_on_off_detail(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT32 rts_
 	return FALSE;
 }
 
-BOOLEAN AsicUpdateBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev)
+BOOLEAN asic_update_11v_mbssid_info(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
+{
+	struct _BSS_INFO_ARGUMENT_T bss;
+	BSS_STRUCT *pMbss = wdev->func_dev;
+	UINT8 DbdcIdx = HcGetBandByWdev(wdev);
+
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_NOTICE,
+		("update bss(%d) 11v mbssid info\n", pMbss->mbss_grp_idx));
+	memcpy(&bss, &wdev->bss_info_argument, sizeof(bss));
+	bss.u4BssInfoFeature = BSS_INFO_11V_MBSSID_FEATURE;
+	bss.max_bssid_indicator = pAd->ApCfg.dot11v_max_bssid_indicator[DbdcIdx];
+	bss.mbssid_index = pMbss->mbss_grp_idx;
+	AsicBssInfoUpdate(pAd, &bss);
+
+	return TRUE;
+
+}
+
+BOOLEAN AsicUpdateBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev, BOOLEAN BcnSntReq)
 {
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 
 	if (arch_ops->archUpdateBeacon)
-		return arch_ops->archUpdateBeacon(pAd, wdev);
+		return arch_ops->archUpdateBeacon(pAd, wdev, BcnSntReq);
 
 	AsicNotSupportFunc(pAd, __func__);
 	return FALSE;
@@ -849,6 +868,7 @@ VOID AsicSetEdcaParm(RTMP_ADAPTER *pAd, struct wmm_entry *entry, struct wifi_dev
 	PEDCA_PARM pEdcaParm = &entry->edca;
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 #ifdef CONFIG_STA_SUPPORT
+	UCHAR EdcaUpdateCountBak = 0;
 	PSTA_ADMIN_CONFIG pStaCfg = NULL;
 	pStaCfg = GetStaCfgByWdev(pAd, wdev);
 #endif
@@ -857,7 +877,25 @@ VOID AsicSetEdcaParm(RTMP_ADAPTER *pAd, struct wmm_entry *entry, struct wifi_dev
 		return;
 	}
 
-	pEdca = &pAd->CommonCfg.APEdcaParm[EdcaIdx];
+	switch (wdev->wdev_type) {
+#ifdef CONFIG_AP_SUPPORT
+	case WDEV_TYPE_AP:
+#ifdef WDS_SUPPORT
+	case WDEV_TYPE_WDS:
+#endif /*WDS_SUPPORT*/
+		pEdca = &pAd->CommonCfg.APEdcaParm[wdev->EdcaIdx];
+		break;
+#endif /*CONFIG_AP_SUPPORT*/
+#ifdef CONFIG_STA_SUPPORT
+	case WDEV_TYPE_STA:
+		pEdca = &pStaCfg->MlmeAux.APEdcaParm;
+		break;
+#endif /*CONFIG_STA_SUPPORT*/
+
+	default:
+		pEdca = &pAd->CommonCfg.APEdcaParm[wdev->EdcaIdx];
+		break;
+	}
 
 	if ((pEdcaParm == NULL) || (pEdcaParm->bValid == FALSE)) {
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): NoEDCAParam\n", __func__));
@@ -875,7 +913,22 @@ VOID AsicSetEdcaParm(RTMP_ADAPTER *pAd, struct wmm_entry *entry, struct wifi_dev
 		os_zero_mem(pEdca, sizeof(EDCA_PARM));
 	} else {
 		OPSTATUS_SET_FLAG(pAd, fOP_STATUS_WMM_INUSED);
-		os_move_mem(pEdca, pEdcaParm, sizeof(EDCA_PARM));
+
+#ifdef CONFIG_STA_SUPPORT
+		/*
+			EdcaUpdateCount must keep when linkup, in case that beacon will
+			set wmm again for EdcaUpdateCount is not the same
+			CR: WCNCR00260092
+		*/
+		if (WDEV_TYPE_STA == wdev->wdev_type) {
+			EdcaUpdateCountBak = pStaCfg->MlmeAux.APEdcaParm.EdcaUpdateCount;
+			os_move_mem(pEdca, pEdcaParm, sizeof(EDCA_PARM));
+			pStaCfg->MlmeAux.APEdcaParm.EdcaUpdateCount = EdcaUpdateCountBak;
+		} else
+#endif /* CONFIG_STA_SUPPORT */
+		{
+			os_move_mem(pEdca, pEdcaParm, sizeof(EDCA_PARM));
+		}
 
 		if (!ADHOC_ON(pAd)) {
 			MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -1052,7 +1105,7 @@ VOID AsicSetSlotTime(
 {
 	UINT32 SlotTime = 0;
 	UINT32 SifsTime = SIFS_TIME_24G;
-	UCHAR BandIdx;
+	UCHAR BandIdx = 0;
 #ifdef CONFIG_STA_SUPPORT
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 #endif
@@ -1074,7 +1127,7 @@ VOID AsicSetSlotTime(
 #endif
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd) {
-		UINT8 ba_en = 1;
+		UINT8 ba_en;
 
 		if (channel > 14)
 			bUseShortSlotTime = TRUE;
@@ -1113,7 +1166,6 @@ VOID AsicSetSlotTime(
 		}
 	}
 #endif /* CONFIG_STA_SUPPORT */
-	BandIdx = HcGetBandByChannel(pAd, channel);
 #ifdef MT_MAC
 {
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
@@ -1492,7 +1544,17 @@ VOID AsicSetWcidAAD_OM(RTMP_ADAPTER *pAd, UINT16 wcid_idx, CHAR value)
 }
 #endif /* HTC_DECRYPT_IOT */
 
+VOID AsicSetWcidPsm(RTMP_ADAPTER *pAd, UINT16 wcid_idx, UCHAR value)
+{
+	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 
+	if (arch_ops->archSetWcidPsm)
+		arch_ops->archSetWcidPsm(pAd, wcid_idx, value);
+	else
+		AsicNotSupportFunc(pAd, __func__);
+
+	return;
+}
 
 VOID AsicAddRemoveKeyTab(
 	IN PRTMP_ADAPTER pAd,
@@ -1854,6 +1916,32 @@ VOID asic_update_mib_bucket(RTMP_ADAPTER *pAd)
 		AsicNotSupportFunc(pAd, __func__);
 }
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+UINT8 AsicReadSkipTx(RTMP_ADAPTER *pAd, UINT16 wcid)
+{
+	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
+
+	if (arch_ops->read_skip_tx) {
+		return arch_ops->read_skip_tx(pAd, wcid);
+	}
+	AsicNotSupportFunc(pAd, __func__);
+	return 0;
+}
+
+VOID AsicUpdateSkipTx(RTMP_ADAPTER *pAd, UINT16 wcid, UINT8 set)
+{
+	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					"Wcid(%d), Set(%d)\n", wcid, set);
+
+	if (arch_ops->update_skip_tx) {
+		return arch_ops->update_skip_tx(pAd, wcid, set);
+	}
+	AsicNotSupportFunc(pAd, __func__);
+}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 #ifdef CONFIG_AP_SUPPORT
 /* set Wdev Mac Address, some chip arch need to set CR .*/
 VOID AsicSetWdevIfAddr(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, INT opmode)
@@ -1907,7 +1995,7 @@ VOID AsicDMASchedulerInit(RTMP_ADAPTER *pAd, INT mode)
 	if (IS_HIF_TYPE(pAd, HIF_MT)) {
 		MT_DMASCH_CTRL_T DmaSchCtrl;
 
-		if (MTK_REV_GTE(pAd, MT7603, MT7603E1) && MTK_REV_LT(pAd, MT7603, MT7603E2))
+		if (MTK_REV_ET(pAd, MT7603, MT7603E1))
 			DmaSchCtrl.bBeaconSpecificGroup = FALSE;
 		else
 			DmaSchCtrl.bBeaconSpecificGroup = TRUE;
@@ -1934,8 +2022,8 @@ INT32 AsicDevInfoUpdate(
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s(): Set OwnMac=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__, PRINT_MAC(OwnMacAddr)));
+			 ("%s(): Set OwnMac="MACSTR"\n",
+			  __func__, MAC2STR(OwnMacAddr)));
 
 	if (arch_ops->archSetDevMac)
 		return arch_ops->archSetDevMac(pAd, OwnMacIdx, OwnMacAddr, BandIdx, Active, EnableFeature);
@@ -1951,9 +2039,9 @@ INT32 AsicBssInfoUpdate(
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s(): Set Bssid=%02x:%02x:%02x:%02x:%02x:%02x, BssIndex(%d)\n",
+			 ("%s(): Set Bssid="MACSTR", BssIndex(%d)\n",
 			  __func__,
-			  PRINT_MAC(bss_info_argument->Bssid),
+			  MAC2STR(bss_info_argument->Bssid),
 			  bss_info_argument->ucBssIndex));
 
 	if (arch_ops->archSetBssid)
@@ -2011,6 +2099,10 @@ INT32 AsicStaRecUpdate(
 {
 	UINT16 WlanIdx = sta_rec_ctrl->WlanIdx;
 	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+	UCHAR gi_idx = 0;
+	UCHAR phy_mode = 0;
+#endif
 
 	if (arch_ops->archSetStaRec) {
 		STA_REC_CFG_T StaCfg;
@@ -2096,7 +2188,15 @@ INT32 AsicStaRecUpdate(
 		StaCfg.pEntry = pEntry;
 		StaCfg.IsNewSTARec = sta_rec_ctrl->IsNewSTARec;
 		os_move_mem(&StaCfg.asic_sec_info, &sta_rec_ctrl->asic_sec_info, sizeof(ASIC_SEC_INFO));
-		ret = arch_ops->archSetStaRec(pAd, StaCfg);
+		ret = arch_ops->archSetStaRec(pAd, &StaCfg);
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+		if (pEntry && IS_ENTRY_CLIENT(pEntry) && (pEntry->wdev)) {
+			gi_idx = wlan_config_get_he_gi(pEntry->wdev);
+			phy_mode = pEntry->MaxHTPhyMode.field.MODE;
+			if ((gi_idx != GI_AUTO) && ((phy_mode >= MODE_HE) && (phy_mode != MODE_UNKNOWN)))
+				ap_set_he_fixed_gi_ltf_by_wcid_or_bss(pAd, gi_idx-1, GI_BY_WCID, pEntry->wcid, pEntry->wdev);
+		}
+#endif
 		return ret;
 	}
 
@@ -2149,7 +2249,7 @@ INT32 AsicRaParamStaRecUpdate(
 		StaCfg.pEntry = pEntry;
 		StaCfg.pRaParam = prParam;
 		/*tracking the starec input history*/
-		return arch_ops->archSetStaRec(pAd, StaCfg);
+		return arch_ops->archSetStaRec(pAd, &StaCfg);
 	}
 
 	AsicNotSupportFunc(pAd, __func__);
@@ -2428,8 +2528,6 @@ AsicThermalProtectAdmitDuty(
 }
 
 
-#if defined(MT7615) || defined(MT7622)
-#else
 INT AsicThermalProtectAdmitDutyInfo(
 	IN PRTMP_ADAPTER	pAd
 )
@@ -2449,7 +2547,6 @@ INT AsicThermalProtectAdmitDutyInfo(
 	return 0;
 
 }
-#endif
 
 INT32 AsicGetFwSyncValue(RTMP_ADAPTER *pAd)
 {
@@ -2564,6 +2661,19 @@ INT32 asic_update_vlan_priority(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 
 }
 #endif
 
+#ifdef PLE_MONITOR_SUPPORT
+INT32 asic_flush_ac_queue(struct _RTMP_ADAPTER *ad, UINT16 wcid, UINT16 pkt_cnt, BOOLEAN ps_check)
+{
+	INT32 ret = 0;
+	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(ad->hdev_ctrl);
+
+	if (arch_ops->flush_ac_queue)
+		ret = arch_ops->flush_ac_queue(ad, wcid, pkt_cnt, ps_check);
+
+	return ret;
+}
+#endif
+
 #ifdef IGMP_SNOOP_SUPPORT
 BOOLEAN AsicMcastEntryInsert(RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, UINT8 Type, PUCHAR MemberAddr,
 							 PNET_DEV dev, UINT16 wcid)
@@ -2586,6 +2696,17 @@ BOOLEAN AsicMcastEntryDelete(RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, PU
 
 	if (arch_ops->archMcastEntryDelete)
 		Ret = arch_ops->archMcastEntryDelete(pAd, GrpAddr, BssIdx, MemberAddr, dev, wcid);
+
+	return Ret;
+}
+
+BOOLEAN AsicMcastEntryDenyList(struct _RTMP_ADAPTER *pAd, UINT8 BssIdx, UINT8 ucEntryCount, UINT8 ucAddToList, UINT_8 *pAddr)
+{
+	INT32 Ret = 0;
+	struct _RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
+
+	if (arch_ops->archMcastEntryDenyList)
+		Ret = arch_ops->archMcastEntryDenyList(pAd, BssIdx, ucEntryCount, ucAddToList, pAddr);
 
 	return Ret;
 }
@@ -4406,6 +4527,22 @@ inline UINT32 asic_get_packet_type(struct _RTMP_ADAPTER *pAd, VOID *rx_packet)
 	return NDIS_STATUS_FAILURE;
 
 }
+
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+UINT32 asic_trans_rxd_into_radiotap(RTMP_ADAPTER *pAd, VOID *rx_packet, struct _RX_BLK *rx_blk)
+{
+	RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
+	UINT32 status = NDIS_STATUS_FAILURE;
+
+	if (arch_ops->trans_rxd_into_radiotap)
+		status = arch_ops->trans_rxd_into_radiotap(pAd, rx_packet, rx_blk);
+	else
+		AsicNotSupportFunc(pAd, __func__);
+
+	return status;
+}
+#endif
+
 
 INT32 asic_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, VOID *rx_pkt)
 {

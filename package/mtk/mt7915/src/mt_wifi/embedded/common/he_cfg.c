@@ -1383,8 +1383,6 @@ INT set_txcmd_sxn_user_dw(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		cmd_id = SET_TXCMD_DBG_SXN_PROTECT_RUINFO;
 		break;
 	default:
-		val_len = 0;
-		cmd_id = 0xff;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s: index exceed than %d\n",
 				 __func__, MAX_NUM_TXCMD_RU_INFO));

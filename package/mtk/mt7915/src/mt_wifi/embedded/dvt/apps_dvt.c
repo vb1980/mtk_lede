@@ -43,7 +43,7 @@ static INT apps_dvt_1_3_basic_test(struct _RTMP_ADAPTER *ad, struct wifi_dev *wd
 		/*Step 1: wait for STA connection*/
 		tr_entry = dvt_ut_notify_wait(ad, DVT_NOTIFY_WSYS_CONNECT_EVENT);
 		ad->veri_ctrl.dump_rx_debug = 1;
-		DVT_LOG("STA connected addr:%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(tr_entry->Addr));
+		DVT_LOG("STA connected addr:"MACSTR"\n", MAC2STR(tr_entry->Addr));
 
 		/*Step 2: check STA's wtbl content*/
 		mt_wtbltlv_debug(ad, tr_entry->wcid, wtbl_debug_cmd_id, wtbl_debug_act, &debug_u);
@@ -91,7 +91,7 @@ static INT apps_dvt_1_3_basic_test(struct _RTMP_ADAPTER *ad, struct wifi_dev *wd
 		struct veri_app_head_input head_input, *phead_input = &head_input;
 
 		if (INFRA_ON(sta_cfg))
-			DVT_LOG("STA connected addr:%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(sta_cfg->wdev.bssid));
+			DVT_LOG("STA connected addr:"MACSTR"\n", MAC2STR(sta_cfg->wdev.bssid));
 		else {
 			DVT_LOG("STA is not connected to AP\n");
 			goto end;

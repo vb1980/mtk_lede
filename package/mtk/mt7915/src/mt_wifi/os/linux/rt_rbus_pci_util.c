@@ -19,21 +19,19 @@
 #include "rtmp_osabl.h"
 #include "rt_os_util.h"
 
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
+static inline void *dma_zalloc_coherent(struct device *dev, size_t size,
+										dma_addr_t *dma_handle, gfp_t flag)
+{
+	void *ret = dma_alloc_coherent(dev, size, dma_handle,
+								   flag | __GFP_ZERO);
+	return ret;
+}
+#endif
+
 #ifdef RTMP_MAC_PCI
 VOID *alloc_rx_buf_1k(void *hif_resource);
-static inline void *dma_zalloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle, gfp_t flag)
 
-{
-
-      void *ret = dma_alloc_coherent(dev, size, dma_handle, flag);
-
-      if (ret)
-
-         memset(ret, 0, size);
-
-      return ret;
-
-}
 /* Function for Tx/Rx/Mgmt Desc Memory allocation. */
 void RtmpAllocDescBuf(
 	IN VOID * pDev,
@@ -45,7 +43,11 @@ void RtmpAllocDescBuf(
 {
 	dma_addr_t DmaAddr = (dma_addr_t)(*phy_addr);
 	struct device *pdev = (struct device *)pDev;
+#if (KERNEL_VERSION(3, 18, 0) <= LINUX_VERSION_CODE)
 	*VirtualAddress = (PVOID)dma_zalloc_coherent(pdev, sizeof(char) * Length, &DmaAddr, GFP_KERNEL);
+#else
+	*VirtualAddress = (PVOID)dma_alloc_coherent(pdev, sizeof(char) * Length, &DmaAddr, GFP_KERNEL);
+#endif
 	*phy_addr = (NDIS_PHYSICAL_ADDRESS)DmaAddr;
 }
 
@@ -119,6 +121,7 @@ PNDIS_PACKET RTMP_AllocateRxPacketBuffer(
 			if (buf_flags & BUF_ZERO)
 				NdisZeroMemory((unsigned char *)pkt + SKB_BUF_HEADROOM_RSV, size);
 
+			NdisZeroMemory((unsigned char *)pkt, SKB_BUF_HEADROOM_RSV);
 			*va = (unsigned char *)pkt + SKB_BUF_HEADROOM_RSV;
 		}
 
@@ -130,6 +133,7 @@ PNDIS_PACKET RTMP_AllocateRxPacketBuffer(
 			if (buf_flags & BUF_ZERO)
 				NdisZeroMemory((PVOID)pkt->data, size);
 
+			NdisZeroMemory((PVOID)pkt->head, skb_headroom(pkt));
 			*va = pkt->data;
 		}
 
@@ -156,6 +160,37 @@ PNDIS_PACKET RTMP_AllocateRxPacketBuffer(
 
 	if (pkt) {
 		*pa = dma_map_single(pdev, *va, size, PCI_DMA_FROMDEVICE);
+		 if (dma_mapping_error(pdev, *pa)) {
+			MTWF_DBG(NULL, DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR, "!!!!dma_mapping_error(pdev, *pa)!!!!\n");
+			switch (rx_ring->buf_type) {
+			case DYNAMIC_PAGE_ALLOC:
+
+#if (KERNEL_VERSION(4, 10, 0) <= LINUX_VERSION_CODE)
+				page_frag_free(pkt);
+#elif (KERNEL_VERSION(4, 3, 0) < LINUX_VERSION_CODE)
+				__free_page_frag(pkt);
+#else
+				DEV_FREE_FRAG_BUF(pkt);
+#endif
+				break;
+
+			case DYNAMIC_SLAB_ALLOC:
+				dev_kfree_skb_any(pkt);
+				break;
+
+			case PRE_SLAB_ALLOC:
+				free_rx_buf_1k(reserved);
+				break;
+
+			default:
+
+				MTWF_DBG(NULL, DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR,
+							"unknown allocate type %d\n", rx_ring->buf_type);
+				break;
+			}
+
+			return NULL;
+		}
 	} else {
 		*va = (PVOID)NULL;
 		*pa = (NDIS_PHYSICAL_ADDRESS)0;

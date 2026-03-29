@@ -74,6 +74,7 @@ struct twt_link_node {
 	UINT8	grp_grade;
 	UINT8	grp_member_cnt;
 	UINT16	sta_list[TWT_HW_GRP_MAX_MEMBER_CNT];
+	UINT8	twt_channel;
 };
 #endif /* WIFI_TWT_SUPPORT */
 #endif /* DOT11_HE_AX */
@@ -166,7 +167,7 @@ UINT32 HcGetMgmtQueueIdx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, enum 
 UINT32 HcGetBcnQueueIdx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 UINT32 HcGetWmmIdx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 UCHAR HcGetBandByChannel(struct _RTMP_ADAPTER *pAd, UCHAR Channel);
-UCHAR HcGetBandInfoByChannel(struct _RTMP_ADAPTER *pAd, UCHAR Channel);
+UCHAR HcGetBandByChannelRange(struct _RTMP_ADAPTER *pAd, UCHAR Channel);
 EDCA_PARM *HcGetEdca(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 VOID HcSetEdca(struct wifi_dev *wdev);
 VOID HcCrossChannelCheck(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR Channel);
@@ -217,6 +218,8 @@ struct pe_control *hc_get_pe_ctrl(struct wifi_dev *wdev);
 /*chipcap & chipop related*/
 struct _RTMP_CHIP_CAP *hc_get_chip_cap(void *hdev_ctrl);
 struct _RTMP_CHIP_OP *hc_get_chip_ops(void *hdev_ctrl);
+struct _RTMP_CHIP_CAP *mt7915_hc_get_chip_cap(void *hdev_ctrl);
+struct _RTMP_CHIP_OP *mt7915_hc_get_chip_ops(void *hdev_ctrl);
 void hc_register_chip_ops(void *hdev_ctrl, struct _RTMP_CHIP_OP *ops);
 struct _RTMP_ARCH_OP *hc_get_arch_ops(void *hdev_ctrl);
 struct mt_io_ops *hc_get_io_ops(void *hdev_ctrl);
@@ -229,9 +232,13 @@ UINT8 hc_get_chip_bcn_max_num(void *hdev_ctrl);
 UINT16 hc_get_chip_wtbl_max_num(void *hdev_ctrl);
 UINT16 hc_get_chip_wtbl_no_matched_idx(void *hdev_ctrl);
 BOOLEAN hc_get_chip_wapi_sup(void *hdev_ctrl);
-UINT32 hc_get_chip_tx_token_nums(void *hdev_ctrl);
-UINT32 hc_get_chip_sw_tx_token_nums(void *hdev_ctrl);
-UINT32 hc_get_chip_mac_rxd_size(void *hdev_ctrl);
+
+
+UINT32 mt7915_hc_get_chip_tx_token_nums(void *hdev_ctrl);
+UINT32 mt7915_hc_get_chip_sw_tx_token_nums(void *hdev_ctrl);
+UINT32 mt7915_hc_get_chip_mac_rxd_size(void *hdev_ctrl);
+
+VOID *mt7915_hc_get_hif_ctrl(void *hdev_ctrl);
 VOID *hc_get_hif_ctrl(void *hdev_ctrl);
 VOID *hc_get_os_cookie(void *hdev_ctrl);
 VOID *hc_get_mcu_ctrl(void *hdev_ctrl);
@@ -243,6 +250,7 @@ UINT32 hc_get_mac_cap(void *hdev_ctrl);
 void *hc_get_hdev_privdata(void *hdev_ctrl);
 #ifdef CUT_THROUGH
 VOID *hc_get_ct_cb(void *hdev_ctrl);
+VOID *mt7915_hc_get_ct_cb(void *hdev_ctrl);
 VOID hc_set_ct_cb(void *hdev_ctrl, void *ct_cb);
 #endif /*CUT_THROUGH*/
 VOID *hc_get_hif_ops(void *hdev_ctrl);

@@ -200,7 +200,10 @@ VOID Bignum_Free(
 UINT32 Bignum_getlen(
 	IN BIGNUM *pBI)
 {
-	return pBI->top * 4;
+	if (pBI != NULL)
+		return pBI->top * 4;
+	else
+		return 0;
 }
 
 INT Bignum_Get_rand_range(IN BIGNUM * range, INOUT BIGNUM * r)
@@ -273,9 +276,14 @@ VOID Bignum_Add(
 	IN BIGNUM *pSecondOperand,
 	OUT BIGNUM **pBI_Result)
 {
+	int ret;
+
 	if (*pBI_Result == NULL)
 		*pBI_Result = BN_new();
-	BN_add(*pBI_Result, pFirstOperand, pSecondOperand);
+	ret = BN_add(*pBI_Result, pFirstOperand, pSecondOperand);
+	if (ret == 0)
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				 "BN_add return 0!\n");
 } /* End of Bignum_Add */
 
 
@@ -390,6 +398,7 @@ VOID Bignum_Mod_Add(
 	OUT BIGNUM **pBI_Result)
 {
 	BN_CTX *bnctx = NULL;
+	int ret;
 
 	bnctx = BN_CTX_new();
 	if (!bnctx) {
@@ -401,7 +410,10 @@ VOID Bignum_Mod_Add(
 	if (*pBI_Result == NULL)
 		*pBI_Result = BN_new();
 
-	BN_mod_add(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P, bnctx);
+	ret = BN_mod_add(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P, bnctx);
+	if (ret == 0)
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				 "BN_mod_add return 0!\n");
 	BN_CTX_free(bnctx);
 }
 
@@ -434,10 +446,15 @@ VOID Bignum_Mod_Add_quick(
 	IN BIGNUM *pBI_P,
 	OUT BIGNUM **pBI_Result)
 {
+	int ret;
+
 	if (*pBI_Result == NULL)
 		*pBI_Result = BN_new();
 
-	BN_mod_add_quick(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P);
+	ret = BN_mod_add_quick(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P);
+	if (ret == 0)
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				 "BN_mod_add_quick return 0!\n");
 }
 
 
@@ -447,10 +464,15 @@ VOID Bignum_Mod_Sub_quick(
 	IN BIGNUM *pBI_P,
 	OUT BIGNUM **pBI_Result)
 {
+	int ret;
+
 	if (*pBI_Result == NULL)
 		*pBI_Result = BN_new();
 
-	BN_mod_sub_quick(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P);
+	ret = BN_mod_sub_quick(*pBI_Result, pFirstOperand, pSecondOperand, pBI_P);
+	if (ret == 0)
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				 "BN_mod_sub_quick return 0!\n");
 }
 
 
@@ -521,7 +543,11 @@ VOID Bignum_Mod_Shift_Left1(
 	IN BIGNUM *pBI_P,
 	OUT BIGNUM **pBI_Result)
 {
-	BN_mod_lshift1_quick(*pBI_Result, pBI, pBI_P);
+	int ret;
+
+	ret = BN_mod_lshift1_quick(*pBI_Result, pBI, pBI_P);
+	MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			 "BN_mod_lshift1_quick return 0!\n");
 }
 
 VOID Bignum_Mod_Shift_Left(
@@ -624,7 +650,10 @@ VOID Bignum_Mod_Mul_Inverse(
 	if (*pBI_Result == NULL)
 		*pBI_Result = BN_new();
 
-	BN_mod_inverse(*pBI_Result, pBI, pBI_P, bnctx);
+	if (BN_mod_inverse(*pBI_Result, pBI, pBI_P, bnctx) == NULL) {
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				 "BN_mod_inverse return null !\n");
+	}
 
 	BN_CTX_free(bnctx);
 }

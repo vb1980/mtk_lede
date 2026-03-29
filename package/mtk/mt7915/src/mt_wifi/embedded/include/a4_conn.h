@@ -34,6 +34,15 @@ typedef struct _A4_CONNECT_ENTRY {
 	UINT16 wcid;
 } A4_CONNECT_ENTRY, *PA4_CONNECT_ENTRY;
 
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+typedef struct _Eth_CONNECT_ENTRY {
+	DL_LIST List;
+	UCHAR mac[6];
+	UINT16 entry_flush_count;
+} Eth_CONNECT_ENTRY, *PEth_CONNECT_ENTRY;
+
+#define Eth_Entry_Flush_Time 45
+#endif
 
 #define A4_TYPE_NONE  0
 #define A4_TYPE_MWDS  1
@@ -134,6 +143,30 @@ INT Set_APProxy_Refresh_Proc(
 	IN	PRTMP_ADAPTER adapter,
 	IN	RTMP_STRING *arg);
 
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+BOOLEAN eth_lookup_entry_by_addr(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr,
+	IN UCHAR update_time
+);
+
+VOID eth_add_entry(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr
+);
+
+VOID eth_delete_entry(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr
+);
+
+VOID eth_update_list(
+	IN PRTMP_ADAPTER adapter
+);
+#endif
 #endif /* A4_CONN */
 #endif /* __A4_CONN_H__*/
 

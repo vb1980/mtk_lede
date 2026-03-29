@@ -1740,7 +1740,7 @@ static VOID aes_s2v(
 	UINT8 *mac)
 {
 	UINT8 tmp[AES_BLOCK_SIZES] = {0};
-	UINT8 tmp2[AES_BLOCK_SIZES];
+	UINT8 tmp2[AES_BLOCK_SIZES] = {0};
 	UINT8 zero[AES_BLOCK_SIZES] = {0};
 	UINT8 *buf = NULL;
 	UINT32 i;

@@ -79,10 +79,6 @@ VOID PeerVHTAction(
 	IN MLME_QUEUE_ELEM *Elem);
 #endif /* DOT11_VHT_AC */
 
-VOID PeerProtectedDualAction(
-	RTMP_ADAPTER *pAd,
-	MLME_QUEUE_ELEM *Elem);
-
 VOID PeerPublicAction(
 	IN PRTMP_ADAPTER pAd,
 	IN MLME_QUEUE_ELEM *Elem);
@@ -105,4 +101,5 @@ void sta_send_event_report(
 	IN struct _RTMP_ADAPTER *pad,
 	IN struct _MLME_QUEUE_ELEM *elem);
 #endif
+
 #endif /* __ACTION_H__ */

@@ -580,22 +580,6 @@ extern ULONG RtmpOsGetUnalignedlong(
 void RTMP_GetCurrentSystemTime(LARGE_INTEGER *time);
 
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifndef CONFIG_RALINK_FLASH_API
-void FlashWrite(UCHAR *p, ULONG a, ULONG b);
-void FlashRead(UCHAR *p, ULONG a, ULONG b);
-#endif /* CONFIG_RALINK_FLASH_API */
-
-int wl_proc_init(void);
-int wl_proc_exit(void);
-
-#ifdef LINUX
-#if defined(CONFIG_RA_CLASSIFIER) || defined(CONFIG_RA_CLASSIFIER_MODULE)
-extern volatile unsigned long classifier_cur_cycle;
-extern int (*ra_classifier_hook_rx) (struct sk_buff *skb, unsigned long cycle);
-#endif /* defined(CONFIG_RA_CLASSIFIER)||defined(CONFIG_RA_CLASSIFIER_MODULE) */
-#endif /* LINUX */
-#endif /* RTMP_RBUS_SUPPORT */
 
 
 

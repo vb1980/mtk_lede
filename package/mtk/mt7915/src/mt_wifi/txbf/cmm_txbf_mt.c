@@ -266,7 +266,6 @@ VOID mt_BfSoundingAdjust(
 
 	if (!VALID_UCAST_ENTRY_WCID(pAd, u2Wcid)) {
 		MTWF_LOG(DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[%s]pEntry is NULL!!\n", __func__));
-		pPeerEntry = NULL;
 		return;
 	}
 	pPeerEntry = &pAd->MacTab.Content[u2Wcid];
@@ -1054,8 +1053,12 @@ INT32 mt_AsicBfStaRecUpdate(
 			pEntry->rStaRecBf.ucMemRequire20M = g_ru2PfmuMemReq[pEntry->rStaRecBf.ucNr][pEntry->rStaRecBf.ucNc];
 		else
 			pEntry->rStaRecBf.ucMemRequire20M = g_ru2PfmuMemReq[ucTxPath - 1][pEntry->rStaRecBf.ucNc];
-	} else
-		pEntry->rStaRecBf.ucMemRequire20M = g_ru2PfmuMemReq[pEntry->rStaRecBf.ucNr][pEntry->rStaRecBf.ucNc];
+	} else {
+		if (pEntry->rStaRecBf.ucNr < 4)
+			pEntry->rStaRecBf.ucMemRequire20M = g_ru2PfmuMemReq[pEntry->rStaRecBf.ucNr][pEntry->rStaRecBf.ucNc];
+		else
+			pEntry->rStaRecBf.ucMemRequire20M = 0;
+	}
 
 	pEntry->rStaRecBf.ucTotMemRequire        = pEntry->rStaRecBf.ucMemRequire20M * g_aPfmuTimeOfMem20M[pEntry->rStaRecBf.ucCBW];
 	pEntry->rStaRecBf.ucMemRow0              = 0;
@@ -1137,6 +1140,10 @@ INT32 mt_AsicBfeeStaRecUpdate(
 	UINT8 u1BandIdx = 0;
 #endif
 	pEntry = &pAd->MacTab.Content[u2WlanIdx];
+	if (!pEntry) {
+		MTWF_LOG(DBG_CAT_BF, CATBF_ASSOC, DBG_LVL_ERROR, ("%s() Fail. pEntry null\n", __func__));
+		return FALSE;
+	}
 
 #ifdef DBDC_MODE
 	if (pAd->CommonCfg.dbdc_mode) {
@@ -1161,11 +1168,6 @@ INT32 mt_AsicBfeeStaRecUpdate(
 #endif /* ANTENNA_CONTROL_SUPPORT */
 
 	MTWF_LOG(DBG_CAT_BF, CATBF_ASSOC, DBG_LVL_INFO, ("%s() dbdc: %u, u1TxPath: %u\n", __func__, pAd->CommonCfg.dbdc_mode, u1TxPath));
-
-	if (!pEntry) {
-		MTWF_LOG(DBG_CAT_BF, CATBF_ASSOC, DBG_LVL_ERROR, ("%s() Fail. pEntry null\n", __func__));
-		return FALSE;
-	}
 
 	os_zero_mem(&pEntry->rStaRecBfee, sizeof(BFEE_STA_REC));
 	if (wlan_config_get_etxbf(pEntry->wdev) == SUBF_ALL || wlan_config_get_etxbf(pEntry->wdev) == SUBF_BFEE) {
@@ -1221,7 +1223,7 @@ INT32 mt_AsicBfStaRecRelease(
 		StaCfg.u2WlanIdx = u2WlanIdx;
 		StaCfg.pEntry = pEntry;
 
-		if (CmdExtStaRecUpdate(pAd, StaCfg) != STATUS_TRUE) {
+		if (CmdExtStaRecUpdate(pAd, &StaCfg) != STATUS_TRUE) {
 			ucStatus = FALSE;
 			MTWF_LOG(DBG_CAT_BF, CATBF_ASSOC, DBG_LVL_ERROR, ("Something wrong in the BF STA Rec update!!\n"));
 		}
@@ -2164,6 +2166,7 @@ VOID TxBFPlyGetGrpStr(
 			os_move_mem(pcStr, "ERR\0", 4);
 			break;
 		default:
+			os_move_mem(pcStr, "NON\0", 4);
 			break;
 		}
 	}
@@ -2191,6 +2194,7 @@ VOID TxBFPlyGetPlyStr(
 			os_move_mem(pcStr, "I>E\0", 4);
 			break;
 		default:
+			os_move_mem(pcStr, "NBF\0", 4);
 			break;
 		}
 	}
@@ -2205,9 +2209,9 @@ VOID TxBfPlyInfoPrint(
 	P_BF_PLY_NSS_T prPlyStaNss;
 	P_BF_PLY_RLT_T prPlyStaRlt;
 	UINT16 Idx, u1SS;
-	CHAR cStrGrp[9];
-	CHAR cStrPly[4];
-	CHAR cStrRlt[4];
+	CHAR cStrGrp[9] = {0};
+	CHAR cStrPly[4] = {0};
+	CHAR cStrRlt[4] = {0};
 
 	MTWF_LOG(DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_OFF, (
 		"============================= Global Setting ========================================\n"));
@@ -3121,7 +3125,7 @@ INT DynamicTxBfDisable(
 			StaCfg.u2WlanIdx = i;
 			StaCfg.pEntry = pEntry;
 			/* update ucAutoSoundingCtrol and WTBL BF flag */
-			if (CmdExtStaRecUpdate(pAd, StaCfg) == STATUS_TRUE) {
+			if (CmdExtStaRecUpdate(pAd, &StaCfg) == STATUS_TRUE) {
 			    fgStatus = TRUE;
 			}
 
@@ -3140,6 +3144,7 @@ UINT32 starec_txbf_feature_decision(struct wifi_dev *wdev, struct _MAC_TABLE_ENT
 {
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
 	UINT32 features = 0;
+	UINT8 u1BandIdx = HcGetBandByWdev(wdev);
 
 	if (entry && (!IS_ENTRY_NONE(entry))) {
 		if (HcIsBfCapSupport(wdev)) {
@@ -3158,8 +3163,8 @@ UINT32 starec_txbf_feature_decision(struct wifi_dev *wdev, struct _MAC_TABLE_ENT
 							if ((IS_ENTRY_PEER_AP(entry) || IS_ENTRY_REPEATER(entry))) {
 								ad->fgApClientMode = TRUE;
 
-								if (ad->fgApCliBfStaRecRegister == FALSE) {
-									ad->fgApCliBfStaRecRegister = TRUE;
+								if (ad->fgApCliBfStaRecRegister[u1BandIdx] == FALSE) {
+									ad->fgApCliBfStaRecRegister[u1BandIdx] = TRUE;
 									ad->ApCli_CmmWlanId = entry->wcid;
 									features |= STA_REC_BF_FEATURE;
 								}

@@ -95,7 +95,7 @@ static VOID OceFdFrameSending(
 	pAd->ApCfg.FdFrameTimerRunning = FALSE;
 	pAd->ApCfg.FdFrameCurNum++;
 
-	FdFrameTimes = (pAd->CommonCfg.BeaconPeriod / OCE_FD_FRAME_PERIOD) - 1;
+	FdFrameTimes = (pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)] / OCE_FD_FRAME_PERIOD) - 1;
 
 	if (pAd->ApCfg.FdFrameCurNum >= FdFrameTimes) {
 		RTMPCancelTimer(&pAd->ApCfg.FdFrameTimer, &TimerCancelled);
@@ -169,53 +169,6 @@ static VOID WextOceSendStaInfoToDaemonEvent(
 		OID_802_11_OCE_MSG, NULL, (PUCHAR)buf, buflen);
 
 	os_free_mem(buf);
-}
-
-static ULONG Reflect(
-	unsigned long crc,
-	int bitnum
-	)
-{
-	unsigned long i, j = 1, crcout = 0;
-
-	for (i = (unsigned long)1<<(bitnum-1); i; i >>= 1) {
-		if (crc & i)
-			crcout |= j;
-		j <<= 1;
-	}
-	return crcout;
-}
-
-ULONG Crcbitbybitfast(
-	UCHAR * p,
-	ULONG len
-	)
-{
-	ULONG i, j, c, bit, crcmask, crchighbit;
-	ULONG crc = 0xffffffff;
-	const int order = 32;
-
-	crcmask = ((((ULONG)1<<(order-1))-1)<<1)|1;
-	crchighbit = (ULONG)1<<(order-1);
-	for (i = 0; i < len; i++) {
-		c = (ULONG)*p++;
-		c = Reflect(c, 8);
-
-		for (j = 0x80; j; j >>= 1) {
-			bit = crc & crchighbit;
-			crc <<= 1;
-			if (c & j)
-				bit ^= crchighbit;
-			if (bit)
-				crc ^= POLYNOMIAL;
-		}
-	}
-
-	crc = Reflect(crc, order);
-	crc ^= 0xffffffff;
-	crc &= crcmask;
-
-	return crc;
 }
 
 OCE_ERR_CODE OceInit(
@@ -489,8 +442,10 @@ OCE_ERR_CODE OceCollectAttribute(
 
 #ifdef CONFIG_STA_SUPPORT
 	case OCE_FRAME_TYPE_PROBE_REQ:
-		ErrCode = OceInsertAttrById(wdev, NULL, pAttrLen, pAttrBuf, OCE_ATTR_CAP_INDCATION);
-		ErrCode = OceInsertAttrById(wdev, NULL, pAttrLen, pAttrBuf, OCE_ATTR_STA_PRB_SUP_BSSID);
+		OceInsertAttrById(wdev, NULL, pAttrLen,
+			pAttrBuf, OCE_ATTR_CAP_INDCATION);
+		OceInsertAttrById(wdev, NULL, pAttrLen,
+			pAttrBuf, OCE_ATTR_STA_PRB_SUP_BSSID);
 		ErrCode = OceInsertAttrById(wdev, NULL, pAttrLen, pAttrBuf, OCE_ATTR_STA_PRB_SUP_SSID);
 		break;
 	case OCE_FRAME_TYPE_ASSOC_REQ:
@@ -704,28 +659,28 @@ INT OceApAutoChSelection2G(
 
 VOID OceScanOceAPList(BSS_TABLE *Tab)
 {
-	UCHAR i;
+	UINT i;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nOCE AP List:\n"));
-	for (i = 0; i < Tab->BssNr  && Tab->BssNr < MAX_LEN_OF_BSS_TABLE; i++) {
+	for (i = 0; i < Tab->BssNr  && Tab->BssNr <= MAX_LEN_OF_BSS_TABLE; i++) {
 		if (Tab->BssEntry[i].is_oce_ap)
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%02x-%02x-%02x-%02x-%02x-%02x, SSID:%s\n",
-				PRINT_MAC(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
+				(MACSTR", SSID:%s\n",
+				MAC2STR(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
 	}
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n11b-only AP List:\n"));
-	for (i = 0; i < Tab->BssNr  && Tab->BssNr < MAX_LEN_OF_BSS_TABLE; i++) {
+	for (i = 0; i < Tab->BssNr  && Tab->BssNr <= MAX_LEN_OF_BSS_TABLE; i++) {
 		if (Tab->BssEntry[i].is_11bonly_ap)
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%02x-%02x-%02x-%02x-%02x-%02x, SSID:%s\n",
-				PRINT_MAC(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
+				(MACSTR", SSID:%s\n",
+				MAC2STR(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
 	}
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nNon-OCE AP List:\n"));
-	for (i = 0; i < Tab->BssNr  && Tab->BssNr < MAX_LEN_OF_BSS_TABLE; i++) {
+	for (i = 0; i < Tab->BssNr  && Tab->BssNr <= MAX_LEN_OF_BSS_TABLE; i++) {
 		if (!Tab->BssEntry[i].is_oce_ap)
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%02x-%02x-%02x-%02x-%02x-%02x, SSID:%s\n",
-				PRINT_MAC(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
+				(MACSTR", SSID:%s\n",
+				MAC2STR(Tab->BssEntry[i].Bssid), Tab->BssEntry[i].Ssid));
 	}
 }
 
@@ -772,6 +727,7 @@ void Oce_read_parameters_from_file(
 	struct wifi_dev *wdev = NULL;
 	OCE_CTRL *oceCtrl = NULL;
 	INT Loop = 0;
+	INT n = 0;
 
 	if (RTMPGetKeyParameter("OCE_SUPPORT", tmpbuf, 32, pBuffer, TRUE)) {
 		RTMP_STRING *macptr;
@@ -941,7 +897,7 @@ void Oce_read_parameters_from_file(
 	}
 
 	for (Loop = 0; Loop < MAX_MBSSID_NUM(pAd); Loop++) {
-		RTMP_STRING tok_str[16];
+		RTMP_STRING tok_str[30];
 		struct wifi_dev *wdev = &pAd->ApCfg.MBSSID[PF_TO_BSS_IDX(pAd, Loop)].wdev;
 		OCE_CTRL *oceCtrl = &wdev->OceCtrl;
 
@@ -949,7 +905,11 @@ void Oce_read_parameters_from_file(
 			OCE_ASSOC_RssiThres:
 		*/
 		NdisZeroMemory(tok_str, sizeof(tok_str));
-		snprintf(tok_str, sizeof(tok_str), "OCE_ASSOC_RssiThres%d", Loop + 1);
+		n = snprintf(tok_str, sizeof(tok_str), "OCE_ASSOC_RssiThres%d", Loop + 1);
+		if (n < 0 || n >= sizeof(tok_str)) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_OCE, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 
 		if (RTMPGetKeyParameter(tok_str, tmpbuf, 32, pBuffer, TRUE)) {
 			INT8 rssi = os_str_tol(tmpbuf, 0, 10);
@@ -964,7 +924,11 @@ void Oce_read_parameters_from_file(
 			OCE_ASSOC_RetryDelay:
 		*/
 		NdisZeroMemory(tok_str, sizeof(tok_str));
-		snprintf(tok_str, sizeof(tok_str), "OCE_ASSOC_RetryDelay%d", Loop + 1);
+		n = snprintf(tok_str, sizeof(tok_str), "OCE_ASSOC_RetryDelay%d", Loop + 1);
+		if (n < 0 || n >= sizeof(tok_str)) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_OCE, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 
 		if (RTMPGetKeyParameter(tok_str, tmpbuf, 32, pBuffer, TRUE)) {
 			UINT8 time = os_str_tol(tmpbuf, 0, 10);
@@ -1044,7 +1008,7 @@ INT build_esp_element(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *buf)
 	else {
 		CurrTxop = pAd->CurrEdcaParam[WMM_PARAM_AC_1].u2Txop;
 		CurrTxop = (!CurrTxop) ? 2000 : CurrTxop * 32; /* 32 us per txop unit */
-		for (i = 0; i < ScanTab->BssNr && ScanTab->BssNr < MAX_LEN_OF_BSS_TABLE; i++)
+		for (i = 0; i < ScanTab->BssNr && ScanTab->BssNr <= MAX_LEN_OF_BSS_TABLE; i++)
 			ScanTxop += ScanTab->BssEntry[i].EdcaParm.Txop[QID_AC_BK];
 
 		ScanTxop *= 32; /* 32 us per txop unit */

@@ -34,6 +34,10 @@
 #define MULTI_CLIENT_NUMS_EAP_TH 16
 #define NEAR_FAR_FAST_PHY_RATE_TH	520
 #define NEAR_FAR_SLOW_PHY_RATE_TH	54
+#ifdef LOW_POWER_SUPPORT
+#define AP_IDLE_COUNT_UNIT			5	/* 5 seconds */
+#define AP_IDLE_TRAFFIC_THRESHOLD	5	/* 5 packets */
+#endif
 
 /* ============================================================= */
 /*      Common definition */
@@ -201,6 +205,14 @@ VOID APAssocStateMachineInit(
 
 VOID MbssKickOutStas(RTMP_ADAPTER *pAd, INT apidx, USHORT Reason);
 VOID APMlmeKickOutSta(RTMP_ADAPTER *pAd, UCHAR *staAddr, UINT16 Wcid, USHORT Reason);
+#ifdef ENHANCE_STAT_SUPPORT
+/* Func to send Wireless Event on Disassoc*/
+VOID WirelessEventSendDiassoc(PRTMP_ADAPTER pAd, MAC_TABLE_ENTRY *pEntry, USHORT Reason);
+typedef struct GNU_PACKED _sta_event_info {
+	UCHAR mac_addr[MAC_ADDR_LEN];
+	USHORT disassoc_reason;
+} sta_event_info;
+#endif /* ENHANCE_STAT_SUPPORT */
 
 #ifdef BW_VENDOR10_CUSTOM_FEATURE
 BOOLEAN IsClientConnected(RTMP_ADAPTER *pAd);
@@ -245,6 +257,19 @@ VOID APCls2errAction(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk);
 #ifdef MT_MAC
 VOID APCheckBcnQHandler(RTMP_ADAPTER *pAd, INT apidx, BOOLEAN *is_pretbtt_int);
 #endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+VOID CSALastBcnTxEventTimeout(
+	IN PVOID SystemSpecific1,
+	IN PVOID FunctionContext,
+	IN PVOID SystemSpecific2,
+	IN PVOID SystemSpecific3);
+
+VOID ChnlSwitchStaNullAckWaitTimeout(
+	IN PVOID SystemSpecific1,
+	IN PVOID FunctionContext,
+	IN PVOID SystemSpecific2,
+	IN PVOID SystemSpecific3);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #endif /* CONFIG_AP_SUPPORT */
 
 /* ap_sync.c */
@@ -258,7 +283,8 @@ VOID ApSiteSurvey_by_wdev(
 VOID Update_LastSec_TXRX_Stats(
 	IN PRTMP_ADAPTER   pAd);
 #endif
-
+VOID Update_Wtbl_Counters(
+	IN PRTMP_ADAPTER   pAd);
 VOID SupportRate(
 	IN struct legacy_rate *rate,
 	OUT PUCHAR * Rates,
@@ -334,6 +360,10 @@ VOID APCleanupPsQueue(RTMP_ADAPTER *pAd, QUEUE_HEADER *pQueue);
 VOID MacTableMaintenance(RTMP_ADAPTER *pAd);
 
 UINT32 MacTableAssocStaNumGet(RTMP_ADAPTER *pAd);
+
+#ifdef LOW_POWER_SUPPORT
+VOID ApIdleStateCheck(RTMP_ADAPTER *pAd);
+#endif
 
 MAC_TABLE_ENTRY *APSsPsInquiry(
 	IN  PRTMP_ADAPTER   pAd,

@@ -226,6 +226,8 @@ static struct vht_ch_layout vht_ch_40M[] = {
 	{140, 144, 142},
 	{149, 153, 151},
 	{157, 161, 159},
+	{165, 169, 167},
+	{173, 177, 175},
 	{0, 0, 0},
 };
 
@@ -298,12 +300,198 @@ static struct vht_ch_layout vht_ch_80M[] = {
 	{116, 128, 122},
 	{132, 144, 138},
 	{149, 161, 155},
+	{165, 177, 171},
 	{0, 0, 0},
 };
 
 static struct  vht_ch_layout vht_ch_160M[] = {
 	{36, 64, 50},
 	{100, 128, 114},
+	{149, 177, 163},
+	{0, 0, 0},
+};
+
+//Country Region 40M channel
+//Countryt Region 6
+static struct vht_ch_layout vht_ch_40M_UNII_1[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{0, 0, 0},
+};
+//Countryt Region 8
+static struct vht_ch_layout vht_ch_40M_UNII_2[] = {
+	{52, 56, 54},
+	{60, 64, 62},
+	{0, 0, 0},
+};
+//Countryt Region 2
+static struct vht_ch_layout vht_ch_40M_UNII_3[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{0, 0, 0},
+};
+//Countryt Region 3, 16
+static struct vht_ch_layout vht_ch_40M_UNII_4[] = {
+	{52, 56, 54},
+	{60, 64, 62},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 4, 5
+static struct vht_ch_layout vht_ch_40M_UNII_5[] = {
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 10, 17
+static struct vht_ch_layout vht_ch_40M_UNII_6[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 0
+static struct vht_ch_layout vht_ch_40M_UNII_7[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 22
+static struct vht_ch_layout vht_ch_40M_UNII_8[] = {
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{0, 0, 0},
+};
+//Countryt Region 18
+static struct vht_ch_layout vht_ch_40M_UNII_9[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{132, 136, 134},
+	{0, 0, 0},
+};
+//Countryt Region 1
+static struct vht_ch_layout vht_ch_40M_UNII_10[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{0, 0, 0},
+};
+//Countryt Region 19
+static struct vht_ch_layout vht_ch_40M_UNII_11[] = {
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 12
+static struct vht_ch_layout vht_ch_40M_UNII_12[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{140, 144, 142},
+	{0, 0, 0},
+};
+//Countryt Region 9
+static struct vht_ch_layout vht_ch_40M_UNII_13[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{132, 136, 134},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 11, 20
+static struct vht_ch_layout vht_ch_40M_UNII_14[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 14
+static struct vht_ch_layout vht_ch_40M_UNII_15[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{132, 136, 134},
+	{140, 144, 142},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 7, 21
+static struct vht_ch_layout vht_ch_40M_UNII_16[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{149, 153, 151},
+	{157, 161, 159},
+	{0, 0, 0},
+};
+//Countryt Region 13
+static struct vht_ch_layout vht_ch_40M_UNII_17[] = {
+	{36, 40, 38},
+	{44, 48, 46},
+	{52, 56, 54},
+	{60, 64, 62},
+	{100, 104, 102},
+	{108, 112, 110},
+	{116, 120, 118},
+	{124, 128, 126},
+	{132, 136, 134},
+	{140, 144, 142},
+	{149, 153, 151},
+	{157, 161, 159},
 	{0, 0, 0},
 };
 
@@ -426,8 +614,8 @@ VOID trigger_vht_ndpa(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *entry)
 
 	vht_ndpa->duration = pAd->CommonCfg.Dsifs +
 						 RTMPCalcDuration(pAd, pAd->CommonCfg.MlmeRate, frm_len);
-	MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Send VHT NDPA Frame to STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-			 PRINT_MAC(entry->Addr)));
+	MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Send VHT NDPA Frame to STA("MACSTR")\n",
+			 MAC2STR(entry->Addr)));
 	hex_dump("VHT NDPA Frame", buf, frm_len);
 	MiniportMMRequest(pAd, 0, buf, frm_len);
 	MlmeFreeMemory(buf);
@@ -453,8 +641,8 @@ VOID trigger_vht_ndpa(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *entry)
 		qos_p[1] = 0;
 		frm_len += 2;
 		entry->snd_reqired = TRUE;
-		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Send sounding QoSNULL Frame to STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				 PRINT_MAC(entry->Addr)));
+		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Send sounding QoSNULL Frame to STA("MACSTR")\n",
+				 MAC2STR(entry->Addr)));
 		hex_dump("VHT NDP Frame(QoSNull)", NullFrame, frm_len);
 		hif_kickout_nullframe_tx(pAd, 0, NullFrame, frm_len);
 	}
@@ -529,7 +717,7 @@ UCHAR vht_cent_ch_freq(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band)
 	if (vht_bw == VHT_BW_2040 || ((prim_ch < 36) && ch_band == CMD_CH_BAND_5G))
 		return prim_ch;
 	else if ((vht_bw == VHT_BW_80) || (vht_bw == VHT_BW_8080)) {
-		while (ch_80M[idx].ch_up_bnd != 0) {
+		while (ch_80M && ch_80M[idx].ch_up_bnd != 0) {
 			if (prim_ch >= ch_80M[idx].ch_low_bnd &&
 				prim_ch <= ch_80M[idx].ch_up_bnd)
 				return ch_80M[idx].cent_freq_idx;
@@ -537,7 +725,7 @@ UCHAR vht_cent_ch_freq(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band)
 			idx++;
 		}
 	} else if (vht_bw == VHT_BW_160) {
-		while (ch_160M[idx].ch_up_bnd != 0) {
+		while (ch_160M && ch_160M[idx].ch_up_bnd != 0) {
 			if (prim_ch >= ch_160M[idx].ch_low_bnd &&
 				prim_ch <= ch_160M[idx].ch_up_bnd)
 				return ch_160M[idx].cent_freq_idx;
@@ -555,7 +743,7 @@ UCHAR vht_cent_ch_freq_40mhz(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band)
 	struct vht_ch_layout *ch_40M = get_ch_array(BW_40, ch_band);
 
 	if ((vht_bw == VHT_BW_2040) && (ch_band == CMD_CH_BAND_5G))
-		while (ch_40M[idx].ch_up_bnd != 0) {
+		while (ch_40M && ch_40M[idx].ch_up_bnd != 0) {
 			if (prim_ch >= ch_40M[idx].ch_low_bnd &&
 				prim_ch <= ch_40M[idx].ch_up_bnd)
 				return ch_40M[idx].cent_freq_idx;
@@ -568,7 +756,7 @@ UCHAR vht_cent_ch_freq_40mhz(UCHAR prim_ch, UCHAR vht_bw, UCHAR ch_band)
 
 UINT16 vht_max_mpdu_size[3] = {3839u, 7935u, 11454u};
 
-INT vht_mode_adjust(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, VHT_CAP_IE *cap, VHT_OP_IE *op)
+INT vht_mode_adjust(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, VHT_CAP_IE *cap, VHT_OP_IE *op, OPERATING_MODE *op_mode)
 {
 	RT_PHY_INFO *ht_phyinfo;
 	struct wifi_dev *wdev = pEntry->wdev;
@@ -599,23 +787,34 @@ INT vht_mode_adjust(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, VHT_CAP_IE *cap,
 		ht_phyinfo = &pEntry->wdev->DesiredHtPhyInfo;
 
 		if (ht_phyinfo) {
-			MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: DesiredHtPhyInfo->vht_bw=%d, ch_width=%d\n", __func__,
+			MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					("%s: DesiredHtPhyInfo->vht_bw=%d, ch_width=%d\n", __func__,
 					 ht_phyinfo->vht_bw, cap->vht_cap.ch_width));
 
 			if ((ht_phyinfo->vht_bw == VHT_BW_2040)) {
-				pEntry->MaxHTPhyMode.field.ShortGI = (vht_sgi & (cap->vht_cap.sgi_80M));
 				pEntry->MaxHTPhyMode.field.STBC = ((wlan_config_get_vht_stbc(pEntry->wdev) & cap->vht_cap.rx_stbc) ? 1 : 0);
 			} else if ((ht_phyinfo->vht_bw >= VHT_BW_80) && (cap->vht_cap.ch_width == 0)) {
 				if (op != NULL) {
 					if (op->vht_op_info.ch_width == 0)  /* peer support VHT20,40 */
 						pEntry->MaxHTPhyMode.field.BW = BW_40;
-					else
+					else {
 						pEntry->MaxHTPhyMode.field.BW = BW_80;
+						pEntry->MaxHTPhyMode.field.ShortGI = (vht_sgi & (cap->vht_cap.sgi_80M));
+					}
+				} else if (op_mode != NULL) {
+					if (op_mode->ch_width == 0)  /* peer support VHT20 */
+						pEntry->MaxHTPhyMode.field.BW = BW_20;
+					else if (op_mode->ch_width == 1)
+						pEntry->MaxHTPhyMode.field.BW = BW_40;
+					else {
+						pEntry->MaxHTPhyMode.field.BW = BW_80;
+						pEntry->MaxHTPhyMode.field.ShortGI = (vht_sgi & (cap->vht_cap.sgi_80M));
+					}
 				} else {
 					/* can not know peer capability, use it's maximum capability */
 					pEntry->MaxHTPhyMode.field.BW = BW_80;
+					pEntry->MaxHTPhyMode.field.ShortGI = (vht_sgi & (cap->vht_cap.sgi_80M));
 				}
-				pEntry->MaxHTPhyMode.field.ShortGI = (vht_sgi & (cap->vht_cap.sgi_80M));
 				pEntry->MaxHTPhyMode.field.STBC = ((wlan_config_get_vht_stbc(pEntry->wdev) & cap->vht_cap.rx_stbc)  ? 1 : 0);
 			} else if ((ht_phyinfo->vht_bw == VHT_BW_80) && (cap->vht_cap.ch_width != 0)) {
 				/* bw80 */
@@ -1057,7 +1256,7 @@ INT build_vht_cap_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *buf)
 		vht_cap_ie.vht_cap.bfer_cap_su       = vht_cap.bfer_cap_su;
 #ifdef MT_MAC
 		vht_cap_ie.vht_cap.bfee_cap_mu       = vht_cap.bfee_cap_mu;
-		vht_cap_ie.vht_cap.bfer_cap_mu       = vht_cap.bfer_cap_mu;
+		vht_cap_ie.vht_cap.bfer_cap_mu       = (vht_cap.bfer_cap_mu && wlan_config_get_vht_bfer_cap_mu(wdev)) ? 1 : 0;
 #endif
 	}
 
@@ -1113,6 +1312,8 @@ INT build_vht_cap_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *buf)
 
 		if (tx_nss >= 4)
 			vht_cap_ie.mcs_set.tx_mcs_map.mcs_ss4 = mcs_cap;
+
+		vht_cap_ie.mcs_set.vht_ext_nss_bw_cap = 1;
 
 		if (wlan_config_get_vht_bw(wdev) == VHT_BW_2040
 			&& wlan_config_get_ht_bw(wdev) == HT_BW_20) {
@@ -1422,16 +1623,101 @@ BOOLEAN vht40_channel_group(RTMP_ADAPTER *pAd, UCHAR channel, struct wifi_dev *w
 	INT idx = 0;
 	UCHAR region = 0;
 	UCHAR ch_band = wlan_config_get_ch_band(wdev);
+	struct vht_ch_layout *vht_ch = get_ch_array(BW_40, ch_band);
 
 	switch (ch_band) {
 	case CMD_CH_BAND_5G:
+		switch (pAd->CommonCfg.CountryRegionForABand) {
+		case 0:
+			vht_ch = vht_ch_40M_UNII_7;
+			break;
+
+		case 1:
+			vht_ch = vht_ch_40M_UNII_10;
+			break;
+
+		case 2:
+			vht_ch = vht_ch_40M_UNII_3;
+			break;
+
+		case 3:
+		case 16:
+			vht_ch = vht_ch_40M_UNII_4;
+			break;
+
+		case 4:
+		case 5:
+			vht_ch = vht_ch_40M_UNII_5;
+			break;
+
+		case 6:
+			vht_ch = vht_ch_40M_UNII_1;
+			break;
+
+		case 7:
+		case 21:
+			vht_ch = vht_ch_40M_UNII_16;
+			break;
+
+		case 8:
+			vht_ch = vht_ch_40M_UNII_2;
+			break;
+
+		case 10:
+		case 17:
+			vht_ch = vht_ch_40M_UNII_6;
+			break;
+
+		case 9:
+			vht_ch = vht_ch_40M_UNII_13;
+			break;
+
+		case 11:
+		case 20:
+			vht_ch = vht_ch_40M_UNII_14;
+			break;
+
+		case 12:
+			vht_ch = vht_ch_40M_UNII_12;
+			break;
+
+		case 13:
+			vht_ch = vht_ch_40M_UNII_17;
+			break;
+
+		case 14:
+			vht_ch = vht_ch_40M_UNII_15;
+			break;
+
+		case 18:
+			vht_ch = vht_ch_40M_UNII_9;
+			break;
+
+		case 19:
+			vht_ch = vht_ch_40M_UNII_11;
+			break;
+
+		case 22:
+			vht_ch = vht_ch_40M_UNII_8;
+			break;
+
+		default:
+			break;
+		}
+
 		region = GetCountryRegionFromCountryCode(pAd->CommonCfg.CountryCode);
-		while (vht_ch_40M[idx].ch_up_bnd != 0) {
-			if (channel >= vht_ch_40M[idx].ch_low_bnd &&
-				channel <= vht_ch_40M[idx].ch_up_bnd) {
+		while (vht_ch[idx].ch_up_bnd != 0) {
+			if (channel >= vht_ch[idx].ch_low_bnd &&
+				channel <= vht_ch[idx].ch_up_bnd) {
 				if (((region == CE) &&
-					(vht_ch_40M[idx].cent_freq_idx == 142))
+					(vht_ch[idx].cent_freq_idx == 142))
 				) {
+					idx++;
+					continue;
+				}
+				if (!UNII4BandSupport(pAd) &&
+					(vht_ch[idx].cent_freq_idx == 167 ||
+						vht_ch[idx].cent_freq_idx == 175)) {
 					idx++;
 					continue;
 				}
@@ -1466,21 +1752,27 @@ BOOLEAN vht80_channel_group(RTMP_ADAPTER *pAd, UCHAR channel, struct wifi_dev *w
 	UCHAR ch_band = wlan_config_get_ch_band(wdev);
 	struct vht_ch_layout *vht_ch = get_ch_array(BW_80, ch_band);
 
-	while (vht_ch[idx].ch_up_bnd != 0) {
+	while (vht_ch && vht_ch[idx].ch_up_bnd != 0) {
 		if (channel >= vht_ch[idx].ch_low_bnd &&
 			channel <= vht_ch[idx].ch_up_bnd) {
+#ifndef DFS_VENDOR10_CUSTOM_FEATURE
+			if ((region == CE) && vht_ch_80M[idx].cent_freq_idx == 138 &&
+                /* Allow using 132~144 while country is United Kingdom in 80Mhz*/
+				(strncmp((RTMP_STRING *) pAd->CommonCfg.CountryCode, "GB", 2))) {
+#else
 			if ((((pAd->CommonCfg.RDDurRegion == JAP ||
 				pAd->CommonCfg.RDDurRegion == JAP_W53 ||
 				pAd->CommonCfg.RDDurRegion == JAP_W56) &&
-				vht_ch_80M[idx].cent_freq_idx == 138)
-				||
+				vht_ch_80M[idx].cent_freq_idx == 138) ||
 				((region == JAP || region == CE) &&
 				vht_ch_80M[idx].cent_freq_idx == 138))
-#ifdef DFS_VENDOR10_CUSTOM_FEATURE
-				&& (!pAd->CommonCfg.bCh144Enabled)
+				&& (!pAd->CommonCfg.bCh144Enabled)) {
 #endif
-			) {
 				/* prevent using 132~144 while Region is CE */
+				idx++;
+				continue;
+			}
+			if (!UNII4BandSupport(pAd) && (vht_ch_80M[idx].cent_freq_idx == 171)) {
 				idx++;
 				continue;
 			}
@@ -1500,11 +1792,15 @@ BOOLEAN vht160_channel_group(RTMP_ADAPTER *pAd, UCHAR channel, struct wifi_dev *
 	UCHAR ch_band = wlan_config_get_ch_band(wdev);
 	struct vht_ch_layout *vht_ch = get_ch_array(BW_160, ch_band);
 
-	while (vht_ch[idx].ch_up_bnd != 0) {
+	while (vht_ch && vht_ch[idx].ch_up_bnd != 0) {
 		if (channel >= vht_ch[idx].ch_low_bnd &&
-			channel <= vht_ch[idx].ch_up_bnd)
+			channel <= vht_ch[idx].ch_up_bnd) {
+			if (!UNII4BandSupport(pAd) && (vht_ch[idx].cent_freq_idx == 163)) {
+				idx++;
+				continue;
+			}
 			return TRUE;
-
+		}
 		idx++;
 	}
 
@@ -1698,6 +1994,10 @@ static UINT8 *build_vht_mcs_nss_set(struct wifi_dev *wdev, UINT8 *f_buf)
 
 	if (mcs_nss->max_vht_mcs < max_mcs)
 		max_mcs = mcs_nss->max_vht_mcs;
+	if (tx_nss > 4)
+		tx_nss = 4;
+	if (rx_nss > 4)
+		rx_nss = 4;
 
 	rx_mcs_map = set_vht_mcs_map(rx_nss, max_mcs);
 	rx_rate_max_nsts = VHT_HIGH_RATE_BW80[max_mcs][rx_nss - 1];
@@ -1768,9 +2068,7 @@ UINT8 *build_vht_op_info(struct wifi_dev *wdev, UINT8 *f_buf)
 
 static UINT8 *build_vht_op_ie(struct wifi_dev *wdev, UINT8 *f_buf)
 {
-	UINT8 *pos = f_buf;
-
-	pos = build_vht_op_info(wdev, f_buf);
+	UINT8 *pos = build_vht_op_info(wdev, f_buf);
 	pos = build_vht_mcs_nss_set(wdev, pos);
 
 	return pos;

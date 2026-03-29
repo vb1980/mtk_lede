@@ -104,8 +104,8 @@ VOID AddWpsWhiteList(
 	if (pWpsWhiteListEntry) {
 		/* the Entry already exist */
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("%s: Found %02x:%02x:%02x:%02x:%02x:%02x in Wps White List\n",
-			__func__, PRINT_MAC(pMacAddr)));
+			("%s: Found "MACSTR" in Wps White List\n",
+			__func__, MAC2STR(pMacAddr)));
 	} else {
 		/* Add new Entry */
 		os_alloc_mem(NULL, (UCHAR **)&pWpsWhiteListEntry, sizeof(WPS_WHITELIST_ENTRY));
@@ -114,8 +114,8 @@ VOID AddWpsWhiteList(
 			pWpsWhiteListEntry->pNext = NULL;
 			NdisCopyMemory(pWpsWhiteListEntry->addr, pMacAddr, MAC_ADDR_LEN);
 			insertTailList(pWpsWhiteList, (RT_LIST_ENTRY *)pWpsWhiteListEntry);
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s]%02x:%02x:%02x:%02x:%02x:%02x added to WpsList:size::%d\n",
-			 __func__, PRINT_MAC(pWpsWhiteListEntry->addr), pWpsWhiteList->size));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s]"MACSTR" added to WpsList:size::%d\n",
+			 __func__, MAC2STR(pWpsWhiteListEntry->addr), pWpsWhiteList->size));
 		} else
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[%s] Mem alloc fail\n", __func__));
 	}
@@ -209,8 +209,8 @@ VOID AddBsListEntry(
 	if (pBsListEntry) {
 		/* the Entry already exist */
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("%s: Found %02x:%02x:%02x:%02x:%02x:%02x in BsList.\n",
-			__func__, PRINT_MAC(pMacAddr)));
+			("%s: Found "MACSTR" in BsList.\n",
+			__func__, MAC2STR(pMacAddr)));
 	} else {
 		/* Add new Entry */
 		os_alloc_mem(NULL, (UCHAR **)&pBsListEntry, sizeof(BS_LIST_ENTRY));
@@ -219,8 +219,8 @@ VOID AddBsListEntry(
 			pBsListEntry->pNext = NULL;
 			NdisCopyMemory(pBsListEntry->addr, pMacAddr, MAC_ADDR_LEN);
 			insertTailList(pBsList, (RT_LIST_ENTRY *)pBsListEntry);
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s] %02x:%02x:%02x:%02x:%02x:%02x added in BsList:size::%d\n",
-			 __func__, PRINT_MAC(pBsListEntry->addr), pBsList->size));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s] "MACSTR" added in BsList:size::%d\n",
+			 __func__, MAC2STR(pBsListEntry->addr), pBsList->size));
 		} else
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[%s]Mem alloc fail\n", __func__));
 	}
@@ -237,14 +237,14 @@ VOID DelBsListEntry(
 
 	if (!pBsListEntry) {
 		/* the Entry already exist */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not Found %02x:%02x:%02x:%02x:%02x:%02x in BsList.\n",
-		 __func__, PRINT_MAC(pMacAddr)));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not Found "MACSTR" in BsList.\n",
+		 __func__, MAC2STR(pMacAddr)));
 	} else {
 		pListEntry = (RT_LIST_ENTRY *)pBsListEntry;
 		/* Delete the Entry */
 		pDelEntry = delEntryList(pBsList, pListEntry);
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Sta %02x:%02x:%02x:%02x:%02x:%02x deleted from BsList:size::%d\n",
-			 __func__, PRINT_MAC(pBsListEntry->addr), pBsList->size));
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Sta "MACSTR" deleted from BsList:size::%d\n",
+			 __func__, MAC2STR(pBsListEntry->addr), pBsList->size));
 		os_free_mem(pDelEntry);
 	}
 }
@@ -316,7 +316,7 @@ INT Show_BndStrg_Info(
 		pBsListEntry = (PBS_LIST_ENTRY)pListEntry;
 
 		while (pBsListEntry != NULL) {
-			BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\t -> %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pBsListEntry->addr)));
+			BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\t -> "MACSTR"\n", MAC2STR(pBsListEntry->addr)));
 			pListEntry = pListEntry->pNext;
 			pBsListEntry = (PBS_LIST_ENTRY)pListEntry;
 		}
@@ -332,7 +332,7 @@ INT Show_BndStrg_Info(
 		pBsListEntry = (PBS_LIST_ENTRY)pListEntry;
 
 		while (pBsListEntry != NULL) {
-			BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\t -> %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pBsListEntry->addr)));
+			BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\t -> "MACSTR"\n", MAC2STR(pBsListEntry->addr)));
 			pListEntry = pListEntry->pNext;
 			pBsListEntry = (PBS_LIST_ENTRY)pListEntry;
 		}
@@ -378,12 +378,12 @@ INT Show_BndStrg_List(
 		if (table->Entry[i].bValid) {
 			if (MAC_ADDR_EQUAL(table->MonitorAddr, table->Entry[i].Addr)) {
 				BND_STRG_PRINTQAMSG(table, table->Entry[i].Addr,
-									(YLW("\t%d: %02x:%02x:%02x:%02x:%02x:%02x [TblIdx:%d]\n"),
-									 i, PRINT_MAC(table->Entry[i].Addr), table->Entry[i].TableIndex));
+									(YLW("\t%d: "MACSTR" [TblIdx:%d]\n"),
+									 i, MAC2STR(table->Entry[i].Addr), table->Entry[i].TableIndex));
 			} else {
 				BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-								  ("\t%d: %02x:%02x:%02x:%02x:%02x:%02x [TblIdx:%d]\n",
-								   i, PRINT_MAC(table->Entry[i].Addr), table->Entry[i].TableIndex));
+								  ("\t%d: "MACSTR" [TblIdx:%d]\n",
+								   i, MAC2STR(table->Entry[i].Addr), table->Entry[i].TableIndex));
 			}
 		}
 	}
@@ -526,8 +526,8 @@ INT Set_BndStrg_MonitorAddr(
 
 	COPY_MAC_ADDR(table->MonitorAddr, MonitorAddr);
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("%s(): %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__, PRINT_MAC(table->MonitorAddr)));
+			 ("%s(): "MACSTR"\n",
+			  __func__, MAC2STR(table->MonitorAddr)));
 	msg.Action = SET_MNT_ADDR;
 	COPY_MAC_ADDR(mnt_addr->Addr, table->MonitorAddr);
 	BndStrgSendMsg(pAd, &msg);
@@ -785,8 +785,8 @@ INT BndStrg_DeleteEntry(PBND_STRG_CLI_TABLE table, PUCHAR pAddr, UINT32 Index)
 
 		if (entry == NULL) {
 			BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-							  ("%s(): Index=%u, %02x:%02x:%02x:%02x:%02x:%02x, Entry not found.\n",
-							   __func__, Index, PRINT_MAC(pAddr)));
+							  ("%s(): Index=%u, "MACSTR", Entry not found.\n",
+							   __func__, Index, MAC2STR(pAddr)));
 			NdisReleaseSpinLock(&table->Lock);
 			return BND_STRG_INVALID_ARG;
 		}
@@ -881,7 +881,7 @@ BOOLEAN BndStrg_CheckConnectionReq(
 		bs_whitelist_entry = FindBsListEntry(&table->WhiteList, pSrcAddr);
 
 		if (bs_whitelist_entry) {
-			BND_STRG_PRINTQAMSG(table, pSrcAddr, ("BndStrg STA %02x:%02x:%02x:%02x:%02x:%02x  whitelisted\n", PRINT_MAC(pSrcAddr)));
+			BND_STRG_PRINTQAMSG(table, pSrcAddr, ("BndStrg STA "MACSTR" whitelisted\n", MAC2STR(pSrcAddr)));
 			return TRUE;
 		}
 	}
@@ -960,7 +960,7 @@ BOOLEAN BndStrg_CheckConnectionReq(
 		bs_blacklist_entry = FindBsListEntry(&table->BlackList, pSrcAddr);
 
 		if (bs_blacklist_entry) {
-			BND_STRG_PRINTQAMSG(table, pSrcAddr, ("BndStrg STA %02x:%02x:%02x:%02x:%02x:%02x  blacklisted\n", PRINT_MAC(pSrcAddr)));
+			BND_STRG_PRINTQAMSG(table, pSrcAddr, ("BndStrg STA "MACSTR" blacklisted\n", MAC2STR(pSrcAddr)));
 			return FALSE;
 		}
 	}
@@ -977,10 +977,10 @@ BOOLEAN BndStrg_CheckConnectionReq(
 					NdisAcquireSpinLock(&table->WpsWhiteListLock);
 					AddWpsWhiteList(&table->WpsWhiteList, pSrcAddr);
 					NdisReleaseSpinLock(&table->WpsWhiteListLock);
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: Probe req: STA %02x:%02x:%02x:%02x:%02x:%02x wps whitelisted\n",
-					table->Channel, PRINT_MAC(pSrcAddr)));
-					BND_STRG_PRINTQAMSG(table, pSrcAddr, ("STA %02x:%02x:%02x:%02x:%02x:%02x channel %u  added in WPS Whitelist\n",
-					PRINT_MAC(pSrcAddr), table->Channel));
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: Probe req: STA "MACSTR" wps whitelisted\n",
+					table->Channel, MAC2STR(pSrcAddr)));
+					BND_STRG_PRINTQAMSG(table, pSrcAddr, ("STA "MACSTR" channel %u  added in WPS Whitelist\n",
+					MAC2STR(pSrcAddr), table->Channel));
 				}
 				return TRUE;
 			}
@@ -988,10 +988,10 @@ BOOLEAN BndStrg_CheckConnectionReq(
 
 		if (FrameType == APMT2_PEER_AUTH_REQ) {
 			if (pWscControl->bWscTrigger) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: Auth req: STA %02x:%02x:%02x:%02x:%02x:%02x  wps whitelisted\n",
-				table->Channel, PRINT_MAC(pSrcAddr)));
-				BND_STRG_PRINTQAMSG(table, pSrcAddr, ("STA %02x:%02x:%02x:%02x:%02x:%02x  channel %u allowed Auth as per WPS Whitelist\n",
-				PRINT_MAC(pSrcAddr), table->Channel));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: Auth req: STA "MACSTR" wps whitelisted\n",
+				table->Channel, MAC2STR(pSrcAddr)));
+				BND_STRG_PRINTQAMSG(table, pSrcAddr, ("STA "MACSTR" channel %u allowed Auth as per WPS Whitelist\n",
+				MAC2STR(pSrcAddr), table->Channel));
 				return TRUE;
 			}
 		}
@@ -1005,25 +1005,25 @@ BOOLEAN BndStrg_CheckConnectionReq(
 
 	if (entry && (FrameType == APMT2_PEER_AUTH_REQ) && (entry->BndStrg_Sta_State == BNDSTRG_STA_ASSOC)) {
 		BND_STRG_PRINTQAMSG(table, pSrcAddr,
-		(RED("%s: (ch%d)  check %s request failed. client's (%02x:%02x:%02x:%02x:%02x:%02x) request is ignored. Client disconnected without DeAuth.!!Waiting for bndstrg result!!\n"
-		), (table->Band == BAND_24G ? "2.4G" : "5G"), table->Channel, "Auth", PRINT_MAC(pSrcAddr)));
+		(RED("%s: (ch%d)  check %s request failed. client's ("MACSTR") request is ignored. Client disconnected without DeAuth.!!Waiting for bndstrg result!!\n"
+		), (table->Band == BAND_24G ? "2.4G" : "5G"), table->Channel, "Auth", MAC2STR(pSrcAddr)));
 		return FALSE;
 	}
 
 	if (entry) {
 #ifdef BND_STRG_QA
 		BND_STRG_PRINTQAMSG(table, pSrcAddr,
-		(GRN("%s: (ch%d)  check %s request ok. client's (%02x:%02x:%02x:%02x:%02x:%02x) request is accepted.\n"
+		(GRN("%s: (ch%d)  check %s request ok. client's ("MACSTR") request is accepted.\n"
 		), (table->Band == BAND_24G ? "2.4G" : "5G"), table->Channel,
-		FrameType == APMT2_PEER_PROBE_REQ ? ("probe") : (FrameType == 3 ? "auth" : "unknow"), PRINT_MAC(pSrcAddr)));
+		FrameType == APMT2_PEER_PROBE_REQ ? ("probe") : (FrameType == 3 ? "auth" : "unknow"), MAC2STR(pSrcAddr)));
 #endif
 		return TRUE;
 	} else {
 #ifdef BND_STRG_QA
 		BND_STRG_PRINTQAMSG(table, pSrcAddr,
-		(RED("%s: (ch%d)  check %s request failed. client's (%02x:%02x:%02x:%02x:%02x:%02x) request is ignored.\n"
+		(RED("%s: (ch%d)  check %s request failed. client's ("MACSTR") request is ignored.\n"
 		), (table->Band == BAND_24G ? "2.4G" : "5G"), table->Channel,
-		FrameType == APMT2_PEER_PROBE_REQ ? ("probe") : (FrameType == 3 ? "auth" : "unknow"), PRINT_MAC(pSrcAddr)));
+		FrameType == APMT2_PEER_PROBE_REQ ? ("probe") : (FrameType == 3 ? "auth" : "unknow"), MAC2STR(pSrcAddr)));
 #endif
 		return FALSE;
 	}
@@ -1163,9 +1163,9 @@ INT BndStrg_SetInfFlags(
 	inf_status_rsp->nvram_support = 0;
 	BndStrgSendMsg(pAd, &msg);
 	BND_STRG_MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					  (BLUE("%s(): BSS(%02X:%02X:%02X:%02X:%02X:%02X)")
+					  (BLUE("%s(): BSS("MACSTR")")
 					   BLUE(" set %s Inf %s %s.\n"), __func__,
-					   PRINT_MAC(wdev->bssid), IS_5G_BAND(Band) ? "5G" : "2G",
+					   MAC2STR(wdev->bssid), IS_5G_BAND(Band) ? "5G" : "2G",
 					   wdev->if_dev->name, bInfReady ? "ready" : "not ready"));
 
 	if (table->bInfReady ^ bInfReady) {
@@ -1327,7 +1327,7 @@ VOID BndStrg_CLIStatusRsp(PRTMP_ADAPTER pAd, PBND_STRG_CLI_TABLE table, BNDSTRG_
 #endif
 						UINT32 RawData;
 						UINT32 RawData_r;
-						UINT32 lastTxRate = pEntry->LastTxRate;
+						UINT32 lastTxRate;
 						UINT32 lastRxRate = pEntry->LastRxRate;
 
 						if (pEntry->bAutoTxRateSwitch == TRUE) {
@@ -1335,6 +1335,7 @@ VOID BndStrg_CLIStatusRsp(PRTMP_ADAPTER pAd, PBND_STRG_CLI_TABLE table, BNDSTRG_
 							HTTRANSMIT_SETTING LastTxRate;
 							HTTRANSMIT_SETTING LastRxRate;
 
+							os_zero_mem(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
 							MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, pEntry->wcid, &rTxStatResult);
 							LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
 							LastTxRate.field.BW = rTxStatResult.rEntryTxRate.BW;
@@ -1742,7 +1743,7 @@ VOID BndStrg_handle_onoff_event(PRTMP_ADAPTER pAd, PBND_STRG_CLI_TABLE table, BN
 			MAC_TABLE_ENTRY *pEntry = &pAd->MacTab.Content[i];
 
 			if (IS_ENTRY_CLIENT(pEntry) && pAd->ApCfg.BndStrgBssIdx[pEntry->func_tb_idx] == TRUE) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[PMF]%s: MacTableDeleteEntry %02x:%02x:%02x:%02x:%02x:%02x\n", __func__, PRINT_MAC(pEntry->Addr)));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[PMF]%s: MacTableDeleteEntry "MACSTR"\n", __func__, MAC2STR(pEntry->Addr)));
 				MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
 			}
 		}
@@ -1777,10 +1778,10 @@ VOID BndStrg_UpdateWhiteBlackList(PRTMP_ADAPTER pAd, PBND_STRG_CLI_TABLE table, 
 	PLIST_HEADER pUpdateList = NULL;
 	NDIS_SPIN_LOCK *pBsListLock = NULL;
 
-	BND_STRG_PRINTQAMSG(table, update_list->Addr, ("%s: client[%02x:%02x:%02x:%02x:%02x:%02x] %s %s\n", __func__, PRINT_MAC(update_list->Addr),
+	BND_STRG_PRINTQAMSG(table, update_list->Addr, ("%s: client["MACSTR"] %s %s\n", __func__, MAC2STR(update_list->Addr),
 		(update_list->deladd ? "Add to":"Remove From"), ((update_list->list_type == bndstrg_whitelist) ? "WhiteList" : "BlackList")));
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: client[%02x:%02x:%02x:%02x:%02x:%02x] %s %s\n", __func__, PRINT_MAC(update_list->Addr),
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: client["MACSTR"] %s %s\n", __func__, MAC2STR(update_list->Addr),
 		(update_list->deladd ? "Add to":"Remove From"), ((update_list->list_type == bndstrg_whitelist) ? "WhiteList" : "BlackList")));
 
 	if (update_list->list_type == bndstrg_whitelist) {
@@ -1844,8 +1845,8 @@ INT BndStrg_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, INT apidx
 			struct bnd_msg_cli_add *cli_add = &msg->data.cli_add;
 
 #ifdef BND_STRG_QA
-		BND_STRG_PRINTQAMSG(table, cli_add->Addr, (("%s[%d][Channel:%d]: Add (%02x:%02x:%02x:%02x:%02x:%02x) client to %s driver table\n\r"),
-			__func__, __LINE__, table->Channel, PRINT_MAC(cli_add->Addr), (IS_5G_BAND(table->Band) ? "5G":"2.4G")));
+		BND_STRG_PRINTQAMSG(table, cli_add->Addr, ("%s[%d][Channel:%d]: Add ("MACSTR") client to %s driver table\n\r",
+			__func__, __LINE__, table->Channel, MAC2STR(cli_add->Addr), (IS_5G_BAND(table->Band) ? "5G":"2.4G")));
 #endif
 
 			entry = BndStrg_TableLookup(table, cli_add->Addr);
@@ -1873,8 +1874,8 @@ INT BndStrg_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, INT apidx
 				if (pEntry && apidx == pEntry->func_tb_idx &&
 					pAd->ApCfg.BndStrgBssIdx[pEntry->func_tb_idx]) {
 #ifdef BND_STRG_QA
-				BND_STRG_PRINTQAMSG(table, cli_del->Addr, (("%s[%d]: kick out client's (%02x:%02x:%02x:%02x:%02x:%02x)\n\r"),
-										 __func__, __LINE__, PRINT_MAC(cli_del->Addr)));
+				BND_STRG_PRINTQAMSG(table, cli_del->Addr, ("%s[%d]: kick out client's ("MACSTR")\n\r",
+										 __func__, __LINE__, MAC2STR(cli_del->Addr)));
 #endif
 					MlmeDeAuthAction(pAd, pEntry, REASON_DISASSOC_STA_LEAVING, FALSE);
 					MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
@@ -1882,8 +1883,8 @@ INT BndStrg_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq, INT apidx
 
 				BndStrg_DeleteEntry(table, cli_del->Addr, 0xFF);
 #ifdef BND_STRG_QA
-			BND_STRG_PRINTQAMSG(table, cli_del->Addr, (("%s[%d][Channel:%d]:DEL (%02x:%02x:%02x:%02x:%02x:%02x) client from %s driver table\n\r"),
-				__func__, __LINE__, table->Channel, PRINT_MAC(cli_del->Addr), (IS_5G_BAND(table->Band) ? "5G":"2.4G")));
+			BND_STRG_PRINTQAMSG(table, cli_del->Addr, ("%s[%d][Channel:%d]:DEL ("MACSTR") client from %s driver table\n\r",
+				__func__, __LINE__, table->Channel, MAC2STR(cli_del->Addr), (IS_5G_BAND(table->Band) ? "5G":"2.4G")));
 #endif
 			}
 		}
@@ -2028,6 +2029,7 @@ void BndStrg_send_BTM_req(
 	UINT32 Len = 0;
 	INT32 Ret;
 	BOOLEAN IsFound = FALSE;
+	BOOLEAN ret = FALSE;
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s\n", __func__));
 
@@ -2129,7 +2131,9 @@ void BndStrg_send_BTM_req(
 #endif
 	hex_dump("BndStrg_send_BTM_req Enque", (unsigned char *)Buf, Len);
 	hex_dump("BndStrg_send_BTM_req Event length", (unsigned char *)Event->u.BTM_REQ_DATA.BTMReq, Event->u.BTM_REQ_DATA.BTMReqLen);
-	MlmeEnqueue(pAd, BTM_STATE_MACHINE, BTM_REQ, Len, Buf, 0);
+	ret = MlmeEnqueue(pAd, BTM_STATE_MACHINE, BTM_REQ, Len, Buf, 0);
+	if (FALSE == ret)
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s::enqueue MLME failed!\n", __func__));
 
 	os_free_mem(Buf);
 
@@ -2137,7 +2141,7 @@ void BndStrg_send_BTM_req(
 
 error1:
 	if (!IsFound)
-		os_free_mem(BTMPeerEntry);
+		BTM_free_Entry(BTMPeerEntry);
 error0:
 	return;
 }

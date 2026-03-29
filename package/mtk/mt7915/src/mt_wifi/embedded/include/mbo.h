@@ -159,7 +159,7 @@ typedef struct GNU_PACKED non_pref_ch {
 	UINT8 ch;
 	UINT8 pref;
 	UINT8 reason_code;
-
+	UINT8 reg_class;
 } STA_CH_PREF, *P_STA_CH_PREF;
 
 
@@ -232,7 +232,6 @@ typedef struct _MBO_CTRL {
 #ifdef CONFIG_STA_SUPPORT
 	MBO_ASSOC_DISALLOW_INFO ADInfo[MAX_ASSOC_DISALLOW_AP_NUM];
 #endif /* CONFIG_STA_SUPPORT */
-	UINT8 reg_class;
 	STA_CH_PREF npc[MBO_NPC_MAX_LEN];
 	UINT8	MboCapIndication;
 	UINT8   AssocDisallowReason;
@@ -321,11 +320,7 @@ INT MboIndicateStaInfoToDaemon(
 	P_MBO_STA_CH_PREF_CDC_INFO pStaInfo,
 	MBO_MSG_TYPE MsgType);
 
-BOOLEAN MboAssocDisallowLookup(
-	PRTMP_ADAPTER pAd,
-	UCHAR *pAddr);
-
-VOID MboParseApMboIE(
+BOOLEAN MboParseApMboIE(
 	PRTMP_ADAPTER pAd,
 	UCHAR *pAddr,
 	UCHAR *buf,

@@ -22,9 +22,10 @@
 
 #define INFRA_TP_PEEK_BOUND_THRESHOLD 50
 #define VERIWAVE_TP_PEEK_BOUND_TH 30
-#define VERIWAVE_2G_PKT_CNT_TH 20
-#define VERIWAVE_5G_PKT_CNT_TH 20
+#define VERIWAVE_2G_PKT_CNT_TH 10
+#define VERIWAVE_5G_PKT_CNT_TH 10
 #define BYTES_PER_SEC_TO_MBPS	17
+#define MCLI_TRAFFIC_TP_TH		2560	/*20kbps*/
 #define TX_MODE_RATIO_THRESHOLD	70
 #define RX_MODE_RATIO_THRESHOLD	70
 #define STA_TP_IDLE_THRESHOLD 10
@@ -258,6 +259,9 @@ typedef struct _STA_TR_ENTRY {
 	UINT TokenCount[WMM_QUE_NUM];
 	INT ps_qbitmap;
 	UCHAR ps_state;
+#ifdef PLE_MONITOR_SUPPORT
+	UCHAR ps_time;
+#endif
 	UCHAR retrieve_start_state;
 	UCHAR token_enq_all_fail;
 
@@ -389,6 +393,9 @@ typedef struct _STA_TR_ENTRY {
 	INT previous_sn[NUM_OF_UP];
 	INT cacheSn[NUM_OF_UP];
 	INT cacheMgmtSn[NUM_OF_MGMT_SN_CAT];
+	UINT8 is_amsdu_invalid[NUM_OF_UP];
+	UINT8 previous_amsdu_invalid_state[NUM_OF_UP];
+	UINT previous_amsdu_invalid_sn[NUM_OF_UP];
 #ifdef MT_SDIO_ADAPTIVE_TC_RESOURCE_CTRL
 #if TC_PAGE_BASED_DEMAND
 	INT32 TotalPageCount[WMM_QUE_NUM];
@@ -525,6 +532,7 @@ struct tr_counter {
 	UINT32 tx_invalid_wdev;
 	UINT32 tx_sw_dataq_drop;
 	UINT32 tx_sw_mgmtq_drop;
+	UINT32 tx_sw_probe_rsp_drop;
 	UINT32 tx_wcid_invalid;
 	UINT32 wlan_state_non_valid_drop;
 	UINT32 mgmt_max_drop;

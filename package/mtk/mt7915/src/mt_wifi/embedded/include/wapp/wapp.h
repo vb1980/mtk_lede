@@ -132,6 +132,13 @@ VOID wapp_send_cac_period_event(
 	IN UCHAR cac_enable,
 	IN USHORT cac_time);
 #endif
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+VOID wapp_send_zwdfs_cac_report(
+	IN PRTMP_ADAPTER pAd,
+	IN UINT32 ifindex,
+	IN UCHAR cac_enable);
+#endif
 VOID wapp_send_csa_event(
 	IN PRTMP_ADAPTER pAd,
 	IN UINT32 ifindex,
@@ -172,6 +179,17 @@ INT wapp_send_wsc_eapol_start_notification(
 INT wapp_send_wsc_eapol_complete_notif(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev);
+INT wapp_send_wsc_status_start_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev);
+
+INT wapp_send_wsc_status_fail_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev);
+
+INT wapp_send_wsc_status_configured_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev);
 
 #ifdef CONFIG_MAP_SUPPORT
 INT wapp_send_scan_complete_notification(
@@ -208,12 +226,22 @@ INT wapp_send_a4_entry_missing(
 	UINT32 ifindex,
 	UCHAR *ip);
 #endif
+#ifdef AX8400_COMPATIBLE
+INT wapp_send_radar_detect_notif(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	unsigned char channel,
+	unsigned char bw,
+	unsigned char ch_status
+	);
+#else
 INT wapp_send_radar_detect_notif(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev,
 	unsigned char channel,
 	unsigned char ch_status
 	);
+#endif
 
 #ifdef WIFI_MD_COEX_SUPPORT
 INT wapp_send_lte_safe_chn_event(
@@ -223,24 +251,45 @@ INT wapp_send_band_status_event(
 	PRTMP_ADAPTER pAd, struct wifi_dev *wdev, UINT8 status);
 #endif
 
+#ifdef LOW_POWER_SUPPORT
+INT wapp_send_no_sta_connect_timeout_event(
+	PRTMP_ADAPTER pAd, struct wifi_dev *wdev);
+
+INT wapp_send_no_data_traffic_timeout_event(
+	PRTMP_ADAPTER pAd, struct wifi_dev *wdev);
+
+INT wapp_send_wifi_up_event(
+	PRTMP_ADAPTER pAd);
+
+INT wapp_send_wifi_down_event(
+	PRTMP_ADAPTER pAd);
+#endif
+
 void wapp_prepare_nop_channel_list(PRTMP_ADAPTER pAd,
 	struct nop_channel_list_s *nop_list);
 
 UINT8 get_channel_utilization(PRTMP_ADAPTER pAd, u32 ifindex);
-UCHAR map_set_op_class_info(
-	PRTMP_ADAPTER pAd,
-	struct wifi_dev *wdev,
-	struct _wdev_op_class_info *op_class);
 
 VOID setChannelList(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev,
 	struct _wdev_chn_info *chn_list);
 #ifdef CONFIG_MAP_SUPPORT
+#ifdef MAP_6E_SUPPORT
+UCHAR map_set_op_class_info(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	struct _wdev_op_class_info_ext *op_class);
+UCHAR map_set_op_class_info_6g(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	struct _wdev_op_class_info_ext *op_class);
+#else
 UCHAR map_set_op_class_info(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev,
 	struct _wdev_op_class_info *op_class);
+#endif
 #ifdef MAP_R2
 VOID Update_Mib_Bucket_for_map(RTMP_ADAPTER *pAd);
 #endif

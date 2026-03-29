@@ -29,8 +29,6 @@
 
 #include "common/link_list.h"
 
-#define IP_UDP 0x11
-
 #define IGMP_PROTOCOL_DESCRIPTOR	0x02
 #define IGMP_MEMBERSHIP_QUERY		0x11	/*same for IGMP v1, v2 & v3*/
 #define IGMP_V1_MEMBERSHIP_REPORT	0x12
@@ -45,6 +43,7 @@
 
 #define IGMPMAC_TB_ENTRY_AGEOUT_TIME (120 * OS_HZ)
 
+#define MAX_NUM_OF_GRP			366
 
 #define IPV4_ADDR_HASH(Addr)            (Addr[0] ^ Addr[1] ^ Addr[2] ^ Addr[3])
 #define IPV6_ADDR_HASH(Addr)            (Addr[0] ^ Addr[1] ^ Addr[2] ^ Addr[3] ^ Addr[4] ^ Addr[5]^ \
@@ -224,6 +223,8 @@ INT Set_IgmpSn_Allow_Non_Memb_Enable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT Set_IgmpSn_AddEntry_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 INT Set_IgmpSn_DelEntry_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+INT Set_IgmpSn_Deny_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 INT Set_IgmpSn_TabDisplay_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 

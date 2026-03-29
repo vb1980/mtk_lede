@@ -144,17 +144,14 @@ extern UCHAR BROADCAST_ADDR[];
 
 #define BSS_NOT_FOUND                    0xFFFFFFFF
 
-
+#define MLME_QUEUE_SCH				16
 #ifndef MLME_MULTI_QUEUE_SUPPORT
 #define MAX_LEN_OF_MLME_QUEUE		256
-#define MLME_QUEUE_SCH			MAX_LEN_OF_MLME_QUEUE
 #define MAX_NUM_OF_MLME_QUEUE		1
 #else
 #define MAX_LEN_OF_MLME_QUEUE		256
 #define MAX_LEN_OF_MLME_HP_QUEUE	128
 #define MAX_LEN_OF_MLME_LP_QUEUE	128
-#define MLME_QUEUE_SCH			(MAX_LEN_OF_MLME_QUEUE + \
-					MAX_LEN_OF_MLME_HP_QUEUE + MAX_LEN_OF_MLME_LP_QUEUE)
 
 #define RATION_OF_MLME_HP_QUEUE		8
 #define RATION_OF_MLME_QUEUE		4
@@ -479,7 +476,7 @@ typedef struct GNU_PACKED _EXT_CAP_INFO_ELEMENT {
 
 } EXT_CAP_INFO_ELEMENT, *PEXT_CAP_INFO_ELEMENT;
 
-#define EXT_CAP_MIN_SAFE_LENGTH		11
+#define EXT_CAP_MIN_SAFE_LENGTH		8
 
 
 /* 802.11n 7.3.2.61 */
@@ -1114,7 +1111,7 @@ struct customer_vendor_ie {
 };
 
 typedef struct _CUSTOMER_PROBE_RSP_VENDOR_IE {
-	DL_LIST List;		
+	DL_LIST List;
 	UCHAR stamac[MAC_ADDR_LEN];
 	UCHAR band;
 	CHAR *pointer;
@@ -1243,6 +1240,7 @@ typedef struct _BSS_ENTRY {
 	UCHAR Bssid[MAC_ADDR_LEN];
 	UCHAR Channel;
 	UCHAR CentralChannel;	/*Store the wide-band central channel for 40MHz.  .used in 40MHz AP. Or this is the same as Channel. */
+	UCHAR SecCentralChannel;   /* The central channel of second channel for 80MHz+80MHz  */
 	ULONG ClientStatusFlags;
 	UCHAR BssType;
 	USHORT AtimWin;
@@ -1389,11 +1387,14 @@ typedef struct _BSS_ENTRY {
 	struct he_txrx_mcs_nss he_mcs_nss_8080;
 	struct he_op_ie he_ops;
 #endif /* DOT11_HE_AX */
+#ifdef MAP_6E_SUPPORT
+	struct map_rnr rnr_info;
+#endif
 } BSS_ENTRY;
 
-typedef struct {
+typedef struct _BSS_TABLE{
 	UINT BssNr;
-	UCHAR           BssOverlapNr;
+	UINT           BssOverlapNr;
 	BSS_ENTRY       BssEntry[MAX_LEN_OF_BSS_TABLE];
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 	USHORT		EventBssEntryLen;
@@ -1755,7 +1756,7 @@ typedef struct GNU_PACKED _FRAME_FTM_ACTION {
 /*#define TX_WEIGHTING                     40 */
 /*#define RX_WEIGHTING                     60 */
 
-#define MAC_TABLE_AGEOUT_TIME			300			/* unit: sec */
+#define MAC_TABLE_AGEOUT_TIME			480			/* unit: sec */
 #define MAC_TABLE_MIN_AGEOUT_TIME		60			/* unit: sec */
 #define MAC_TABLE_ASSOC_TIMEOUT			5			/* unit: sec */
 /* #define MAC_TABLE_FULL(Tab)				((Tab).size == MAX_LEN_OF_MAC_TABLE) */
@@ -1793,6 +1794,7 @@ struct _build_ie_info {
 };
 
 #ifdef HOSTAPD_OWE_SUPPORT
+#ifndef CONFIG_OWE_SUPPORT
 typedef struct GNU_PACKED _EXT_ECDH_PARAMETER_IE {
 	UCHAR ext_ie_id;
 	UCHAR length;
@@ -1800,6 +1802,7 @@ typedef struct GNU_PACKED _EXT_ECDH_PARAMETER_IE {
 	UINT16 group;
 	UCHAR public_key[128];
 } EXT_ECDH_PARAMETER_IE, *PEXT_ECDH_PARAMETER_IE;
+#endif
 #endif
 
 struct _op_info {
@@ -1900,6 +1903,9 @@ typedef struct _IE_lists {
 #ifdef IGMP_TVM_SUPPORT
 	struct _nec_tvm_ie tvm_ie;
 #endif /* IGMP_TVM_SUPPORT */
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	struct customer_vendor_ie CustomerVendorIE;
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 } IE_LISTS;
 
 typedef struct _bcn_ie_list {
@@ -1916,6 +1922,9 @@ typedef struct _bcn_ie_list {
 	UCHAR Erp;
 	UCHAR DtimCount;
 	UCHAR DtimPeriod;
+#ifdef TR181_SUPPORT
+	UCHAR NbrDtimPeriod;
+#endif
 	UCHAR BcastFlag;
 	UCHAR MessageToMe;
 	UCHAR CkipFlag;
@@ -1947,6 +1956,9 @@ typedef struct _bcn_ie_list {
 #ifdef CONFIG_RCSA_SUPPORT
 	CSA_IE_INFO CsaInfo;
 #endif
+#ifdef MAP_6E_SUPPORT
+	struct map_rnr rnr_info;
+#endif
 } BCN_IE_LIST;
 
 VOID MlmeHandler(struct _RTMP_ADAPTER *pAd);
@@ -1970,6 +1982,7 @@ typedef struct _MLME_QOS_ACTION_STRUCT {
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 VOID CustomerBssEntrySet(
 	IN struct _RTMP_ADAPTER *pAd,
+	struct wifi_dev *wdev,
 	IN BCN_IE_LIST *ie_list,
 	IN BSS_ENTRY * pBss,
 	IN USHORT LengthVIE,
@@ -1979,5 +1992,8 @@ VOID CustomerBssEntrySet(
 extern VOID ch_switch_monitor_state_machine_init(struct _RTMP_ADAPTER *pAd);
 extern VOID ch_switch_monitor_exit(struct _RTMP_ADAPTER *pAd);
 #endif
+
+ULONG Crcbitbybitfast(unsigned char *p, unsigned long len);
+
 #endif	/* MLME_H__ */
 

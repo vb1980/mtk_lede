@@ -871,14 +871,14 @@ static int __init whnat_module_init(void)
 	WHNAT_DBG(WHNAT_DBG_OFF, "%s(): module init and register callback for whnat\n", __func__);
 	/*initial global whnat control*/
 	memset(wc, 0, sizeof(struct whnat_ctrl));
-	/*register hook function*/
-	mt_wlan_hook_register(&whnat_ops);
 	/*register proc*/
 	whnat_ctrl_proc_init(wc);
 	/*initial whnat driver and check */
 	whnat_ctrl_init(wc);
 	/*initial pci cr mirror cfg*/
 	whnat_hif_init(&wc->hif_cfg);
+	/*register hook function*/
+	mt7915_mt_wlan_hook_register(&whnat_ops);
 	return 0;
 }
 
@@ -887,10 +887,10 @@ static void __exit whnat_module_exit(void)
 	struct whnat_ctrl *wc = whnat_ctrl_get();
 
 	WHNAT_DBG(WHNAT_DBG_OFF, "%s(): whnat module exist\n", __func__);
+	mt7915_mt_wlan_hook_unregister(&whnat_ops);
 	whnat_hif_exit(&wc->hif_cfg);
 	whnat_ctrl_exit(wc);
 	whnat_ctrl_proc_exit(wc);
-	mt_wlan_hook_unregister(&whnat_ops);
 }
 
 module_init(whnat_module_init);

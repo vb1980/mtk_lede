@@ -269,7 +269,15 @@ static VOID ApCliAssocPostProc(
 	pApCliEntry->MlmeAux.CapabilityInfo = CapabilityInfo & SUPPORTED_CAPABILITY_INFO;
 	NdisMoveMemory(&pApCliEntry->MlmeAux.APEdcaParm, pEdcaParm, sizeof(EDCA_PARM));
 	check_legacy_rates(rate, &pApCliEntry->MlmeAux.rate, &pApCliEntry->wdev);
+#if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
 	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, (has_ht_cap ? "%s===> 11n HT STA\n" : "%s===> legacy STA\n", __func__));
+#else
+	if (has_ht_cap) {
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,  ("%s===> 11n HT STA\n", __func__));
+	} else {
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,  ("%s===> legacy STA\n", __func__));
+	}
+#endif
 #ifdef DOT11_N_SUPPORT
 
 	if (has_ht_cap && WMODE_CAP_N(pApCliEntry->wdev.PhyMode))
@@ -543,7 +551,7 @@ static BOOLEAN sta_block_checker(struct wifi_dev *wdev)
 {
 	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)wdev->sys_handle;
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
-	USHORT Status = MLME_FAIL_NO_RESOURCE;
+	USHORT Status;
 
 	/* Block all authentication request durning WPA block period */
 	if (pStaCfg->bBlockAssoc == TRUE) {
@@ -583,6 +591,9 @@ static VOID sta_mlme_assoc_req_action(
 	IN PRTMP_ADAPTER pAd,
 	IN MLME_QUEUE_ELEM *Elem)
 {
+#ifdef MAC_REPEATER_SUPPORT
+	REPEATER_CLIENT_ENTRY *rept = NULL;
+#endif /* MAC_REPEATER_SUPPORT */
 	UCHAR ApAddr[6];
 	HEADER_802_11 AssocHdr;
 	USHORT ListenIntv;
@@ -601,17 +612,17 @@ static VOID sta_mlme_assoc_req_action(
 	RALINK_TIMER_STRUCT *assoc_timer = NULL;
 	UCHAR SsidIe    = IE_SSID;
 	UCHAR SupRateIe = IE_SUPP_RATES;
-#ifdef MAC_REPEATER_SUPPORT
-	REPEATER_CLIENT_ENTRY *rept = NULL;
-#endif /* MAC_REPEATER_SUPPORT */
-
 #if defined(DOT11_SAE_SUPPORT) || defined(CONFIG_OWE_SUPPORT)
 	USHORT ifIndex = wdev->func_idx;
 #endif
-
 #if defined(TXBF_SUPPORT) && defined(VHT_TXBF_SUPPORT)
 	UCHAR ucETxBfCap;
 #endif /* TXBF_SUPPORT && VHT_TXBF_SUPPORT */
+#ifdef MBO_SUPPORT
+	PWSC_CTRL pWscControl = &wdev->WscControl;
+    (void)pWscControl;
+#endif /* MBO_SUPPORT */
+
 
 	if (!pStaCfg) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -660,15 +671,6 @@ static VOID sta_mlme_assoc_req_action(
 		cntl_auth_assoc_conf(wdev, CNTL_MLME_ASSOC_CONF, Status);
 		return;
 	}
-
-#ifdef MBO_SUPPORT
-	if (IS_MBO_ENABLE(wdev)) {
-		if (wdev->wdev_type == WDEV_TYPE_STA) {
-			if (MboAssocDisallowLookup(pAd, ApAddr))
-				return;
-		}
-	}
-#endif /* MBO_SUPPORT */
 
 	/* insert MacRepeater Mac Entry here */
 #ifdef MAC_REPEATER_SUPPORT
@@ -774,7 +776,7 @@ static VOID sta_mlme_assoc_req_action(
 		if (!((wdev->channel > 14) &&
 			  (pAd->CommonCfg.bIEEE80211H == TRUE)))
 			CapabilityInfo &= (~0x0100);
-#ifdef MBO_SUPPORT
+#ifdef DOT11K_RRM_SUPPORT
 		if ((IS_RRM_ENABLE(wdev)))
 			CapabilityInfo |= RRM_CAP_BIT;
 #endif
@@ -1020,7 +1022,18 @@ static VOID sta_mlme_assoc_req_action(
 							}
 						}
 #endif /* DOT11W_PMF_SUPPORT */
+#ifdef APCLI_SUPPORT
+						/* ocv_support set to true temporary so that ocvc
+						* bit can be set in assoc req. It will be finally set
+						* when AP also supports OCV */
+						if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+							pSecConfig->ocv_support = TRUE;
+#endif
 						WPAMakeRSNIE(pStaCfg->wdev.wdev_type, pSecConfig, pAPEntry);
+#ifdef APCLI_SUPPORT
+						if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+							pSecConfig->ocv_support = FALSE;
+#endif
 						pStaCfg->AKMMap = AKMMap;
 						pStaCfg->PairwiseCipher = PairwiseCipher;
 						pStaCfg->GroupCipher = GroupCipher;
@@ -1098,8 +1111,8 @@ static VOID sta_mlme_assoc_req_action(
 					if ((rept != NULL) && (pAd->fgClonedStaWithBfeeSelected == FALSE)) {
 						MAC_TABLE_ENTRY *pEntry = (MAC_TABLE_ENTRY *)NULL;
 
-						MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s : OriginalAddress[0~5] = %x:%x:%x:%x:%x:%x\n",
-								 __func__, PRINT_MAC(rept->OriginalAddress)));
+						MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s : OriginalAddress[0~5] = "MACSTR"\n",
+								 __func__, MAC2STR(rept->OriginalAddress)));
 						pEntry = rept->pMacEntry;
 
 						if ((pEntry) && (HcIsBfCapSupport(pEntry->wdev) == TRUE)) {
@@ -1135,12 +1148,28 @@ static VOID sta_mlme_assoc_req_action(
 #ifdef MBO_SUPPORT
 		if (IS_MBO_ENABLE(wdev))
 			FrameLen += build_supp_op_class_ie(pAd, wdev, pOutBuffer + FrameLen);
-		if (IS_RRM_ENABLE(wdev))
-			RRM_InsertRRMEnCapIE(pAd, wdev, pOutBuffer + FrameLen, &FrameLen, wdev->func_idx);
+#ifdef CONFIG_MAP_SUPPORT
+	if (IS_MAP_ENABLE(pAd) && (pAd->MAPMode == MAP_CERT_MODE)) {
+		if (IS_MBO_ENABLE(wdev) && pWscControl && !pWscControl->bWscTrigger)
+			MakeMboOceIE(pAd, wdev, NULL, pOutBuffer + FrameLen, &FrameLen,
+				MBO_FRAME_TYPE_ASSOC_REQ);
+		} else {
+		if (IS_MBO_ENABLE(wdev))
+			MakeMboOceIE(pAd, wdev, NULL, pOutBuffer + FrameLen, &FrameLen,
+			MBO_FRAME_TYPE_ASSOC_REQ);
+		}
+#else
 		if (IS_MBO_ENABLE(wdev))
 			MakeMboOceIE(pAd, wdev, NULL, pOutBuffer + FrameLen, &FrameLen, MBO_FRAME_TYPE_ASSOC_REQ);
+#endif
 #endif /* MBO_SUPPORT */
-		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+#ifdef DOT11K_RRM_SUPPORT
+		if (IS_RRM_ENABLE(wdev)) {
+			RRM_InsertRRMEnCapIE(pAd, wdev, pOutBuffer + FrameLen, &FrameLen, wdev->func_idx);
+			MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, "%s:: APCLI INSERT RM CAPA FrameLen = %lu\n", __func__, FrameLen);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, "%s:: APCLI NOT INSERT RM CAPA\n", __func__);
+#endif
 
 		FrameLen += build_vendor_ie(pAd, wdev, (pOutBuffer + FrameLen), VIE_ASSOC_REQ
 		);
@@ -1331,7 +1360,18 @@ static VOID sta_mlme_assoc_req_action(
 						}
 					}
 #endif /* DOT11W_PMF_SUPPORT */
+#ifdef APCLI_SUPPORT
+					/* ocv_support set to true temporary so that ocvc
+					* bit can be set in assoc req. It will be finally set
+					* when AP also supports OCV */
+					if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+						pSecConfig->ocv_support = TRUE;
+#endif
 					WPAMakeRSNIE(pStaCfg->wdev.wdev_type, pSecConfig, pAPEntry);
+#ifdef APCLI_SUPPORT
+					if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+						pSecConfig->ocv_support = FALSE;
+#endif
 					pStaCfg->AKMMap = AKMMap;
 					pStaCfg->PairwiseCipher = PairwiseCipher;
 					pStaCfg->GroupCipher = GroupCipher;
@@ -1385,6 +1425,21 @@ static VOID sta_mlme_assoc_req_action(
 		}
 		/* RSN end */
 
+		/* Fix Connect IOT issue:When Iphone checks Assoc req,
+		* it may follow the strict order of RSN first, then RSNXE.
+		* Once the order is reversed, assoc connect will be rejected.
+		*/
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+		FrameLen += build_rsnxe_ie(wdev, &wdev->SecConfig, pOutBuffer + FrameLen);
+#else
+#ifdef CONFIG_MAP_SUPPORT
+	if ((IS_MAP_ENABLE(pAd) && (pAd->MAPMode != MAP_CERT_MODE)) ||
+		(!IS_MAP_ENABLE(pAd)))
+		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+#else
+		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+#endif
+#endif
 		ie_info.frame_buf = (UCHAR *)(pOutBuffer + FrameLen);
 		FrameLen +=  build_extra_ie(pAd, &ie_info);
 #ifdef WSC_INCLUDED
@@ -1502,7 +1557,7 @@ static VOID sta_mlme_reassoc_req_action(
 			cntl_auth_assoc_conf(Elem->wdev, CNTL_MLME_REASSOC_CONF, Status);
 			return;
 		}
-#ifdef MBO_SUPPORT
+#ifdef DOT11K_RRM_SUPPORT
 		if ((IS_RRM_ENABLE(wdev)))
 			CapabilityInfo |= RRM_CAP_BIT;
 #endif
@@ -1558,7 +1613,18 @@ static VOID sta_mlme_reassoc_req_action(
 				}
 			}
 #endif /* DOT11W_PMF_SUPPORT */
+#ifdef APCLI_SUPPORT
+			/* ocv_support set to true temporary so that ocvc
+			* bit can be set in assoc req. It will be finally set
+			* when AP also supports OCV */
+			if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+				pSecConfig->ocv_support = TRUE;
+#endif
 			WPAMakeRSNIE(pStaCfg->wdev.wdev_type, pSecConfig, pAPEntry);
+#ifdef APCLI_SUPPORT
+			if (pStaCfg->wdev.SecConfig.apcli_ocv_support)
+				pSecConfig->ocv_support = FALSE;
+#endif
 			pStaCfg->AKMMap = AKMMap;
 			pStaCfg->PairwiseCipher = PairwiseCipher;
 			pStaCfg->GroupCipher = GroupCipher;
@@ -1576,9 +1642,6 @@ static VOID sta_mlme_reassoc_req_action(
 		}
 
 #ifdef MBO_SUPPORT
-		/* Insert RRMEnable IE */
-		if (IS_RRM_ENABLE(wdev))
-			RRM_InsertRRMEnCapIE(pAd, wdev, pOutBuffer + FrameLen, &FrameLen, wdev->func_idx);
 		/* Insert Supported Operating Class IE */
 		if (IS_MBO_ENABLE(wdev))
 			FrameLen += build_supp_op_class_ie(pAd, wdev, pOutBuffer + FrameLen);
@@ -1586,6 +1649,11 @@ static VOID sta_mlme_reassoc_req_action(
 		if (IS_MBO_ENABLE(wdev))
 			MakeMboOceIE(pAd, wdev, NULL, pOutBuffer + FrameLen, &FrameLen, MBO_FRAME_TYPE_ASSOC_REQ);
 #endif /* MBO_SUPPORT */
+#ifdef DOT11K_RRM_SUPPORT
+		/* Insert RRMEnable IE */
+		if (IS_RRM_ENABLE(wdev))
+			RRM_InsertRRMEnCapIE(pAd, wdev, pOutBuffer + FrameLen, &FrameLen, wdev->func_idx);
+#endif
 #ifdef DOT11R_FT_SUPPORT
 
 		/* Add MDIE if we are connection to DOT11R AP */
@@ -1614,7 +1682,14 @@ static VOID sta_mlme_reassoc_req_action(
 				UCHAR rsnxe_ie[MAX_LEN_OF_RSNXEIE];
 				UCHAR rsnxe_ie_len;
 
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+				rsnxe_ie_len = build_rsnxe_ie(wdev, &wdev->SecConfig, rsnxe_ie);
+#else
+#ifdef CONFIG_MAP_SUPPORT
+				if (!(IS_MAP_ENABLE(pAd) && IS_MAP_CERT_ENABLE(pAd)))
+#endif
 				rsnxe_ie_len = build_rsnxe_ie(&wdev->SecConfig, rsnxe_ie);
+#endif
 
 				pEntry = &pAd->MacTab.Content[MCAST_WCID];
 				/* Insert RSNIE[PMK-R1-NAME] */
@@ -1742,7 +1817,14 @@ static VOID sta_mlme_reassoc_req_action(
 #endif /* DOT11_N_SUPPORT */
 		ie_info.frame_buf = (UCHAR *)(pOutBuffer + FrameLen);
 		FrameLen += build_extended_cap_ie(pAd, &ie_info);
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+		FrameLen += build_rsnxe_ie(wdev, &wdev->SecConfig, pOutBuffer + FrameLen);
+#else
+#ifdef CONFIG_MAP_SUPPORT
+		if (!(IS_MAP_ENABLE(pAd) && IS_MAP_CERT_ENABLE(pAd)))
+#endif
 		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+#endif
 		/* add Ralink proprietary IE to inform AP this STA is going to use AGGREGATION or PIGGY-BACK+AGGREGATION */
 		/* Case I: (Aggregation + Piggy-Back) */
 		/* 1. user enable aggregation, AND */
@@ -1851,8 +1933,8 @@ static VOID sta_mlme_disassoc_req_action(
 
 	RTMPCancelTimer(&pStaCfg->MlmeAux.DisassocTimer, &TimerCancelled);
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("ASSOC - Send DISASSOC request[BSSID::%02x:%02x:%02x:%02x:%02x:%02x (Reason=%d)\n",
-			  PRINT_MAC(pDisassocReq->addr), pDisassocReq->reason)); /* snowpin for cntl mgmt */
+			 ("ASSOC - Send DISASSOC request[BSSID::"MACSTR" (Reason=%d)\n",
+			  MAC2STR(pDisassocReq->addr), pDisassocReq->reason)); /* snowpin for cntl mgmt */
 	MgtMacHeaderInitExt(pAd, &DisassocHdr, SUBTYPE_DISASSOC, 0, pDisassocReq->addr, /* snowpin for cntl mgmt */
 						wdev->if_addr,
 						pDisassocReq->addr);	/* patch peap ttls switching issue */ /* snowpin for cntl mgmt */
@@ -1907,7 +1989,7 @@ static VOID sta_peer_assoc_rsp_action(
 	IN PRTMP_ADAPTER pAd,
 	IN MLME_QUEUE_ELEM *Elem)
 {
-	USHORT CapabilityInfo, Status, Aid;
+	USHORT CapabilityInfo, Status, Aid = 0;
 	UCHAR Addr2[MAC_ADDR_LEN];
 	BOOLEAN TimerCancelled;
 	UCHAR CkipFlag;
@@ -2006,12 +2088,37 @@ static VOID sta_peer_assoc_rsp_action(
 				ASSERT(pEntry);
 
 				if (!pEntry) {
-					if (ie_list)
+					if (ie_list != NULL)
 						os_free_mem(ie_list);
 					return;
 				}
 
 				set_mlme_rsn_ie(pAd, wdev, pEntry);
+#ifdef APCLI_SUPPORT
+				if (pStaCfg->wdev.SecConfig.apcli_ocv_support) {
+					MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+					DBG_LVL_TRACE, "ApCli OCV: pEntry->RSNIE_Len:%d\n", pEntry->RSNIE_Len);
+					if (pEntry->RSNIE_Len) {
+						pStaCfg->wdev.SecConfig.ocv_support = TRUE;
+						if (wpa_check_rsn_cap(&pStaCfg->wdev.SecConfig,
+									&pEntry->SecConfig,
+									pEntry->RSN_IE,
+									pEntry->RSNIE_Len)) {
+							MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+							DBG_LVL_TRACE, "ApCli OCV: wpa_check_rsn_cap return TRUE\n");
+						} else {
+							MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+							DBG_LVL_TRACE, "ApCli OCV: wpa_check_rsn_cap return FALSE\n");
+						}
+						if (pEntry->SecConfig.ocv_support == FALSE)
+							pStaCfg->wdev.SecConfig.ocv_support = FALSE;
+
+						MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+						DBG_LVL_TRACE, "ApCli OCV: Self.ocv_support:%d pEntry.ocv_support:%d\n",
+						pStaCfg->wdev.SecConfig.ocv_support, pEntry->SecConfig.ocv_support);
+					}
+				}
+#endif
 				if (IF_COMBO_HAVE_AP_STA(pAd) && wdev->wdev_type == WDEV_TYPE_STA) {
 					op_mode = OPMODE_AP;
 #ifdef CONFIG_MAP_SUPPORT
@@ -2019,10 +2126,12 @@ static VOID sta_peer_assoc_rsp_action(
 						pEntry->DevPeerRole = ie_list->MAP_AttriValue;
 #ifdef MAP_R2
 						pEntry->profile = ie_list->MAP_ProfileValue;
-						pStaCfg->wdev.MAPCfg.primary_vid = ie_list->MAP_default_vid;
+						if (IS_VALID_VID(ie_list->MAP_default_vid)) {
+							pStaCfg->wdev.MAPCfg.primary_vid = ie_list->MAP_default_vid;
+						}
 						MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI,
-							DBG_LVL_ERROR, ("pEntry=%p, profile=%02x\n",
-							pEntry, pEntry->profile));
+							DBG_LVL_ERROR, ("pEntry=%p, profile=%02x, ie_vid:%d\n",
+							pEntry, pEntry->profile, ie_list->MAP_default_vid));
 #endif
 					}
 #endif /* CONFIG_MAP_SUPPORT */
@@ -2035,7 +2144,7 @@ static VOID sta_peer_assoc_rsp_action(
 							UINT8 *pmkid = NULL;
 							UINT8 pmkid_count = 0;
 							UINT32 sec_akm = 0;
-
+							INT idx;
 
 							SET_AKM_OWE(sec_akm);
 
@@ -2044,7 +2153,6 @@ static VOID sta_peer_assoc_rsp_action(
 											PMKID_LIST,
 											&pmkid_count);
 								if (pmkid != NULL) {
-									INT idx;
 									BOOLEAN FoundPMK = FALSE;
 
 									/*  Search cached PMKID, append it if existed */
@@ -2077,6 +2185,18 @@ static VOID sta_peer_assoc_rsp_action(
 										need_process_ecdh_ie = TRUE;
 
 								if (need_process_ecdh_ie == TRUE) {
+									/*
+									 *  Fix IOT issue with Maxlinear AP in HE-5.75.1_6G. Maxlinear
+									 *  AP does't not carry pmkid in RSNIE in association response,
+									 *  so delete pmkid_cache here to solve connecting issue with
+									 *  Maxlinear AP.
+									*/
+									idx = sta_search_pmkid_cache(pAd, Addr2, wdev->func_idx, wdev,
+										sec_akm, pStaCfg->MlmeAux.Ssid, pStaCfg->MlmeAux.SsidLen);
+									if (idx != INVALID_PMKID_IDX) {
+										sta_delete_pmkid_cache(pAd, Addr2, wdev->func_idx, wdev,
+											sec_akm, pStaCfg->MlmeAux.Ssid, pStaCfg->MlmeAux.SsidLen);
+									}
 									MTWF_LOG(DBG_CAT_AP,
 													DBG_SUBCAT_ALL,
 													DBG_LVL_TRACE,
@@ -2246,6 +2366,12 @@ static VOID sta_peer_assoc_rsp_action(
 	} else
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("ASSOC - %s() sanity check fail\n", __func__));
 
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+
 	if (ie_list != NULL)
 		os_free_mem(ie_list);
 }
@@ -2268,11 +2394,11 @@ static VOID sta_peer_reassoc_rsp_action(
 {
 	USHORT CapabilityInfo;
 	USHORT Status;
-	USHORT Aid;
+	USHORT Aid = 0;
 	UCHAR Addr2[MAC_ADDR_LEN];
 	UCHAR CkipFlag;
 	BOOLEAN TimerCancelled;
-	EDCA_PARM EdcaParm;
+	EDCA_PARM EdcaParm = {0};
 	UCHAR NewExtChannelOffset = 0xff;
 	EXT_CAP_INFO_ELEMENT ExtCapInfo;
 	IE_LISTS *ie_list = NULL;
@@ -2314,6 +2440,12 @@ static VOID sta_peer_reassoc_rsp_action(
 					ASSERT(pEntry);
 
 					if (!pEntry) {
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+						/* fix memory leak when trigger scan continuously*/
+						if (ie_list && ie_list->CustomerVendorIE.pointer)
+							os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+
 						if (ie_list)
 							os_free_mem(ie_list);
 						return;
@@ -2343,12 +2475,47 @@ static VOID sta_peer_reassoc_rsp_action(
 					pEntry = MacTableInsertEntry(pAd, Addr2, wdev, ENTRY_INFRA, OPMODE_STA, TRUE);
 					ASSERT(pEntry);
 					if (!pEntry) {
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+						/* fix memory leak when trigger scan continuously*/
+						if (ie_list && ie_list->CustomerVendorIE.pointer)
+							os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+
 						if (ie_list)
 							os_free_mem(ie_list);
 						return;
 					}
 				}
 				MaxSupportedRateIn500Kbps = dot11_max_sup_rate(rate);
+#ifdef APCLI_SUPPORT
+				if (pStaCfg->wdev.SecConfig.apcli_ocv_support) {
+					UINT8   rsnie_len = ie_list->RSNIE_Len;
+					PUINT8  rsnie_ptr = ie_list->RSN_IE;
+					MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+					DBG_LVL_TRACE, "ApCli OCV: pEntry->RSNIE_Len:%d rsnie_len:%d\n",
+					pEntry->RSNIE_Len, rsnie_len);
+
+					if (rsnie_len) {
+						pStaCfg->wdev.SecConfig.ocv_support = TRUE;
+						if (wpa_check_rsn_cap(&pStaCfg->wdev.SecConfig,
+									&pEntry->SecConfig,
+									rsnie_ptr,
+									rsnie_len)) {
+							MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+							DBG_LVL_TRACE, "ApCli OCV: wpa_check_rsn_cap return TRUE\n");
+						} else {
+							MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+							DBG_LVL_TRACE, "ApCli OCV: wpa_check_rsn_cap return FALSE\n");
+						}
+						if (pEntry->SecConfig.ocv_support == FALSE)
+							pStaCfg->wdev.SecConfig.ocv_support = FALSE;
+
+						MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI,
+						DBG_LVL_TRACE, "ApCli OCV: Self.ocv_support:%d pEntry.ocv_support:%d\n",
+						pStaCfg->wdev.SecConfig.ocv_support, pEntry->SecConfig.ocv_support);
+					}
+				}
+#endif
 				/* go to procedure listed on page 376 */
 				sta_assoc_post_proc(pAd, Addr2, CapabilityInfo, Aid,
 									&EdcaParm, ie_list, pEntry);
@@ -2412,6 +2579,12 @@ static VOID sta_peer_reassoc_rsp_action(
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				 ("REASSOC - %s() sanity check fail\n", __func__));
 	}
+
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
 	if (ie_list)
 		os_free_mem(ie_list);

@@ -271,7 +271,7 @@ typedef s_int32 (*wlan_oid_handler_t) (void *winfos,
 #define SERV_DBG_CAT_ALL	SERV_DBG_CAT_MISC
 #define SERV_DBG_CAT_EN_ALL_MASK	0xFFFFFFFFu
 
-extern u_int32 serv_dbg_lvl;
+extern s_int32 serv_dbg_lvl;
 
 /* Debugging and printing related definitions and prototypes */
 #define SERV_PRINT		printk
@@ -334,11 +334,8 @@ extern u_int32 serv_dbg_lvl;
 /*****************************************************************************
  *	Enum value definition
  *****************************************************************************/
-/* Service thread usage list */
-enum service_thread_list {
-	SERV_THREAD_TEST = 0,
-	SERV_THREAD_NUM
-};
+#define MAX_SERV_THREAD_NUM 3
+
 
 /*****************************************************************************
  *	Data struct definition
@@ -376,4 +373,5 @@ void sys_ad_wakeup_os_task(struct serv_os_task *task);
 
 void sys_ad_mem_dump32(void *ptr, u_long length);
 
+s_int32 sys_snprintf_error(u_long size, s_int32 res);
 #endif /* __SYS_ADAPTION_H__ */

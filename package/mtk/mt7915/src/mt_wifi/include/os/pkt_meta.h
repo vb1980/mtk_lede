@@ -242,6 +242,11 @@
 #define RTMP_GET_PKT_MAT_FREE(_p)			(PACKET_CB(_p, 14))
 #endif /* MAC_REPEATER_SUPPORT */
 
+/* Band Index */
+#define RTMP_SET_BAND_IDX(_p, _idx)			(PACKET_CB(_p, 14) = _idx)
+#define RTMP_GET_BAND_IDX(_p)				(PACKET_CB(_p, 14))
+
+
 
 /* [CB_OFF + 15 ~ 19]  */
 
@@ -386,6 +391,8 @@
 
 #endif /* CONFIG_HOTSPOT_R2 */
 
+
+#define RTMP_SET_PACKET_UP_CB33(_p, _prio)      (PACKET_CB(_p, 33) = _prio)
 
 #define RTMP_SET_PACKET_QUEIDX(_p, _idx)   (RTPKT_TO_OSPKT(_p)->cb[CB_OFF+35] = (_idx))
 #define RTMP_GET_PACKET_QUEIDX(_p)         (RTPKT_TO_OSPKT(_p)->cb[CB_OFF+35])

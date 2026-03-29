@@ -46,7 +46,6 @@
 #define LEN_PMKID				16
 #endif
 
-
 #ifndef AC_NUM
 #define AC_NUM						4
 #endif
@@ -55,12 +54,13 @@
 #define MAX_LEN_OF_SSID 32
 #define MAX_NUM_OF_CHANNELS		59
 #define ASSOC_REQ_LEN 512
-#define PREQ_IE_LEN 128
+#define PREQ_IE_LEN 200
 #define BCN_RPT_LEN 200
 #define IWSC_MAX_SUB_MASK_LIST_COUNT	3
 #define WMODE_CAP_N(_x)                        (((_x) & (WMODE_GN | WMODE_AN)) != 0)
 #define WMODE_CAP_AC(_x)               (((_x) & (WMODE_AC)) != 0)
 #define WMODE_CAP_AX(_x)	((_x) & (WMODE_AX_24G | WMODE_AX_5G | WMODE_AX_6G))
+
 #define WMODE_CAP(_x, _mode)   (((_x) & (_mode)) != 0)
 
 #define MAX_SUPPORT_INF_NUM (17 * MAX_NUM_OF_RADIO) /* 16MBSS+1APCLI */
@@ -68,7 +68,15 @@
 #define MAX_PROFILE_CNT 4
 #define PER_EVENT_LIST_MAX_NUM 		5
 #define	DAEMON_NEIGHBOR_REPORT_MAX_NUM 128
+#ifdef AX8400_COMPATIBLE
+#define VERSION_WAPP_CMM "v3.0.0.1"
+#else
 #define VERSION_WAPP_CMM "v2.0.2"
+#endif
+#ifdef MAP_WF6
+#define MAX_TID 4
+#endif
+
 typedef enum {
 	WAPP_STA_INVALID,
 	WAPP_STA_DISCONNECTED,
@@ -120,6 +128,14 @@ typedef enum {
 	WAPP_APCLI_DISASSOCIATED = 0,
 	WAPP_APCLI_ASSOCIATED,
 } WAPP_APCLI_ASSOC_STATE;
+
+typedef enum {
+	WAPP_WSC_STATUS_OFF = 0,
+	WAPP_WSC_STATUS_IDLE = 1,
+	WAPP_WSC_STATUS_FAIL = 2,
+	WAPP_WSC_STATUS_START = 3,
+	WAPP_WSC_STATUS_CONFIGURED = 34,
+} WAPP_WSC_STATUS;
 
 typedef enum {
 	WAPP_DEV_QUERY_RSP = 1,
@@ -174,10 +190,42 @@ typedef enum {
 	WAPP_DPP_ACTION_FRAME_RECEIVED,
 	WAPP_DPP_ACTION_FRAME_STATUS,
 #endif
+#ifdef AX8400_COMPATIBLE
+	WAPP_DPP_CCE_RSP,
+#endif
 	WAPP_CAC_PERIOD_EVENT,
 #ifdef WIFI_MD_COEX_SUPPORT
 	WAPP_UNSAFE_CHANNEL_EVENT,
 	WAPP_BAND_STATUS_CHANGE_EVENT,
+#endif
+#ifdef AX8400_COMPATIBLE
+	WAPP_STA_INFO,
+	WAPP_R3_RECONFIG_TRIGGER,
+	WAPP_R3_DPP_URI_INFO,
+#endif
+#ifdef LOW_POWER_SUPPORT
+	WAPP_NO_STA_CONNECT_TIMEOUT_EVENT,
+	WAPP_NO_DATA_TRAFFIC_TIMEOUT_EVENT,
+	WAPP_WIFI_UP_EVENT,
+	WAPP_WIFI_DOWN_EVENT,
+#endif
+#ifdef AX8400_COMPATIBLE
+	WAPP_QOS_ACTION_FRAME_EVENT = 70,
+	WAPP_MSCS_CLASSIFIER_PARAM_EVENT,
+	WAPP_VEND_SPEC_UP_TUPLE_EVENT,
+	WAPP_CH_CHANGE_R3,
+	WAPP_SELF_SRG_BITMAP_EVENT,
+	WAPP_UPLINK_TRAFFIC_EVENT,
+#ifdef WPS_UNCONFIG_FEATURE_SUPPORT
+	WAPP_CONFIG_WPS_EVENT,
+#endif
+#else
+	WAPP_WSC_STATUS_START_NOTIF,
+	WAPP_WSC_STATUS_FAIL_NOTIF,
+	WAPP_WSC_STATUS_CONFIGURED_NOTIF,
+#endif
+#ifdef DFS_ZEROWAIT_SUPPORT
+	WAPP_ZWDFS_CAC_REPORT,
 #endif
 } WAPP_EVENT_ID;
 
@@ -280,8 +328,67 @@ typedef struct GNU_PACKED _wdev_he_cap {
 	unsigned char dl_mu_mimo_ofdma_cap;
 	unsigned char ul_ofdma_cap;
 	unsigned char dl_ofdma_cap;
+	unsigned char gi; /* 0:auto;1:800;2:1600;3:3200 */
 } wdev_he_cap;
 
+#ifdef MAP_WF6
+struct GNU_PACKED assoc_wifi6_sta_info {
+	unsigned char tid;
+	unsigned char tid_q_size;
+};
+
+typedef struct GNU_PACKED _wdev_wf6_cap {
+	unsigned char he_mcs_len;
+	unsigned char he_mcs[MAX_HE_MCS_LEN];
+	unsigned char tx_stream;
+	unsigned char rx_stream;
+	unsigned char he_8080;
+	unsigned char he_160;
+	unsigned char su_bf_cap;
+	unsigned char mu_bf_cap;
+	unsigned char ul_mu_mimo_cap;
+	unsigned char ul_mu_mimo_ofdma_cap;
+	unsigned char dl_mu_mimo_ofdma_cap;
+	unsigned char ul_ofdma_cap;
+	unsigned char dl_ofdma_cap;
+	unsigned char agent_role;
+	unsigned char su_beamformee_status;
+	unsigned char beamformee_sts_less80;
+	unsigned char beamformee_sts_more80;
+	unsigned char max_user_dl_tx_mu_mimo;
+	unsigned char max_user_ul_rx_mu_mimo;
+	unsigned char max_user_dl_tx_ofdma;
+	unsigned char max_user_ul_rx_ofdma;
+	unsigned char rts_status;
+	unsigned char mu_rts_status;
+	unsigned char m_bssid_status;
+	unsigned char mu_edca_status;
+	unsigned char twt_requester_status;
+	unsigned char twt_responder_status;
+} wdev_wf6_cap;
+
+typedef struct GNU_PACKED _wdev_wf6_cap_roles {
+	unsigned char role_supp;
+	wdev_wf6_cap wf6_role[2];
+} wdev_wf6_cap_roles;
+#endif /*MAP_WF6*/
+
+#ifdef MAP_R4_SPT
+typedef struct GNU_PACKED _wdev_spc_reuse_req {
+	unsigned char partial_bss_color;
+	unsigned char bss_color;
+	unsigned char hesiga_spa_reuse_val_allowed;
+	unsigned char srg_info_valid;
+	unsigned char nonsrg_offset_valid;
+	unsigned char psr_disallowed;
+	unsigned char nonsrg_obsspd_max_offset;
+	unsigned char srg_obsspd_min_offset;
+	unsigned char srg_obsspd_max_offset;
+	unsigned char srg_bss_color_bitmap[8];
+	unsigned char srg_partial_bssid_bitmap[8];
+	unsigned char neigh_bssColor_bitmap[8];
+} wdev_spc_reuse_req;
+#endif
 
 #ifdef MAP_R2
 typedef struct GNU_PACKED _wdev_extended_ap_metrics {
@@ -373,10 +480,16 @@ typedef struct GNU_PACKED _wapp_client_info {
 	struct map_cli_cap cli_caps;
 #ifdef MAP_R2
 	wdev_extended_sta_metrics ext_metric_info;
+#endif
 	u16 disassoc_reason;
+#ifdef MAP_R2
 	u8 IsReassoc;
 #endif
 	u8  is_APCLI;
+#ifdef MAP_WF6
+	u8 tid_cnt;
+	struct assoc_wifi6_sta_info status_tlv[MAX_TID];
+#endif
 } wapp_client_info;
 
 struct GNU_PACKED chnList {
@@ -392,8 +505,10 @@ typedef struct GNU_PACKED _wdev_chn_info {
 	u8		ch_list_num;
 	u8		non_op_chn_num;
 	u16		dl_mcs;
-	struct chnList ch_list[16];
-	u8		non_op_ch_list[16];
+	struct chnList ch_list[32];
+	u8		non_op_ch_list[32];
+	u8		AutoChannelSkipListNum;
+	u8		AutoChannelSkipList[MAX_NUM_OF_CHANNELS + 1];
 } wdev_chn_info;
 
 struct GNU_PACKED opClassInfo {
@@ -406,6 +521,17 @@ typedef struct GNU_PACKED _wdev_op_class_info {
 	u8		num_of_op_class;
 	struct opClassInfo opClassInfo[MAX_OP_CLASS];
 } wdev_op_class_info;
+
+struct GNU_PACKED opClassInfoExt {
+	u8	op_class;
+	u8	num_of_ch;
+	u8	ch_list[MAX_NUM_OF_CHANNELS];
+};
+
+typedef struct GNU_PACKED _wdev_op_class_info_ext {
+	u8		num_of_op_class;
+	struct opClassInfoExt opClassInfoExt[MAX_OP_CLASS];
+} wdev_op_class_info_ext;
 
 typedef struct GNU_PACKED _wdev_bss_info {
 	u8 if_addr[MAC_ADDR_LEN];
@@ -461,11 +587,37 @@ typedef struct GNU_PACKED _wdev_ap_config {
 	u8 sta_report_not_cop;
 	u8 rssi_steer;
 } wdev_ap_config;
-
+#ifdef AX8400_COMPATIBLE
+struct GNU_PACKED pwr_limit {
+	u8	op_class;
+	u8	max_pwr;
+};
+#endif
+#ifdef AX8400_COMPATIBLE
+typedef struct GNU_PACKED _wdev_tx_power {
+	u8		num_of_op_class;
+	struct pwr_limit tx_pwr_limit[MAX_OP_CLASS];
+	u16 tx_pwr;
+} wdev_tx_power;
+#else
 typedef struct GNU_PACKED _wdev_tx_power {
 	signed char pwr_limit;
 	u16 tx_pwr;
 } wdev_tx_power;
+
+#endif
+
+#ifdef CONFIG_TXPWR_LIMIT_SUPPORT
+struct GNU_PACKED tx_pwr_limit {
+	u8 channel;
+	u8 pwrlimit[3];
+};
+typedef struct GNU_PACKED _wdev_tx_power_limit {
+	u8 ch_num;
+	u8 resv[3];
+	struct tx_pwr_limit tx_pwr[32];
+} wdev_tx_power_limit;
+#endif /* CONFIG_TXPWR_LIMIT_SUPPORT */
 
 /*Driver detects sta needed to steer*/
 typedef struct GNU_PACKED _wdev_steer_sta {
@@ -519,7 +671,21 @@ typedef struct GNU_PACKED _wapp_mnt_info {
 typedef struct GNU_PACKED _wapp_csa_info {
 	u8 new_channel;
 } wapp_csa_info;
-
+#ifdef AX8400_COMPATIBLE
+#ifdef WPS_UNCONFIG_FEATURE_SUPPORT
+struct GNU_PACKED wapp_wps_config_info {
+	u8 SSID[33];	/* mandatory */
+	u8 channel;
+	u16 AuthType;	/* mandatory, 1: open, 2: wpa-psk, 4: shared, 8:wpa, 0x10: wpa2, 0x20: wpa2-psk */
+	u16 EncrType;	/* mandatory, 1: none, 2: wep, 4: tkip, 8: aes */
+	u8 Key[64];		/* mandatory, Maximum 64 byte */
+	u16 KeyLength;
+	u8 MacAddr[MAC_ADDR_LEN];	/* mandatory, AP MAC address */
+	u8 bss_role;				/*0-Fronthaul, 1-Backhaul*/
+	u8 index;
+};
+#endif
+#endif
 typedef struct GNU_PACKED _wapp_bss_state_info {
 	u32 interface_index;
 	WAPP_BSS_STATE bss_state;
@@ -589,6 +755,13 @@ typedef struct GNU_PACKED _wapp_qbss_load {
 } WAPP_QBSS_LOAD_PARM;
 
 #endif
+#ifdef MAP_6E_SUPPORT
+struct GNU_PACKED map_rnr {
+	u8 channel;
+	u8 op;
+	u8 cce_ind;
+};
+#endif
 
 struct GNU_PACKED scan_bss_info {
 	u8 Bssid[MAC_ADDR_LEN];
@@ -611,6 +784,9 @@ struct GNU_PACKED scan_bss_info {
 #ifdef MAP_R2
 	WAPP_QBSS_LOAD_PARM QbssLoad;
 #endif
+#ifdef MAP_6E_SUPPORT
+	struct map_rnr rnr_6e;
+#endif
 };
 struct GNU_PACKED wapp_scan_info {
 	u32 interface_index;
@@ -628,6 +804,9 @@ struct GNU_PACKED radar_notif_s
 {
 	u32 channel;
 	u32 status;
+#ifdef AX8400_COMPATIBLE
+	u32 bw;
+#endif
 };
 
 typedef struct GNU_PACKED _NDIS_802_11_SSID {
@@ -646,7 +825,7 @@ typedef struct _WSC_CREDENTIAL {
 	NDIS_802_11_SSID SSID;	/* mandatory */
 	u16 AuthType;	/* mandatory, 1: open, 2: wpa-psk, 4: shared, 8:wpa, 0x10: wpa2, 0x20: wpa2-psk */
 	u16 EncrType;	/* mandatory, 1: none, 2: wep, 4: tkip, 8: aes */
-	u8 Key[64];		/* mandatory, Maximum 64 byte */
+	u8 Key[64+1];		/* mandatory, Maximum 64 byte +1 byte for null terminate*/
 	u16 KeyLength;
 	u8 MacAddr[MAC_ADDR_LEN];	/* mandatory, AP MAC address */
 	u8 KeyIndex;		/* optional, default is 1 */
@@ -689,21 +868,6 @@ struct GNU_PACKED scan_BH_ssids
 	struct scan_SSID scan_SSID_val[MAX_PROFILE_CNT];
 };
 
-#ifdef DPP_SUPPORT
-struct GNU_PACKED wapp_dpp_action_frame {
-	u8 src[MAC_ADDR_LEN];
-	u32 wapp_dpp_frame_id_no;
-	u32 chan;
-	u32 frm_len;
-	u32 is_gas;
-	u8 frm[0];
-};
-
-struct GNU_PACKED wapp_dpp_frm_tx_status {
-	u8 tx_success;
-	u16 seq_no;
-};
-
 struct GNU_PACKED action_frm_data {
 	u32 ifindex;
 	u8 bssid[MAC_ADDR_LEN];
@@ -723,6 +887,21 @@ struct GNU_PACKED roc_req {
 	u32 wait_time;
 };
 
+#ifdef DPP_SUPPORT
+struct GNU_PACKED wapp_dpp_action_frame {
+	u8 src[MAC_ADDR_LEN];
+	u32 wapp_dpp_frame_id_no;
+	u32 chan;
+	u32 frm_len;
+	u32 is_gas;
+	u8 frm[0];
+};
+
+struct GNU_PACKED wapp_dpp_frm_tx_status {
+	u8 tx_success;
+	u16 seq_no;
+};
+
 struct GNU_PACKED pmk_req {
 	u32 ifindex;
 	u8 pmk[LEN_PMK];
@@ -732,6 +911,10 @@ struct GNU_PACKED pmk_req {
 	u8 supplicant_addr[MAC_ADDR_LEN];
 	int timeout;
 	int akmp;
+#ifdef AX8400_COMPATIBLE
+	u8 ssid[MAX_LEN_OF_SSID];
+	u8 ssidlen;
+#endif
 };
 #endif /*DPP_SUPPORT*/
 
@@ -778,6 +961,11 @@ typedef union GNU_PACKED _wapp_event_data {
 	struct wapp_wsc_scan_info wsc_scan_info;
 	u32 a4_missing_entry_ip;
 	struct radar_notif_s radar_notif;
+#ifdef AX8400_COMPATIBLE
+#ifdef WPS_UNCONFIG_FEATURE_SUPPORT
+	struct wapp_wps_config_info wps_conf_info;
+#endif
+#endif
 	wapp_cac_info cac_info;
 #ifdef MAP_R2
 	wdev_extended_ap_metric ext_ap_metrics;
@@ -793,7 +981,9 @@ typedef union GNU_PACKED _wapp_event_data {
 	struct unsafe_channel_notif_s unsafe_ch_notif;
 	struct band_status_change band_status;
 #endif
+	u8	ifname[IFNAMSIZ];
 } wapp_event_data;
+
 typedef struct GNU_PACKED _wapp_req_data {
 	u32	ifindex;
 	u8 mac_addr[MAC_ADDR_LEN];
@@ -817,6 +1007,7 @@ struct GNU_PACKED wapp_event {
 	u32 ifindex;
 	wapp_event_data data;
 };
+
 
 typedef struct GNU_PACKED _tbtt_info_set {
 	u8 NrAPTbttOffset;
@@ -882,7 +1073,11 @@ typedef union GNU_PACKED _RRM_BSSID_INFO
 {
 	struct GNU_PACKED {
 #ifdef RT_BIG_ENDIAN
-		u32 Reserved:18;
+		u32 Reserved:14;
+		u32 _20_TU_ProbeRspActive:1;
+		u32 CO_locatedAP:1;
+		u32 HE_ER_BSS:1;
+		u32 HE:1;
 		u32 FTM:1;
 		u32 VHT:1;
 		u32 HT:1;
@@ -910,7 +1105,11 @@ typedef union GNU_PACKED _RRM_BSSID_INFO
 		u32 HT:1;
 		u32 VHT:1;
 		u32 FTM:1;
-		u32 Reserved:18;
+		u32 HE:1;
+		u32 HE_ER_BSS:1;
+		u32 CO_locatedAP:1;
+		u32 _20_TU_ProbeRspActive:1;
+		u32 Reserved:14;
 #endif
 	} field;
 	u32 word;

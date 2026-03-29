@@ -661,8 +661,7 @@ VOID RTMPTkipMixKey(
 	ppk5 = ppk5 + rotr1(ppk4);
 	/* Phase 2, Step 3 */
 	/* Phase 2, Step 3 */
-	tsc0 = (unsigned int)((pnh >> 16) % 65536); /* msb */
-	tsc1 = (unsigned int)(pnh % 65536);
+
 	tsc2 = (unsigned int)(pnl % 65536); /* lsb */
 	rc4key[0] = (tsc2 >> 8) % 256;
 	rc4key[1] = (((tsc2 >> 8) % 256) | 0x20) & 0x7f;
@@ -808,7 +807,13 @@ BOOLEAN RTMPSoftDecryptTKIP(
 	}
 
 	/* Extract peer's MIC and subtract MIC length from total data length */
+	if (plaintext_len < LEN_TKIP_MIC) {
+		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("! plaintext_len is greater than maximum length of array !\n"));	 /*CRC error.*/
+		return FALSE;
+	}
 	plaintext_len -= LEN_TKIP_MIC;
+
 	NdisMoveMemory(TrailMIC, plaintext_ptr + plaintext_len, LEN_TKIP_MIC);
 	RTMPInitMICEngine(pAd, pKey->Key, DA, SA, UserPriority, pKey->RxMic);
 	RTMPTkipAppend(&pAd->PrivateInfo.Tx, plaintext_ptr, plaintext_len);

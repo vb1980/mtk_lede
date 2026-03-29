@@ -30,6 +30,7 @@ VOID vht_cfg_init(struct vht_cfg *obj)
 	obj->vht_sgi = GI_400;
 	obj->vht_bw_sig = BW_SIGNALING_DISABLE;
 	obj->max_mpdu_len = MPDU_7991_OCTETS;
+	obj->bfer_cap_mu = 1;
 }
 
 VOID vht_cfg_exit(struct vht_cfg *obj)
@@ -121,6 +122,18 @@ VOID wlan_config_set_vht_max_mpdu_len(struct wifi_dev *wdev, UINT8 max_mpdu_len)
 		cfg->vht_conf.max_mpdu_len = max_mpdu_len;
 }
 
+VOID wlan_config_set_vht_bfer_cap_mu(struct wifi_dev *wdev, UINT8 enable)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	if (!cfg) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "cfg NULL\n");
+		return;
+	}
+
+	cfg->vht_conf.bfer_cap_mu = enable;
+}
+
 /*
 * Get
 */
@@ -193,4 +206,17 @@ UINT8 wlan_config_get_vht_max_mpdu_len(struct wifi_dev *wdev)
 	else
 		return 0;
 }
+
+UINT8 wlan_config_get_vht_bfer_cap_mu(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	if (!cfg) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "cfg NULL\n");
+		return 0;
+	}
+
+	return cfg->vht_conf.bfer_cap_mu;
+}
+
 #endif /*DOT11_VHT_AC*/

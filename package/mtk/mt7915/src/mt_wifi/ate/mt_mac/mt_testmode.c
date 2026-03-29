@@ -25,9 +25,6 @@
 #endif
 
 
-#ifdef MT7622
-#include "chip/mt7622.h"
-#endif /* MT7622 */
 
 
 
@@ -271,49 +268,10 @@ struct _ATE_ANT_MAP ant_to_spe_idx_map[] = {
 #else
 #endif
 
-#if defined(MT7615) || defined(MT7622) || defined(P18) || defined(MT7663) || defined(AXE) || defined(MT7626)
-#define ATE_ANT_USER_SEL 0x80000000
-
-struct _ATE_TXPWR_GROUP_MAP txpwr_group_map[] = {
-	{2407, 2484, {DMAC_TX0_G_BAND_TARGET_PWR, DMAC_TX1_G_BAND_TARGET_PWR, DMAC_TX2_G_BAND_TARGET_PWR, DMAC_TX3_G_BAND_TARGET_PWR} },
-	{4910, 5140, {DMAC_GRP0_TX0_A_BAND_TARGET_PWR, DMAC_GRP0_TX1_A_BAND_TARGET_PWR,	DMAC_GRP0_TX2_A_BAND_TARGET_PWR, DMAC_GRP0_TX3_A_BAND_TARGET_PWR} },
-	{5140, 5250, {DMAC_GRP1_TX0_A_BAND_TARGET_PWR, DMAC_GRP1_TX1_A_BAND_TARGET_PWR,	DMAC_GRP1_TX2_A_BAND_TARGET_PWR, DMAC_GRP1_TX3_A_BAND_TARGET_PWR} },
-	{5250, 5360, {DMAC_GRP2_TX0_A_BAND_TARGET_PWR, DMAC_GRP2_TX1_A_BAND_TARGET_PWR, DMAC_GRP2_TX2_A_BAND_TARGET_PWR, DMAC_GRP2_TX3_A_BAND_TARGET_PWR} },
-	{5360, 5470, {DMAC_GRP3_TX0_A_BAND_TARGET_PWR, DMAC_GRP3_TX1_A_BAND_TARGET_PWR,	DMAC_GRP3_TX2_A_BAND_TARGET_PWR, DMAC_GRP3_TX3_A_BAND_TARGET_PWR} },
-	{5470, 5580, {DMAC_GRP4_TX0_A_BAND_TARGET_PWR, DMAC_GRP4_TX1_A_BAND_TARGET_PWR,	DMAC_GRP4_TX2_A_BAND_TARGET_PWR, DMAC_GRP4_TX3_A_BAND_TARGET_PWR} },
-	{5580, 5690, {DMAC_GRP5_TX0_A_BAND_TARGET_PWR, DMAC_GRP5_TX1_A_BAND_TARGET_PWR,	DMAC_GRP5_TX2_A_BAND_TARGET_PWR, DMAC_GRP5_TX3_A_BAND_TARGET_PWR} },
-	{5690, 5800, {DMAC_GRP6_TX0_A_BAND_TARGET_PWR, DMAC_GRP6_TX1_A_BAND_TARGET_PWR,	DMAC_GRP6_TX2_A_BAND_TARGET_PWR, DMAC_GRP6_TX3_A_BAND_TARGET_PWR} },
-	{5800, 5925, {DMAC_GRP7_TX0_A_BAND_TARGET_PWR, DMAC_GRP7_TX1_A_BAND_TARGET_PWR,	DMAC_GRP7_TX2_A_BAND_TARGET_PWR, DMAC_GRP7_TX3_A_BAND_TARGET_PWR} } };
-
-#elif defined(MT7637)
-/* todo: efuse structure need unify, MT7636 will fail in this flow */
-#define EFUSE_ADDR_TX0POWER_54M_2_4G                     0x58/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_4920_5140                0x64/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5150_5250                0x69/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5250_5360                0x6E/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5360_5470                0x73/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5470_5580                0x78/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5580_5690                0x7D/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5690_5800                0x82/* MT7637 */
-#define EFUSE_ADDR_TX0POWER_54M_5810_5925                0x87/* MT7637 */
-
-struct _ATE_TXPWR_GROUP_MAP txpwr_group_map[] = {
-	{2407, 2484, {EFUSE_ADDR_TX0POWER_54M_2_4G} },
-	{4910, 5140, {EFUSE_ADDR_TX0POWER_54M_4920_5140} },
-	{5140, 5250, {EFUSE_ADDR_TX0POWER_54M_5150_5250} },
-	{5250, 5360, {EFUSE_ADDR_TX0POWER_54M_5250_5360} },
-	{5360, 5470, {EFUSE_ADDR_TX0POWER_54M_5360_5470} },
-	{5470, 5580, {EFUSE_ADDR_TX0POWER_54M_5470_5580} },
-	{5580, 5690, {EFUSE_ADDR_TX0POWER_54M_5580_5690} },
-	{5690, 5800, {EFUSE_ADDR_TX0POWER_54M_5690_5800} },
-	{5800, 5925, {EFUSE_ADDR_TX0POWER_54M_5810_5925} },
-};
-#else
 /* todo: efuse structure need unify, MT7636 will fail in this flow */
 struct _ATE_TXPWR_GROUP_MAP txpwr_group_map[] = {
 	{0},
 };
-#endif
 
 #if defined(MT7663) || defined(AXE) || defined(MT7626) || defined(MT7915)
 #define CONNAC_TXTONE_POWER_OFFSET 1
@@ -1402,9 +1360,9 @@ static VOID  mt_ate_sx_inc_cal_ext(
 	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)FunctionContext;
 	struct _ATE_CTRL *ATECtrl = &pAd->ATECtrl;
 	struct _ATE_OPERATION *ATEOp = ATECtrl->ATEOp;
-	UCHAR control_band_idx = ATECtrl->control_band_idx;
+	UCHAR control_band_idx;
 	UINT32 regC = 0, regE3C = 0;
-	UINT32 WfSel = B0_WF2;
+	UINT32 WfSel;
 	INT i;
 
 	for (control_band_idx = TESTMODE_BAND0; control_band_idx <= TESTMODE_BAND1; control_band_idx++) {
@@ -1542,7 +1500,7 @@ round_tx:
 			PKT_TOKEN_CB *cb = hc_get_ct_cb(pAd->hdev_ctrl);
 			struct token_tx_pkt_queue *que = token_tx_get_queue_by_band(cb, band_idx);
 			UINT32 free_token_cnt =	atomic_read(&que->free_token_cnt);
-			UINT32 pkt_tx_token_id_max = que->pkt_tkid_max;
+			UINT32 pkt_tx_token_id_max = que->pkt_tkid_end;
 
 			free_num = hif_get_tx_resource_free_num(pAd->hdev_ctrl, hwq_idx);
 
@@ -2813,6 +2771,7 @@ err1:
 INT32 MT_ATEDumpLog(RTMP_ADAPTER *pAd, struct _ATE_LOG_DUMP_CB *log_cb, UINT32 log_type)
 {
 	INT32 ret = 0;
+	INT snprintf_ret;
 	INT idx = 0;
 	UINT32 u4BufferCounter = 0;
 #ifdef LOGDUMP_TO_FILE
@@ -2843,17 +2802,32 @@ INT32 MT_ATEDumpLog(RTMP_ADAPTER *pAd, struct _ATE_LOG_DUMP_CB *log_cb, UINT32 l
 	switch (log_type) {
 	case ATE_LOG_RXV:
 		dump_func = MT_ATEDumpRXV;
-		snprintf(Log_type, sizeof(Log_type), "%s", "LOG");
+		snprintf_ret = snprintf(Log_type, sizeof(Log_type), "%s", "LOG");
+		if (os_snprintf_error(sizeof(Log_type), snprintf_ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Log_type snprintf error!\n");
+			return FALSE;
+		}
 		break;
 
 	case ATE_LOG_RDD:
 		dump_func = MT_ATERDDParseResult;
-		snprintf(Log_type, sizeof(Log_type), "%s", "RDD");
+		snprintf_ret = snprintf(Log_type, sizeof(Log_type), "%s", "RDD");
+		if (os_snprintf_error(sizeof(Log_type), snprintf_ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Log_type snprintf error!\n");
+			return FALSE;
+		}
 		break;
 
 	case ATE_LOG_RE_CAL:
 		dump_func = MT_ATEDumpReCal;
-		snprintf(Log_type, sizeof(Log_type), "%s", "RECAL");
+		snprintf_ret = snprintf(Log_type, sizeof(Log_type), "%s", "RECAL");
+		if (os_snprintf_error(sizeof(Log_type), snprintf_ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Log_type snprintf error!\n");
+			return FALSE;
+		}
 		break;
 
 	default:
@@ -3419,7 +3393,7 @@ INT MT_ATERxDoneHandle(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 {
 	struct _ATE_CTRL *ATECtrl = &pAd->ATECtrl;
 	struct _ATE_OPERATION *ATEOp = ATECtrl->ATEOp;
-	INT32 band_idx = -1;
+	INT32 band_idx;
 	UINT32 bn0_cr_addr = RMAC_CHFREQ0;
 #if defined(DBDC_MODE)
 	UINT32 bn1_cr_addr = RMAC_CHFREQ1;
@@ -3750,10 +3724,6 @@ static INT32 MT_ATEInitBandInfo(RTMP_ADAPTER *pAd, UINT32 band_idx)
 static INT32 MT_ATEStart(RTMP_ADAPTER *pAd)
 {
 	struct _ATE_CTRL *ATECtrl = &pAd->ATECtrl;
-#if defined(MT7615) || defined(MT7622)
-	struct _ATE_OPERATION    *ATEOp = ATECtrl->ATEOp;
-#else
-#endif /* defined(MT7615) || defined(MT7622) */
 	struct _ATE_IF_OPERATION *if_ops = ATECtrl->ATEIfOps;
 	struct _RTMP_CHIP_OP *chip_ops = hc_get_chip_ops(pAd->hdev_ctrl);
 	INT32 Ret = 0;
@@ -3970,8 +3940,8 @@ static INT32 MT_ATEStart(RTMP_ADAPTER *pAd)
 	APStop(pAd, pMbss, AP_BSS_OPER_ALL);
 	ATECtrl->backup_bEnableTxBurst = pAd->CommonCfg.bEnableTxBurst;
 	pAd->CommonCfg.bEnableTxBurst = 0;	/* to turn off TXOP */
-	ATECtrl->backup_bcn_period = pAd->CommonCfg.BeaconPeriod;
-	pAd->CommonCfg.BeaconPeriod = 0;	/* to turn of TBTT timer */
+	ATECtrl->backup_bcn_period = pAd->CommonCfg.BeaconPeriod[DBDC_BAND0];
+	pAd->CommonCfg.BeaconPeriod[DBDC_BAND0] = 0;	/* to turn of TBTT timer */
 #endif /* CONFIG_AP_SUPPORT */
 	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS);
 
@@ -4001,34 +3971,6 @@ static INT32 MT_ATEStart(RTMP_ADAPTER *pAd)
 	}
 #endif	/* DBDC_MODE */
 
-#if defined(MT7615) || defined(MT7622)
-	/* Tx Power related Status Initialization
-	    Disable TX power related behavior when enter test mode */
-	ATECtrl->tx_pwr_sku_en        = FALSE;
-	ATECtrl->tx_pwr_percentage_en = FALSE;
-	ATECtrl->tx_pwr_backoff_en  = FALSE;
-	ATECtrl->tx_pwr_percentage_level       = 100;
-#ifdef DBDC_MODE
-	if (IS_ATE_DBDC(pAd)) {
-		Info->tx_pwr_sku_en        = FALSE;
-		Info->tx_pwr_percentage_en = FALSE;
-		Info->tx_pwr_backoff_en  = FALSE;
-		Info->tx_pwr_percentage_level       = 100;
-	}
-#endif /* DBDC_MODE */
-
-	/* Disable Tx Power related feature for ATE mode */
-#ifdef CONFIG_HW_HAL_OFFLOAD
-	/* SKU */
-	ATEOp->SetCfgOnOff(pAd, EXT_CFG_ONOFF_SINGLE_SKU, FALSE);
-	/* Power Percentage */
-	ATEOp->SetCfgOnOff(pAd, EXT_CFG_ONOFF_POWER_PERCENTAGE, FALSE);
-	/* Power Drop */
-	ATEOp->SetPowerDropLevel(pAd, 100);
-	/* BF Backoff */
-	ATEOp->SetCfgOnOff(pAd, EXT_CFG_ONOFF_BF_BACKOFF, FALSE);
-#endif /* CONFIG_HW_HAL_OFFLOAD */
-#else
 	/* Tx Power related Status Initialization
 	    Disable TX power related behavior when enter test mode */
 #ifdef SINGLE_SKU_V2
@@ -4041,7 +3983,6 @@ static INT32 MT_ATEStart(RTMP_ADAPTER *pAd)
 		TxPowerBfBackoffCtrl(pAd, FALSE, TESTMODE_BAND1);
 	}
 #endif
-#endif /* defined(MT7615) || defined(MT7622) */
 
 #ifdef ATE_TXTHREAD
 #endif
@@ -4230,7 +4171,7 @@ static INT32 MT_ATEStop(RTMP_ADAPTER *pAd)
 
 #ifdef CONFIG_AP_SUPPORT
 	pAd->CommonCfg.bEnableTxBurst = ATECtrl->backup_bEnableTxBurst;
-	pAd->CommonCfg.BeaconPeriod = ATECtrl->backup_bcn_period;
+	pAd->CommonCfg.BeaconPeriod[DBDC_BAND0] = ATECtrl->backup_bcn_period;
 	APStartUp(pAd, pMbss, AP_BSS_OPER_ALL);
 #endif /* CONFIG_AP_SUPPROT  */
 	RTMP_OS_NETDEV_START_QUEUE(pAd->net_dev);
@@ -5157,27 +5098,6 @@ INT mt_ate_wtbl_cfg(RTMP_ADAPTER *pAd, UINT32 band_idx)
 	dw_set[1].u4DwMask = 0xD8E0F000;
 
 	if (need_ampdu) {
-#if defined(MT7615) || defined(MT7622) || defined(P18) || defined(MT7663) || defined(AXE) || defined(MT7626)
-		if (IS_MT7615(pAd) || IS_MT7622(pAd) || IS_P18(pAd) || IS_MT7663(pAd) || IS_AXE(pAd)
-			|| IS_MT7626(pAd)) {
-			if (ant_sel & ATE_ANT_USER_SEL)
-				ant_sel &= ~ATE_ANT_USER_SEL;
-			else {
-				INT map_idx = 0;
-
-				for (map_idx = 0; map_idx < ARRAY_SIZE(ant_to_spe_idx_map); map_idx++) {
-					if (ant_sel == ant_to_spe_idx_map[map_idx].ant_sel)
-						break;
-				}
-
-				if (map_idx == ARRAY_SIZE(ant_to_spe_idx_map))
-					ant_sel = 0;
-
-				else
-					ant_sel = ant_to_spe_idx_map[map_idx].spe_idx;
-			}
-		}
-#endif /* defined(MT7615) || defined(MT7622) || defined(P18) || defined(MT7663) || defined(AXE) || defined(MT7626) */
 
 		dw_set[1].u4DwValue = (0x1 << 29)
 					| (0x7 << 24)
@@ -5460,7 +5380,7 @@ INT32 MT_ATEGenBurstPkt(RTMP_ADAPTER *pAd, UCHAR *buf, UINT32 band_idx)
 		ops = hc_get_chip_ops(pAd->hdev_ctrl);
 
 		if (ops->set_ampdu_wtbl != NULL)
-			ret = ops->set_ampdu_wtbl(pAd, band_idx);
+			ops->set_ampdu_wtbl(pAd, band_idx);
 		else
 			goto error_out;
 	}
@@ -5871,7 +5791,7 @@ static INT32 mt_ate_set_wmm_param_by_qid(RTMP_ADAPTER *pAd, struct wifi_dev *wde
 	INT32 ret = 0;
 	UINT32 band_idx = HcGetBandByWdev(wdev);
 	struct _ATE_IPG_PARAM *ipg_param = (struct _ATE_IPG_PARAM *)TESTMODE_GET_PADDR(pAd, band_idx, ipg_param);
-	UCHAR WmmIdx = 0xFF;
+	UCHAR WmmIdx;
 	USHORT ac_idx;
 	UINT16 slot_time, sifs_time, cw;
 	UINT8 ac_num, aifsn;
@@ -5899,8 +5819,12 @@ static INT32 mt_ate_set_wmm_param_by_qid(RTMP_ADAPTER *pAd, struct wifi_dev *wde
 	ac_num = ac_idx;
 	aifsn = ipg_param->aifsn;
 	cw = ipg_param->cw;
-	ret = AsicSetWmmParam(pAd, WmmIdx, (UINT32)ac_num, WMM_PARAM_AIFSN, (UINT32)aifsn);
-	ret = AsicSetWmmParam(pAd, WmmIdx, (UINT32)ac_num, WMM_PARAM_CWMIN, (UINT32)cw);
+	if (AsicSetWmmParam(pAd, WmmIdx, (UINT32)ac_num, WMM_PARAM_AIFSN, (UINT32)aifsn))
+		MTWF_DBG(pAd, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			"AsicSetWmmParam of aifsn return 1\n");
+	if (AsicSetWmmParam(pAd, WmmIdx, (UINT32)ac_num, WMM_PARAM_CWMIN, (UINT32)cw))
+		MTWF_DBG(pAd, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			"AsicSetWmmParam of CWMIN return 1\n");
 	ret = AsicSetWmmParam(pAd, WmmIdx, (UINT32)ac_num, WMM_PARAM_CWMAX, (UINT32)cw);
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			 ("%s: qid=%d, slot_time=%d, sifs_time=%d, ac_num=%d, aifsn=%d, cw=%d\n",
@@ -5942,6 +5866,11 @@ static INT32 mt_ate_apply_ipg_param(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 
 #ifdef CONFIG_HW_HAL_OFFLOAD
 	ret = MtCmdATESetSlotTime(pAd, (UINT8)slot_time, (UINT8)sifs_time, RIFS_TIME, EIFS_TIME, (UINT8)band_idx);
+	MTWF_DBG(pAd, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+	   "ipg=%d, slot_time=%d, sifs_time=%d, aifsn=%d, cw=%d\n",
+		ipg, slot_time, sifs_time, aifsn, cw);
+	if (ret)
+		return ret;
 #endif
 	ret = mt_ate_set_wmm_param_by_qid(pAd, wdev);
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -6169,7 +6098,9 @@ NDIS_STATUS mt_ate_store_tx_info(struct _RTMP_ADAPTER *ad,
 			UINT32 txlen = (ate_tx_info) ? ate_tx_info->mpdu_length : TESTMODE_GET_PARAM(ad, band_idx, tx_len);
 			struct _MAC_TABLE_ENTRY_STACK *stack = (struct _MAC_TABLE_ENTRY_STACK *)TESTMODE_GET_PADDR(ad, band_idx, stack);
 
-			ret = MT_ATEComposePkt(ad, pate_pkt, band_idx, sta_idx);
+			if (MT_ATEComposePkt(ad, pate_pkt, band_idx, sta_idx))
+				MTWF_DBG(ad, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"MT_ATEComposePkt fail\n");
 
 			if (pkt_tx_time > 0)
 				txlen = tx_time_param->pkt_msdu_len;
@@ -6284,7 +6215,7 @@ INT32 mt_ate_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *tx_blk)
 	RTMP_SET_PACKET_WCID(tx_blk->pPacket, 0);
 
 	/* Fill TX blk for ATE mode */
-	ret = ate_chip_ops->fill_tx_blk(pAd, wdev, tx_blk);
+	ate_chip_ops->fill_tx_blk(pAd, wdev, tx_blk);
 
 	/* TMAC_INFO setup for ATE mode */
 	ret = mt_ate_set_tmac_info(pAd, &tmac_info, band_idx);
@@ -6446,7 +6377,7 @@ static INT32 mt_ate_tx_subscribe(RTMP_ADAPTER *ad)
 
 	/* Calculate duty_cycle related parameter first */
 	if (duty_cycle > 0)
-		Ret = mt_ate_calculate_duty_cycle(ad, control_band_idx);
+		mt_ate_calculate_duty_cycle(ad, control_band_idx);
 
 	ate_tx_info.tx_mode = tx_mode;
 	ate_tx_info.bw = TESTMODE_GET_PARAM(ad, control_band_idx, per_pkt_bw);
@@ -6558,7 +6489,7 @@ static INT32 mt_ate_tx_subscribe(RTMP_ADAPTER *ad)
 		tx_time_param->pkt_ampdu_cnt = 1;
 
 	if (chip_ops->set_ba_limit)
-		chip_ops->set_ba_limit(ad, HcGetWmmIdx(ad, wdev), tx_time_param->pkt_ampdu_cnt);
+		chip_ops->set_ba_limit(ad, HcGetWmmIdx(ad, wdev), tx_time_param->pkt_ampdu_cnt, control_band_idx);
 
 	if (chip_ops->pause_ac_queue)
 		chip_ops->pause_ac_queue(ad, 0xf);
@@ -6567,7 +6498,7 @@ static INT32 mt_ate_tx_subscribe(RTMP_ADAPTER *ad)
 	Ret = mt_ate_apply_spe_antid(ad, control_band_idx);
 
 #ifdef SINGLE_SKU_V2
-	Ret = mt_ate_apply_pwr_offset(ad, control_band_idx);
+	mt_ate_apply_pwr_offset(ad, control_band_idx);
 #endif
 
 	return Ret;
@@ -6743,7 +6674,7 @@ static INT32 MT_ATEStartTx(RTMP_ADAPTER *pAd)
 
 #if defined(CUT_THROUGH) || defined(DOT11_HE_AX)
 	/* Apply IPG setting to HW */
-	Ret = mt_ate_apply_ipg_param(pAd, stack->wdev[0]);
+	mt_ate_apply_ipg_param(pAd, stack->wdev[0]);
 #endif
 
 	if (round != 0xFFFFFFFF) {
@@ -6777,7 +6708,7 @@ static INT32 MT_ATEStartTx(RTMP_ADAPTER *pAd)
 			UINT32 round = TESTMODE_GET_PARAM(pAd, control_band_idx, ATE_TX_CNT);
 			UINT32 rounded_cnt = TESTMODE_GET_PARAM(pAd, control_band_idx, ATE_TXED_CNT);
 			UINT32 ampdu_cnt = tx_time_param->pkt_ampdu_cnt;
-			UINT32 token_limit = que->pkt_tkid_max / 2;
+			UINT32 token_limit = que->pkt_tkid_end / 2;
 
 			input_cnt = round*ampdu_cnt*stack->index;
 			input_cnt = ((input_cnt > token_limit) ? token_limit : input_cnt);
@@ -8213,31 +8144,6 @@ static INT32 MT_ATESetRXFilterPktLen(RTMP_ADAPTER *pAd, UINT32 Enable, UINT32 Rx
 	return Ret;
 }
 
-#if defined(MT7615) || defined(MT7622)
-static INT32 MT_ATEGetTxPower(RTMP_ADAPTER *pAd, UINT32 Channel, UINT32 Ch_Band, PUINT32 EfuseAddr, PUINT32 Power)
-{
-	INT32 Ret = 0;
-	struct _ATE_CTRL *ATECtrl = &(pAd->ATECtrl);
-	UCHAR u1BandIdx = ATECtrl->control_band_idx;
-	EXT_EVENT_ID_GET_TX_POWER_T TxPowerResult = {0};
-	INT32 Type = 1;
-
-	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		("%s: Channel: %d, u1BandIdx: %d, Ch_Band: %d\n",
-		__func__, Channel, u1BandIdx, Ch_Band));
-
-	Ret = MtCmdGetTxPower(pAd, Type, Channel, u1BandIdx, Ch_Band, &TxPowerResult);
-
-	os_msec_delay(30);
-
-	*EfuseAddr = TxPowerResult.ucEfuseAddr;
-	*Power = TxPowerResult.ucEfuseContent;
-	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("%s: EfuseAddr: 0x%x Power: 0x%x\n", __func__, *EfuseAddr, *Power));
-
-	return Ret;
-}
-#else
 static INT32 MT_ATEGetTxPower(RTMP_ADAPTER *pAd, UINT32 Channel, UINT32 Ch_Band, UINT32 u4AntIdx, PUINT32 Power)
 {
 	INT32 Ret = 0;
@@ -8257,7 +8163,6 @@ static INT32 MT_ATEGetTxPower(RTMP_ADAPTER *pAd, UINT32 Channel, UINT32 Ch_Band,
 
 	return Ret;
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 static INT32 MT_ATEBssInfoUpdate(RTMP_ADAPTER *pAd, UINT32 OwnMacIdx, UINT32 BssIdx, UCHAR *Bssid)
 {
@@ -9638,9 +9543,9 @@ INT32 MtTestModeInit(RTMP_ADAPTER *pAd)
 {
 	UINT16 wcid = 0;
 	INT32 Status = 0;
-	Status = mt_testmode_chip_init(pAd);
-	Status = MT_TestModeOpInit(pAd);
-	Status = MT_TestModeIfOpInit(pAd);
+	mt_testmode_chip_init(pAd);
+	MT_TestModeOpInit(pAd);
+	MT_TestModeIfOpInit(pAd);
 	pAd->ATECtrl.test_pkt = NULL;
 	RTMP_OS_TASK_INIT(&pAd->LbCtrl.LoopBackTxTask, "ATE_LoopBackTask", pAd);
 	/*Unify*/

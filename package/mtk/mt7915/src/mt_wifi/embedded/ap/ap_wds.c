@@ -206,14 +206,16 @@ INT wds_rx_foward_handle(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, PNDIS_PACKET 
 
 INT WdsEntryAlloc(RTMP_ADAPTER *pAd, UCHAR band_idx, UCHAR *pAddr)
 {
-	INT i, WdsTabIdx = -1;
+	INT i, WdsTabIdx = -1, start_idx;
 	RT_802_11_WDS_ENTRY *wds_entry;
 
 	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO,
-			("%s(): %02x-%02x-%02x-%02x-%02x-%02x, WdsMode = %d\n", __func__, PRINT_MAC(pAddr), pAd->WdsTab.Mode[band_idx]));
+			("%s(): "MACSTR", WdsMode = %d\n", __func__, MAC2STR(pAddr), pAd->WdsTab.Mode[band_idx]));
 	NdisAcquireSpinLock(&pAd->WdsTab.WdsTabLock);
 
-	for (i = 0; i < MAX_WDS_ENTRY ; i++) {
+	start_idx = band_idx * MAX_WDS_PER_BAND;
+
+	for (i = start_idx; i < MAX_WDS_ENTRY ; i++) {
 		wds_entry = &pAd->WdsTab.WdsEntry[i];
 
 		if ((pAd->WdsTab.Mode[band_idx] >= WDS_LAZY_MODE)) {
@@ -253,8 +255,8 @@ VOID WdsEntryDel(RTMP_ADAPTER *pAd, UCHAR *pAddr)
 	INT i;
 	RT_802_11_WDS_ENTRY *wds_entry;
 
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%s(): %02x-%02x-%02x-%02x-%02x-%02x\n", __func__,
-			 PRINT_MAC(pAddr)));
+	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%s(): "MACSTR"\n", __func__,
+			 MAC2STR(pAddr)));
 
 	NdisAcquireSpinLock(&pAd->WdsTab.WdsTabLock);
 
@@ -262,9 +264,7 @@ VOID WdsEntryDel(RTMP_ADAPTER *pAd, UCHAR *pAddr)
 		wds_entry = &pAd->WdsTab.WdsEntry[i];
 
 		if (MAC_ADDR_EQUAL(pAddr, wds_entry->PeerWdsAddr) && WDS_ENTRY_IS_ASSIGNED(wds_entry->flag)) {
-			wds_entry->flag = 0;
-			NdisZeroMemory(wds_entry->PeerWdsAddr, MAC_ADDR_LEN);
-			wds_entry->synced = FALSE;
+			WDS_ENTRY_SET_FLAG(wds_entry->flag, WDS_ENTRY_IS_INITED(wds_entry->flag));
 			break;
 		}
 	}
@@ -319,8 +319,8 @@ MAC_TABLE_ENTRY *MacTableInsertWDSEntry(
 #if defined(TXBF_SUPPORT) && defined(VHT_TXBF_SUPPORT)
 	UCHAR ucETxBfCap;
 #endif /* TXBF_SUPPORT && VHT_TXBF_SUPPORT */
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%s(): WdsTabIdx = %d, Addr %02x-%02x-%02x-%02x-%02x-%02x\n", __func__,
-			 WdsTabIdx, PRINT_MAC(pAddr)));
+	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%s(): WdsTabIdx = %d, Addr "MACSTR"\n", __func__,
+			 WdsTabIdx, MAC2STR(pAddr)));
 
 	/* if FULL, return */
 	if (pAd->MacTab.Size >= GET_MAX_UCAST_NUM(pAd))
@@ -447,7 +447,7 @@ MAC_TABLE_ENTRY *MacTableInsertWDSEntry(
 #if defined(TXBF_SUPPORT) && defined(VHT_TXBF_SUPPORT)
 				wlan_config_set_etxbf(wdev, ucETxBfCap);
 #endif
-				vht_mode_adjust(pAd, pEntry, &vht_cap, NULL);
+				vht_mode_adjust(pAd, pEntry, &vht_cap, NULL, NULL);
 				dot11_vht_mcs_to_internal_mcs(pAd, wdev, &vht_cap, &pEntry->MaxHTPhyMode);
 				set_vht_cap(pAd, pEntry, &vht_cap);
 				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%s(): Peer's PhyCap=>Mode:%s, BW:%s, MCS: 0x%x (Word = 0x%x)\n",
@@ -468,9 +468,33 @@ MAC_TABLE_ENTRY *MacTableInsertWDSEntry(
 #ifdef DOT11_HE_AX
 			if (WMODE_CAP_AX(phy_mode)) {
 				struct he_ies he_ie;
+				int i;
 
+				os_zero_mem(&he_ie, sizeof(struct he_ies));
 				get_own_he_ie(wdev, &he_ie);
 				update_peer_he_params(pEntry, &he_ie);
+				he_mode_adjust(pEntry->wdev, pEntry);
+				for (i = 0; i < DOT11AX_MAX_STREAM; i++) {
+					if (pEntry->cap.rate.he80_rx_nss_mcs[i] == 3)
+						break;
+				}
+				if (i != 0) {
+					i = i <= wlan_operate_get_tx_stream(wdev) ? i : wlan_operate_get_tx_stream(wdev);
+					pEntry->MaxHTPhyMode.field.MCS = ((i-1) << 4);
+				} else {
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("%s(): STA antenna information provided is incorrect", __func__));
+				}
+
+				if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 2)
+					pEntry->MaxHTPhyMode.field.MCS += HE_MCS_11 ;
+				else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 1)
+					pEntry->MaxHTPhyMode.field.MCS += HE_MCS_9 ;
+				else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 0)
+					pEntry->MaxHTPhyMode.field.MCS += HE_MCS_7;
+				else
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("%s(): STA MCS information provided is incorrect", __func__));
 			}
 #endif
 
@@ -628,7 +652,7 @@ MAC_TABLE_ENTRY *FindWdsEntry(
 {
 	MAC_TABLE_ENTRY *pEntry = NULL;
 
-	if (pAd->WdsTab.flg_wds_init[pRxBlk->band]) {
+	if (pAd->WdsTab.Mode[pRxBlk->band]) {
 		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE, ("%s(): Wcid = %d, PhyMode = 0x%x\n", __func__,
 			 pRxBlk->wcid, pRxBlk->rx_rate.field.MODE));
 		/* lookup the match wds entry for the incoming packet. */
@@ -645,8 +669,8 @@ MAC_TABLE_ENTRY *FindWdsEntry(
 
 			if (!wdev) {
 				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
-					 ("%s(): No matched wdev (%02x-%02x-%02x-%02x-%02x-%02x), wcid = %d!!!\n", __func__,
-					 PRINT_MAC(pRxBlk->Addr1), pRxBlk->wcid));
+					 ("%s(): No matched wdev ("MACSTR"), wcid = %d!!!\n", __func__,
+					 MAC2STR(pRxBlk->Addr1), pRxBlk->wcid));
 				return NULL;
 			}
 
@@ -666,17 +690,17 @@ MAC_TABLE_ENTRY *FindWdsEntry(
 						  pRxBlk->rx_rate.field.MODE);
 
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE,
-				 ("!!! report WDS UC DATA (from %02x-%02x-%02x-%02x-%02x-%02x) to MLME (len=%d) !!!\n",
-				 PRINT_MAC(pRxBlk->Addr2), pRxBlk->DataSize));
+				 ("!!! report WDS UC DATA (from "MACSTR") to MLME (len=%d) !!!\n",
+				 MAC2STR(pRxBlk->Addr2), pRxBlk->DataSize));
 		} else if (pEntry) {
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO,
-				 ("%s[band%d]A2(%02x-%02x-%02x-%02x-%02x-%02x) found as wcid:%d!!! (Drop)\n", __func__, pRxBlk->band,
-				 PRINT_MAC(pRxBlk->Addr2), pEntry->wcid));
+				 ("%s[band%d]A2("MACSTR") found as wcid:%d!!! (Drop)\n", __func__, pRxBlk->band,
+				 MAC2STR(pRxBlk->Addr2), pEntry->wcid));
 		}
 	} else {
 		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE,
-			 ("!!! Recv WDS UC DATA (from %02x-%02x-%02x-%02x-%02x-%02x) but WDS for band%d is not enabled !!! (Drop)\n",
-			 PRINT_MAC(pRxBlk->Addr2), pRxBlk->band));
+			 ("!!! Recv WDS UC DATA (from "MACSTR") but WDS for band%d is not enabled !!! (Drop)\n",
+			 MAC2STR(pRxBlk->Addr2), pRxBlk->band));
 	}
 
 	return pEntry;
@@ -704,8 +728,8 @@ VOID WdsTableMaintenance(RTMP_ADAPTER *pAd, UCHAR band_idx)
 
 		peer = pAd->WdsTab.WdsEntry[idx].peer;
 
-		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO, ("%s(): Entry[%d], Wcid = %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 __func__, idx, peer->wcid, PRINT_MAC(peer->Addr)));
+		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO, ("%s(): Entry[%d], Wcid = %d, "MACSTR"\n",
+				 __func__, idx, peer->wcid, MAC2STR(peer->Addr)));
 
 		NdisAcquireSpinLock(&pAd->WdsTab.WdsTabLock);
 		NdisAcquireSpinLock(&pAd->MacTabLock);
@@ -717,8 +741,8 @@ VOID WdsTableMaintenance(RTMP_ADAPTER *pAd, UCHAR band_idx)
 
 		/* delete those MAC entry that has been idle for a long time */
 		if (peer->NoDataIdleCount >= MAC_TABLE_AGEOUT_TIME) {
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE, ("ageout %02x:%02x:%02x:%02x:%02x:%02x from WDS #%d after %d-sec silence\n",
-					 PRINT_MAC(peer->Addr), idx, MAC_TABLE_AGEOUT_TIME));
+			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE, ("ageout "MACSTR" from WDS #%d after %d-sec silence\n",
+					 MAC2STR(peer->Addr), idx, MAC_TABLE_AGEOUT_TIME));
 			WdsEntryDel(pAd, peer->Addr);
 			wds_bss_linkdown(pAd, peer->wcid);
 		}
@@ -788,12 +812,12 @@ VOID AsicUpdateWdsEncryption(RTMP_ADAPTER *pAd, UINT16 wcid)
 	}
 }
 
-UCHAR WdsGetPeerSuppPhyModeLegacy(
+USHORT WdsGetPeerSuppPhyModeLegacy(
 	IN PUCHAR SupRate,
 	IN UCHAR SupRateLen,
 	IN UCHAR Channel)
 {
-	UCHAR PeerPhyModeLegacy = 0;
+	USHORT PeerPhyModeLegacy = 0;
 	INT i;
 
 	if ((SupRateLen > 0) && (SupRateLen < MAX_LEN_OF_SUPPORTED_RATES)) {
@@ -818,10 +842,10 @@ UCHAR WdsGetPeerSuppPhyModeLegacy(
 	return PeerPhyModeLegacy;
 }
 
-UCHAR WdsGetPeerSuppPhyMode(
+USHORT WdsGetPeerSuppPhyMode(
 	IN BCN_IE_LIST * ie_list)
 {
-	UCHAR PeerPhyMode = 0;
+	USHORT PeerPhyMode = 0;
 	struct common_ies *cmm_ies = &ie_list->cmm_ies;
 	struct legacy_rate *rate = &cmm_ies->rate;
 #ifdef DOT11_N_SUPPORT
@@ -849,8 +873,8 @@ UCHAR WdsGetPeerSuppPhyMode(
 
 	/* Check OFDM/CCK capability */
 	PeerPhyMode |= WdsGetPeerSuppPhyModeLegacy(rate->sup_rate, rate->sup_rate_len, ie_list->Channel);
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO, ("%s(): %02x-%02x-%02x-%02x-%02x-%02x, PeerPhyMode = 0x%x\n", __func__,
-			 PRINT_MAC(ie_list->Addr2), PeerPhyMode));
+	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO, ("%s(): "MACSTR", PeerPhyMode = 0x%x\n", __func__,
+			 MAC2STR(ie_list->Addr2), PeerPhyMode));
 
 	if (((ie_list->Channel > 0) && (ie_list->Channel <= 14) && WMODE_CAP_5G(PeerPhyMode)) ||
 		((ie_list->Channel > 14) && WMODE_CAP_2G(PeerPhyMode)))
@@ -866,8 +890,8 @@ VOID WdsPeerBeaconProc(
 	IN UCHAR MaxSupportedRateLen,
 	IN BCN_IE_LIST * ie_list)
 {
-	UCHAR MaxSupportedRate = RATE_11;
-	UCHAR PeerPhyMode;
+	UCHAR MaxSupportedRate;
+	USHORT PeerPhyMode;
 	BOOLEAN bRaReInit = FALSE;
 	RT_802_11_WDS_ENTRY *pWdsEntry = NULL;
 	struct wifi_dev *wdev, *main_wdev;
@@ -888,6 +912,7 @@ VOID WdsPeerBeaconProc(
 	struct WIFI_SYS_CTRL wsys;
 	struct _BSS_INFO_ARGUMENT_T *bss = &wsys.BssInfoCtrl;
 	BOOLEAN bReInitPhyMode = FALSE;
+	int i;
 
 	RETURN_IF_PAD_NULL(pAd);
 
@@ -961,12 +986,12 @@ VOID WdsPeerBeaconProc(
 			bReInitPhyMode = TRUE;
 	}
 
-	if (WMODE_EQUAL(cmm_phy_mode, WMODE_B)) {
+	if (WMODE_EQUAL(cmm_phy_mode, WMODE_B) && WMODE_CAP(pWdsEntry->phy_mode, WMODE_B)) {
 		pEntry->MaxHTPhyMode.field.MODE = MODE_CCK;
 		pEntry->MaxHTPhyMode.field.MCS = 3;
 		pEntry->MaxHTPhyMode.field.BW = BW_20;
 		pEntry->RateLen = 4;
-	} else if (WMODE_CAP(cmm_phy_mode, WMODE_G | WMODE_A)) {
+	} else if (WMODE_CAP(cmm_phy_mode, WMODE_G | WMODE_A) && WMODE_CAP(pWdsEntry->phy_mode, WMODE_G | WMODE_A)) {
 		pEntry->MaxHTPhyMode.field.MODE = MODE_OFDM;
 		pEntry->MaxHTPhyMode.field.MCS = 7;
 		pEntry->MaxHTPhyMode.field.BW = BW_20;
@@ -1018,7 +1043,7 @@ VOID WdsPeerBeaconProc(
 			rtmp_set_vht(pAd, wdev, pDesired_ht_phy);
 		}
 
-		vht_mode_adjust(pAd, pEntry, vht_cap, NULL);
+		vht_mode_adjust(pAd, pEntry, vht_cap, NULL, NULL);
 		dot11_vht_mcs_to_internal_mcs(pAd, wdev, vht_cap, &pEntry->MaxHTPhyMode);
 		set_vht_cap(pAd, pEntry, vht_cap);
 		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO, ("%s(): Peer's PhyCap=>Mode:%s, BW:%s, MCS: 0x%x (Word = 0x%x)\n",
@@ -1065,6 +1090,27 @@ VOID WdsPeerBeaconProc(
 		update_peer_he_caps(pEntry, cmm_ies);
 		update_peer_he_operation(pEntry, cmm_ies);
 		he_mode_adjust(pEntry->wdev, pEntry);
+		for (i = 0; i < DOT11AX_MAX_STREAM; i++) {
+			if (pEntry->cap.rate.he80_rx_nss_mcs[i] == 3)
+				break;
+		}
+		if (i != 0) {
+			i = i <= wlan_operate_get_tx_stream(wdev) ? i : wlan_operate_get_tx_stream(wdev);
+			pEntry->MaxHTPhyMode.field.MCS = ((i-1) << 4);
+		} else {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("%s(): STA antenna information provided is incorrect", __func__));
+		}
+
+		if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 2)
+			pEntry->MaxHTPhyMode.field.MCS += HE_MCS_11 ;
+		else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 1)
+			pEntry->MaxHTPhyMode.field.MCS += HE_MCS_9 ;
+		else if (pEntry->cap.rate.he80_rx_nss_mcs[0] == 0)
+			pEntry->MaxHTPhyMode.field.MCS += HE_MCS_7;
+		else
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("%s(): STA MCS information provided is incorrect", __func__));
 	}
 #endif
 
@@ -1118,8 +1164,7 @@ VOID WdsPeerBeaconProc(
 		RAInit(pAd, pEntry);
 	}
 
-	if (!pWdsEntry->synced)
-		pWdsEntry->synced = TRUE;
+	WDS_ENTRY_SET_SYNCED(pWdsEntry->flag);
 }
 
 VOID APWdsInitialize(RTMP_ADAPTER *pAd)
@@ -1137,12 +1182,13 @@ VOID APWdsInitialize(RTMP_ADAPTER *pAd)
 		wds_entry->phy_mode = 0;
 		wds_entry->wdev.bAutoTxRateSwitch = TRUE;
 		wds_entry->wdev.DesiredTransmitSetting.field.MCS = MCS_AUTO;
-		wds_entry->flag = 0;
+		WDS_ENTRY_SET_FLAG(wds_entry->flag, WDS_ENTRY_IS_INITED(wds_entry->flag));
 		wds_entry->peer = NULL;
 		wds_entry->KeyIdx = 0;
 		NdisZeroMemory(&wds_entry->WdsKey, sizeof(CIPHER_KEY));
 		NdisZeroMemory(&wds_entry->WdsCounter, sizeof(WDS_COUNTER));
 	}
+	NdisAllocateSpinLock(pAd, &pAd->WdsTab.WdsTabLock);
 	MTWF_LOG(DBG_CAT_ALL, CATAP_WDS, DBG_LVL_OFF,
 		 ("%s():WdsEntry[0~%d]\n", __func__, MAX_WDS_ENTRY-1));
 }
@@ -1153,36 +1199,29 @@ INT Show_WdsTable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	struct _RT_802_11_WDS_ENTRY *wds_entry;
 	CHAR *wmode;
 
-	for (i = DBDC_BAND0; i < DBDC_BAND_NUM; i++) {
-		MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("\n[band%d]WDS mode=%s\n", i, wds_mode_2_str(pAd->WdsTab.Mode[i])));
-
-		if (pAd->WdsTab.Mode[i])
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF,
-				 ("\tWDS for band[%d] is %s(count:%d)\n\n", i,
-				  (pAd->WdsTab.flg_wds_init[i]) ? "initialized" : "not initialized",
-				   (UINT32)pAd->WdsTab.wds_num[i]));
-	}
-
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("############## WDS List ##############\n"));
 	for (i = 0; i < MAX_WDS_ENTRY; i++) {
+		if (i == 0 || i == MAX_WDS_PER_BAND) {
+			INT band = i ? DBDC_BAND1 : DBDC_BAND0;
+			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("\n[band%d]WDS mode:%s count:%d\n############## WDS List ##############\n",
+					band, wds_mode_2_str(pAd->WdsTab.Mode[band]), pAd->WdsTab.wds_num[band]));
+		}
 		wds_entry = &pAd->WdsTab.WdsEntry[i];
 		wmode = wmode_2_str(wds_entry->phy_mode);
-
 		if (!wmode)
-			return FALSE;
+			continue;
 
 		if (HcIsRadioAcq(&wds_entry->wdev)) {
-			struct _SECURITY_CONFIG *p_sec_con = NULL;
-			p_sec_con = &wds_entry->wdev.SecConfig;
+			struct _SECURITY_CONFIG *p_sec_con = &wds_entry->wdev.SecConfig;
 
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF,
-				 ("IF/WDS%d(band%d)-%02x:%02x:%02x:%02x:%02x:%02x(%s,%s), OpState=%d Sync:%s,\n\t\t\twmode:%s Cipher=%s, KeyId=%d\n",
+				 ("IF/WDS%d(band%d)-"MACSTR"(%s,%s,%s,%s), OpState=%d \n\t\t\twmode:%s Cipher=%s, KeyId=%d\n",
 				  i, HcGetBandByWdev(&wds_entry->wdev),
-				  PRINT_MAC(wds_entry->PeerWdsAddr),
+				  MAC2STR(wds_entry->PeerWdsAddr),
+				  WDS_ENTRY_IS_INITED(wds_entry->flag) ? "initialized" : "not initialized",
 				  WDS_ENTRY_IS_ASSIGNED(wds_entry->flag) ? "Assigned" : "Unassigned",
+				  WDS_ENTRY_IS_SYNCED(wds_entry->flag) ? "SYNCED" : "NO SYNC",
 				  WDS_ENTRY_IS_VALID(wds_entry->flag) ? "Valid" : "Invalid",
 				  wlan_operate_get_state(&wds_entry->wdev),
-				  (wds_entry->synced) ? "TRUE" : "FALSE",
 				  wmode,
 				  GetEncryModeStr(p_sec_con->PairwiseCipher),
 				  wds_entry->wdev.SecConfig.PairwiseKeyId));
@@ -1212,7 +1251,7 @@ INT Show_WdsTable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
 
 		if (IS_ENTRY_WDS(pEntry)) {
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(pEntry->Addr)));
+			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, (""MACSTR"  ", MAC2STR(pEntry->Addr)));
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%-4d", (int)pEntry->func_tb_idx));
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%-4d", (int)pEntry->Aid));
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("%-4d", (int)pEntry->PsMode));
@@ -1295,6 +1334,8 @@ INT profile_wds_reg(
 		} else {
 			if (wds_mode >= WDS_LAZY_MODE)
 				ad->WdsTab.wds_num[band_idx] += MAX_WDS_PER_BAND;
+			else if (wds_mode == WDS_DISABLE_MODE)
+				ad->WdsTab.wds_num[band_idx] = 0;
 			else {
 				if (RTMPGetKeyParameter("WdsList", tmpbuf, TEMP_STR_SIZE, buffer, TRUE) != TRUE) {
 					MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
@@ -1305,7 +1346,7 @@ INT profile_wds_reg(
 				for (str_ptr = rstrtok(tmpbuf, ";");
 					str_ptr; str_ptr = rstrtok(NULL, ";")) {
 					MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
-						 ("WdsList(%ld):%s\n", ad->WdsTab.wds_num[band_idx], tmpbuf));
+						 ("WdsList(%d):%s\n", ad->WdsTab.wds_num[band_idx], str_ptr));
 					ad->WdsTab.wds_num[band_idx]++;
 				}
 			}
@@ -1332,15 +1373,16 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 	/*Wds Number */
 	if (RTMPGetKeyParameter("WdsNum", tmpbuf, 10, buffer, TRUE)) {
 		for (i = 0, macptr = rstrtok(tmpbuf, ";");
-			(macptr && i < DBDC_BAND_NUM); macptr = rstrtok(NULL, ";"), i++)
-			if (kstrtoul(macptr, 10, &pAd->WdsTab.wds_num[i]) != 0)
-				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS Number defined by WdsList!\n"));
+			(macptr && i < DBDC_BAND_NUM); macptr = rstrtok(NULL, ";"), i++) {
+			pAd->WdsTab.wds_num[i] = os_str_tol(macptr, 0, 10);
+			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("wds_num[%d]=%d!\n", i, pAd->WdsTab.wds_num[i]));
+		}
 	}
 #ifdef DBDC_MODE
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS Number: band[0]=%ld, band[1]=%ld\n",
+	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS Number: band[0]=%d, band[1]=%d\n",
 		 pAd->WdsTab.wds_num[DBDC_BAND0], pAd->WdsTab.wds_num[DBDC_BAND1]));
 #else
-	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS Number: band[0]=%ld\n",
+	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS Number: band[0]=%d\n",
 		 pAd->WdsTab.wds_num[DBDC_BAND0]));
 #endif
 
@@ -1350,7 +1392,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 		RT_802_11_WDS_ENTRY *pWdsEntry;
 
 		for (i = 0, macptr = rstrtok(tmpbuf, ";"); (macptr && i < DBDC_BAND_NUM); macptr = rstrtok(NULL, ";"), i++) {
-			UINT32 start_idx = pAd->WdsTab.wds_num[DBDC_BAND0]*i;
+			UINT32 start_idx = MAX_WDS_PER_BAND * i;
+			UINT32 end_idx = MAX_WDS_PER_BAND * (i + 1);
 			switch (os_str_tol(macptr, 0, 10)) {
 			case WDS_BRIDGE_MODE: /* Bridge mode, DisAllow association(stop Beacon generation and Probe Req. */
 				pAd->WdsTab.Mode[i] = WDS_BRIDGE_MODE;
@@ -1362,8 +1405,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 				break;
 
 			case WDS_LAZY_MODE: /* Lazy mode, Auto learn wds entry by same SSID, channel, security policy */
-				for (wds_idx = start_idx; wds_idx < MAX_WDS_ENTRY; wds_idx++) {
-					pWdsEntry = &pAd->WdsTab.WdsEntry[i];
+				for (wds_idx = start_idx; wds_idx < end_idx; wds_idx++) {
+					pWdsEntry = &pAd->WdsTab.WdsEntry[wds_idx];
 
 					if (WDS_ENTRY_IS_ASSIGNED(pWdsEntry->flag) && (HcGetBandByWdev(&pWdsEntry->wdev) == i))
 						WdsEntryDel(pAd, pWdsEntry->PeerWdsAddr);
@@ -1387,8 +1430,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 
 			case WDS_DISABLE_MODE:	/* Disable mode */
 			default:
-				for (wds_idx = 0; wds_idx < MAX_WDS_ENTRY; wds_idx++) {
-					pWdsEntry = &pAd->WdsTab.WdsEntry[i];
+				for (wds_idx = start_idx; wds_idx < end_idx; wds_idx++) {
+					pWdsEntry = &pAd->WdsTab.WdsEntry[wds_idx];
 
 					if (WDS_ENTRY_IS_ASSIGNED(pWdsEntry->flag) && (HcGetBandByWdev(&pWdsEntry->wdev) == i))
 						WdsEntryDel(pAd, pWdsEntry->PeerWdsAddr);
@@ -1397,7 +1440,7 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 				break;
 			}
 
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("WDS-Enable mode=%d\n", pAd->WdsTab.Mode[i]));
+			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("band%d WDS-Enable mode=%d\n", i, pAd->WdsTab.Mode[i]));
 		}
 	}
 
@@ -1425,8 +1468,9 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 	/*WdsPhyMode */
 	if (RTMPGetKeyParameter("WdsPhyMode", tmpbuf, MAX_PARAM_BUFFER_SIZE, buffer, TRUE)) {
 		for (i = 0, macptr = rstrtok(tmpbuf, ";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL, ";"), i++) {
+			if (i == pAd->WdsTab.wds_num[DBDC_BAND0])
+				i = MAX_WDS_PER_BAND;
 			pWdsEntry = &pAd->WdsTab.WdsEntry[i];
-			wdev = &pWdsEntry->wdev;
 #ifdef DBDC_MODE
 			if (pAd->CommonCfg.dbdc_mode && (i >= pAd->WdsTab.wds_num[DBDC_BAND0])) {
 				main_wdev = &pAd->ApCfg.MBSSID[pAd->ApCfg.BssidNumPerBand[DBDC_BAND0]].wdev;
@@ -1466,6 +1510,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 	/* WdsTxMode */
 	if (RTMPGetKeyParameter("WdsTxMode", tmpbuf, 25, buffer, TRUE)) {
 		for (i = 0, macptr = rstrtok(tmpbuf, ";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL, ";"), i++) {
+			if (i == pAd->WdsTab.wds_num[DBDC_BAND0])
+				i = MAX_WDS_PER_BAND;
 			wdev = &pAd->WdsTab.WdsEntry[i].wdev;
 			wdev->DesiredTransmitSetting.field.FixedTxMode =
 				RT_CfgSetFixedTxPhyMode(macptr);
@@ -1477,6 +1523,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 	/* WdsTxMcs */
 	if (RTMPGetKeyParameter("WdsTxMcs", tmpbuf, 50, buffer, TRUE)) {
 		for (i = 0, macptr = rstrtok(tmpbuf, ";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL, ";"), i++) {
+			if (i == pAd->WdsTab.wds_num[DBDC_BAND0])
+				i = MAX_WDS_PER_BAND;
 			wdev = &pAd->WdsTab.WdsEntry[i].wdev;
 			wdev->DesiredTransmitSetting.field.MCS =
 				RT_CfgSetTxMCSProc(macptr, &wdev->bAutoTxRateSwitch);
@@ -1495,6 +1543,8 @@ VOID rtmp_read_wds_from_file(RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, RTMP_STRING
 	/* WdsVlan */
 	if (RTMPGetKeyParameter("WDS_VLANID", tmpbuf, MAX_PARAM_BUFFER_SIZE, buffer, TRUE)) {
 		for (i = 0, macptr = rstrtok(tmpbuf, ";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL, ";"), i++) {
+			if (i == pAd->WdsTab.wds_num[DBDC_BAND0])
+				i = MAX_WDS_PER_BAND;
 			pAd->WdsTab.WdsEntry[i].wdev.VLAN_VID = os_str_tol(macptr, 0, 10);
 			pAd->WdsTab.WdsEntry[i].wdev.VLAN_Priority = 0;
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF, ("If/wds%d - WdsVlanId=%d\n", i, pAd->WdsTab.WdsEntry[i].wdev.VLAN_VID));
@@ -1562,7 +1612,7 @@ static struct wifi_dev_ops wds_wdev_ops = {
 
 VOID WDS_Init(RTMP_ADAPTER *pAd, UCHAR band_idx, RTMP_OS_NETDEV_OP_HOOK *pNetDevOps)
 {
-	INT if_idx = -1, count = 0, netdev_idx;
+	INT if_idx = -1, count = 0, netdev_idx = 0;
 	PNET_DEV pWdsNetDev;
 	struct wifi_dev *wdev, *main_wdev = NULL;
 	RT_802_11_WDS_ENTRY *wds_entry;
@@ -1571,17 +1621,8 @@ VOID WDS_Init(RTMP_ADAPTER *pAd, UCHAR band_idx, RTMP_OS_NETDEV_OP_HOOK *pNetDev
 	if (band_idx >= DBDC_BAND_NUM)
 		goto error_out;
 
-	if (band_idx == DBDC_BAND0) {
-		if_idx = 0;
-		count = pAd->WdsTab.wds_num[DBDC_BAND0];
-	} else if (band_idx == DBDC_BAND1) {
-		if_idx = pAd->WdsTab.wds_num[DBDC_BAND0];
-		count = pAd->WdsTab.wds_num[DBDC_BAND1];
-	} else {
-		MTWF_LOG(DBG_CAT_ALL, CATAP_WDS, DBG_LVL_OFF,
-			 ("%s(): Invalid band(%d)\n", __func__, band_idx));
-		goto error_out;
-	}
+	if_idx = band_idx * MAX_WDS_PER_BAND;
+	count = pAd->WdsTab.wds_num[band_idx];
 
 	if ((if_idx+count) > MAX_WDS_ENTRY) {
 		MTWF_LOG(DBG_CAT_ALL, CATAP_WDS, DBG_LVL_OFF,
@@ -1591,88 +1632,12 @@ VOID WDS_Init(RTMP_ADAPTER *pAd, UCHAR band_idx, RTMP_OS_NETDEV_OP_HOOK *pNetDev
 	}
 
 	MTWF_LOG(DBG_CAT_ALL, CATAP_WDS, DBG_LVL_OFF,
-		 ("%s():wds_num[%d]=%d, count=%d, MAX_WDS_ENTRY=%d, if_idx=%d, flg_wds_init=%d\n",
-		  __func__, band_idx, count - if_idx, count, MAX_WDS_ENTRY, if_idx,
-		  pAd->WdsTab.flg_wds_init[band_idx]));
+		 ("%s():wds_num[%d]=%d, MAX_WDS_ENTRY=%d, if_idx=%d\n",
+		  __func__, band_idx, count, MAX_WDS_ENTRY, if_idx));
 
 	/* sanity check to avoid redundant virtual interfaces are created */
-	if (pAd->WdsTab.flg_wds_init[band_idx] != FALSE) {
-		for (; count ; if_idx++, count--) {
-#ifdef DBDC_MODE
-			if (pAd->CommonCfg.dbdc_mode && (band_idx > DBDC_BAND0))
-				main_wdev = &pAd->ApCfg.MBSSID[pAd->ApCfg.BssidNumPerBand[DBDC_BAND0]].wdev;
-			else
-#endif	/* DBDC_MODE */
-				main_wdev = &pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev;
-			wds_entry = &pAd->WdsTab.WdsEntry[if_idx];
-			wdev = &wds_entry->wdev;
-			wdev->PhyMode = main_wdev->PhyMode;
-			update_att_from_wdev(wdev, main_wdev);
-			SetCommonHtVht(pAd, wdev);
-			RTMPUpdateRateInfo(wdev->PhyMode, &wdev->rate);
-#ifdef CONFIG_RA_PHY_RATE_SUPPORT
-			rtmpeapupdaterateinfo(wdev->PhyMode, &wdev->rate, &wdev->eap);
-#endif /* CONFIG_RA_PHY_RATE_SUPPORT */
-			os_move_mem(wdev->if_addr, main_wdev->if_addr, MAC_ADDR_LEN);
-			os_move_mem(wdev->bss_info_argument.Bssid, wdev->if_addr, MAC_ADDR_LEN);
-		}
-
-		return;
-	}
-
-	netdev_idx = 0;
-	for (; count ; if_idx++, count--) {
-		UINT32 MC_RowID = 0, IoctlIF = 0;
-		char *dev_name;
-		INT32 Ret;
-#if defined(MULTI_PROFILE)
-		UCHAR wds_dev_name[IFNAMSIZ] = {"\0"};
-		if (pAd->CommonCfg.dbdc_mode) {
-			multi_profile_wds_devname_req(pAd, wds_dev_name, if_idx);
-			dev_name = wds_dev_name;
-		} else
-#endif	/* DBDC_MODE */
-		{
-			dev_name = get_dev_name_prefix(pAd, INT_WDS);
-			if (dev_name == NULL) {
-				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
-						("Get name prefix fail\n"));
-				break;
-			}
-		}
-
-		pWdsNetDev = RtmpOSNetDevCreate(MC_RowID, &IoctlIF, INT_WDS, netdev_idx,
-						sizeof(struct mt_dev_priv), dev_name, TRUE);
-
+	for (; count ; if_idx++, count--, netdev_idx++) {
 		wds_entry = &pAd->WdsTab.WdsEntry[if_idx];
-		wdev = &wds_entry->wdev;
-
-		if (pWdsNetDev == NULL) {
-			/* allocation fail, exit */
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR, ("Allocate network device fail (WDS)...\n"));
-			break;
-		}
-
-		NdisZeroMemory(&wds_entry->WdsCounter, sizeof(WDS_COUNTER));
-		Ret = wdev_init(pAd, wdev, WDEV_TYPE_WDS, pWdsNetDev, if_idx, wds_entry, (VOID *)pAd);
-
-		if (Ret == FALSE) {
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR, ("Assign wdev idx for %s failed, free net device!\n",
-					 RTMP_OS_NETDEV_GET_DEVNAME(pWdsNetDev)));
-			RtmpOSNetDevFree(pWdsNetDev);
-			break;
-		}
-
-		Ret = wdev_ops_register(wdev, WDEV_TYPE_WDS, &wds_wdev_ops,
-								cap->qos.wmm_detect_method);
-
-		if (!Ret) {
-			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
-					 ("register wdev_ops %s failed, free net device!\n",
-					  RTMP_OS_NETDEV_GET_DEVNAME(pWdsNetDev)));
-			RtmpOSNetDevFree(pWdsNetDev);
-			break;
-		}
 
 #ifdef DBDC_MODE
 		if (pAd->CommonCfg.dbdc_mode && (band_idx > DBDC_BAND0))
@@ -1681,39 +1646,90 @@ VOID WDS_Init(RTMP_ADAPTER *pAd, UCHAR band_idx, RTMP_OS_NETDEV_OP_HOOK *pNetDev
 #endif	/* DBDC_MODE */
 			main_wdev = &pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev;
 
-		if (pAd->WdsTab.Mode[band_idx] >= WDS_LAZY_MODE)
-			wds_entry->phy_mode = get_wds_phymode(main_wdev, MODE_UNKNOWN);
-
+		wdev = &wds_entry->wdev;
 		wdev->PhyMode = main_wdev->PhyMode;
-		update_att_from_wdev(wdev, main_wdev);
-		MSDU_FORBID_CLEAR(wdev, MSDU_FORBID_CONNECTION_NOT_READY);
-		wdev->PortSecured = WPA_802_1X_PORT_SECURED;
-		/*update rate info for wdev*/
-		SetCommonHtVht(pAd, wdev);
-		RTMPUpdateRateInfo(wdev->PhyMode, &wdev->rate);
-#ifdef CONFIG_RA_PHY_RATE_SUPPORT
-		rtmpeapupdaterateinfo(wdev->PhyMode, &wdev->rate, &wdev->eap);
-#endif /* CONFIG_RA_PHY_RATE_SUPPORT */
-		/* transfor RXBLK Addr1 according this adddress */
+		wdev->sys_handle  = main_wdev->sys_handle;
 		os_move_mem(wdev->if_addr, main_wdev->if_addr, MAC_ADDR_LEN);
 		os_move_mem(wdev->bssid, wdev->if_addr, MAC_ADDR_LEN);
 		os_move_mem(wdev->bss_info_argument.Bssid, wdev->if_addr, MAC_ADDR_LEN);
-		RTMP_OS_NETDEV_SET_PRIV(pWdsNetDev, pAd);
-		RTMP_OS_NETDEV_SET_WDEV(pWdsNetDev, wdev);
-		pNetDevOps->priv_flags = INT_WDS;
-		pNetDevOps->needProtcted = TRUE;
-		pNetDevOps->wdev = wdev;
-		/* Register this device */
-		RtmpOSNetDevAttach(pAd->OpMode, pWdsNetDev, pNetDevOps);
-		netdev_idx++;
-	}
 
-	NdisAllocateSpinLock(pAd, &pAd->WdsTab.WdsTabLock);
+		if (!WDS_ENTRY_IS_INITED(wds_entry->flag)) {
+			UINT32 MC_RowID = 0, IoctlIF = 0;
+			char *dev_name;
+			INT32 Ret;
+#if defined(MULTI_PROFILE)
+			UCHAR wds_dev_name[IFNAMSIZ] = {"\0"};
+			if (pAd->CommonCfg.dbdc_mode) {
+				multi_profile_wds_devname_req(pAd, wds_dev_name, if_idx);
+				dev_name = wds_dev_name;
+			} else
+#endif	/* DBDC_MODE */
+			{
+				dev_name = get_dev_name_prefix(pAd, INT_WDS);
+				if (dev_name == NULL) {
+					MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
+							("Get name prefix fail\n"));
+					break;
+				}
+			}
 
-	if (if_idx > 0) {
-		NdisAcquireSpinLock(&pAd->WdsTab.WdsTabLock);
-		pAd->WdsTab.flg_wds_init[band_idx] = TRUE;
-		NdisReleaseSpinLock(&pAd->WdsTab.WdsTabLock);
+			pWdsNetDev = RtmpOSNetDevCreate(MC_RowID, &IoctlIF, INT_WDS, netdev_idx,
+							sizeof(struct mt_dev_priv), dev_name, TRUE);
+
+
+			if (pWdsNetDev == NULL) {
+				/* allocation fail, exit */
+				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR, ("Allocate network device fail (WDS)...\n"));
+				break;
+			}
+
+			NdisZeroMemory(&wds_entry->WdsCounter, sizeof(WDS_COUNTER));
+			Ret = wdev_init(pAd, wdev, WDEV_TYPE_WDS, pWdsNetDev, if_idx, wds_entry, (VOID *)pAd);
+
+			if (Ret == FALSE) {
+				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR, ("Assign wdev idx for %s failed, free net device!\n",
+						 RTMP_OS_NETDEV_GET_DEVNAME(pWdsNetDev)));
+				RtmpOSNetDevFree(pWdsNetDev);
+				break;
+			}
+
+			Ret = wdev_ops_register(wdev, WDEV_TYPE_WDS, &wds_wdev_ops,
+									cap->qos.wmm_detect_method);
+
+			if (!Ret) {
+				MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_ERROR,
+						 ("register wdev_ops %s failed, free net device!\n",
+						  RTMP_OS_NETDEV_GET_DEVNAME(pWdsNetDev)));
+				RtmpOSNetDevFree(pWdsNetDev);
+				break;
+			}
+			update_att_from_wdev(wdev, main_wdev);
+			MSDU_FORBID_CLEAR(wdev, MSDU_FORBID_CONNECTION_NOT_READY);
+			wdev->PortSecured = WPA_802_1X_PORT_SECURED;
+			/*update rate info for wdev*/
+			SetCommonHtVht(pAd, wdev);
+			RTMPUpdateRateInfo(wdev->PhyMode, &wdev->rate);
+#ifdef CONFIG_RA_PHY_RATE_SUPPORT
+			rtmpeapupdaterateinfo(wdev->PhyMode, &wdev->rate, &wdev->eap);
+#endif /* CONFIG_RA_PHY_RATE_SUPPORT */
+
+			/* transfor RXBLK Addr1 according this adddress */
+			RTMP_OS_NETDEV_SET_PRIV(pWdsNetDev, pAd);
+			RTMP_OS_NETDEV_SET_WDEV(pWdsNetDev, wdev);
+			pNetDevOps->priv_flags = INT_WDS;
+			pNetDevOps->needProtcted = TRUE;
+			pNetDevOps->wdev = wdev;
+			/* Register this device */
+			RtmpOSNetDevAttach(pAd->OpMode, pWdsNetDev, pNetDevOps);
+			WDS_ENTRY_SET_INITED(wds_entry->flag);
+		} else {
+			update_att_from_wdev(wdev, main_wdev);
+			SetCommonHtVht(pAd, wdev);
+			RTMPUpdateRateInfo(wdev->PhyMode, &wdev->rate);
+#ifdef CONFIG_RA_PHY_RATE_SUPPORT
+			rtmpeapupdaterateinfo(wdev->PhyMode, &wdev->rate, &wdev->eap);
+#endif /* CONFIG_RA_PHY_RATE_SUPPORT */
+		}
 	}
 
 	MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_OFF,
@@ -1742,7 +1758,7 @@ VOID WDS_Remove(RTMP_ADAPTER *pAd)
 			wdev_deinit(pAd, wdev);
 			RtmpOSNetDevFree(wdev->if_dev);
 			/* Clear it as NULL to prevent latter access error. */
-			pAd->WdsTab.flg_wds_init[HcGetBandByWdev(wdev)] = FALSE;
+			WDS_ENTRY_CLEAR_FLAG(pAd->WdsTab.WdsEntry[index].flag);
 			wdev->if_dev = NULL;
 		}
 	}
@@ -1809,6 +1825,9 @@ INT wds_inf_open(struct wifi_dev *wdev)
 			wdev->func_idx, wdev->OmacIdx));
 
 		RTMPSetIndividualHT(pAd, wdev->func_idx + MIN_NET_DEVICE_FOR_WDS);
+
+		if (strcmp(wds_entry->PeerWdsAddr, "00:00:00:00:00:00") != 0)
+			WdsEntryAlloc(pAd, HcGetBandByWdev(wdev), wds_entry->PeerWdsAddr);
 
 		if (WDS_ENTRY_IS_ASSIGNED(wds_entry->flag)) {
 			peer = MacTableInsertWDSEntry(pAd, wds_entry->PeerWdsAddr, wdev->func_idx);
@@ -1881,8 +1900,8 @@ BOOLEAN WdsMsgTypeSubst(
 	if (pFrame->Hdr.FC.Type == FC_TYPE_DATA) {
 		if ((pFrame->Hdr.FC.FrDs == 1) && (pFrame->Hdr.FC.ToDs == 1)) {
 			MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_TRACE,
-				("%s, AP WDS recv UC data from %02x-%02x-%02x-%02x-%02x-%02x\n",
-				__func__, PRINT_MAC(pFrame->Hdr.Addr2)));
+				("%s, AP WDS recv UC data from "MACSTR"\n",
+				__func__, MAC2STR(pFrame->Hdr.Addr2)));
 
 			*Machine = WDS_STATE_MACHINE;
 			*MsgType = APMT2_WDS_RECV_UC_DATA;

@@ -30,11 +30,10 @@ int mt_wlan_hook_call(unsigned short hook, void *ad, void *priv)
 	return 0;
 }
 
-
 /*
 *
 */
-int mt_wlan_hook_register(struct mt_wlan_hook_ops *ops)
+int mt7915_mt_wlan_hook_register(struct mt_wlan_hook_ops *ops)
 {
 	struct mt_wlan_hook_ops *next = NULL;
 	struct mt_wlan_hook_ops *cur = NULL;
@@ -59,13 +58,13 @@ int mt_wlan_hook_register(struct mt_wlan_hook_ops *ops)
 
 	return 0;
 }
-EXPORT_SYMBOL(mt_wlan_hook_register);
+EXPORT_SYMBOL(mt7915_mt_wlan_hook_register);
 
 
 /*
 *
 */
-int mt_wlan_hook_unregister(struct mt_wlan_hook_ops *ops)
+int mt7915_mt_wlan_hook_unregister(struct mt_wlan_hook_ops *ops)
 {
 	struct mt_wlan_hook_ops *next, *cur;
 
@@ -82,4 +81,4 @@ int mt_wlan_hook_unregister(struct mt_wlan_hook_ops *ops)
 
 	return -1;
 }
-EXPORT_SYMBOL(mt_wlan_hook_unregister);
+EXPORT_SYMBOL(mt7915_mt_wlan_hook_unregister);

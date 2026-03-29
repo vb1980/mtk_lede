@@ -79,6 +79,7 @@ typedef struct _HOTSPOT_CTRL {
 	PUCHAR RoamingConsortiumIE;
 	PUCHAR HSIndicationIE;
 	PUCHAR P2PIE;
+	NDIS_SPIN_LOCK IeLock;
 	BOOLEAN  HSDaemonReady;
 	BOOLEAN HotSpotEnable;
 	enum HSCTRL_STATE HSCtrlState;

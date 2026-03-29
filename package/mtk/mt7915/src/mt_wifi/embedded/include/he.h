@@ -22,7 +22,7 @@
 
 struct common_ies;
 
-#define DEFAULT_COLOR 1
+#define INVALID_COLOR 0
 #define HE_MAX_SUPPORT_STREAM DOT11AX_MAX_STREAM
 enum {
 	HE_BW_20,
@@ -221,6 +221,8 @@ struct he_ies {
 	(((info) & INTRA_HE_PARTIAL_BSS_COLOR) != 0)
 #define IS_STA_SUPPORT_TWT(entry)\
 	((entry->cap.he_mac_cap & HE_TWT_REQUEST) ? TRUE : FALSE)
+#define IS_STA_SUPPORT_BTWT(entry)\
+	((entry->cap.he_mac_cap & HE_BROADCAST_TWT) ? TRUE : FALSE)
 #define IS_BSS_COLOR_DIS(info)\
 	(((info) & INTRA_HE_BSS_COLOR_DIS) != 0)
 
@@ -241,7 +243,10 @@ UINT32 add_reassoc_rsp_he_ies(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 f_len)
 UINT32 add_probe_req_he_ies(struct wifi_dev *wdev, UINT8 *f_buf);
 UINT32 add_assoc_req_he_ies(struct wifi_dev *wdev, UINT8 *f_buf);
 UINT32 add_reassoc_req_he_ies(struct wifi_dev *wdev, UINT8 *f_buf);
-
+#ifdef CONFIG_6G_SUPPORT
+UINT32 add_he_6g_rnr_ie(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 f_len, UINT32 queried_s_ssid);
+UINT32 add_fils_tpe_ie(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 f_len);
+#endif
 /*parse*/
 UINT32 parse_he_beacon_probe_rsp_ies(UINT8 *ie_head, VOID *ie_list);
 UINT32 parse_he_assoc_rsp_ies(UINT8 *ie_head, VOID *ie_list);

@@ -1,17 +1,21 @@
 /*
- ***************************************************************************
- * MediaTek Inc.
+ * Copyright (c) [2020], MediaTek Inc. All rights reserved.
  *
- * All rights reserved. source code is an unpublished work and the
- * use of a copyright notice does not imply otherwise. This source code
- * contains confidential trade secret material of MediaTek. Any attemp
- * or participation in deciphering, decoding, reverse engineering or in any
- * way altering the source code is stricitly prohibited, unless the prior
- * written consent of MediaTek, Inc. is obtained.
+ * This software/firmware and related documentation ("MediaTek Software") are
+ * protected under relevant copyright laws.
+ * The information contained herein is confidential and proprietary to
+ * MediaTek Inc. and/or its licensors.
+ * Except as otherwise provided in the applicable licensing terms with
+ * MediaTek Inc. and/or its licensors, any reproduction, modification, use or
+ * disclosure of MediaTek Software, and information contained herein, in whole
+ * or in part, shall be strictly prohibited.
+*/
+/*
+ ***************************************************************************
  ***************************************************************************
 
     Module Name:
-    safe_cbhn.h//Fancy20200810
+    safe_chn.h
 */
 
 
@@ -27,7 +31,8 @@
 *                              C O N S T A N T S
 ********************************************************************************
 */
-#define UNSAFE_CHN_PROC_INTVL         60000      /* unit: msec */
+#define UNSAFE_CHN_FIRST_PROC_TIME 30000  /* unit: msec */
+#define UNSAFE_CHN_PROC_INTVL      1000   /* unit: msec */
 
 #define SAFE_CHN_START_IDX_2G4 	0	/* To keep align with modem/FW, bit 1 is channel 1 */
 #define SAFE_CHN_END_IDX_2G4 	14
@@ -36,23 +41,21 @@
 #define SAFE_CHN_START_IDX_5G1 	149
 #define SAFE_CHN_END_IDX_5G1 	181
 
-typedef enum _ENUM_SAFE_CHN_TYPE_T
-{
+typedef enum _ENUM_SAFE_CHN_TYPE_T {
 	SAFE_CHN_TYPE_NONE = 0x0,
 	SAFE_CHN_TYPE_2G4 = 0x1,
 	SAFE_CHN_TYPE_5G = 0x2
-}ENUM_SAFE_CHN_TYPE_T, *P_SAFE_CHN_TYPE_T;
+} ENUM_SAFE_CHN_TYPE_T, *P_SAFE_CHN_TYPE_T;
 
-typedef enum _ENUM_SAFE_CHN_MASK_IDX_T
-{
+typedef enum _ENUM_SAFE_CHN_MASK_IDX_T {
 	SAFE_CHN_MASK_BAND_2G4 = 0,	/*2.4G, ch1~14 */
 	SAFE_CHN_MASK_BAND_5G_0 = 1, /* 5G, ch36~144 */
 	SAFE_CHN_MASK_BAND_5G_1 = 2, /* 5G, ch149~181 */
 	SAFE_CHN_MASK_IDX_NUM = 3
 } ENUM_SAFE_CHN_MASK_IDX_T, *P_ENUM_SAFE_CHN_MASK_IDX_T;
 
-typedef struct _LTE_SAFE_CH_CTRL
-{
+typedef struct _LTE_SAFE_CH_CTRL {
+	BOOLEAN bEnabled;	/* Whether query lte unsafe channel feature is enabled or not */
 	BOOLEAN bQueryLteDone;	/* Whether query lte unsafe channel cmd send or not, to avoid multiple query */
 	NDIS_SPIN_LOCK SafeChDbLock;	/* Lock of self DB */
 	UINT_32 SafeChnProcIntvl;	/* Interval of processing safe channel change, to avoid trigger channel switch too frequently. */
@@ -62,11 +65,12 @@ typedef struct _LTE_SAFE_CH_CTRL
 	UINT_32 BandBanCnt[DBDC_BAND_NUM];	/* Used for stats. */
 	UINT_32	FailCnt[DBDC_BAND_NUM];	/* Used for stats. */
 	UINT_32 BandUpCnt[DBDC_BAND_NUM];	/* Used for stats. */
+	UINT_32 TriggerEventIntvl;	/* Used for debug */
 	UINT_32	WaitForSafeChOpCnt[DBDC_BAND_NUM];	/* Count for LTE event waiting for operting */
 	BOOLEAN bAllUnsafe[DBDC_BAND_NUM];	/* TRUE/FALSE: all available channels are unsafe on the band /or not */
 	UINT_32 SafeChnBitmask[SAFE_CHN_MASK_IDX_NUM];	/* Safe channel bitmask (not filter unavailable channels) 1: safe, 0: unsafe */
 	UINT_32 AvaChnBitmask[SAFE_CHN_MASK_IDX_NUM];	/* All available channel bitmask (not filter unsafe channels) 1: safe, 0: unsafe */
-}LTE_SAFE_CH_CTRL, *P_LTE_SAFE_CH_CTRL;
+} LTE_SAFE_CH_CTRL, *P_LTE_SAFE_CH_CTRL;
 
 /**
 * LteSafeChannelInit - Init LTE safe channel.
@@ -81,11 +85,11 @@ VOID LteSafeChannelInit(IN PRTMP_ADAPTER	pAd);
 VOID LteSafeChannelDeinit(IN PRTMP_ADAPTER pAd);
 
 /**
-* ProcessSafeChannelChange - Process unsafe channel change.
+* CheckSafeChannelChange - Check and enqueue unsafe channel change.
 * @pAd: pointer of the RTMP_ADAPTER
 *
 **/
-VOID ProcessSafeChannelChange(RTMP_ADAPTER *pAd);
+VOID CheckSafeChannelChange(RTMP_ADAPTER *pAd);
 
 /**
 * LteSafeBuildChnBitmask - Build available channel bit mask.
@@ -123,6 +127,14 @@ VOID LteSafeChnEventHandle(RTMP_ADAPTER *pAd, UINT32 *channel_bit_mask);
 NTSTATUS LteSafeChannelChangeProcess(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt);
 
 /**
+* Set_UnsafeChannel_State - Enable or disable unsafe channel switch.
+* @pAd: pointer of the RTMP_ADAPTER
+* @arg: state (0: disable; 1: enable)
+*
+**/
+INT Set_UnsafeChannel_State(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+/**
 * Set_UnsafeChannel_Proc - Configure unsafe channel list.
 * @pAd: pointer of the RTMP_ADAPTER
 * @arg: unsafe channel list (ex. 1:36:40)
@@ -142,6 +154,24 @@ INT Set_UnsafeChannel_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 **/
 INT Show_UnsafeChannel_Info(PRTMP_ADAPTER	 pAd, RTMP_STRING *arg);
 
+/**
+* Trigger_UnsafeChannel_Event - Trigger unsafe channel event.
+* @pAd: pointer of the RTMP_ADAPTER
+* @arg: event interval (0: not send event, >0: send event interval in msecs.)
+*
+* This function is for feature debug
+*
+**/
+INT Trigger_UnsafeChannel_Event(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+/**
+* MakeUpSafeChannelEvent - Make up unsafe channel event.
+* @pAd: pointer of the RTMP_ADAPTER
+*
+* This function is for feature debug
+*
+**/
+VOID MakeUpSafeChannelEvent(RTMP_ADAPTER *pAd);
 
 #endif
 #endif

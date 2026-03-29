@@ -48,8 +48,8 @@ INT32 TdlsTxSHandler(RTMP_ADAPTER *pAd, CHAR *Data, UINT32 Priv)
 		pEntry->TdlsTxFailCount++;
 
 	if (pEntry->TdlsTxFailCount > 15) {
-		MTWF_LOG(DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): TdlsTxFailCount > 15!!  teardown link with (%02X:%02X:%02X:%02X:%02X:%02X)!!\n"
-				 , __func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): TdlsTxFailCount > 15!!  teardown link with ("MACSTR")!!\n"
+				 , __func__, MAC2STR(pEntry->Addr)));
 		pEntry->TdlsTxFailCount = 0;
 		cfg_tdls_auto_teardown(pAd, pEntry);
 	}

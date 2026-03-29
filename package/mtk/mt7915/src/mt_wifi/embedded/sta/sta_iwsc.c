@@ -253,7 +253,7 @@ VOID IWSC_Stop(RTMP_ADAPTER *pAd, BOOLEAN bSendNotification)
 			BCN_UPDATE_IF_STATE_CHG);
 		AsicEnableIbssSync(
 			pAd,
-			pAd->CommonCfg.BeaconPeriod,
+			pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 			HW_BSSID_0,
 			OPMODE_ADHOC);
 		WscStop(pAd,
@@ -967,8 +967,8 @@ VOID IWSC_PeerAction(RTMP_ADAPTER *pAd, PMLME_QUEUE_ELEM pElem)
 		}
 
 		if (FrameType == IWSC_SEL_REG_START_NOTITY) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive SelRegStartNotification from %02X:%02X:%02X:%02X:%02X:%02X!\n",
-					 PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive SelRegStartNotification from "MACSTR"!\n",
+					 MAC2STR(PeerMAC)));
 			pIWscInfo->bSelRegStart = TRUE;
 			RTMPMoveMemory(pIWscInfo->RegMacAddr, PeerMAC, MAC_ADDR_LEN);
 			WscBuildProbeRespIE(pAd,
@@ -982,8 +982,8 @@ VOID IWSC_PeerAction(RTMP_ADAPTER *pAd, PMLME_QUEUE_ELEM pElem)
 								0,
 								STA_MODE);
 		} else if (FrameType == IWSC_SEL_REG_FINISH_NOTITY) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive SelRegFinishNotification from %02X:%02X:%02X:%02X:%02X:%02X!\n",
-					 PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive SelRegFinishNotification from "MACSTR"!\n",
+					 MAC2STR(PeerMAC)));
 
 			if (NdisEqualMemory(pIWscInfo->RegMacAddr, PeerMAC, MAC_ADDR_LEN)) {
 				pIWscInfo->bSelRegStart = FALSE;
@@ -995,8 +995,8 @@ VOID IWSC_PeerAction(RTMP_ADAPTER *pAd, PMLME_QUEUE_ELEM pElem)
 		} else if (FrameType == IWSC_DEV_QUERY_REQUEST) {
 			UCHAR RandomVal = RandomByte(pAd);
 
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive Device Query Request from %02X:%02X:%02X:%02X:%02X:%02X!\n",
-					 PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive Device Query Request from "MACSTR"!\n",
+					 MAC2STR(PeerMAC)));
 
 			if (RandomVal < 20)
 				RandomVal = 20;
@@ -1066,8 +1066,8 @@ VOID IWSC_PeerAction(RTMP_ADAPTER *pAd, PMLME_QUEUE_ELEM pElem)
 				}
 			}
 		} else if (FrameType == IWSC_DEV_QUERY_RESPONSE) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive Device Query Response from %02X:%02X:%02X:%02X:%02X:%02X!\n",
-					 PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Receive Device Query Response from "MACSTR"!\n",
+					 MAC2STR(PeerMAC)));
 #ifdef IWSC_TEST_SUPPORT
 
 			if (pAd->StaCfg[0].IWscInfo.bBlockConnection)
@@ -1204,7 +1204,7 @@ VOID IWSC_PeerProbeRequest(RTMP_ADAPTER *pAd, PMLME_QUEUE_ELEM pElem)
 			BCN_UPDATE_IF_STATE_CHG);
 		AsicEnableIbssSync(
 			pAd,
-			pAd->CommonCfg.BeaconPeriod,
+			pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 			HW_BSSID_0,
 			OPMODE_ADHOC);
 		WscBuildProbeRespIE(pAd,
@@ -1453,7 +1453,7 @@ VOID IWSC_RoleAction(RTMP_ADAPTER *pAd, INT WscConfMode)
 			BCN_UPDATE_IF_STATE_CHG);
 		AsicEnableIbssSync(
 			pAd,
-			pAd->CommonCfg.BeaconPeriod,
+			pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 			HW_BSSID_0,
 			OPMODE_ADHOC);
 		pWpsCtrl->WscState = WSC_STATE_LINK_UP;
@@ -1476,7 +1476,7 @@ VOID IWSC_RoleAction(RTMP_ADAPTER *pAd, INT WscConfMode)
 			BCN_UPDATE_IF_STATE_CHG);
 		AsicEnableIbssSync(
 			pAd,
-			pAd->CommonCfg.BeaconPeriod,
+			pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 			HW_BSSID_0,
 			OPMODE_ADHOC);
 		pWpsCtrl->WscState = WSC_STATE_START;
@@ -1531,8 +1531,8 @@ VOID IWSC_AddSmpbcEnrollee(RTMP_ADAPTER *pAd, UCHAR *pPeerAddr)
 									STA_MODE);
 			}
 
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SMPBC Enrollee - %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 PRINT_MAC(pEntry->Addr)));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SMPBC Enrollee - "MACSTR"\n",
+					 MAC2STR(pEntry->Addr)));
 		}
 	} else if (pIWscInfo->bIWscEntryTimerRunning) {
 		pEntry = MacTableLookup2(pAd, pPeerAddr, &pAd->StaCfg[0].wdev);
@@ -1547,8 +1547,8 @@ VOID IWSC_AddSmpbcEnrollee(RTMP_ADAPTER *pAd, UCHAR *pPeerAddr)
 
 		if (pEntry && !pEntry->bIWscSmpbcAccept) {
 			pEntry->bIWscSmpbcAccept = TRUE;
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Accept this peer enrollee - %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 PRINT_MAC(pEntry->Addr)));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Accept this peer enrollee - "MACSTR"\n",
+					 MAC2STR(pEntry->Addr)));
 			WscInsertPeerEntryByMAC(&pWpsCtrl->WscPeerList, pPeerAddr);
 			pWscPeerEntry = WscFindPeerEntry(&pWpsCtrl->WscPeerList, pPeerAddr);
 
@@ -1583,7 +1583,7 @@ VOID IWSC_AddSmpbcEnrollee(RTMP_ADAPTER *pAd, UCHAR *pPeerAddr)
 
 ULONG IWSC_SearchWpsApByPinMethod(RTMP_ADAPTER *pAd)
 {
-	UCHAR		i;
+	UINT		i;
 	BSS_ENTRY	*pBss;
 
 	for (i = 0; i < pAd->ScanTab.BssNr; i++) {

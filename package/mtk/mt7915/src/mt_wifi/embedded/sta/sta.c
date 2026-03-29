@@ -101,8 +101,8 @@ INT STAInitialize(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 
 	if (NdisEqualMemory(&pAd->EthConvert.EthCloneMac[0], &ZERO_MAC_ADDR[0], MAC_ADDR_LEN)) {
 		NdisMoveMemory(&pAd->EthConvert.EthCloneMac[0], &pAd->CurrentAddress[0], MAC_ADDR_LEN);
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Read EEPROM, EthCloneMac is %02x:%02x:%02x:%02x:%02x:%02x!\n",
-				 PRINT_MAC(pAd->EthConvert.EthCloneMac)));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Read EEPROM, EthCloneMac is "MACSTR"!\n",
+				 MAC2STR(pAd->EthConvert.EthCloneMac)));
 	}
 
 #endif /* ETH_CONVERT_SUPPORT */
@@ -319,7 +319,12 @@ VOID MSTA_Init(RTMP_ADAPTER *pAd, RTMP_OS_NETDEV_OP_HOOK *pNetDevOps)
 #ifdef CONFIG_APSTA_MIXED_SUPPORT
 		if (IF_COMBO_HAVE_AP_STA(pAd)) {
 #ifdef MULTI_PROFILE
-			snprintf(final_name, sizeof(final_name), "%s", dev_name);
+			Ret = snprintf(final_name, sizeof(final_name), "%s", dev_name);
+			if (os_snprintf_error(sizeof(final_name), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"final_name snprintf error!\n");
+				break;
+			}
 			multi_profile_apcli_devname_req(pAd, final_name, &idx);
 			/* MULTI_PROFILE=enable && dbdc_mode=TRUE, apcli interface name will be apcli0,apclix0 */
 			pDevNew = RtmpOSNetDevCreate(
@@ -573,7 +578,6 @@ INT sta_inf_open(struct wifi_dev *wdev)
 #endif /* CONFIG_APSTA_MIXED_SUPPORT */
 
 	pStaCfg = &pAd->StaCfg[wdev->func_idx];
-	pStaCfg->apcliNeedEnable = FALSE;	/*Used while scanning*/
 
 	if (wifi_sys_open(wdev) != TRUE) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s() open fail!!!\n", __func__));
@@ -630,7 +634,6 @@ INT sta_inf_close(struct wifi_dev *wdev)
 	/* Pat: TODO: */
 #ifdef APCLI_AUTO_CONNECT_SUPPORT
 	pStaCfg->ApCliAutoConnectRunning = FALSE;
-	printk("sta_inf_close ApCliAutoConnectRunning  ----to fasle \n");
 #endif /* APCLI_AUTO_CONNECT_SUPPORT */
 
 #if defined(CONFIG_FAST_NAT_SUPPORT) && (defined(CONFIG_WIFI_PKT_FWD) || defined(CONFIG_WIFI_PKT_FWD_MODULE))
@@ -672,7 +675,6 @@ INT sta_inf_close(struct wifi_dev *wdev)
 #endif /* defined(APCLI_CFG80211_SUPPORT) */
 
 	MSTAStop(pAd, wdev);
-	pStaCfg->apcliNeedEnable = FALSE;	/*Used while scanning*/
 	if (wifi_sys_close(wdev) != TRUE) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() close fail!!!\n", __func__));
 		return FALSE;
@@ -703,7 +705,7 @@ INT adhoc_link_up(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	} else {
 		AsicEnableIbssSync(
 			ad,
-			ad->CommonCfg.BeaconPeriod,
+			ad->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 			HW_BSSID_0,
 			OPMODE_ADHOC);
 	}
@@ -807,6 +809,14 @@ VOID sta_wait_link_down(STA_ADMIN_CONFIG *pStaCfg)
 				 ("(%s) sta idx [%d] can't linkdown within 500ms, do linkdown in main thread\n"
 				  , __func__, pStaCfg->wdev.func_idx));
 		LinkDown(pAd, linkdown_type, wdev, NULL);
+		if (pStaCfg->ApcliInfStat.Valid == TRUE) {
+			pStaCfg->ApcliInfStat.Valid = FALSE;
+			/* clear MlmeAux.Ssid and Bssid. */
+			NdisZeroMemory(pStaCfg->MlmeAux.Bssid, MAC_ADDR_LEN);
+			pStaCfg->MlmeAux.SsidLen = 0;
+			NdisZeroMemory(pStaCfg->MlmeAux.Ssid, MAX_LEN_OF_SSID);
+			pStaCfg->MlmeAux.Rssi = 0;
+		}
 	}
 }
 
@@ -916,10 +926,8 @@ VOID ApCliPeerCsaAction(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, BCN_IE_LIST *i
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
 				 ("[APCLI]  Following root AP to switch channel to ch%u\n",
 				  ie_list->NewChannel));
-#if defined(WAPP_SUPPORT) && defined(CONFIG_MAP_SUPPORT)
-		if (pAd->bMAPQuickChChangeEn)
-			wdev->quick_ch_change = QUICK_CH_SWICH_ENABLE_WO_DISCONNECTION;
 
+#if defined(WAPP_SUPPORT) && defined(CONFIG_MAP_SUPPORT)
 		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
 				("Channel Change due to csa\n"));
 #endif
@@ -942,10 +950,22 @@ VOID ApCliPeerCsaAction(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, BCN_IE_LIST *i
 						BssTableInit(ScanTab);
 				}
 #endif
+		/*To do set channel for PEER CSA, need TakeChannelOpCharge first*/
+		if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_PEER_CSA, FALSE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: TakeChannelOpCharge fail for PEER CSA!!\n", __func__));
+			return;
+		}
+
 		rtmp_set_channel(pAd, wdev, ie_list->NewChannel);
+
+		/*if no need CSA, just release ChannelOpCharge here*/
+		if (pAd->ApCfg.set_ch_async_flag == FALSE)
+			ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_PEER_CSA);
+
 #if defined(WAPP_SUPPORT) && defined(CONFIG_MAP_SUPPORT)
-		if (pAd->bMAPQuickChChangeEn)
-			/* wdev->quick_ch_change = QUICK_CH_SWICH_DISABLE; */
+		if (IS_MAP_ENABLE(pAd))
+			pDot11h->ChChangeCSA = TRUE;
+
 		wapp_send_csa_event(pAd, RtmpOsGetNetIfIndex(wdev->if_dev), wdev->channel);
 #endif
 	}
@@ -1010,6 +1030,7 @@ INT apcli_fp_tx_pkt_allowed(
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
 	UINT16 wcid = RTMP_GET_PACKET_WCID(pkt);
 	UCHAR frag_nums;
+	MAC_TABLE_ENTRY *pTmpEntry = NULL;
 #ifdef MAP_TS_TRAFFIC_SUPPORT
 	MAC_TABLE_ENTRY *peer_entry = NULL;
 #endif
@@ -1095,6 +1116,13 @@ INT apcli_fp_tx_pkt_allowed(
 			if (!RTMPCheckEtherType(pAd, pkt, &tr_ctl->tr_entry[wcid], wdev))
 				allowed = FALSE;
 		}
+		/* if sta rec isn't valid, don't allow pkt tx */
+		pTmpEntry = &pAd->MacTab.Content[wcid];
+		if (!(pTmpEntry && pTmpEntry->sta_rec_valid)) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s():Drop PKT before StaRec ready! wcid = %d.\n", __func__, wcid));
+			allowed = FALSE;
+		}
 	}
 
 	return allowed;
@@ -1112,6 +1140,7 @@ INT apcli_tx_pkt_allowed(
 	UINT16 wcid = RTMP_GET_PACKET_WCID(pkt);
 	UCHAR frag_nums;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+	MAC_TABLE_ENTRY *pTmpEntry = NULL;
 #ifdef WSC_INCLUDED
 	BOOLEAN do_wsc_now = FALSE;
 #endif /* WSC_INCLUDED */
@@ -1220,6 +1249,13 @@ INT apcli_tx_pkt_allowed(
 			   )
 				allowed = FALSE;
 
+		}
+		/* if sta rec isn't valid, don't allow pkt tx */
+		pTmpEntry = &pAd->MacTab.Content[wcid];
+		if (!(pTmpEntry && pTmpEntry->sta_rec_valid)) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s():Drop PKT before StaRec ready! wcid = %d.\n", __func__, wcid));
+			allowed = FALSE;
 		}
 	}
 
@@ -1879,16 +1915,11 @@ VOID ApCliIfDown(RTMP_ADAPTER *pAd)
 	INVAILD_TRIGGER_MAC_ENTRY *pEntry = NULL;
 #endif /* MAC_REPEATER_SUPPORT */
 
-        MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
-                                ("%s, caller:%pS,\n", __func__, OS_TRACE));
-
 	for (ifIndex = 0; ifIndex < MAX_APCLI_NUM; ifIndex++) {
 		pApCliEntry = &pAd->StaCfg[ifIndex];
 
 		if (pApCliEntry->ApcliInfStat.Enable == TRUE)
 			continue;
-
-		pApCliEntry->ApcliInfStat.ProbeReqCnt = 0;	 /* reset probe req count */   //MTK delete 2020.08.19
 
 		if (pApCliEntry->ApcliInfStat.Valid == FALSE)
 			continue;
@@ -2170,7 +2201,7 @@ UCHAR ApCliAutoConnectBWAdjust(
 		}
 
 		if (bResetVHTBw) {
-			INT Idx = -1;
+			INT Idx;
 			BOOLEAN bMatch = FALSE;
 
 			for (Idx = 0; Idx < pChCtrl->ChListNum; Idx++) {
@@ -2252,12 +2283,10 @@ BOOLEAN ApCliAutoConnectExec(
 	IN  PRTMP_ADAPTER   pAd,
 	IN struct wifi_dev *wdev)
 {
-	UCHAR			ifIdx, CfgSsidLen, entryIdx;
+	UCHAR			ifIdx, CfgSsidLen;
+	UINT entryIdx;
 	RTMP_STRING *pCfgSsid;
 	BSS_TABLE		*pScanTab, *pSsidBssTab;
-	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
-	INT old_ioctl_if;
-	INT old_ioctl_if_type;
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 #ifdef CONFIG_OWE_SUPPORT
 	PSTA_ADMIN_CONFIG papcli_entry = NULL;
@@ -2265,7 +2294,7 @@ BOOLEAN ApCliAutoConnectExec(
 #endif
 
 	ASSERT(pStaCfg);
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("---> ApCliAutoConnectExec()\n"));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("---> ApCliAutoConnectExec()\n"));
 
 	if (wdev)
 		ifIdx = wdev->func_idx;
@@ -2277,6 +2306,8 @@ BOOLEAN ApCliAutoConnectExec(
 		return FALSE;
 	}
 
+	if (!pStaCfg)
+		return FALSE;
 	if (pStaCfg->ApcliInfStat.AutoConnectFlag != TRUE)
 		return FALSE;
 
@@ -2314,10 +2345,10 @@ BOOLEAN ApCliAutoConnectExec(
 			}
 		}
 
-		if (powe_bss_tab->BssNr < MAX_LEN_OF_BSS_TABLE){
+		if (powe_bss_tab->BssNr < MAX_LEN_OF_BSS_TABLE) {
 			/* fix memory leak when trigger scan continuously */
 			BssEntryReset(powe_bss_tab, &powe_bss_tab->BssEntry[powe_bss_tab->BssNr]);
-    	}
+		}
 	}
 #endif
 
@@ -2334,7 +2365,6 @@ BOOLEAN ApCliAutoConnectExec(
 			pBssEntry->SsidLen &&
 			(pBssEntry->SsidLen == CfgSsidLen) &&
 			(pSsidBssTab->BssNr < MAX_LEN_OF_BSS_TABLE)) {
-			printk("Get SSID=%s \n", pBssEntry->Ssid);
 			if (((((wdev->SecConfig.AKMMap & pBssEntry->AKMMap) != 0) ||
 				(IS_AKM_AUTOSWITCH(wdev->SecConfig.AKMMap) && IS_AKM_SHARED(pBssEntry->AKMMap)) ||
 				(IS_AKM_WPA2PSK_ONLY(pBssEntry->AKMMap) && IS_AKM_WPA3PSK_ONLY(wdev->SecConfig.AKMMap)))
@@ -2345,28 +2375,20 @@ BOOLEAN ApCliAutoConnectExec(
 						&& (IS_AKM_OWE(wdev->SecConfig.AKMMap)))
 #endif
 			   ) {
-				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF,
+				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
 						 ("Found desired ssid in Entry %2d:\n", entryIdx));
-				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF,
+				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
 						 ("I/F(apcli%d) ApCliAutoConnectExec:(Len=%d,Ssid=%s, Channel=%d, Rssi=%d)\n",
 						  ifIdx, pBssEntry->SsidLen, pBssEntry->Ssid,
 						  pBssEntry->Channel, pBssEntry->Rssi));
-				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF,
+				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
 						 ("I/F(apcli%d) ApCliAutoConnectExec::(AuthMode=%s, EncrypType=%s)\n", ifIdx,
 						  GetAuthMode(pBssEntry->AuthMode),
 						  GetEncryptType(pBssEntry->WepStatus)));
 				/* fix memory leak when trigger scan continuously */
-				BssEntryCopy(pSsidBssTab, &pSsidBssTab->BssEntry[pSsidBssTab->BssNr++],pBssEntry);
+				BssEntryCopy(pSsidBssTab,
+					&pSsidBssTab->BssEntry[pSsidBssTab->BssNr++], pBssEntry);
 			}
-		}else{
-				printk("SSID not match(%s) %02x:%02x:%02x:%02x:%02x:%02x \n", 
-						pBssEntry->Ssid,
-						pBssEntry->Bssid[0],
-						pBssEntry->Bssid[1],
-						pBssEntry->Bssid[2],
-						pBssEntry->Bssid[3],
-						pBssEntry->Bssid[4],
-						pBssEntry->Bssid[5]);
 		}
 	}
 	if (pSsidBssTab->BssNr < MAX_LEN_OF_BSS_TABLE) {
@@ -2380,7 +2402,7 @@ BOOLEAN ApCliAutoConnectExec(
 	BssTableSortByRssi(pSsidBssTab, TRUE);
 
 	if ((pSsidBssTab->BssNr == 0)) {
-		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("chd------No match entry.\n"));
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("No match entry.\n"));
 		pStaCfg->ApCliAutoConnectRunning = FALSE;
 	} else if (pSsidBssTab->BssNr > 0 &&
 			   pSsidBssTab->BssNr <= MAX_LEN_OF_BSS_TABLE) {
@@ -2396,61 +2418,19 @@ BOOLEAN ApCliAutoConnectExec(
 		if (bw_adj == AUTO_BW_NEED_TO_ADJUST || (!IS_INVALID_HT_SECURITY(pBssEntry->PairwiseCipher)))
 #endif /* APCLI_AUTO_BW_TMP */
 		{
-#ifdef CONFIG_APSTA_MIXED_SUPPORT
-            /* Enable beacon tx for the bss which is same band with apcli wdev */
-            int Index;
-            struct wifi_dev *wdevEach;
-            
-            for (Index = 0; Index < WDEV_NUM_MAX; Index++) {
-                wdevEach = pAd->wdev_list[Index];
-                
-                if (wdevEach == NULL)
-                    continue;
-
-                if (wdevEach->pHObj == NULL)
-                    continue;
-                if ((HcGetBandByWdev(wdevEach) == HcGetBandByWdev(wdev)) && 
-                 wdevEach->bAllowBeaconing && (wdevEach->bcn_buf.bBcnSntReq == FALSE) ) {
-                    UpdateBeaconHandler(pAd, wdevEach, BCN_UPDATE_ENABLE_TX);
-                }
-            }
-            
-#endif /*
-            CONFIG_APSTA_MIXED_SUPPORT */
-			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("Switch to channel :%d\n", pBssEntry->Channel));
+			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("Switch to channel :%d\n", pBssEntry->Channel));
 			rtmp_set_channel(pAd, wdev, pBssEntry->Channel);
 		}
 	} else {
-		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, ("Error! Out of table range: (BssNr=%d).\n", pSsidBssTab->BssNr));
-		RtmpOSNetDevProtect(1);
-		old_ioctl_if = pObj->ioctl_if;
-		old_ioctl_if_type = pObj->ioctl_if_type;
-		pObj->ioctl_if = ifIdx;
-		pObj->ioctl_if_type = INT_APCLI;
-		Set_ApCli_Enable_Proc(pAd, "1");
-		pObj->ioctl_if = old_ioctl_if;
-		pObj->ioctl_if_type = old_ioctl_if_type;
-		RtmpOSNetDevProtect(0);
-		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("<--- 1111ApCliAutoConnectExec()\n"));
+		MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, "Error! Out of table range: (BssNr=%d).\n", pSsidBssTab->BssNr);
+		SetApCliEnableByWdev(pAd, wdev, TRUE);
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("<--- ApCliAutoConnectExec()\n"));
 		return FALSE;
 	}
 
-	RtmpOSNetDevProtect(1);
-	old_ioctl_if = pObj->ioctl_if;
-	old_ioctl_if_type = pObj->ioctl_if_type;
-	pObj->ioctl_if = ifIdx;
-	pObj->ioctl_if_type = INT_APCLI;
+	SetApCliEnableByWdev(pAd, wdev, TRUE);
 
-	//MQR: mtk patch for disable apcli not effect.
-	if(pStaCfg->ApcliInfStat.Enable == TRUE)
-		Set_ApCli_Enable_Proc(pAd, "1");
-	else
-		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("chd stop scan===ApcliInfStat.Enable=%d\n",pStaCfg->ApcliInfStat.Enable));
-
-	pObj->ioctl_if = old_ioctl_if;
-	pObj->ioctl_if_type = old_ioctl_if_type;
-	RtmpOSNetDevProtect(0);
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("<--- 2222ApCliAutoConnectExec()\n"));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("<--- ApCliAutoConnectExec()\n"));
 	return TRUE;
 }
 /*
@@ -2475,15 +2455,12 @@ VOID ApCliSwitchCandidateAP(
 	BSS_TABLE		*pSsidBssTab;
 	PSTA_ADMIN_CONFIG	pApCliEntry;
 	UCHAR			lastEntryIdx, ifIdx;
-	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
-	INT old_ioctl_if;
-	INT old_ioctl_if_type;
 	SCAN_CTRL *ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
 
 	if (ScanCtrl->PartialScan.bScanning == TRUE)
 		return;
 
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("---> ApCliSwitchCandidateAP()\n"));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("---> ApCliSwitchCandidateAP()\n"));
 
 	if (wdev)
 		ifIdx = wdev->func_idx;
@@ -2502,7 +2479,7 @@ VOID ApCliSwitchCandidateAP(
 	pSsidBssTab = &pApCliEntry->MlmeAux.SsidBssTab;
 
 	if (pSsidBssTab->BssNr == 0) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("chd----No Bss\n"));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("No Bss\n"));
 		pApCliEntry->ApCliAutoConnectRunning = FALSE;
 		return;
 	}
@@ -2515,7 +2492,7 @@ VOID ApCliSwitchCandidateAP(
 	BssEntryReset(pSsidBssTab, &pSsidBssTab->BssEntry[--pSsidBssTab->BssNr]);
 	lastEntryIdx = pSsidBssTab->BssNr - 1;
 
-	if ((pSsidBssTab->BssNr > 0) && (pSsidBssTab->BssNr < MAX_LEN_OF_BSS_TABLE)) {
+	if ((pSsidBssTab->BssNr > 0) && (pSsidBssTab->BssNr <= MAX_LEN_OF_BSS_TABLE)) {
 		BSS_ENTRY *pBssEntry = &pSsidBssTab->BssEntry[pSsidBssTab->BssNr - 1];
 #ifdef APCLI_AUTO_BW_TMP /* should be removed after apcli auto-bw is applied */
 		BOOLEAN bw_adj;
@@ -2525,24 +2502,17 @@ VOID ApCliSwitchCandidateAP(
 		if (bw_adj)
 #endif /* APCLI_AUTO_BW_TMP */
 		{
-			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("Switch to channel :%d\n", pBssEntry->Channel));
+			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("Switch to channel :%d\n", pBssEntry->Channel));
 			rtmp_set_channel(pAd, wdev, pBssEntry->Channel);
 		}
 	} else {
-		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("chd----No candidate AP, the process is about to stop.\n"));
+		MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("No candidate AP, the process is about to stop.\n"));
 		pApCliEntry->ApCliAutoConnectRunning = FALSE;
 	}
 
-	RtmpOSNetDevProtect(1);
-	old_ioctl_if = pObj->ioctl_if;
-	old_ioctl_if_type = pObj->ioctl_if_type;
-	pObj->ioctl_if = ifIdx;
-	pObj->ioctl_if_type = INT_APCLI;
-	Set_ApCli_Enable_Proc(pAd, "1");
-	pObj->ioctl_if = old_ioctl_if;
-	pObj->ioctl_if_type = old_ioctl_if_type;
-	RtmpOSNetDevProtect(0);
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("---> ApCliSwitchCandidateAP()\n"));
+	SetApCliEnableByWdev(pAd, wdev, TRUE);
+
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("---> ApCliSwitchCandidateAP()\n"));
 }
 #endif /* APCLI_AUTO_CONNECT_SUPPORT */
 VOID apcli_dync_txop_alg(
@@ -2563,7 +2533,7 @@ VOID apcli_dync_txop_alg(
 		UINT16 cond_txop_level[NUM_OF_APCLI_TXOP_COND] = {0};
 		UINT16 cond_thrd[NUM_OF_APCLI_TXOP_COND] = {0};
 		UINT16 txop_level = TXOP_0;
-		UINT16 current_txop_level = TXOP_0;
+		UINT16 current_txop_level;
 		BOOLEAN apcli_txop_en = FALSE;
 		STA_ADMIN_CONFIG *apcli_entry = NULL;
 
@@ -2859,11 +2829,37 @@ VOID ApCliIfMonitor(RTMP_ADAPTER *pAd)
 	STA_ADMIN_CONFIG *pApCliEntry;
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+#ifdef CONFIG_MAP_SUPPORT
+	UCHAR IdBss = 0;
+	BSS_STRUCT *pMbss = NULL;
+	struct DOT11_H *pDot11h = NULL;
+	struct wifi_dev *wdev = NULL;
+	BOOLEAN ChChangeInProgress = FALSE;
+#endif
 
 	/* Reset is in progress, stop immediately */
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS) ||
 		!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP))
 		return;
+
+#ifdef CONFIG_MAP_SUPPORT
+	if (IS_MAP_ENABLE(pAd)) {
+		for (IdBss = 0; IdBss < pAd->ApCfg.BssidNum; IdBss++) {
+			pMbss = &pAd->ApCfg.MBSSID[IdBss];
+			if (pMbss == NULL)
+				continue;
+			wdev = &pMbss->wdev;
+			if (wdev == NULL)
+				continue;
+
+			pDot11h = wdev->pDot11_H;
+			if (pDot11h && pDot11h->ChChangeCSA) {
+				ChChangeInProgress = TRUE;
+				break;
+			}
+		}
+	}
+#endif
 
 	for (index = 0; index < MAX_APCLI_NUM; index++) {
 		UINT16 wcid;
@@ -2915,21 +2911,31 @@ VOID ApCliIfMonitor(RTMP_ADAPTER *pAd)
 			}
 
 			if (!pApCliEntry->PwrMgmt.bDoze) {
-				if (RTMP_TIME_AFTER(pAd->Mlme.Now32, (pApCliEntry->ApcliInfStat.ApCliRcvBeaconTime +
-						 (12 * OS_HZ)))) {
-					MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
-						("STA Beacon loss condition got hit.\n"));
+#ifdef CONFIG_MAP_SUPPORT
+				if (IS_MAP_ENABLE(pAd) && (ChChangeInProgress == TRUE) &&
+					(RTMP_TIME_BEFORE(pAd->Mlme.Now32, (pApCliEntry->ApcliInfStat.ApCliRcvBeaconTime +
+					(8 * OS_HZ))))) {
+						MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
+							"ChChange due to CSA In Progress\n");
+				} else {
+#endif
+					if (RTMP_TIME_AFTER(pAd->Mlme.Now32, (pApCliEntry->ApcliInfStat.ApCliRcvBeaconTime +
+							(4 * OS_HZ)))) {
+						MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
+							("STA Beacon loss condition got hit.\n"));
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
-					pMacEntry->bTxPktChk = FALSE;
+						pMacEntry->bTxPktChk = FALSE;
 #endif /* RACTRL_FW_OFFLOAD_SUPPORT */
-					bBeacon_miss = TRUE;
-					bForceBrocken = TRUE;
+						bBeacon_miss = TRUE;
+						bForceBrocken = TRUE;
+#ifdef CONFIG_MAP_SUPPORT
+					}
+#endif
 				}
 			}
 
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 #ifdef BEACON_MISS_ON_PRIMARY_CHANNEL
-fds
 				if ((cap->fgRateAdaptFWOffload == TRUE) &&
 					(pMacEntry->TxStatRspCnt > 1) && (pMacEntry->TotalTxSuccessCnt)) {
 				/*When Root AP changes the primary channel within the same group of bandwidth, APCLI not disconnects from Root AP.
@@ -3006,8 +3012,8 @@ fds
 			continue;
 
 		if (bForceBrocken == TRUE) {
-			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("ApCliIfMonitor: IF(apcli%d) - no Beancon is received from root-AP.\n", index));
-			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("ApCliIfMonitor: Reconnect the Root-Ap again.\n"));
+			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("ApCliIfMonitor: IF(apcli%d) - no Beancon is received from root-AP.\n", index));
+			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("ApCliIfMonitor: Reconnect the Root-Ap again.\n"));
 #ifdef CONFIG_MULTI_CHANNEL
 
 			if (pAd->Mlme.bStartMcc == TRUE)
@@ -3031,6 +3037,12 @@ fds
 				repeater_disconnect_by_band(pAd, HcGetBandByWdev(&apcli_entry->wdev));
 			}
 #endif /* MAC_REPEATER_SUPPORT */
+			/*
+				Improve a case that beacon miss will be invoked constantly when tput. is buzy.
+				And avoid a disconnection action may be enqueued repeatedly.
+			*/
+			pApCliEntry->ApcliInfStat.ApCliRcvBeaconTime = (pAd->Mlme.Now32 + (300 * OS_HZ));
+
 			if (bBeacon_miss)
 				pApCliEntry->ApcliInfStat.Disconnect_Sub_Reason = APCLI_DISCONNECT_SUB_REASON_MNT_NO_BEACON;
 			else
@@ -3096,6 +3108,68 @@ INT set_apcli_sae_group_proc(
 					__func__, group));
 		return FALSE;
 	}
+
+	return TRUE;
+}
+
+INT Set_apcli_sae_pk_only_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING *arg)
+{
+	POS_COOKIE pObj;
+	UCHAR *pSaepkonly = NULL;
+	UCHAR saepkonly = 0;
+	UINT32 staidx = 0;
+
+	if (strlen(arg) == 0)
+		return FALSE;
+
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	if (pObj->ioctl_if < 0 || pObj->ioctl_if >= pAd->MSTANum) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"pObj->ioctl_if is invalid value\n");
+		return FALSE;
+	}
+
+	staidx = pObj->ioctl_if;
+	pSaepkonly = &pAd->StaCfg[staidx].wdev.SecConfig.sae_cap.sae_pk_only_en;
+
+	saepkonly = os_str_tol(arg, 0, 10);
+
+	*pSaepkonly = (UCHAR) saepkonly;
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "[SAE] saepk_only=%d\n",
+		saepkonly);
+
+	return TRUE;
+}
+
+INT Set_apcli_sae_pk_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING *arg)
+{
+	POS_COOKIE pObj;
+	UCHAR *pSaepk = NULL;
+	UCHAR saepk = 0;
+	UINT32 staidx = 0;
+
+	if (strlen(arg) == 0)
+		return FALSE;
+
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	if (pObj->ioctl_if < 0 || pObj->ioctl_if >= pAd->MSTANum) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"pObj->ioctl_if is invalid value\n");
+		return FALSE;
+	}
+
+	staidx = pObj->ioctl_if;
+	pSaepk = &pAd->StaCfg[staidx].wdev.SecConfig.sae_cap.sae_pk_en;
+
+	saepk = os_str_tol(arg, 0, 10);
+
+	*pSaepk = (UCHAR) saepk;
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "[SAE] saepk=%d\n",
+		saepk);
 
 	return TRUE;
 }
@@ -3255,8 +3329,8 @@ INT sta_add_pmkid_cache(
 		NdisMoveMemory(&psaved_pmk[cached_idx].PMK, pmk, pmk_len);
 		NdisMoveMemory(&psaved_pmk[cached_idx].ssid, ssid, ssid_len);
 		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					("%s(): add %02x:%02x:%02x:%02x:%02x:%02x cache(%d) akm:0x%x,SSID:%s\n",
-					 __func__, PRINT_MAC(paddr), cached_idx, psaved_pmk[cached_idx].akm, psaved_pmk[cached_idx].ssid));
+					("%s(): add "MACSTR" cache(%d) akm:0x%x,SSID:%s\n",
+					 __func__, MAC2STR(paddr), cached_idx, psaved_pmk[cached_idx].akm, psaved_pmk[cached_idx].ssid));
 	}
 
 	if (psaved_pmk_lock)
@@ -3304,8 +3378,8 @@ INT sta_search_pmkid_cache(
 			&& (ssid && (ssid_len <= MAX_LEN_OF_SSID)
 					&& NdisEqualMemory(&psaved_pmk[i].ssid[0], ssid, ssid_len))) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d),akm:0x%x,SSID:%s\n",
-						 __func__, PRINT_MAC(paddr), i, akm, psaved_pmk[i].ssid));
+						("%s():"MACSTR" cache(%d),akm:0x%x,SSID:%s\n",
+						 __func__, MAC2STR(paddr), i, akm, psaved_pmk[i].ssid));
 			break;
 		}
 	}
@@ -3365,8 +3439,8 @@ VOID sta_delete_pmkid_cache(
 
 		if (psaved_pmk[cached_idx].Valid == TRUE) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d),akm:0x%x,SSID:%s\n",
-						 __func__, PRINT_MAC(paddr), cached_idx, akm, psaved_pmk[cached_idx].ssid));
+						("%s():"MACSTR" cache(%d),akm:0x%x,SSID:%s\n",
+						 __func__, MAC2STR(paddr), cached_idx, akm, psaved_pmk[cached_idx].ssid));
 			psaved_pmk[cached_idx].Valid = FALSE;
 			psaved_pmk[cached_idx].akm = 0;
 			NdisZeroMemory(&psaved_pmk[cached_idx].PMKID, LEN_PMKID);
@@ -3583,8 +3657,8 @@ VOID sta_delete_pmkid_cache_by_akm(
 		if ((psaved_pmk[cached_idx].Valid == TRUE) &&
 			(psaved_pmk[cached_idx].akm == akm)) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d),akm:0x%x,SSID:%s\n",
-						 __func__, PRINT_MAC(psaved_pmk[cached_idx].BSSID), cached_idx, akm, psaved_pmk[cached_idx].ssid));
+						("%s():"MACSTR" cache(%d),akm:0x%x,SSID:%s\n",
+						 __func__, MAC2STR(psaved_pmk[cached_idx].BSSID), cached_idx, akm, psaved_pmk[cached_idx].ssid));
 			psaved_pmk[cached_idx].Valid = FALSE;
 			psaved_pmk[cached_idx].akm = 0;
 			NdisZeroMemory(&psaved_pmk[cached_idx].PMKID, LEN_PMKID);
@@ -3729,8 +3803,8 @@ VOID sta_delete_psk_pmkid_cache_all(
 			(IS_AKM_PSK(psaved_pmk[cached_idx].akm)
 				&& !IS_AKM_OWE(psaved_pmk[cached_idx].akm))) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d),akm:0x%x,SSID:%s\n",
-						 __func__, PRINT_MAC(psaved_pmk[cached_idx].BSSID), cached_idx,
+				("%s():"MACSTR" cache(%d),akm:0x%x,SSID:%s\n",
+						 __func__, MAC2STR(psaved_pmk[cached_idx].BSSID), cached_idx,
 				psaved_pmk[cached_idx].akm, psaved_pmk[cached_idx].ssid));
 			psaved_pmk[cached_idx].Valid = FALSE;
 			psaved_pmk[cached_idx].akm = 0;
@@ -3902,5 +3976,35 @@ BOOLEAN sta_handle_owe_trans(
 		}
 	}
 	return FALSE;
+}
+#endif
+#ifdef APCLI_SUPPORT
+INT Set_apcli_ocv_support_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING * arg)
+{
+	POS_COOKIE pObj;
+	UCHAR apcli_ocv_support = 0;
+	UINT32 staidx = 0;
+
+	if (strlen(arg) == 0)
+		return FALSE;
+
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	if (pObj->ioctl_if < 0 || pObj->ioctl_if >= pAd->MSTANum) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"pObj->ioctl_if is invalid value\n");
+		return FALSE;
+	}
+
+	staidx = pObj->ioctl_if;
+
+	apcli_ocv_support = os_str_tol(arg, 0, 10);
+
+	pAd->StaCfg[staidx].wdev.SecConfig.apcli_ocv_support = apcli_ocv_support;
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"[ApCli OCV] apcli_ocv_support:%d\n", apcli_ocv_support);
+
+	return TRUE;
 }
 #endif

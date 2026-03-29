@@ -8,6 +8,10 @@ struct capi_set_cmd ap_set_wireless_capi[] = {
 	{"num_users_ofdma", ap_set_wireless_nusers_ofdma},
 	{"non_tx_bss_idx", ap_set_wireless_non_txbss_idx},
 	{"mu_edca_override", ap_set_wireless_mu_edca_override},
+#ifdef CONFIG_6G_SUPPORT
+	{"act_ind_unsolicit_probe_rsp", ap_set_wireless_act_ind_unsolicited_probe_rsp},
+	{"ap6g_discovery_apply", ap_set_wireless_discovery_apply},
+#endif /* CONFIG_6G_SUPPORT */
 	{"non_support", ap_set_wireless_non_support} /* End of ap_set_wireless */
 };
 
@@ -179,7 +183,7 @@ VOID ap_set_wireless_fixed_mcs(VOID *ad, VOID *param)
 	struct _MAC_TABLE_ENTRY *entry = (struct _MAC_TABLE_ENTRY *)param;
 	struct wifi_dev *wdev = NULL;
 	UINT8 mcs = CAPI_MCS_AUTO;
-	UINT32 wcid = 1;
+	UINT32 wcid;
 
 	if (!entry)
 		return;
@@ -271,16 +275,23 @@ VOID ap_set_wireless_mumimo(VOID *ad, VOID *param)
 	char str[20] = {0}, mu_fixed_rate_en[] = "1";
 	char mimo_param[] = "2-122-0-1-0-1-2-2-2";/* <2Usr>-<RU61>-<3.2GI>-<HEFB>-<DL>-<WCID>-<MCS2> */
 
-	UINT8 mu_dl_mimo = 0;
-	UINT8 ppdu_type = CAPI_LEGACY;
+	UINT8 mu_dl_mimo;
+	UINT8 ppdu_type;
+	int ret;
 
 	if (!wdev)
 		return;
 	mu_dl_mimo = wlan_config_get_mu_dl_mimo(wdev);
 	ppdu_type = wlan_config_get_ppdu_tx_type(wdev);
 #ifdef CFG_SUPPORT_FALCON_MURU
-	if (mu_dl_mimo && (ppdu_type == CAPI_MU))
-		snprintf(str, sizeof(str), "%s", "dl_init");
+	if (mu_dl_mimo && (ppdu_type == CAPI_MU)) {
+		ret = snprintf(str, sizeof(str), "%s", "dl_init");
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"str snprintf error!\n");
+			return;
+		}
+	}
 	else
 		return;
 
@@ -296,8 +307,25 @@ VOID ap_set_wireless_mumimo(VOID *ad, VOID *param)
 #ifdef DOT11_VHT_AC
 			&& (wlan_config_get_vht_bw(wdev) == VHT_BW_80)
 #endif /* DOT11_VHT_AC */
-		)
-		snprintf(mimo_param, sizeof(mimo_param), "%s", "2-134-0-1-0-1-2-2-2");/* <2Usr>-<RU67>-<3.2GI>-<HEFB>-<DL>-<WCID>-<MCS2> */
+		) {
+		ret = snprintf(mimo_param, sizeof(mimo_param), "%s", "2-134-0-1-0-1-2-2-2");/* <2Usr>-<RU67>-<3.2GI>-<HEFB>-<DL>-<WCID>-<MCS2> */
+		if (os_snprintf_error(sizeof(mimo_param), ret)) {
+			MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"mimo_param snprintf error!\n");
+			return;
+		}
+	}
+#ifdef DOT11_HE_AX
+	else if (wlan_config_get_he_bw(wdev) == HE_BW_160) {
+		/* <2Usr>-<RU67>-<3.2GI>-<HEFB>-<DL>-<WCID>-<MCS2> */
+		ret = snprintf(mimo_param, sizeof(mimo_param), "%s", "2-137-0-1-0-1-2-2-2");
+		if (os_snprintf_error(sizeof(mimo_param), ret)) {
+			MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"mimo_param 2 snprintf error!\n");
+			return;
+		}
+	}
+#endif /* DOT11_HE_AX */
 
 	/* Fix MU rate as MCS2. */
 	SetMuMimoFixedRate(adapt, mu_fixed_rate_en);
@@ -316,6 +344,7 @@ VOID ap_set_wireless_nusers_ofdma(VOID *ad, VOID *param)
 	struct wifi_dev *wdev = (struct wifi_dev *)param;
 	char str[20];
 	UINT8 nuser = 0;
+	int ret;
 
 	if (!wdev)
 		return;
@@ -324,7 +353,12 @@ VOID ap_set_wireless_nusers_ofdma(VOID *ad, VOID *param)
 	if (nuser < 2)
 		return;
 	SetMuruSuTx(adapt, "0");
-	snprintf(str, sizeof(str), "%s:%d", "dl_comm_user_cnt", nuser);
+	ret = snprintf(str, sizeof(str), "%s:%d", "dl_comm_user_cnt", nuser);
+	if (os_snprintf_error(sizeof(str), ret)) {
+		MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+			"str 2 snprintf error!\n");
+		return;
+	}
 	MTWF_LOG(DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_OFF,
 			("func:%s, cmd:%s\n", __func__, str));
 	/* Set default value as SUBAR. */
@@ -356,6 +390,42 @@ VOID ap_set_wireless_mu_edca_override(VOID *ad, VOID *param)
 	return;
 }
 
+#if defined(CONFIG_AP_SUPPORT) && defined(DOT11_HE_AX) && defined(CONFIG_6G_SUPPORT)
+/*
+ * This api is including:
+ * unsolicited_probe_rsp / cadence_unsolicited_probe_rsp / fils_discovery
+ */
+VOID ap_set_wireless_discovery_apply(VOID *ad, VOID *param)
+{
+	struct wifi_dev *wdev = (struct wifi_dev *)param;
+	UINT8 unsolicit_type = 0, tu = 20, unsolicit_txmode = 0;
+
+	if (!wdev)
+		return;
+
+	if (WMODE_CAP_6G(wdev->PhyMode)) {
+		tu = wlan_config_get_unsolicit_tx_tu(wdev);
+		unsolicit_type = wlan_config_get_unsolicit_tx_type(wdev);
+		unsolicit_txmode = wlan_config_get_unsolicit_tx_mode(wdev);
+
+		in_band_discovery_update(wdev, unsolicit_type, tu, unsolicit_txmode, TRUE);
+	}
+	return;
+}
+
+VOID ap_set_wireless_act_ind_unsolicited_probe_rsp(VOID *ad, VOID *param)
+{
+	struct wifi_dev *wdev = (struct wifi_dev *)param;
+	UINT8 rnr_in_probe_2g = wlan_config_get_rnr_in_probe_rsp(wdev, RFIC_24GHZ);
+	UINT8 rnr_in_probe_5g = wlan_config_get_rnr_in_probe_rsp(wdev, RFIC_5GHZ);
+	UINT8 rnr_in_probe_6g = wlan_config_get_rnr_in_probe_rsp(wdev, RFIC_6GHZ);
+
+	/* RNR in Unsolicited Probe Rsp */
+	out_band_discovery_update(wdev, rnr_in_probe_2g, rnr_in_probe_5g, rnr_in_probe_6g);
+	return;
+}
+#endif /* defined(CONFIG_AP_SUPPORT) && defined(DOT11_HE_AX) && defined(CONFIG_6G_SUPPORT) */
+
 VOID ap_set_wireless_non_txbss_idx(VOID *ad, VOID *param)
 {
 #ifdef DOT11_HE_AX
@@ -385,6 +455,10 @@ VOID ap_set_wireless_bss_configs(
 	set_ap_wireless(ad, "num_users_ofdma", wdev);
 	set_ap_wireless(ad, "non_tx_bss_idx", wdev);
 	set_ap_wireless(ad, "mu_edca_override", wdev);
+#ifdef CONFIG_6G_SUPORT
+	set_ap_wireless(ad, "act_ind_unsolicit_probe_rsp", wdev);
+	set_ap_wireless(ad, "ap6g_discovery_apply", wdev);
+#endif /* CONFIG_6G_SUPORT */
 #endif /*DOT11_HE_AX*/
 }
 
@@ -566,6 +640,80 @@ VOID ap_set_rfeature_he_gi(VOID *ad, VOID *param)
 #endif /*DOT11_HE_AX*/
 	return;
 }
+
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+VOID ap_set_he_fixed_gi_ltf_by_wcid_or_bss(RTMP_ADAPTER *pAd, UINT8 gi, UINT8 mode, UINT32 wcid, struct wifi_dev *wdev)
+{
+	UINT32 u_wcid = CAPI_ALL_STA;
+	UINT32 startWcid = 0;
+	MAC_TABLE_ENTRY *pEntry = NULL;
+	MAC_TABLE *pMacTable = NULL;
+	struct wifi_dev *entry_wdev = NULL;
+	UINT16 max_sta_num = 0;
+	UINT8 ltf = gi;
+	UINT8 he_gi[CAPI_HE_GI_NUM] = {
+		((GI_08_US << BW20_HE_GI_SHIFT)|(GI_08_US << BW40_HE_GI_SHIFT)|(GI_08_US << BW80_HE_GI_SHIFT)|(GI_08_US << BW160_HE_GI_SHIFT)),
+		((GI_16_US << BW20_HE_GI_SHIFT)|(GI_16_US << BW40_HE_GI_SHIFT)|(GI_16_US << BW80_HE_GI_SHIFT)|(GI_16_US << BW160_HE_GI_SHIFT)),
+		((GI_32_US << BW20_HE_GI_SHIFT)|(GI_32_US << BW40_HE_GI_SHIFT)|(GI_32_US << BW80_HE_GI_SHIFT)|(GI_32_US << BW160_HE_GI_SHIFT)),
+	};
+	UINT8 he_ltf[CAPI_HE_LTF_NUM] = {
+		(LTF_2x << BW20_HE_LTF_SHIFT)|(LTF_2x << BW40_HE_LTF_SHIFT)|(LTF_2x << BW80_HE_LTF_SHIFT)|(LTF_2x << BW160_HE_LTF_SHIFT),
+		(LTF_2x << BW20_HE_LTF_SHIFT)|(LTF_2x << BW40_HE_LTF_SHIFT)|(LTF_2x << BW80_HE_LTF_SHIFT)|(LTF_2x << BW160_HE_LTF_SHIFT),
+		(LTF_4x << BW20_HE_LTF_SHIFT)|(LTF_4x << BW40_HE_LTF_SHIFT)|(LTF_4x << BW80_HE_LTF_SHIFT)|(LTF_4x << BW160_HE_LTF_SHIFT),
+	};
+	PCHAR gi_ltf_info[3] = {
+	"GI_08_US + LTF_2x",
+	"GI_16_US + LTF_2x",
+	"GI_32_US + LTF_4x"
+	};
+
+	MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_TRACE, "Enter.\n");
+	if (!pAd)
+		return;
+	if (gi >= GI_MASK) {
+		MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR, "Invalid gi value(%d)!!!.\n", gi);
+		return;
+	}
+
+	switch (mode) {
+		case GI_BY_WCID:
+			if (VALID_UCAST_ENTRY_WCID(pAd, wcid)) {
+				snd_ra_fw_cmd(RA_PARAM_GI_UPDATE, pAd, wcid, &he_gi[gi]);
+				snd_ra_fw_cmd(RA_PARAM_HELTF_UPDATE, pAd, wcid, &he_ltf[ltf]);
+				MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_TRACE,
+					"Set %s by wcid success.\n", gi_ltf_info[gi]);
+			}
+			else
+				MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_TRACE, "Invalid wcid value(%d)!!!.\n", wcid);
+			break;
+		case GI_BY_BSS:
+			if (!wdev) {
+				MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR, "Invalid wdev!!!.\n");
+				return;
+			}
+			pMacTable = &pAd->MacTab;
+			max_sta_num = HcGetMaxStaNum(pAd);
+			for (u_wcid = startWcid; VALID_UCAST_ENTRY_WCID(pAd, u_wcid); u_wcid++) {
+				pEntry = &pMacTable->Content[u_wcid];
+				if (u_wcid > max_sta_num)
+					break;
+				if (!(pEntry && (IS_ENTRY_CLIENT(pEntry))))
+					continue;
+				entry_wdev = pEntry->wdev;
+				if (!(entry_wdev && (entry_wdev == wdev)))
+					continue;
+				snd_ra_fw_cmd(RA_PARAM_GI_UPDATE, pAd, u_wcid, &he_gi[gi]);
+				snd_ra_fw_cmd(RA_PARAM_HELTF_UPDATE, pAd, wcid, &he_ltf[ltf]);
+			}
+			MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_TRACE,
+					"Set %s by BSS success.\n", gi_ltf_info[gi]);
+			break;
+		default:
+			MTWF_DBG(pAd, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR, "Wrong gi mode(%d)!!!.\n", mode);
+			break;
+	}
+}
+#endif
 
 VOID ap_set_rfeature_trig_txbf(VOID *ad, VOID *param)
 {
@@ -796,7 +944,7 @@ VOID sta_set_wireless_fixed_mcs_run_time(VOID *ad, VOID *param)
 	struct _MAC_TABLE_ENTRY *entry = (struct _MAC_TABLE_ENTRY *)param;
 	struct wifi_dev *wdev = NULL;
 	UINT8 mcs = CAPI_MCS_AUTO;
-	UINT32 wcid = CAPI_APCLI_STA;
+	UINT32 wcid;
 
 	if (!entry)
 		return;
@@ -882,13 +1030,25 @@ VOID sta_set_rfeature_ltf(VOID *ad, VOID *param)
 {
 #ifdef DOT11_HE_AX
 	struct _RTMP_ADAPTER *adapt = (struct _RTMP_ADAPTER *)ad;
-	UINT32 wcid = CAPI_APCLI_STA;
+	UINT32 wcid = 0;
 	UINT8 he_ltf[CAPI_HE_LTF_NUM] = {
 		(LTF_1x << BW20_HE_LTF_SHIFT)|(LTF_1x << BW40_HE_LTF_SHIFT)|(LTF_1x << BW80_HE_LTF_SHIFT)|(LTF_1x << BW160_HE_LTF_SHIFT),
 		(LTF_2x << BW20_HE_LTF_SHIFT)|(LTF_2x << BW40_HE_LTF_SHIFT)|(LTF_2x << BW80_HE_LTF_SHIFT)|(LTF_2x << BW160_HE_LTF_SHIFT),
 		(LTF_4x << BW20_HE_LTF_SHIFT)|(LTF_4x << BW40_HE_LTF_SHIFT)|(LTF_4x << BW80_HE_LTF_SHIFT)|(LTF_4x << BW160_HE_LTF_SHIFT),
 	};
 	UINT8 ltf = *((UINT8 *)param);
+
+	POS_COOKIE pObj = (POS_COOKIE) adapt->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(adapt, pObj->ioctl_if, pObj->ioctl_if_type);
+	MAC_TABLE_ENTRY *pEntry = NULL;
+
+	pEntry = GetAssociatedAPByWdev(adapt, wdev);
+	if (IS_ENTRY_NONE(pEntry)) {
+		MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"pEntry not found\n");
+		return;
+	}
+	wcid = pEntry->wcid;
 
 	if (ltf >= CAPI_HE_LTF_NUM)
 		return;
@@ -906,7 +1066,7 @@ VOID sta_set_rfeature_gi(VOID *ad, VOID *param)
 {
 #ifdef DOT11_HE_AX
 	struct _RTMP_ADAPTER *adapt = (struct _RTMP_ADAPTER *)ad;
-	UINT32 wcid = CAPI_APCLI_STA;
+	UINT32 wcid = 0;
 	UINT8 he_gi[CAPI_HE_GI_NUM] = {
 		((GI_08_US << BW20_HE_GI_SHIFT)|(GI_08_US << BW40_HE_GI_SHIFT)|(GI_08_US << BW80_HE_GI_SHIFT)|(GI_08_US << BW160_HE_GI_SHIFT)),
 		((GI_16_US << BW20_HE_GI_SHIFT)|(GI_16_US << BW40_HE_GI_SHIFT)|(GI_16_US << BW80_HE_GI_SHIFT)|(GI_16_US << BW160_HE_GI_SHIFT)),
@@ -914,8 +1074,24 @@ VOID sta_set_rfeature_gi(VOID *ad, VOID *param)
 	};
 	UINT8 gi = *((UINT8 *)param);
 
+	POS_COOKIE pObj = (POS_COOKIE) adapt->OS_Cookie;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(adapt, pObj->ioctl_if, pObj->ioctl_if_type);
+	MAC_TABLE_ENTRY *pEntry = NULL;
+
+	pEntry = GetAssociatedAPByWdev(adapt, wdev);
+	if (IS_ENTRY_NONE(pEntry)) {
+		MTWF_DBG(adapt, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"pEntry not found\n");
+		return;
+	}
+	wcid = pEntry->wcid;
+
+
+	if (gi >= CAPI_HE_GI_NUM)
+		return;
+
 	MTWF_LOG(DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_OFF,
-			("func:%s, arg:%d\n", __func__, gi));
+			("func:%s, arg:%d ra_setting=0x%08x\n", __func__, gi, he_gi[gi]));
 
 	/* EXT_CMD_STAREC_UPDATE,STA_REC_RA_UPDATE,RA_PARAM_GI_UPDATE */
 	snd_ra_fw_cmd(RA_PARAM_GI_UPDATE, adapt, wcid, &he_gi[gi]);

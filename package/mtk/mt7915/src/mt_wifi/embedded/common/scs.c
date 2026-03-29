@@ -67,8 +67,8 @@ int SCS_Set_FW_Offload(RTMP_ADAPTER *pAd, CMD_SMART_CARRIER_ENABLE Param)
 	AndesSendCmdMsg(pAd, msg);
 
 	error:
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s:(Ret = %d_\n", __func__, Ret));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "Ret = %d_\n", Ret);
 	return Ret;
 }
 
@@ -76,8 +76,8 @@ VOID SetSCS(RTMP_ADAPTER *pAd, UCHAR BandIdx, UINT32 value)
 {
 	CMD_SMART_CARRIER_ENABLE Param = {0};
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("%s(): BandIdx=%d, SCSEnable=%d\n", __func__, BandIdx, value));
+	MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		" BandIdx=%d, SCSEnable=%d\n", BandIdx, value);
 	if (value > 500) /* traffic threshold.*/
 		pAd->SCSCtrl.SCSTrafficThreshold[BandIdx] = value;
 	else if (value == SCS_DISABLE) {
@@ -146,10 +146,10 @@ static VOID scs_get_glo_addr_handler(struct cmd_msg *msg,
 	pEntry = (P_EVENT_GET_SCS_GLO_ADDR)rsp_payload;
 	pFwGlo = &pEntry->rGloInfo;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("%s:SCS_EVENT_GET_GLO_ADDR\n", __func__));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("eventId %u\n", pEntry->u4EventId));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"SCS_EVENT_GET_GLO_ADDR\n");
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"eventId %u\n", pEntry->u4EventId);
 
 	if (ops->check_scs_glo)
 		ops->check_scs_glo(pAd, (VOID *)pFwGlo);
@@ -162,16 +162,16 @@ static VOID scsEventDispatcher(struct cmd_msg *msg, char *rsp_payload,
 	char *pData = (rsp_payload);
 	UINT16 len = (rsp_payload_len);
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("%s: u4EventId = %u, len = %u\n", __func__, u4EventId, len));
+	MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 " u4EventId = %u, len = %u\n", u4EventId, len);
 #ifdef RT_BIG_ENDIAN
 	u4EventId = cpu2le32(u4EventId);
 #endif
 
 	switch (u4EventId) {
 	case SCS_EVENT_GET_GLO_ADDR:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s: SCS_EVENT_GET_GLO_ADDR\n", __func__));
+		MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 " SCS_EVENT_GET_GLO_ADDR\n");
 		scs_get_glo_addr_handler(msg, pData, len);
 		break;
 	default:
@@ -188,7 +188,7 @@ INT ShowScsGloAddr(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT32 cmd = SCS_GET_GLO_ADDR;
 	struct _CMD_ATTRIBUTE attr = {0};
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:", __func__));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "->");
 
 	/* Allocate memory for msg */
 	msg = AndesAllocCmdMsg(pAd, sizeof(cmd));
@@ -213,8 +213,8 @@ INT ShowScsGloAddr(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	AndesAppendCmdMsg(msg, (char *)&cmd, sizeof(cmd));
 	AndesSendCmdMsg(pAd, msg);
 error:
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("%s:(Ret = %d\n", __func__, Ret));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "Ret = %d\n", Ret);
 	return Ret;
 }
 
@@ -805,8 +805,8 @@ VOID SetSCS(RTMP_ADAPTER *pAd, UCHAR BandIdx, UINT32 value)
 {
 	UINT32 CrValue;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("%s(): BandIdx=%d, SCSEnable=%d\n", __func__, BandIdx, value));
+	MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"BandIdx=%d, SCSEnable=%d\n", BandIdx, value);
 	if (value > 500) /* traffic threshold.*/
 		pAd->SCSCtrl.SCSTrafficThreshold[BandIdx] = value;
 	else if (value == SCS_DISABLE) {

@@ -277,6 +277,7 @@ typedef struct __FT_TAB {
 		Keep the R1KH catch table on  Radio Off state for MBO-4.2.6(E) case to meet the R1KH miss case.
 	*/
 	BOOLEAN FT_RadioOff;
+	INT RadioOn;
 #endif /* FT_R1KH_KEEP */
 
 } FT_TAB, *PFT_TAB;

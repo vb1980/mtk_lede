@@ -88,7 +88,7 @@
 		};
 
 		factory: partition@100000 {
-			label = "factory";
+			label = "Factory";
 			reg = <0x100000 0x80000>;
 			read-only;
 		};
@@ -147,7 +147,6 @@
 	mtketh-wan = "eth1";
 	mtketh-ppd = "eth0";
 	mtketh-lan = "eth0";
-	ext-devices = "wlan0","wlan1","rax0","ra0", "rai0","apclii0","apclix0", "apcli0";
 	mtketh-max-gmac = <2>;
 	/delete-property/ mtkdsa-wan-port;
 };

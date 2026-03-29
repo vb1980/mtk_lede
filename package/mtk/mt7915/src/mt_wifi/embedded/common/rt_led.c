@@ -62,126 +62,6 @@ INT LED_Array[16][16] = {
 };
 #endif /* CONFIG_ANDES_SUPPORT */
 
-/*=============================================================================================
- *add by tw
- */
-void wps_led_on(void)
-{
-    int  nRet = -1;
-    char path[] = "/sbin/ledhelper.sh";
-    char *argv[] = {path, "platform_led_on green wps ", NULL};
-    char *envp[] = {"HOME=/", "TERM=linux", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};
-
-    nRet = call_usermodehelper(path, argv, envp, UMH_WAIT_EXEC);
-
-    MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("twSetLedStatus - wps_led_on - nRet=%d\n", nRet));
-}
-
-void wps_led_off(void)
-{
-    int  nRet = -1;
-    char path[] = "/sbin/ledhelper.sh";
-    char *argv[] = {path, "platform_led_off green wps ", NULL};
-    char *envp[] = {"HOME=/", "TERM=linux", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};
-
-    nRet = call_usermodehelper(path, argv, envp, UMH_WAIT_EXEC);
-    MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("twSetLedStatus - wps_led_off - nRet=%d\n", nRet));
-}
-
-void wps_led_blink(int delay_on, int delay_off)
-{
-    int  nRet = -1;
-    char path[] = "/sbin/ledhelper.sh";
-    char *argv[] = {path, NULL, NULL};
-    char *envp[] = {"HOME=/", "TERM=linux", "PATH=/sbin:/bin:/usr/sbin:/usr/bin", NULL};
-    char ledAction[128] = {0};
-
-    sprintf(ledAction, "platform_led_set_timer green wps %d %d", delay_on, delay_off);
-
-    argv[1] = ledAction;
-    nRet = call_usermodehelper(path, argv, envp, UMH_WAIT_EXEC);
-    MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("twSetLedStatus - wps_led_blink - nRet=%d\n", nRet));
-}
-
-struct work_struct work_wps_blink;
-struct work_struct work_wps_off;
-struct work_struct work_wps_on;
-int delay_on = 0;
-int delay_off = 0;
-UCHAR g_CurrentLinkStatus = 0xFF;
-
-void work_blink(struct work_struct *work)
-{
-    wps_led_blink(delay_on, delay_off);
-}
-
-void work_on(struct work_struct *work)
-{
-    wps_led_on();
-}
-
-void work_off(struct work_struct *work)
-{
-    wps_led_off();
-}
-
-void workqueue_inits(void)
-{
-    INIT_WORK(&work_wps_blink, work_blink);
-    INIT_WORK(&work_wps_off, work_off);
-    INIT_WORK(&work_wps_on, work_on);
-}
-
-void twSetLedStatus(UCHAR LinkStatus)
-{
-    MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-             ("twSetLedStatus - LinkStatus[0x%x] g_CurrentLinkStatus[0x%x]\n", LinkStatus, g_CurrentLinkStatus));
-    if (g_CurrentLinkStatus == LinkStatus)
-    {
-        return;
-    }
-    g_CurrentLinkStatus = LinkStatus;
-
-#ifdef WSC_INCLUDED
-#ifdef WSC_LED_SUPPORT
-    switch (LinkStatus)
-    {
-        case LINK_STATUS_WPS_IN_PROCESS:
-            delay_on = 500;
-            delay_off = 500;
-            schedule_work(&work_wps_blink);
-            break;
-        case LINK_STATUS_WPS_ERROR:
-            delay_on = 100;
-            delay_off = 100;
-            schedule_work(&work_wps_blink);
-            break;
-        case LINK_STATUS_WPS_SETUP_LOCKED:
-            delay_on = 200;
-            delay_off = 200;
-            schedule_work(&work_wps_blink);
-            break;
-        case LINK_STATUS_WPS_SESSION_OVERLAP_DETECTED:
-            delay_on = 100;
-            delay_off = 100;
-            schedule_work(&work_wps_blink);
-            break;
-        case LINK_STATUS_WPS_TURN_LED_OFF:
-        case LINK_STATUS_NORMAL_CONNECTION_WITHOUT_SECURITY:
-            schedule_work(&work_wps_off);
-            break;
-        case LINK_STATUS_NORMAL_CONNECTION_WITH_SECURITY:
-            schedule_work(&work_wps_on);
-            break;
-        default:
-            break;
-    }
-
-#endif /* WSC_LED_SUPPORT */
-#endif /* WSC_INCLUDED */
-}
-/*=============================================================================================*/
-
 /*
 	========================================================================
 
@@ -241,7 +121,7 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 		LedMode = 1;
 #if defined(WSC_INCLUDED) && defined(WSC_LED_SUPPORT)
 
-		if (Status > LED_WPS_SETUP_LOCKED)
+		if (Status > LED_WPS_SUCCESS)
 #else
 		if (Status > LED_POWER_UP)
 #endif /* defined(WSC_INCLUDED) && defined(WSC_LED_SUPPORT) */
@@ -276,6 +156,7 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 
 	case LED_HALT:
 		LedMode = 0; /* Driver sets MAC register and MAC controls LED */
+		/* fallthrough */
 
 	case LED_RADIO_OFF:
 		LinkStatus = LINK_STATUS_RADIO_OFF;
@@ -323,11 +204,6 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 
 			pWscControl->WscLEDMode = LED_WPS_ERROR;
 			pWscControl->WscLastWarningLEDMode = LED_WPS_ERROR;
-			if (LED_MODE(pAd) == WPS_LED_MODE_13)
-			{
-				/* Reset the WPS error LED pattern after 5 seconds. */
-				RTMPSetTimer(&pWscControl->WscLEDTimer, WSC_WPS_TURN_OFF_LED_TIMEOUT_5SEC);
-			}
 		} else
 			bIgnored = TRUE;
 
@@ -339,11 +215,6 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 			MCUCmd = MCU_SET_WPS_LED_MODE;
 			pWscControl->WscLEDMode = LED_WPS_SESSION_OVERLAP_DETECTED;
 			pWscControl->WscLastWarningLEDMode = LED_WPS_SESSION_OVERLAP_DETECTED;
-			if (LED_MODE(pAd) == WPS_LED_MODE_13)
-			{
-				/* Turn off the WPS error LED pattern after 1 seconds. */
-				RTMPSetTimer(&pWscControl->WscLEDTimer, WSC_WPS_TURN_OFF_LED_TIMEOUT);
-			}
 		} else
 			bIgnored = TRUE;
 
@@ -382,14 +253,6 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 				pWscControl->WscLEDMode = LED_WPS_SUCCESS;
 				/* Turn off the WPS successful LED pattern after 300 seconds. */
 				RTMPSetTimer(&pWscControl->WscLEDTimer, WSC_SUCCESSFUL_LED_PATTERN_TIMEOUT);
-			}
-			else if (LED_MODE(pAd) == WPS_LED_MODE_13) { /* The WPS LED mode 13. */
-				if (ApHasSecuritySetting(pAd)) { /* The WPS AP has the security setting. */
-						LinkStatus = LINK_STATUS_NORMAL_CONNECTION_WITH_SECURITY;
-				}
-				else{
-						LinkStatus = LINK_STATUS_NORMAL_CONNECTION_WITHOUT_SECURITY;
-				}
 			} else {
 				MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: LED_WPS_SUCCESS (Incorrect LED mode = %d)\n",
 						 __func__, LED_MODE(pAd)));
@@ -405,14 +268,6 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 			LinkStatus = LINK_STATUS_WPS_TURN_LED_OFF;
 			MCUCmd = MCU_SET_WPS_LED_MODE;
 			pWscControl->WscLEDMode = LED_WPS_TURN_LED_OFF;
-			if (LED_MODE(pAd) == WPS_LED_MODE_13)
-			{
-				if (pWscControl->WscLastWarningLEDMode == LED_WPS_SESSION_OVERLAP_DETECTED)
-				{
-					/* Reset the WPS LED_WPS_SESSION_OVERLAP_DETECTED LED pattern after 0.5 seconds. */
-					RTMPSetTimer(&pWscControl->WscLEDTimer, WSC_WPS_TURN_OFF_LED_TIMEOUT_500MS);
-				}
-			}
 		} else
 			bIgnored = TRUE;
 
@@ -482,15 +337,6 @@ VOID RTMPSetLEDStatus(RTMP_ADAPTER *pAd, UCHAR Status, UCHAR BandIdx)
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("RTMPSetLED::Unknown Status 0x%x\n", Status));
 		break;
 	}
-
-#ifdef WSC_INCLUDED
-#ifdef WSC_LED_SUPPORT
-    if (LED_MODE(pAd) == WPS_LED_MODE_13)
-    {
-        twSetLedStatus(LinkStatus);
-    }
-#endif /* WSC_LED_SUPPORT */
-#endif /* WSC_INCLUDED */
 
 	if (IS_MT7615(pAd) || IS_MT7663(pAd) || IS_MT7626(pAd) || IS_MT7915(pAd)) {
 		if (Status == LED_RADIO_OFF) {
@@ -727,8 +573,6 @@ void RTMPInitLEDMode(IN RTMP_ADAPTER *pAd)
 #endif /* RTMP_MAC_PCI */
 	}
 
-	pLedCntl->MCULedCntl.word = 0x0d00 >> 8;
-
 	AsicSendCommandToMcu(pAd, MCU_SET_LED_AG_CFG, 0xff, (UCHAR)pLedCntl->LedAGCfg, (UCHAR)(pLedCntl->LedAGCfg >> 8), FALSE);
 	AsicSendCommandToMcu(pAd, MCU_SET_LED_ACT_CFG, 0xff, (UCHAR)pLedCntl->LedACTCfg, (UCHAR)(pLedCntl->LedACTCfg >> 8), FALSE);
 	AsicSendCommandToMcu(pAd, MCU_SET_LED_POLARITY, 0xff, (UCHAR)pLedCntl->LedPolarity, (UCHAR)(pLedCntl->LedPolarity >> 8), FALSE);
@@ -736,8 +580,6 @@ void RTMPInitLEDMode(IN RTMP_ADAPTER *pAd)
 	pAd->LedCntl.LedIndicatorStrength = 0xFF;
 	RTMPSetSignalLED(pAd, -100);	/* Force signal strength Led to be turned off, before link up */
 	RTMPStartLEDMode(pAd);
-
-    workqueue_inits();
 
 #if defined(MT7915)
 	/*led init setting*/

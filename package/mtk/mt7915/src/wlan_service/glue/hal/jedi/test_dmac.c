@@ -96,7 +96,8 @@ s_int32 mt_test_mac_restore_cr(
 s_int32 mt_test_mac_set_ampdu_ba_limit(
 	struct test_wlan_info *winfos,
 	u_int8 wmm_idx,
-	u_int8 agg_limit)
+	u_int8 agg_limit,
+	u_char band_idx)
 {
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(winfos->hdev_ctrl);
 	RTMP_ADAPTER *ad = NULL;
@@ -107,7 +108,7 @@ s_int32 mt_test_mac_set_ampdu_ba_limit(
 		return SERV_STATUS_HAL_MAC_INVALID_PAD;
 
 	if (ops->set_ba_limit)
-		ops->set_ba_limit(ad, wmm_idx, agg_limit);
+		ops->set_ba_limit(ad, wmm_idx, agg_limit, band_idx);
 	else
 		return SERV_STATUS_HAL_MAC_INVALID_CHIPOPS;
 

@@ -20,14 +20,21 @@
 #include <string.h>
 #include <stdlib.h>
 
-
+#ifdef CONFIG_MT76XX_COMBO_DUAL_DRIVER_SUPPORT
+#define PATH_OF_MCU_BIN_IN "/../bin/"
+#define PATH_OF_MCU_BIN_OUT "/embedded/include/mcu/"
+#define PATH_OF_EEPROM_IN "/../bin/"
+#define PATH_OF_EEPROM_OUT "/embedded/include/eeprom/"
+#define PATH_OF_ROM_PATCH_IN "/../bin/"
+#define PATH_OF_ROM_PATCH_OUT "/embedded/include/mcu/"
+#else /* CONFIG_MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
 #define PATH_OF_MCU_BIN_IN "/bin/"
 #define PATH_OF_MCU_BIN_OUT "/embedded/include/mcu/"
 #define PATH_OF_EEPROM_IN "/bin/"
 #define PATH_OF_EEPROM_OUT "/embedded/include/eeprom/"
 #define PATH_OF_ROM_PATCH_IN "/bin/"
 #define PATH_OF_ROM_PATCH_OUT "/embedded/include/mcu/"
-
+#endif /* !CONFIG_MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
 
 int bin2h(char *infname, char *outfname, char *fw_name, const char *mode)
 {

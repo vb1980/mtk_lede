@@ -102,12 +102,11 @@ HeraConfigStbcPriority(
 	rHeraStbcPriority.u1Operation = u1Operation;
 	rHeraStbcPriority.u1StbcPriority = u1StbcPriority;
 
-	MTWF_LOG(DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-					("%s: u1BandIdx = %u, u1Operation=%u, u1StbcPriority = %u\n",
-					__func__,
+	MTWF_DBG(pAd, DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					"u1BandIdx = %u, u1Operation=%u, u1StbcPriority = %u\n",
 					rHeraStbcPriority.u1BandIdx,
 					rHeraStbcPriority.u1Operation,
-					rHeraStbcPriority.u1StbcPriority));
+					rHeraStbcPriority.u1StbcPriority);
 
 	AsicHeraStbcPriorityCtrl(pAd, (PUINT8)&rHeraStbcPriority);
 }
@@ -130,11 +129,10 @@ HeraInitStbcPriority(
 		u1BandIdx = pRadioCtrl->BandIdx;
 		u1StbcPriority = pAd->CommonCfg.HeraStbcPriority[u1BandIdx];
 
-		MTWF_LOG(DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-						("%s: u1BandIdx = %u, u1StbcPriority = %u\n",
-						__func__,
+		MTWF_DBG(pAd, DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+						"u1BandIdx = %u, u1StbcPriority = %u\n",
 						u1BandIdx,
-						u1StbcPriority));
+						u1StbcPriority);
 
 		HeraConfigStbcPriority(pAd, u1BandIdx, HERA_STBC_PRIORITY_OP_SET, u1StbcPriority);
 	}
@@ -158,8 +156,7 @@ INT Set_Hera_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		goto error;
 
 	u4Action = u4Input[0];
-	MTWF_LOG(DBG_CAT_BF, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("%s: u4Action = %u\n", __func__, u4Action));
+	MTWF_PRINT("%s: u4Action = %u\n", __func__, u4Action);
 
 	switch (u4Action) {
 	case HERA_PROC_ACTION_STBC_PRIORITY:
@@ -173,15 +170,15 @@ INT Set_Hera_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	return TRUE;
 
 error:
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Wrong Cmd Format. Plz input:\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("iwpriv ra0 set hera=[0]-[1]-[2]-[3]\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  [0]=0: STBC Priority Configuration:\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("      hera=0-[1]-[2]-[3]\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("             [1]: Band Index (0, 1)\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("                 [2]: Operation (0: Get, 1: Set)\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("                     [3]: STBC Priority (0: < IBF, 1: > IBF, 2: > EBF. Used when Operation=Set)\n"));
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("  [0]=Others: TBD\n"));
+	MTWF_PRINT("Wrong Cmd Format. Plz input:\n");
+	MTWF_PRINT("iwpriv ra0 set hera=[0]-[1]-[2]-[3]\n");
+	MTWF_PRINT("[0]=0: STBC Priority Configuration:\n");
+	MTWF_PRINT("	hera=0-[1]-[2]-[3]\n");
+	MTWF_PRINT("	[1]: Band Index (0, 1)\n");
+	MTWF_PRINT("	[2]: Operation (0: Get, 1: Set)\n");
+	MTWF_PRINT("	[3]: STBC Priority\n");
+	MTWF_PRINT("		(0: < IBF, 1: > IBF, 2: > EBF. Used when Operation=Set)\n");
+	MTWF_PRINT("[0]=Others: TBD\n");
 	return FALSE;
 }
 
@@ -207,16 +204,20 @@ raWrapperEntrySet(
 		__func__, pEntry->wcid));
 	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): sup_rate_mode: 0x%x, sup_cck_mcs: 0x%x, sup_ofdm_mcs: 0x%x\n",
 		__func__, pEntry->SupportRateMode, pEntry->SupportCCKMCS, pEntry->SupportOFDMMCS));
+
 #ifdef DOT11_N_SUPPORT
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): sup_ht_mcs: 0x%x\n",
-		__func__, pEntry->SupportHTMCS));
+	MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+		"sup_ht_mcs: 0x%x\n",
+		pEntry->SupportHTMCS);
 #ifdef DOT11_VHT_AC
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): sup_vht_mcs(1ss-2ss-3ss-4ss): 0x%x-0x%x-0x%x-0x%x\n",
-		__func__, pEntry->SupportVHTMCS1SS, pEntry->SupportVHTMCS2SS, pEntry->SupportVHTMCS3SS, pEntry->SupportVHTMCS4SS));
+	MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+		"sup_vht_mcs(1ss-2ss-3ss-4ss): 0x%x-0x%x-0x%x-0x%x\n",
+		pEntry->SupportVHTMCS1SS, pEntry->SupportVHTMCS2SS,
+		pEntry->SupportVHTMCS3SS, pEntry->SupportVHTMCS4SS);
 #endif /* DOT11_VHT_AC */
 #endif /* DOT11_N_SUPPORT */
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): ---------------------------------------------------------------------\n",
-		__func__));
+	MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+		"----------------------------------------------------------\n");
 
 	pRaEntry->u2Wcid = pEntry->wcid;
 	pRaEntry->fgAutoTxRateSwitch = pEntry->bAutoTxRateSwitch;
@@ -811,8 +812,7 @@ APQuickResponeForRateUpExec(
 #endif /* MT_MAC */
 
 		/* Do nothing if this entry didn't change */
-		if (pEntry->LastSecTxRateChangeAction == RATE_NO_CHANGE
-		   )
+		if (pEntry->LastSecTxRateChangeAction == RATE_NO_CHANGE)
 			continue;
 	}
 }
@@ -834,11 +834,8 @@ APQuickResponeForRateUpExec(
 VOID MlmeDynamicTxRateSwitching(
 	IN PRTMP_ADAPTER pAd)
 {
-	ULONG i, TxTotalCnt;
+	ULONG i;
 	MAC_TABLE_ENTRY *pEntry;
-	TX_STA_CNT1_STRUC StaTx1;
-	TX_STA_CNT0_STRUC TxStaCnt0;
-	ULONG TxRetransmit = 0, TxSuccess = 0, TxFailCount = 0;
 	UINT32 ret;
 #ifdef CONFIG_ATE
 
@@ -850,17 +847,13 @@ VOID MlmeDynamicTxRateSwitching(
 #ifdef CONFIG_STA_SUPPORT
 	for (i = 0; i < pAd->MSTANum; i++)
 		if ((pAd->StaCfg[i].wdev.DevInfo.WdevActive) && (pAd->StaCfg[i].PwrMgmt.bDoze)) {
-			MTWF_LOG(DBG_CAT_PS, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(%d): H/W in PM4, return\n", __func__, __LINE__));
+			MTWF_DBG(pAd, DBG_CAT_PS, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				"H/W in PM4, return\n");
 			return;
 		}
 #endif /* CONFIG_STA_SUPPORT */
 
 	RTMP_SEM_EVENT_WAIT(&pAd->AutoRateLock, ret);
-	/* Update statistic counter */
-	TxRetransmit = StaTx1.field.TxRetransmit;
-	TxSuccess = StaTx1.field.TxSuccess;
-	TxFailCount = TxStaCnt0.field.TxFailCount;
-	TxTotalCnt = TxRetransmit + TxSuccess + TxFailCount;
 
 	/* walk through MAC table, see if need to change AP's TX rate toward each entry */
 	for (i = 1; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
@@ -967,8 +960,7 @@ StaQuickResponeForRateUpExec(
 #endif /* MT_MAC */
 
 		/* Do nothing if this entry didn't change */
-		if (pEntry->LastSecTxRateChangeAction == RATE_NO_CHANGE
-		   )
+		if (pEntry->LastSecTxRateChangeAction == RATE_NO_CHANGE)
 			continue;
 	}
 }
@@ -1014,9 +1006,8 @@ VOID RTMPSetSupportMCS(
 			UCHAR RateDefault[8] = {0x82, 0x84, 0x8b, 0x96, 0x12, 0x24, 0x48, 0x6c};
 
 			os_move_mem(sum_rate, RateDefault, 8);
+			MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_WARN, "wrong SUPP RATES., Len=%d\n", sup_rate_len);
 			sup_rate_len = 8;
-			MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():wrong SUPP RATES., Len=%d\n",
-					 __func__, sup_rate_len));
 		}
 	}
 
@@ -1024,8 +1015,8 @@ VOID RTMPSetSupportMCS(
 		if ((sup_rate_len + ext_rate_len) <= MAX_LEN_OF_SUPPORTED_RATES) {
 			os_move_mem(&sum_rate[sup_rate_len], ext_rate, ext_rate_len);
 			sum_rate_len += ext_rate_len;
-		} else {
-			os_move_mem(&sum_rate[sup_rate_len], ext_rate, MAX_LEN_OF_SUPPORTED_RATES - ext_rate_len);
+		} else if (sup_rate_len < MAX_LEN_OF_SUPPORTED_RATES) {
+			os_move_mem(&sum_rate[sup_rate_len], ext_rate, MAX_LEN_OF_SUPPORTED_RATES - sup_rate_len);
 			sum_rate_len = MAX_LEN_OF_SUPPORTED_RATES;
 		}
 	}
@@ -1042,10 +1033,10 @@ VOID RTMPSetSupportMCS(
 #endif /* DOT11_VHT_AC */
 	pEntry->SupportRateMode = 0;
 
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): sum_rate_len: %d,  sum_rate: ", __func__, sum_rate_len));
+	MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, "sum_rate_len: %d,  sum_rate: ", sum_rate_len);
 	for (idx = 0; idx < sum_rate_len; idx++)
-		MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("0x%x ", sum_rate[idx]));
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("\n"));
+		MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, "0x%x ", sum_rate[idx]);
+	MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_INFO, "\n");
 
 	for (idx = 0; idx < sum_rate_len; idx++) {
 		switch ((sum_rate[idx] & 0x7F) * 5) {
@@ -1159,13 +1150,14 @@ VOID RTMPSetSupportMCS(
 #ifdef DOT11_VHT_AC
 
 		if (has_vht_cap && (vht_cap != NULL) && pDesired_ht_phy->bVhtEnable) {
+			UINT8 nTxStream = wlan_operate_get_tx_stream(pEntry->wdev);
 			/* Currently we only support for MCS0~MCS7, so don't check mcs_map */
 			pEntry->SupportVHTMCS1SS = 0;
 			pEntry->SupportVHTMCS2SS = 0;
 			pEntry->SupportVHTMCS3SS = 0;
 			pEntry->SupportVHTMCS4SS = 0;
 
-			for (j = wlan_operate_get_tx_stream(pEntry->wdev); j > 0; j--) {
+			for (j = nTxStream; j <= 4; j--) {
 				switch (j) {
 				case 1:
 					if (vht_cap->mcs_set.rx_mcs_map.mcs_ss1 < VHT_MCS_CAP_NA) {

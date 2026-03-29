@@ -163,7 +163,7 @@ NDIS_STATUS  dumpIPv6MacTb(
 
 		while (pHead) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("IPv6Mac[%d]:\n", startIdx));
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\t:IPv6=%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x,Mac=%02x:%02x:%02x:%02x:%02x:%02x, lastTime=0x%lx, next=%p\n"
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("\t:IPv6=%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x,Mac="MACSTR", lastTime=0x%lx, next=%p\n"
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[0])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[1])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[2])
@@ -172,8 +172,7 @@ NDIS_STATUS  dumpIPv6MacTb(
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[5])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[6])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[7])
-					, pHead->macAddr[0], pHead->macAddr[1], pHead->macAddr[2]
-					, pHead->macAddr[3], pHead->macAddr[4], pHead->macAddr[5], pHead->lastTime, pHead->pNext));
+					, MAC2STR(pHead->macAddr), pHead->lastTime, pHead->pNext));
 			pHead = pHead->pNext;
 		}
 	}
@@ -227,7 +226,8 @@ static NDIS_STATUS IPv6MacTableUpdate(
 					pPrev = NULL;
 				}
 				pEntry = (pPrev == NULL ? NULL : pPrev->pNext);
-				pMatCfg->nodeCount--;
+				if (pMatCfg->nodeCount > 0)
+					pMatCfg->nodeCount--;
 			} else {
 				pPrev = pEntry;
 				pEntry = pEntry->pNext;
@@ -398,8 +398,12 @@ static PNDIS_PACKET ICMPv6_Handle_Tx(
 
 	pIPv6Hdr = (RT_IPV6_HDR *)pLayerHdr;
 	payloadLen = OS_NTOHS(pIPv6Hdr->payload_len);
+	if (payloadLen > (1500 - IPV6_HDR_LEN))
+		return newSkb;
 	pICMPv6Hdr = (RT_ICMPV6_HDR *)(pLayerHdr + offset);
 	ICMPOffset = offset;
+	if (ICMPOffset > IPV6_HDR_LEN)
+		ICMPOffset = IPV6_HDR_LEN;
 	ICMPMsgLen = payloadLen + IPV6_HDR_LEN - ICMPOffset;
 	leftLen = ICMPMsgLen;
 
@@ -724,6 +728,8 @@ VOID getIPv6MacTbInfo(
 	IPv6MacMappingEntry *pHead;
 	int startIdx, endIdx;
 	char Ipv6str[40] = {0};
+	int ret;
+	ULONG str_tmp_len;
 
 	pIPv6MacTable = (IPv6MacMappingTable *)pMatCfg->MatTableSet.IPv6MacTable;
 
@@ -735,8 +741,19 @@ VOID getIPv6MacTbInfo(
 	/* dump all. */
 	startIdx = 0;
 	endIdx = MAT_MAX_HASH_ENTRY_SUPPORT;
-	sprintf(pOutBuf, "\n");
-	sprintf(pOutBuf + strlen(pOutBuf), "%-40s%-20s\n", "IP", "MAC");
+	ret = snprintf(pOutBuf, BufLen, "\n");
+	if (os_snprintf_error(BufLen, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
+	str_tmp_len = BufLen - strlen(pOutBuf);
+	ret = snprintf(pOutBuf + strlen(pOutBuf), str_tmp_len, "%-40s%-20s\n", "IP", "MAC");
+	if (os_snprintf_error(str_tmp_len, ret)) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+		return;
+	}
 
 	for (; startIdx < endIdx; startIdx++) {
 		pHead = pIPv6MacTable->hash[startIdx];
@@ -747,7 +764,7 @@ VOID getIPv6MacTbInfo(
 				break;
 
 			NdisZeroMemory(Ipv6str, 40);
-			sprintf(Ipv6str, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x"
+			ret = snprintf(Ipv6str, 40, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x"
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[0])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[1])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[2])
@@ -756,9 +773,21 @@ VOID getIPv6MacTbInfo(
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[5])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[6])
 					, OS_NTOHS((*((RT_IPV6_ADDR *)(&pHead->ipv6Addr[0]))).ipv6_addr16[7]));
-			sprintf(pOutBuf + strlen(pOutBuf), "%-40s%02x:%02x:%02x:%02x:%02x:%02x\n",
+			if (os_snprintf_error(40, ret)) {
+				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+			str_tmp_len = BufLen - strlen(pOutBuf);
+			ret = snprintf(pOutBuf + strlen(pOutBuf),
+					str_tmp_len, "%-40s%02x:%02x:%02x:%02x:%02x:%02x\n",
 					Ipv6str, pHead->macAddr[0], pHead->macAddr[1], pHead->macAddr[2],
 					pHead->macAddr[3], pHead->macAddr[4], pHead->macAddr[5]);
+			if (os_snprintf_error(str_tmp_len, ret)) {
+				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
 			pHead = pHead->pNext;
 		}
 	}

@@ -4840,7 +4840,7 @@ int BN_mod_exp_recp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
 		 * a window to do.  To do this we need to scan forward until the last
 		 * set bit before the end of the window
 		 */
-		j = wstart;
+
 		wvalue = 1;
 		wend = 0;
 
@@ -5025,7 +5025,7 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 		 * a window to do.  To do this we need to scan forward until the last
 		 * set bit before the end of the window
 		 */
-		j = wstart;
+
 		wvalue = 1;
 		wend = 0;
 
@@ -6000,7 +6000,7 @@ int BN_mod_exp_simple(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
 		 * a window to do.  To do this we need to scan forward until the last
 		 * set bit before the end of the window
 		 */
-		j = wstart;
+
 		wvalue = 1;
 		wend = 0;
 

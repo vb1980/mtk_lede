@@ -51,8 +51,8 @@ VOID RT28xx_WDS_Init(VOID *pAd, UCHAR band_idx, PNET_DEV net_dev)
 	netDevOpHook.ioctl = rt28xx_ioctl;
 	netDevOpHook.get_stats = RT28xx_get_wds_ether_stats;
 	NdisMoveMemory(&netDevOpHook.devAddr[0], RTMP_OS_NETDEV_GET_PHYADDR(net_dev), MAC_ADDR_LEN);
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("The new WDS interface MAC = %02X:%02X:%02X:%02X:%02X:%02X\n",
-			 PRINT_MAC(netDevOpHook.devAddr)));
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("The new WDS interface MAC = "MACSTR"\n",
+			 MAC2STR(netDevOpHook.devAddr)));
 	RTMP_AP_IoctlHandle(pAd, NULL, CMD_RTPRIV_IOCTL_WDS_INIT,
 						0, &netDevOpHook, band_idx);
 }

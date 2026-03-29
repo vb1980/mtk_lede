@@ -61,6 +61,7 @@ VOID he_cfg_init(struct he_cfg *obj)
 	obj->ofdma_usr_num = 0;
 	obj->non_tx_bss_idx = 0;
 	obj->ofdma_dir = 0;
+	obj->gi = GI_AUTO;
 	he_cfg_mu_edca_init(&obj->mu_edca_param_set);
 }
 
@@ -83,6 +84,20 @@ VOID wlan_config_set_he_bw(struct wifi_dev *wdev, UINT8 he_bw)
 	}
 
 	cfg->he_conf.bw = he_bw;
+}
+
+VOID wlan_config_set_he_gi(struct wifi_dev *wdev, UINT8 he_gi)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	if (!cfg) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: cfg NULL\n", __func__));
+		return;
+	}
+
+	cfg->he_conf.gi = he_gi;
+	wdev->HEPhyMode.field.ShortGI = he_gi;
 }
 
 VOID wlan_config_set_he_txop_dur_rts_thld(struct wifi_dev *wdev, UINT32 txop_dur_thld)
@@ -279,6 +294,61 @@ VOID wlan_config_set_ofdma_direction(struct wifi_dev *wdev, UINT8 ofdma_dir)
 	cfg->he_conf.ofdma_dir = ofdma_dir;
 }
 
+#ifdef CONFIG_6G_SUPPORT
+VOID wlan_config_set_unsolicit_tx_by_cfg(struct wifi_dev *wdev, UINT8 by_cfg)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.unsolicit_tx_by_cfg = by_cfg;
+}
+
+VOID wlan_config_set_unsolicit_tx_type(struct wifi_dev *wdev, UINT8 tx_type)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.unsolicit_tx_type = tx_type;
+}
+
+VOID wlan_config_set_unsolicit_tx_mode(struct wifi_dev *wdev, UINT8 tx_mode)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.unsolicit_tx_mode = tx_mode;
+}
+
+VOID wlan_config_set_unsolicit_tx_tu(struct wifi_dev *wdev, UINT8 tx_tu)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.unsolicit_tx_tu = tx_tu;
+}
+
+VOID wlan_config_set_qos_tx_tu(struct wifi_dev *wdev, UINT8 tx_tu)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.qos_tx_tu = tx_tu;
+}
+
+VOID wlan_config_set_qos_tx_state(struct wifi_dev *wdev, UINT8 state)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.qos_tx_state = state;
+}
+
+VOID wlan_config_set_rnr_in_probe_rsp(
+	struct wifi_dev *wdev, UINT8 rnr_2g, UINT8 rnr_5g, UINT8 rnr_6g
+)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	cfg->he_conf.ap6g.rnr_in_probe_2g = rnr_2g;
+	cfg->he_conf.ap6g.rnr_in_probe_5g = rnr_5g;
+	cfg->he_conf.ap6g.rnr_in_probe_6g = rnr_6g;
+}
+#endif
+
 /*
  * GET function
  */
@@ -417,7 +487,6 @@ UINT8 wlan_config_get_he_rx_nss(struct wifi_dev *wdev)
 UINT16 wlan_config_get_he_txop_dur_rts_thld(struct wifi_dev *wdev)
 {
 	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
-	UINT16 txop_duration = DISABLE_TXOP_DURATION_RTS_THRESHOLD;
 
 	if (!cfg) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -426,9 +495,7 @@ UINT16 wlan_config_get_he_txop_dur_rts_thld(struct wifi_dev *wdev)
 	}
 
 	/* unit 32us, 1023 indicate disable */
-	txop_duration = cfg->he_conf.txop_duration;
-
-	return txop_duration;
+	return cfg->he_conf.txop_duration;
 }
 
 #ifdef WIFI_TWT_SUPPORT
@@ -566,4 +633,73 @@ UINT8 wlan_config_get_mu_ul_mimo(struct wifi_dev *wdev)
 	}
 
 	return cfg->phy_conf.mu_ul_mimo;
+}
+
+#ifdef CONFIG_6G_SUPPORT
+UINT8 wlan_config_get_unsolicit_tx_tu(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.unsolicit_tx_tu;
+}
+
+UINT8 wlan_config_get_unsolicit_tx_mode(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.unsolicit_tx_mode;
+}
+
+UINT8 wlan_config_get_unsolicit_tx_by_cfg(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.unsolicit_tx_by_cfg;
+}
+
+UINT8 wlan_config_get_unsolicit_tx_type(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.unsolicit_tx_type;
+}
+
+UINT8 wlan_config_get_qos_tx_state(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.qos_tx_state;
+}
+
+UINT8 wlan_config_get_qos_tx_tu(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	return cfg->he_conf.ap6g.qos_tx_tu;
+}
+
+UINT8 wlan_config_get_rnr_in_probe_rsp(struct wifi_dev *wdev, UCHAR rf_mode)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+	UINT8 rnr_in_probe;
+
+	if (rf_mode == RFIC_6GHZ)
+		rnr_in_probe = cfg->he_conf.ap6g.rnr_in_probe_6g;
+	else if (rf_mode == RFIC_5GHZ)
+		rnr_in_probe = cfg->he_conf.ap6g.rnr_in_probe_5g;
+	else
+		rnr_in_probe = cfg->he_conf.ap6g.rnr_in_probe_2g;
+
+	return rnr_in_probe;
+}
+#endif /* CONFIG_6G_SUPPORT */
+
+UCHAR wlan_config_get_he_gi(struct wifi_dev *wdev)
+{
+	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
+
+	if (cfg)
+		return cfg->he_conf.gi;
+	else
+		return 0;
 }

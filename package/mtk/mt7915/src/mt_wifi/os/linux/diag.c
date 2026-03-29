@@ -653,7 +653,7 @@ static int diag_sta_proc_show(struct seq_file *m, void *v)
 		(pCtrl->diag_band == DIAG_BAND_5G && pAd->ApCfg.MBSSID[apidx].wdev.channel <= 14))
 			continue;
 
-		seq_printf(m, "%02X:%02X:%02X:%02X:%02X:%02X", PRINT_MAC(pEntry->Addr));
+		seq_printf(m, MACSTR, (MAC2STR(pEntry->Addr)));
 		seq_printf(m, "\t%d", pEntry->RssiSample.AvgSnr[0]);
 		seq_printf(m, "\t%d", RTMPAvgRssi(pAd, &pEntry->RssiSample));
 
@@ -1226,8 +1226,8 @@ void diag_conn_error_write(PRTMP_ADAPTER pAd)
 
 			snprintf(buf + strlen(buf),
 				buf_size -  strlen(buf),
-				" %02x:%02x:%02x:%02x:%02x:%02x %s: %s",
-				PRINT_MAC(log_entry->StaAddr),
+				MACSTR" %s: %s",
+				MAC2STR(log_entry->StaAddr),
 				log_entry->Ssid,
 				DIAG_CONN_ERR_INFO[log_entry->errCode]);
 
@@ -1348,10 +1348,8 @@ void diag_log_file_write(PRTMP_ADAPTER pAd)
 				if (!MAC_ADDR_EQUAL(log_entry->sta_addr, MAC_ADDR_ZERO))
 					snprintf(buf + strlen(buf),
 						buf_size -  strlen(buf),
-						"%02X%02X%02X%02X%02X%02X",
-						log_entry->sta_addr[0], log_entry->sta_addr[1],
-						log_entry->sta_addr[2], log_entry->sta_addr[3],
-						log_entry->sta_addr[4], log_entry->sta_addr[5]);
+						MACSTR,
+						MAC2STR(log_entry->sta_addr));
 				else
 					snprintf(buf + strlen(buf),
 						buf_size -  strlen(buf),

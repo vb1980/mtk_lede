@@ -944,7 +944,7 @@ error:
 }
 INT SetCalculateInitMCSProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-	INT32 Ret = TRUE;
+	INT32 Ret;
 	PCHAR pch = NULL;
 	PCHAR pIndex = NULL;
 	UINT32 index = 0;

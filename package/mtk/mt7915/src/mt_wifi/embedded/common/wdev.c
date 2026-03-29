@@ -15,6 +15,8 @@
 
 */
 #include "rt_config.h"
+#include "mgmt/be_internal.h"
+#include "fsm/fsm_sync.h"
 
 BOOLEAN is_testmode_wdev(UINT32 wdev_type)
 {
@@ -254,6 +256,7 @@ VOID BssInfoArgumentLink(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev, struct
 #ifdef CONFIG_AP_SUPPORT
 	BSS_STRUCT *pMbss = wdev->func_dev;
 #endif
+	struct freq_cfg fcfg;
 
 	bssinfo->OwnMacIdx = wdev->OmacIdx;
 	bssinfo->ucBandIdx = wdev->DevInfo.BandIdx;
@@ -261,7 +264,22 @@ VOID BssInfoArgumentLink(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev, struct
 	os_move_mem(bssinfo->Bssid, wdev->bssid, MAC_ADDR_LEN);
 	bssinfo->CipherSuit = SecHWCipherSuitMapping(wdev->SecConfig.PairwiseCipher);
 	bssinfo->ucPhyMode = wdev->PhyMode;
+
+	/*if the wdev of the band is in scanning status,
+	  need resync cfg to avoid get scan chan_oper for bssinfo chan_oper*/
+	if (scan_in_run_state(ad, wdev)) {
+		MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: band%d under scanning\n", __func__, bssinfo->ucBandIdx));
+		os_zero_mem(&fcfg, sizeof(fcfg));
+		phy_freq_get_cfg(wdev, &fcfg);
+		operate_loader_phy(wdev, &fcfg);
+	}
 	hc_radio_query_by_wdev(wdev, &bssinfo->chan_oper);
+
+	MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: bw = %d, cen_ch1 = %d, cen_ch2 = %d, prim_ch = %d\n",
+				__func__, bssinfo->chan_oper.bw, bssinfo->chan_oper.cen_ch_1,
+				bssinfo->chan_oper.cen_ch_2, bssinfo->chan_oper.prim_ch));
 
 	switch (wdev->wdev_type) {
 	case WDEV_TYPE_STA:
@@ -334,7 +352,7 @@ VOID BssInfoArgumentLink(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev, struct
 		bssinfo->NetworkType = NETWORK_INFRA;
 		bssinfo->u4ConnectionType = CONNECTION_INFRA_AP;
 #ifdef CONFIG_AP_SUPPORT
-		bssinfo->bcn_period = ad->CommonCfg.BeaconPeriod;
+		bssinfo->bcn_period = ad->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 
 		if (pMbss) {
 #ifdef DOT11V_MBSSID_SUPPORT
@@ -473,6 +491,11 @@ INT32 wdev_init(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, enum WDEV_TYPE wdev_ty
 	wdev->forbid_data_tx = 0x1 << MSDU_FORBID_CONNECTION_NOT_READY;
 	wdev->bAllowBeaconing = FALSE;
 	wdev->radio_off_req = FALSE;
+
+	RTMP_SEM_EVENT_INIT(&wdev->wdev_op_lock, &pAd->RscSemMemList);
+	wdev->wdev_op_lock_flag = FALSE;
+	NdisZeroMemory(wdev->dbg_wdev_op_lock_caller, sizeof(wdev->dbg_wdev_op_lock_caller));
+
 	wdev_idx = wdev_idx_reg(pAd, wdev);
 
 	init_vie_ctrl(wdev);
@@ -516,8 +539,8 @@ INT32 wdev_attr_update(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	case WDEV_TYPE_AP:
 	case WDEV_TYPE_GO:
 		AsicSetWdevIfAddr(pAd, wdev, OPMODE_AP);
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s(): wdevId%d = %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 __func__, wdev->wdev_idx, PRINT_MAC(wdev->if_addr)));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s(): wdevId%d = "MACSTR"\n",
+				 __func__, wdev->wdev_idx, MAC2STR(wdev->if_addr)));
 
 		if (wdev->if_dev) {
 			NdisMoveMemory(RTMP_OS_NETDEV_GET_PHYADDR(wdev->if_dev),
@@ -530,8 +553,8 @@ INT32 wdev_attr_update(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 #ifdef CONFIG_STA_SUPPORT
 	case WDEV_TYPE_STA:
 		AsicSetWdevIfAddr(pAd, wdev, OPMODE_STA);
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s(): wdevId%d = %02x:%02x:%02x:%02x:%02x:%02x\n",
-				__func__, wdev->wdev_idx, PRINT_MAC(wdev->if_addr)));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s(): wdevId%d = "MACSTR"\n",
+				__func__, wdev->wdev_idx, MAC2STR(wdev->if_addr)));
 
 		if (wdev->if_dev)
 			NdisMoveMemory(RTMP_OS_NETDEV_GET_PHYADDR(wdev->if_dev), wdev->if_addr, MAC_ADDR_LEN);
@@ -557,8 +580,9 @@ INT32 wdev_deinit(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 {
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(caller:%pS), wdev(%d)\n",
 			 __func__, OS_TRACE, wdev->wdev_idx));
-	
+
 	deinit_vie_ctrl(wdev);
+	RTMP_SEM_EVENT_DESTORY(&wifi_dev->wdev_op_lock);
 
 	if (wdev->wdev_type != WDEV_TYPE_REPEATER) {
 		wlan_operate_exit(wdev);
@@ -632,8 +656,6 @@ VOID wdev_fsm_init(struct wifi_dev *wdev)
 {
 	sync_fsm_ops_init(wdev);
 	cntl_state_machine_init(wdev, &wdev->cntl_machine, wdev->cntl_func);
-	/* add for multi wdev reuse sync state machine */
-	sync_fsm_init_for_wdev((PRTMP_ADAPTER)wdev->sys_handle, wdev, &wdev->sync_machine, wdev->sync_func);
 	auth_fsm_init((PRTMP_ADAPTER)wdev->sys_handle, wdev, &wdev->auth_machine, wdev->auth_func);
 	assoc_fsm_init((PRTMP_ADAPTER)wdev->sys_handle, wdev, &wdev->assoc_machine, wdev->assoc_func);
 }
@@ -844,6 +866,7 @@ void update_att_from_wdev(struct wifi_dev *dev1, struct wifi_dev *dev2)
 #ifdef TXBF_SUPPORT
 	UCHAR txbf;
 #endif
+	UCHAR max_mpdu_len;
 
 	/*update configure*/
 	if (wlan_config_get_ext_cha(dev1) == EXTCHA_NOASSIGN) {
@@ -882,6 +905,10 @@ void update_att_from_wdev(struct wifi_dev *dev1, struct wifi_dev *dev2)
 		wlan_config_get_ba_tx_wsize(dev2),
 		wlan_config_get_ba_rx_wsize(dev2));
 
+	/* VHT Max mpdu length */
+	max_mpdu_len = wlan_config_get_vht_max_mpdu_len(dev2);
+	wlan_config_set_vht_max_mpdu_len(dev1, max_mpdu_len);
+
 #ifdef DOT11_HE_AX
 #ifdef WIFI_TWT_SUPPORT
 	/* STA/APCLI TWT */
@@ -892,6 +919,7 @@ void update_att_from_wdev(struct wifi_dev *dev1, struct wifi_dev *dev2)
 	ba_en = wlan_config_get_ba_enable(dev2);
 	wlan_config_set_ba_enable(dev1, (ba_en > 0) ? ba_en : 0);
 	dev1->channel = dev2->channel;
+	dev1->quick_ch_change = dev2->quick_ch_change;
 	wlan_config_set_ch_band(dev1, dev2->PhyMode);
 	dev1->bWmmCapable = dev2->bWmmCapable;
 	wlan_operate_update_ht_cap(dev1);
@@ -922,19 +950,10 @@ void wdev_sync_prim_ch(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev)
 		tdev = ad->wdev_list[i];
 
 		if (tdev && HcIsRadioAcq(tdev) && (band_idx == HcGetBandByWdev(tdev)))
-#ifdef CONFIG_MAP_SUPPORT
-		{
-#endif
 			tdev->channel = wdev->channel;
-#ifdef CONFIG_MAP_SUPPORT
-			if (tdev->wdev_type == WDEV_TYPE_AP)
-				tdev->quick_ch_change = wdev->quick_ch_change;
-		}
-#endif
 		else if ((wdev->wdev_type == WDEV_TYPE_AP) &&
 				(tdev != NULL) &&
-				(band_idx == HcGetBandByWdev(tdev)) &&
-				(tdev->PhyMode == wdev->PhyMode))
+				(band_idx == HcGetBandByWdev(tdev)))
 			tdev->channel = wdev->channel;
 
 		/* Fix for Apcli linkdown issue when AP interface brinup happens after linkup */
@@ -942,12 +961,15 @@ void wdev_sync_prim_ch(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev)
 				(tdev != NULL) &&
 				(tdev->wdev_type == WDEV_TYPE_AP) &&
 				(tdev->if_up_down_state == 0) &&
-				(tdev->PhyMode == wdev->PhyMode))
-		{
+				(band_idx == HcGetBandByWdev(tdev)))
 			tdev->channel = wdev->channel;
-#ifdef CONFIG_MAP_SUPPORT
+		
+		if (tdev && ((tdev->wdev_type == WDEV_TYPE_AP) || (tdev->wdev_type == WDEV_TYPE_STA))
+			&& ((wdev->wdev_type == WDEV_TYPE_AP) || (wdev->wdev_type == WDEV_TYPE_STA))) {
 			tdev->quick_ch_change = wdev->quick_ch_change;
-#endif
+			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
+			("[%s] QuickChannel:%d; tdev_type:%d,tdev_idx:%d; wdev_type:%d,wdev_idx:%d==> \n", __func__,
+			tdev->quick_ch_change, tdev->wdev_type, tdev->wdev_idx, wdev->wdev_type, wdev->wdev_idx));
 		}
 	}
 }

@@ -535,7 +535,7 @@ int rt_ioctl_giwmode(struct net_device *dev,
 					 __u32 *mode, char *extra)
 {
 	VOID *pAd = NULL;
-	ULONG Mode;
+	ULONG Mode = 0;
 
 	GET_PAD_FROM_NET_DEV(pAd, dev);
 
@@ -612,7 +612,7 @@ int rt_ioctl_giwrange(struct net_device *dev,
 	struct iw_range *range = (struct iw_range *) extra;
 	UINT16 val;
 	int i;
-	ULONG Mode, ChannelListNum;
+	ULONG Mode = 0, ChannelListNum = 0;
 	UCHAR *pChannel;
 	UINT32 *pFreq;
 
@@ -832,8 +832,8 @@ int rt_ioctl_siwap(struct net_device *dev,
 	RTMP_STA_IoctlHandle(pAd, NULL, CMD_RTPRIV_IOCTL_STA_SIOCSIWAP, 0,
 						 (VOID *)(ap_addr->sa_data), 0, RT_DEV_PRIV_FLAGS_GET(dev));
 	memcpy(Bssid, ap_addr->sa_data, MAC_ADDR_LEN);
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::SIOCSIWAP %02x:%02x:%02x:%02x:%02x:%02x\n",
-			 Bssid[0], Bssid[1], Bssid[2], Bssid[3], Bssid[4], Bssid[5]));
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("IOCTL::SIOCSIWAP "MACSTR"\n",
+			 MAC2STR(Bssid)));
 	return 0;
 }
 
@@ -899,7 +899,7 @@ static void set_quality(VOID *pAd,
 	iq->noise = pBss->Noise;
 	/*    iq->updated = pAd->iw_stats.qual.updated; */
 	/*	iq->updated = ((struct iw_statistics *)(pAd->iw_stats))->qual.updated; */
-	iq->updated = 1;     /* Flags to know if updated */
+	/* iq->updated = 1; */    /* Flags to know if updated */
 #if WIRELESS_EXT >= 17
 	iq->updated = IW_QUAL_QUAL_UPDATED | IW_QUAL_LEVEL_UPDATED | IW_QUAL_NOISE_UPDATED;
 #endif
@@ -918,7 +918,7 @@ int rt_ioctl_iwaplist(struct net_device *dev,
 	struct iw_quality qual[IW_MAX_AP];
 	int i;
 	RT_CMD_STA_IOCTL_BSS_LIST BssList, *pBssList = &BssList;
-	RT_CMD_STA_IOCTL_BSS *pList;
+	RT_CMD_STA_IOCTL_BSS *pList = NULL;
 
 	GET_PAD_FROM_NET_DEV(pAd, dev);
 	memset(qual, 0, sizeof(qual));
@@ -940,6 +940,8 @@ int rt_ioctl_iwaplist(struct net_device *dev,
 		return 0;
 	}
 
+	os_zero_mem(pBssList->pList, sizeof(RT_CMD_STA_IOCTL_BSS_LIST) * IW_MAX_AP);
+
 	os_alloc_mem(NULL, (UCHAR **)&addr, sizeof(struct sockaddr) * IW_MAX_AP);
 
 	if (addr == NULL) {
@@ -956,6 +958,7 @@ int rt_ioctl_iwaplist(struct net_device *dev,
 		return -EFAULT;
 	}
 
+	NdisZeroMemory(pBssList, sizeof(RT_CMD_STA_IOCTL_BSS_LIST));
 	RTMP_STA_IoctlHandle(pAd, NULL, CMD_RTPRIV_IOCTL_BSS_LIST_GET, 0,
 						 pBssList, 0, RT_DEV_PRIV_FLAGS_GET(dev));
 
@@ -1027,7 +1030,7 @@ int rt_ioctl_giwscan(struct net_device *dev,
 					 struct iw_point *data, char *extra)
 {
 	VOID *pAd = NULL;
-	int i = 0, status = 0;
+	int i = 0, status = 0, ret;
 	RTMP_STRING *current_ev = extra, *previous_ev = NULL;
 	RTMP_STRING *end_buf, *current_val;
 	RTMP_STRING custom[MAX_CUSTOM_LEN] = {0};
@@ -1052,6 +1055,7 @@ int rt_ioctl_giwscan(struct net_device *dev,
 #endif /* ANDROID_SUPPORT */
 	pIoctlScan->priv_flags = RT_DEV_PRIV_FLAGS_GET(dev);
 	pIoctlScan->pBssTable = NULL;
+	pIoctlScan->BssNr = 0;
 
 	if (DetermineCallerInterface(dev, pAd) != NDIS_STATUS_SUCCESS)
 		return -EFAULT;
@@ -1127,10 +1131,21 @@ int rt_ioctl_giwscan(struct net_device *dev,
 		memset(&iwe, 0, sizeof(iwe));
 		iwe.cmd = SIOCGIWNAME;
 		if (pBssEntry->Channel > 14) {
-			if (pBssEntry->has_ht_cap)
-				snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11a/n");
-			else
-				snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11a");
+			if (pBssEntry->has_ht_cap) {
+				ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11a/n");
+				if (os_snprintf_error(IFNAMSIZ, ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+					status = 0;
+					goto go_out;
+				}
+			} else {
+				ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11a");
+				if (os_snprintf_error(IFNAMSIZ, ret)) {
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+					status = 0;
+					goto go_out;
+				}
+			}
 		} else {
 			/* if one of non B mode rate is set supported rate . it mean G only. */
 			for (rateCnt = 0; rateCnt < pBssEntry->SupRateLen; rateCnt++) {
@@ -1145,18 +1160,45 @@ int rt_ioctl_giwscan(struct net_device *dev,
 			}
 
 			if (pBssEntry->has_ht_cap) {
-				if (isGonly == TRUE)
-					snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11g/n");
-				else
-					snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b/g/n");
+				if (isGonly == TRUE) {
+					ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11g/n");
+					if (os_snprintf_error(IFNAMSIZ, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+						status = 0;
+						goto go_out;
+					}
+				} else {
+					ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b/g/n");
+					if (os_snprintf_error(IFNAMSIZ, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+						status = 0;
+						goto go_out;
+					}
+				}
 			} else {
-				if (isGonly == TRUE)
-					snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11g");
-				else {
-					if (pBssEntry->SupRateLen == 4 && pBssEntry->ExtRateLen == 0)
-						snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b");
-					else
-						snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b/g");
+				if (isGonly == TRUE) {
+					ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11g");
+					if (os_snprintf_error(IFNAMSIZ, ret)) {
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+						status = 0;
+						goto go_out;
+					}
+				} else {
+					if (pBssEntry->SupRateLen == 4 && pBssEntry->ExtRateLen == 0) {
+						ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b");
+						if (os_snprintf_error(IFNAMSIZ, ret)) {
+							MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+							status = 0;
+							goto go_out;
+						}
+					} else {
+						ret = snprintf(iwe.u.name, IFNAMSIZ, "%s", "802.11b/g");
+						if (os_snprintf_error(IFNAMSIZ, ret)) {
+							MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "ShowAmpduCounter snprintf error!\n");
+							status = 0;
+							goto go_out;
+						}
+					}
 				}
 			}
 		}
@@ -1573,6 +1615,7 @@ int rt_ioctl_giwessid(struct net_device *dev,
 	}
 
 	data->flags = 1;
+	NdisZeroMemory(pIoctlEssid, sizeof(RT_CMD_STA_IOCTL_SSID));
 	pIoctlEssid->pSsid = (CHAR *)essid;
 	pIoctlEssid->Status = 0;
 
@@ -1666,7 +1709,7 @@ int rt_ioctl_siwrts(struct net_device *dev,
 
 	if (rts->disabled)
 		val = MAX_RTS_THRESHOLD;
-	else if (rts->value < 0 || rts->value > MAX_RTS_THRESHOLD)
+	else if (rts->value > MAX_RTS_THRESHOLD)
 		return -EINVAL;
 	else if (rts->value == 0)
 		val = MAX_RTS_THRESHOLD;
@@ -1686,7 +1729,7 @@ int rt_ioctl_giwrts(struct net_device *dev,
 					struct iw_param *rts, char *extra)
 {
 	VOID *pAd = NULL;
-	USHORT RtsThreshold;
+	UCHAR RtsThreshold = 0;
 
 	GET_PAD_FROM_NET_DEV(pAd, dev);
 
@@ -1754,7 +1797,7 @@ int rt_ioctl_giwfrag(struct net_device *dev,
 					 struct iw_param *frag, char *extra)
 {
 	VOID *pAd = NULL;
-	USHORT FragmentThreshold;
+	UCHAR FragmentThreshold = 0;
 
 	GET_PAD_FROM_NET_DEV(pAd, dev);
 
@@ -1855,6 +1898,7 @@ rt_ioctl_giwencode(struct net_device *dev,
 		return -ENETDOWN;
 	}
 
+	NdisZeroMemory(pIoctlSec, sizeof(RT_CMD_STA_IOCTL_SECURITY));
 	pIoctlSec->pData = (CHAR *)key;
 	pIoctlSec->KeyIdx = erq->flags & IW_ENCODE_INDEX;
 	pIoctlSec->length = erq->length;
@@ -2657,7 +2701,7 @@ int rt_ioctl_giwrate(struct net_device *dev,
 	VOID   *pAd = NULL;
 	/*    int rate_index = 0, rate_count = 0; */
 	/*    HTTRANSMIT_SETTING ht_setting; */
-	ULONG Rate;
+	ULONG Rate = 0;
 
 	GET_PAD_FROM_NET_DEV(pAd, dev);
 	/*check if the interface is down */
@@ -2922,7 +2966,7 @@ INT rt28xx_sta_ioctl(void *net_dev_obj, void *rq, INT cmd) /* snowpin for ap/sta
 
 	case SIOCGIWNICKN: { /*get node name/nickname */
 		RT_CMD_STA_IOCTL_NICK_NAME NickName, *pNickName = &NickName;
-		CHAR nickname[IW_ESSID_MAX_SIZE + 1];
+		CHAR nickname[IW_ESSID_MAX_SIZE + 1] = {0};
 		struct iw_point	*erq = NULL;
 
 		erq = &wrqin->u.data;
@@ -3044,7 +3088,11 @@ INT rt28xx_sta_ioctl(void *net_dev_obj, void *rq, INT cmd) /* snowpin for ap/sta
 
 	case SIOCGIWPRIV:
 		if (wrqin->u.data.pointer) {
-			if (access_ok( wrqin->u.data.pointer, sizeof(privtab)) != TRUE)
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+			if (access_ok(VERIFY_WRITE, wrqin->u.data.pointer, sizeof(privtab)) != TRUE)
+#else
+			if (access_ok(wrqin->u.data.pointer, sizeof(privtab)) != TRUE)
+#endif
 				break;
 
 			if ((ARRAY_SIZE(privtab)) <= wrq->u.data.length) {
@@ -3059,13 +3107,21 @@ INT rt28xx_sta_ioctl(void *net_dev_obj, void *rq, INT cmd) /* snowpin for ap/sta
 		break;
 
 	case RTPRIV_IOCTL_SET:
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) != TRUE)
+#else
 		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) != TRUE)
+#endif
 			break;
 
 		return rt_ioctl_setparam(net_dev, NULL, NULL, wrqin->u.data.pointer);
 
 	case RTPRIV_IOCTL_STA_SHOW: /* snowpin for ap/sta */
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) != TRUE)
+#else
 		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) != TRUE)
+#endif
 			break;
 
 		return rt_ioctl_showparam(net_dev, NULL, NULL, wrqin->u.data.pointer);

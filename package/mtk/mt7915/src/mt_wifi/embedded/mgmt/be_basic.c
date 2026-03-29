@@ -78,7 +78,7 @@ static VOID radio_operate_init(struct wifi_dev *wdev)
 			} else if (chGrp == W53)
 				grpWidth = V10_W53_SIZE;
 
-		channel = DfsV10FindNonNopChannel(ad, chGrp, grpWidth);
+		channel = DfsV10FindNonNopChannel(ad, wdev, chGrp, grpWidth);
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			("[%s] NOP channel %d grp %d\n", __func__, channel, chGrp));
 			if (channel && (DfsV10CheckChnlGrp(ad, channel) == W56_UC &&
@@ -113,6 +113,9 @@ static VOID radio_operate_init(struct wifi_dev *wdev)
 #endif
 		RadarStateCheck(ad, wdev);
 #endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	ad->chan_switch_time[6] = jiffies_to_msecs(jiffies);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	operate_loader_phy(wdev, &fcfg);
 }
 
@@ -135,10 +138,12 @@ VOID wlan_operate_init(struct wifi_dev *wdev)
 	ht_oper_init(wdev, &obj->ht_oper);
 	ht_op_status_init(wdev, &obj->ht_status);
 #ifdef DOT11_VHT_AC
-	vht_oper_init(wdev, &obj->vht_oper);
+	if (WMODE_CAP_AC(wdev->PhyMode))
+		vht_oper_init(wdev, &obj->vht_oper);
 #endif /* DOT11_VHT_AC */
 #ifdef DOT11_HE_AX
-	he_oper_init(wdev, &obj->he_oper);
+	if (WMODE_CAP_AX(wdev->PhyMode))
+		he_oper_init(wdev, &obj->he_oper);
 #endif
 
 	/*adjust radio operate from configure*/

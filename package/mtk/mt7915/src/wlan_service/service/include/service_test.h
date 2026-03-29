@@ -201,14 +201,19 @@ s_int32 mt_serv_dpd_prek_dump(struct service_test *serv_test);
 s_int32 mt_serv_dpd_prek_5g(struct service_test *serv_test);
 s_int32 mt_serv_dpd_prek_2g(struct service_test *serv_test);
 s_int32 mt_serv_dpd_prek(struct service_test *serv_test);
-s_int32 mt_serv_set_freq_offset(struct service_test *serv_test);
+s_int32 mt_serv_set_freq_offset(
+	struct service_test *serv_test,
+	u_int32 band_idx);
 s_int32 mt_serv_tx_power_operation(
 	struct service_test *serv_test, u_int32 item);
 s_int32 mt_serv_get_freq_offset(
-	struct service_test *serv_test, u_int32 *freq_offset);
+	struct service_test *serv_test,
+	u_int32 *freq_offset,
+	u_int32 band_idx);
 s_int32 mt_serv_get_cfg_on_off(
 	struct service_test *serv_test,
-	u_int32 type, u_int32 *result);
+	u_int32 band_idx, u_int32 type,
+	u_int32 *result);
 s_int32 mt_serv_get_tx_tone_pwr(
 	struct service_test *serv_test,
 	u_int32 ant_idx, u_int32 *power);
@@ -227,6 +232,11 @@ s_int32 mt_serv_set_tssi(
 	struct service_test *serv_test,
 	u_int32 on_off,
 	u_int32 wf_sel);
+s_int32 mt_serv_get_rf_type_capability(
+	struct service_test *serv_test,
+	u_int32 band_idx,
+	u_int32 *tx_ant,
+	u_int32 *rx_ant);
 s_int32 mt_serv_set_rdd_on_off(
 	struct service_test *serv_test,
 	u_int32 rdd_num,
@@ -302,7 +312,7 @@ s_int32 mt_serv_calibration_test_mode(
 s_int32 mt_serv_do_cal_item(
 	struct service_test *serv_test, u_int32 item);
 s_int32 mt_serv_set_band_mode(struct service_test *serv_test);
-s_int32 mt_serv_get_band_mode(struct service_test *serv_test);
+s_int32 mt_serv_get_band_mode(struct service_test *serv_test, u_int8 band_idx);
 s_int32 mt_serv_log_on_off(
 	struct service_test *serv_test, u_int32 log_type,
 	u_int32 log_ctrl, u_int32 log_size);
@@ -317,6 +327,8 @@ s_int32 mt_serv_get_antswap_capability(
 	struct service_test *serv_test, u_int32 *antswap_support);
 s_int32 mt_serv_set_antswap(
 	struct service_test *serv_test, u_int32 ant);
+s_int32 mt_serv_set_eeprom_to_fw(
+	struct service_test *serv_test);
 s_int32 mt_serv_reg_eprm_operation(
 	struct service_test *serv_test, u_int32 item);
 s_int32 mt_serv_mps_operation(
@@ -443,5 +455,5 @@ s_int32 mt_serv_store_cali(
 	struct service_test *serv_test,
 	u_int32 storage,
 	u_int8 *data);
-
+s_int32 mt_serv_check_txv(struct service_test *serv_test);
 #endif /* __SERVICE_TEST_H__ */

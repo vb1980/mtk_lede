@@ -132,7 +132,4 @@ VOID ScanParmFill(
 	IN  UCHAR BssType,
 	IN  UCHAR ScanType);
 
-/* add for multi wdev reuse sync state machine */
-VOID sync_fsm_init_for_wdev(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, STATE_MACHINE *Sm, STATE_MACHINE_FUNC Trans[]);
-
 #endif /* __FSM_SYNC_H__ */

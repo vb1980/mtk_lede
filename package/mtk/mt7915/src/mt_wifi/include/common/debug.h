@@ -38,12 +38,12 @@
 /* Debug Level */
 #define DBG_LVL_OFF		0
 #define DBG_LVL_ERROR	1
-#define DBG_LVL_DEBUG	2
-#define DBG_LVL_WARN	3
-#define DBG_LVL_TRACE	4
-#define DBG_LVL_INFO	5
-#define DBG_LVL_LOUD	6
-#define DBG_LVL_NOISY	7
+#define DBG_LVL_WARN	2
+#define DBG_LVL_TRACE	3
+#define DBG_LVL_NOTICE  DBG_LVL_TRACE
+#define DBG_LVL_INFO	4
+#define DBG_LVL_LOUD	5
+#define DBG_LVL_NOISY	6
 #define DBG_LVL_MAX		DBG_LVL_NOISY
 #if !defined(EVENT_TRACING)
 /* Debug Category */
@@ -71,6 +71,7 @@
 #define DBG_CAT_TOKEN	20
 #define DBG_CAT_CMW     21 /* CMW Link Test related */
 #define DBG_CAT_BF		22 /* BF */
+#define DBG_CAT_CHN		23 /* Channel related; Channel/ACS/DFS/Scan */
 #define DBG_CAT_RSV1    30 /* reserved index for code development */
 #define DBG_CAT_RSV2    31 /* reserved index for code development */
 #define DBG_CAT_MAX     31
@@ -156,23 +157,60 @@
 #define CATBF_IWCMD		0x00000002u
 #define CATBF_ASSOC		0x00000004u
 
+/* Sub-Category of  DBG_CAT_CHN */
+#define CATCHN_ACS	0x00000002u
+#define CATCHN_DFS	0x00000004u
+#define CATCHN_SCAN	0x00000008u
+#define CATCHN_UNSAFE	0x00000010u
+#define CATCHN_CHN	0x00000020u
+
 /***********************************************************************************
  *	Debugging and printing related definitions and prototypes
  ***********************************************************************************/
 #define PRINT_MAC(addr)	\
 	addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]
 
+#ifdef MASK_PARTIAL_MACADDR
+#define MACSTR "%02x:**:**:%02x:%02x:%02x"
+#define MAC2STR(addr) (addr)[0], (addr)[3], (addr)[4], (addr)[5]
+#else
+#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+#define MAC2STR(addr) (addr)[0], (addr)[1], (addr)[2], (addr)[3], (addr)[4], (addr)[5]
+#endif
+
 #ifdef DBG
 extern int			DebugLevel;
+extern int			DebugLevel_BkUp;
 extern UINT32		DebugCategory;
 extern UINT32		DebugSubCategory[DBG_LVL_MAX + 1][32];
 
 
 #define MTWF_LOG(Category, SubCategory, Level, Fmt)	\
-	do {} while (0)
+	do {	\
+		if ((0x1 << Category) & (DebugCategory))	\
+			if ((SubCategory) & (DebugSubCategory[Level][Category])) \
+				MTWF_PRINT Fmt; \
+	} while (0)
+
+#ifdef DBG_ENHANCE
+#define MTWF_DBG(pAd, Category, SubCategory, Level, ...)	\
+	do {	\
+		if (((0x1 << Category) & DebugCategory)	\
+			&& (SubCategory & DebugSubCategory[Level][Category]))	\
+			mtwf_dbg_prt(pAd,Category,Level,__func__,__LINE__,##__VA_ARGS__);\
+	} while (0)
+#else
+#define MTWF_DBG(pAd, Category, SubCategory, Level, ...)	\
+	do {	\
+		if (((0x1 << Category) & DebugCategory)		\
+			&& (SubCategory & DebugSubCategory[Level][Category]))	\
+			MTWF_PRINT(__VA_ARGS__);	\
+	} while (0)
+#endif
 
 #else
 #define MTWF_LOG(Category, SubCategory, Level, Fmt)
+#define MTWF_DBG(pAd, Category, SubCategory, Level, ...)
 #endif
 
 void hex_dump(char *str, unsigned char *pSrcBufVA, unsigned int SrcBufLen);

@@ -67,6 +67,9 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 	UCHAR BandIdx = HcGetBandByWdev(wdev);
 	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
+#ifdef CONFIG_MAP_SUPPORT
+	struct DOT11_H *pDot11h = wdev->pDot11_H;
+#endif
 
 	pEntry = GetAssociatedAPByWdev(pAd, wdev);
 	rssi_sample.AvgRssi[0] = Elem->rssi_info.raw_rssi[0];
@@ -86,9 +89,22 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 
 		if (pEntry &&
 			(IS_ENTRY_PEER_AP(pEntry) || IS_ENTRY_REPEATER(pEntry))) {
+#ifdef CONFIG_MAP_SUPPORT
+			if (IS_MAP_ENABLE(pAd) && wdev->channel == bcn_ie_list->Channel) {
+				pStaCfg->ApcliInfStat.ApCliRcvBeaconTime = pAd->Mlme.Now32;
+				if (pDot11h && pDot11h->ChChangeCSA)
+					pDot11h->ChChangeCSA = FALSE;
+			}  else if (!IS_MAP_ENABLE(pAd))
+				pStaCfg->ApcliInfStat.ApCliRcvBeaconTime = pAd->Mlme.Now32;
+#else
 			pStaCfg->ApcliInfStat.ApCliRcvBeaconTime = pAd->Mlme.Now32;
-
-			AdjustBwToSyncAp(pAd, bcn_ie_list, &pStaCfg->wdev);
+#endif
+#ifdef CONFIG_MAP_SUPPORT
+			if (!IS_MAP_CERT_ENABLE(pAd))
+				AdjustBwToSyncAp(pAd, bcn_ie_list, &pStaCfg->wdev);
+#else
+				AdjustBwToSyncAp(pAd, bcn_ie_list, &pStaCfg->wdev);
+#endif
 			ApCliCheckConConnectivity(pAd, pStaCfg, bcn_ie_list);
 			{
 				UCHAR RegClass;
@@ -277,8 +293,8 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 		/* collapse into the ADHOC network which has bigger BSSID value. */
 		for (i = 0; i < MAC_ADDR_LEN; i++) {
 			if (bcn_ie_list->Bssid[i] > pStaCfg->Bssid[i]) {
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SYNC - merge to the IBSS with bigger BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-						 PRINT_MAC(bcn_ie_list->Bssid)));
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("SYNC - merge to the IBSS with bigger BSSID="MACSTR"\n",
+						 MAC2STR(bcn_ie_list->Bssid)));
 				AsicDisableSync(pAd, HW_BSSID_0);
 				COPY_MAC_ADDR(pStaCfg->Bssid, bcn_ie_list->Bssid);
 
@@ -342,12 +358,11 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 		if ((pAd->CommonCfg.bIEEE80211H == 1) &&
 			(bcn_ie_list->NewChannel != 0) &&
 			(bcn_ie_list->Channel != bcn_ie_list->NewChannel)
-#ifdef CONFIG_MAP_SUPPORT
 			&& (wdev->quick_ch_change == QUICK_CH_SWICH_DISABLE)
 #ifdef MAP_R2
-			&& (IS_MAP_TURNKEY_ENABLE(pAd) && (wdev->channel != bcn_ie_list->NewChannel))
+			&& (IS_MAP_TURNKEY_ENABLE(pAd))
 #endif
-#endif
+			&& (wdev->channel != bcn_ie_list->NewChannel)
 			) {
 			UCHAR index = 0;
 			/*
@@ -357,7 +372,7 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 			wdev->channel  = 1;
 			wlan_operate_set_prim_ch(wdev, 1);
 			LinkDown(pAd, link_down_type, &pStaCfg->wdev, NULL);
-			MlmeQueueInit(pAd);
+			MlmeResetByWdev(pAd, wdev);
 			BssTableInit(ScanTab);
 			RtmpusecDelay(1000000);	/* use delay to prevent STA do reassoc */
 
@@ -544,18 +559,23 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 			   2009: PF#1: 20/40 Coexistence in 2.4 GHz Band
 			   When AP changes "STA Channel Width" and "Secondary Channel Offset" fields of HT Operation Element in the Beacon to 0
 			*/
-			if (INFRA_ON(pStaCfg)) {
-				BOOLEAN bChangeBW = FALSE;
+#ifdef CONFIG_MAP_SUPPORT
+			if (!IS_MAP_CERT_ENABLE(pAd)) {
+#endif
+				if (INFRA_ON(pStaCfg)) {
+					BOOLEAN bChangeBW = FALSE;
 
-				bChangeBW = AdjustBwToSyncAp(pAd, bcn_ie_list, wdev);
+					bChangeBW = AdjustBwToSyncAp(pAd, bcn_ie_list, wdev);
 
-				if (bChangeBW) {
-					pAd->CommonCfg.BSSCoexist2040.word = 0;
-					TriEventInit(pAd);
-					BuildEffectedChannelList(pAd, wdev);
+					if (bChangeBW) {
+						pAd->CommonCfg.BSSCoexist2040.word = 0;
+						TriEventInit(pAd);
+						BuildEffectedChannelList(pAd, wdev);
+					}
 				}
+#ifdef CONFIG_MAP_SUPPORT
 			}
-
+#endif
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
 #ifdef DOT11_VHT_AC
@@ -740,7 +760,7 @@ static BOOLEAN sta_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	MakeOutgoingFrame(pOutBuffer,                   &FrameLen,
 					  sizeof(HEADER_802_11),        &ProbeRspHdr,
 					  TIMESTAMP_LEN,                &FakeTimestamp,
-					  2,                            &pAd->CommonCfg.BeaconPeriod,
+					  2,                            &pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 					  2,                            &CapabilityInfo,
 					  1,                            &SsidIe,
 					  1,                            &pStaCfg->SsidLen,
@@ -932,8 +952,8 @@ static BOOLEAN sta_join_peer_response_matched(struct _RTMP_ADAPTER *pAd,
 				   ((wdev->SecConfig.PairwiseCipher & pInBss->PairwiseCipher) != 0))) &&
 				(((wdev->SecConfig.AKMMap & pInBss->AKMMap) == 0)
 					|| ((wdev->SecConfig.PairwiseCipher & pInBss->PairwiseCipher) == 0))) {
-				//MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				//		("%s()RSN IE VALIDATE FAIL\n", __func__));
+				MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						("%s()RSN IE VALIDATE FAIL\n", __func__));
 				return FALSE;
 			}
 		} else {
@@ -1319,14 +1339,26 @@ static BOOLEAN sta_join_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 						}
 					}
 
+
 					if (IS_AKM_WPA3PSK(pProfile_SecConfig->AKMMap) ||
 						IS_AKM_WPA3_192BIT(pProfile_SecConfig->AKMMap) ||
 						IS_AKM_WPA3(pProfile_SecConfig->AKMMap) ||
 						IS_AKM_OWE(pProfile_SecConfig->AKMMap)) {
 							/* if use WPA3/WPA3PSK/OWE, force to PMF connect */
 						pProfile_SecConfig->PmfCfg.MFPC = TRUE;
-						pProfile_SecConfig->PmfCfg.MFPR = TRUE;
+						if (IS_AKM_WPA2PSK_ONLY(pEntry_SecConfig->AKMMap)) {
+							/*If AP is WPA2PSK only, set MFP Required to 0 to support both MFP capable/noncapable AP*/
+							pProfile_SecConfig->PmfCfg.MFPR = FALSE;
+						}
+						else
+							pProfile_SecConfig->PmfCfg.MFPR = TRUE;
 					}
+
+					if (IS_AKM_OPEN(pProfile_SecConfig->AKMMap)) {
+						pProfile_SecConfig->PmfCfg.MFPC = FALSE;
+						pProfile_SecConfig->PmfCfg.MFPR = FALSE;
+					}
+
 
 					if (((pProfile_SecConfig->PmfCfg.MFPR) && (RsnCap.field.MFPC == FALSE))
 						|| ((pProfile_SecConfig->PmfCfg.MFPC == FALSE) && (RsnCap.field.MFPR))) {
@@ -1357,6 +1389,49 @@ static BOOLEAN sta_join_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 				}
 			}
 #endif /* DOT11W_PMF_SUPPORT */
+#ifdef APCLI_SUPPORT
+			if (pStaCfg->ApCliTransDisableSupported) {
+				struct transition_disable_bitmap *bitmap =
+						&(pStaCfg->ApCli_tti_bitmap);
+				/* Valid Combinations */
+				if ((bitmap->wpa3_psk && (IS_AKM_WPA3PSK(pEntry_SecConfig->AKMMap)))
+#ifdef DOT11_SAE_SUPPORT
+				|| (bitmap->sae_pk && pStaCfg->wdev.SecConfig.sae_cap.sae_pk_en &&
+				(pStaCfg->MlmeAux.sae_conn_type == SAE_CONNECTION_TYPE_SAEPK) &&
+				(IS_AKM_SAE(pEntry_SecConfig->AKMMap)))
+#endif
+#ifdef DOT11_SUITEB_SUPPORT
+				|| (bitmap->wpa3_ent &&
+				(IS_AKM_SUITEB_SHA256(pEntry_SecConfig->AKMMap)))
+#endif
+#ifdef CONFIG_OWE_SUPPORT
+				|| (bitmap->enhanced_open && (IS_AKM_OWE(pEntry_SecConfig->AKMMap)))
+#endif
+				) {
+				MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
+					"Valid Combo tti_bitmap: wpa3_psk:%d sae_pk:%d wpa3_ent:%d OWE:%d APs AKM:0x%x\n",
+					bitmap->wpa3_psk, bitmap->sae_pk,
+					bitmap->wpa3_ent, bitmap->enhanced_open,
+					pEntry_SecConfig->AKMMap);
+				} else if (bitmap->wpa3_psk || bitmap->sae_pk ||
+					bitmap->wpa3_ent || bitmap->enhanced_open) {
+					/* Other Combinations which are not valid */
+					MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
+					"Transition Disabled: Invalid combo tti_bitmap: wpa3_psk:%d sae_pk:%d wpa3_ent:%d OWE:%d APs AKM:0x%x\n",
+					bitmap->wpa3_psk, bitmap->sae_pk,
+					bitmap->wpa3_ent, bitmap->enhanced_open,
+					pEntry_SecConfig->AKMMap);
+
+					return FALSE;
+				} else {
+					MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
+					"Transition Disable active but no valid bit is set tti_bitmap: wpa3_psk:%d sae_pk:%d wpa3_ent:%d OWE:%d APs AKM:0x%x\n",
+					bitmap->wpa3_psk, bitmap->sae_pk,
+					bitmap->wpa3_ent, bitmap->enhanced_open,
+					pEntry_SecConfig->AKMMap);
+				}
+			}
+#endif /*#ifdef APCLI_SUPPORT*/
 
 			if ((IS_NO_SECURITY(pEntry_SecConfig)
 				 || ((!IS_CIPHER_WEP(pEntry_SecConfig->PairwiseCipher)) && (!IS_CIPHER_TKIP(pEntry_SecConfig->PairwiseCipher))))
@@ -1503,12 +1578,15 @@ static BOOLEAN sta_join_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 		if (ie_list->AironetCellPowerLimit != 0xFF) {
 			/* We need to change our TxPower for CCX 2.0 AP Control of Client Transmit Power */
 			ChangeToCellPowerLimit(pAd, ie_list->AironetCellPowerLimit);
-		} else  /* Used the default TX Power Percentage. */
+		} else {
+			/* Used the default TX Power Percentage. */
 			/* Used the default TX Power Percentage. */
 			pAd->CommonCfg.ucTxPowerPercentage[BAND0] = pAd->CommonCfg.ucTxPowerDefault[BAND0];
 #ifdef DBDC_MODE
 			pAd->CommonCfg.ucTxPowerPercentage[BAND1] = pAd->CommonCfg.ucTxPowerDefault[BAND1];
 #endif /* DBDC_MODE */
+
+		}
 
 		if (pStaCfg->BssType == BSS_INFRA) {
 			BOOLEAN InfraAP_BW;

@@ -480,6 +480,7 @@ static VOID WtblTxRateCounterGet(RTMP_ADAPTER *pAd, UINT16 u2Wcid, DMAC_TX_CNT_I
 VOID MtfAsicTxCntUpdate(RTMP_ADAPTER *pAd, UINT16 Wcid, MT_TX_COUNTER *pTxInfo)
 {
 	DMAC_TX_CNT_INFO tx_cnt_info;
+	NdisZeroMemory(&tx_cnt_info, sizeof(DMAC_TX_CNT_INFO));
 
 	WtblTxRateCounterGet(pAd, Wcid, &tx_cnt_info);
 	pTxInfo->TxCount = tx_cnt_info.wtbl_wd16.field.current_bw_tx_cnt;
@@ -896,12 +897,6 @@ UINT32 MtfAsicGetRxStat(RTMP_ADAPTER *pAd, UINT type)
 			value = value & 0xFFFF;
 			break;
 
-#ifdef MT7622
-		case HQA_RX_STAT_MAC_FCS_OK_COUNT:
-			MAC_IO_READ32(pAd->hdev_ctrl, MIB_M0SDR51, &value);
-			value = value & 0xFFFF;
-			break;
-#endif /* MT7622 */
 
 		case HQA_RX_STAT_PHY_MDRDYCNT:
 			/* [31:16] OFDM [15:0] CCK */
@@ -1866,9 +1861,9 @@ VOID MtfAsicGetTxTscByDriver(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *pT
 	HW_IO_READ32(pAd->hdev_ctrl, tb_entry.wtbl_addr + (4 * 10), &val);
 	*(pTxTsc+4) = val & 0xff;
 	*(pTxTsc+5) = (val >> 8) & 0xff;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): WCID(%d) TxTsc 0x%02x-0x%02x-0x%02x-0x%02x-0x%02x-0x%02x\n",
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): WCID(%d) TxTsc "MACSTR"\n",
 			 __func__, Wcid,
-			 *pTxTsc, *(pTxTsc+1), *(pTxTsc+2), *(pTxTsc+3), *(pTxTsc+4), *(pTxTsc+5)));
+			 MAC2STR(pTxTsc)));
 }
 
 INT mtf_asic_rts_on_off(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT32 rts_num, UINT32 rts_len, BOOLEAN rts_en)
@@ -2072,7 +2067,7 @@ INT mtf_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 		if (enable == 0) {
 			if (flush_all == TRUE) {
 				for (i = 0; i < MAX_NUM_OF_MONITOR_GROUP; i++) {
-					pMuarGroup = &pAd->MntGroupTable[i];
+					pMuarGroup = &pAd->MntGroupTable[band_idx][i];
 
 					if (pMuarGroup->bValid && (pMuarGroup->Band == band_idx))
 						NdisZeroMemory(pMuarGroup, sizeof(*pMuarGroup));
@@ -2080,7 +2075,7 @@ INT mtf_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 
 				for (i = 0; i < MAX_NUM_OF_MONITOR_STA; i++) {
 
-					pMntEntry = &pAd->MntTable[i];
+					pMntEntry = &pAd->MntTable[band_idx][i];
 
 					if (!pMntEntry->bValid || (pMntEntry->Band != band_idx))
 						continue;
@@ -2108,8 +2103,8 @@ INT mtf_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 
 						if (pMacEntry->mnt_band == 0) { /* no more use for other band */
 							MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-									 ("%s::call MacTableDeleteEntry(WCID=%d)- %02X:%02X:%02X:%02X:%02X:%02X\n",
-									  __func__, pMacEntry->wcid, PRINT_MAC(pMacEntry->Addr)));
+									 ("%s::call MacTableDeleteEntry(WCID=%d)- "MACSTR"\n",
+									  __func__, pMacEntry->wcid, MAC2STR(pMacEntry->Addr)));
 							MacTableDeleteEntry(pAd, pMacEntry->wcid, pMacEntry->Addr);
 						}
 					}
@@ -2136,24 +2131,24 @@ INT mtf_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 					return FALSE;
 				}
 
-			if ((pAd->MonitrCnt[BAND0] + pAd->MonitrCnt[BAND1]) == 0) {
-				pAd->MntEnable = 0;
-				NdisZeroMemory(&pAd->MntTable, sizeof(pAd->MntTable));
-				NdisZeroMemory(&pAd->MntGroupTable, sizeof(pAd->MntGroupTable));
+			if (pAd->MonitrCnt[band_idx] == 0) {
+				pAd->MntEnable[band_idx] = 0;
+				NdisZeroMemory(&pAd->MntTable[band_idx], sizeof(MNT_STA_ENTRY));
+				NdisZeroMemory(&pAd->MntGroupTable[band_idx], sizeof(MNT_MUAR_GROUP));
 			}
 			}
 		} else {
 			if (band_idx == DBDC_BAND0) {
 				pconfig_smesh->ucBand = BAND0;
 				pconfig_smesh->ucAccessMode = 1;
-				pconfig_smesh->ucSmeshEn = 1;
+				pconfig_smesh->ucSmeshEn = enable;
 				apply_mntr_ruleset_smesh(pAd, pconfig_smesh);
 				MtCmdSmeshConfigSet(pAd, (UCHAR *)pconfig_smesh, &rSmeshResult);
 			} else if (band_idx == DBDC_BAND1) {
 
 				pconfig_smesh->ucBand = BAND1;
 				pconfig_smesh->ucAccessMode = 1;
-				pconfig_smesh->ucSmeshEn = 1;
+				pconfig_smesh->ucSmeshEn = enable;
 				apply_mntr_ruleset_smesh(pAd, pconfig_smesh);
 				MtCmdSmeshConfigSet(pAd, (UCHAR *)pconfig_smesh, &rSmeshResult);
 
@@ -2165,7 +2160,6 @@ INT mtf_set_air_monitor_enable(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR 
 				return FALSE;
 			}
 
-			pAd->MntEnable = 1;
 		}
 	}
 
@@ -2210,11 +2204,13 @@ INT mtf_set_air_monitor_rule(struct _RTMP_ADAPTER *pAd, UCHAR *rule, UCHAR band_
 	if (band_idx == DBDC_BAND0) {
 		pconfig_smesh->ucBand = BAND0;
 		pconfig_smesh->ucAccessMode = 1;
+		pconfig_smesh->ucSmeshEn = 1;
 		apply_mntr_ruleset_smesh(pAd, pconfig_smesh);
 		MtCmdSmeshConfigSet(pAd, (UCHAR *)pconfig_smesh, &rSmeshResult);
 	} else if (band_idx == DBDC_BAND1) {
 		pconfig_smesh->ucBand = BAND1;
 		pconfig_smesh->ucAccessMode = 1;
+		pconfig_smesh->ucSmeshEn = 1;
 		apply_mntr_ruleset_smesh(pAd, pconfig_smesh);
 		MtCmdSmeshConfigSet(pAd, (UCHAR *)pconfig_smesh, &rSmeshResult);
 	} else {
@@ -2235,7 +2231,7 @@ INT mtf_set_air_monitor_rule(struct _RTMP_ADAPTER *pAd, UCHAR *rule, UCHAR band_
 
 INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR mnt_idx, UCHAR band_idx)
 {
-	INT ret = TRUE, i;
+	INT ret, i;
 	UCHAR *p = ZERO_MAC_ADDR, muar_idx = 0, muar_group_base = 0;
 	BOOLEAN bCreate = FALSE;
 	MNT_STA_ENTRY *pMntEntry = NULL;
@@ -2245,6 +2241,7 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 	EXT_CMD_MUAR_T config_muar;
 	EXT_CMD_MUAR_MULTI_ENTRY_T muar_entry;
 	UCHAR mnt_enable = 0;
+	UCHAR totalMonitrCnt = 0, value = 0, remainder = 0;
 
 	NdisZeroMemory(&config_muar, sizeof(EXT_CMD_MUAR_T));
 	NdisZeroMemory(&muar_entry, sizeof(EXT_CMD_MUAR_MULTI_ENTRY_T));
@@ -2257,8 +2254,8 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 
 
 	if (mnt_idx < MAX_NUM_OF_MONITOR_STA) {
-		pAd->MntIdx = mnt_idx;
-		pMntEntry = &pAd->MntTable[mnt_idx];
+		pAd->MntIdx[band_idx] = mnt_idx;
+		pMntEntry = &pAd->MntTable[band_idx][mnt_idx];
 	} else {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				 ("The index is over the maximum limit.\n"));
@@ -2281,7 +2278,7 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 			}
 
 			if (pMntEntry->muar_group_idx < MAX_NUM_OF_MONITOR_GROUP)
-				pMuarGroup = &pAd->MntGroupTable[pMntEntry->muar_group_idx];
+				pMuarGroup = &pAd->MntGroupTable[band_idx][pMntEntry->muar_group_idx];
 
 			if (pMuarGroup) {
 				pMuarGroup->Count--;
@@ -2308,15 +2305,18 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 			return TRUE;
 		}
 
-		if ((pAd->MonitrCnt[BAND0] + pAd->MonitrCnt[BAND1]) >= MAX_NUM_OF_MONITOR_STA) {
+		/*Comments: 7915 dual band have 2 seperated MUAR table, can monitor 16 + 16 STAs.*/
+		if ((pAd->MonitrCnt[band_idx]) >= MAX_NUM_OF_MONITOR_STA) {
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					 ("The monitor number extends to maximum limit(%d).\n", MAX_NUM_OF_MONITOR_STA));
 			os_free_mem(pdata_muar);
 			return FALSE;
 		}
-
+		/*muar_group_idx: 	0	1	2	3	4	5	6	7*/
+		/*MUAR Index:		32	36	40	44	48	52	56	60*/
+		/*					34	38	42	46	50	54	58	62*/
 		for (i = 0; i < MAX_NUM_OF_MONITOR_GROUP; i++) {
-			pMuarGroup = &pAd->MntGroupTable[i];
+			pMuarGroup = &pAd->MntGroupTable[band_idx][i];
 
 			if (!pMuarGroup->bValid) {
 				NdisZeroMemory(pMntEntry, sizeof(MNT_STA_ENTRY));
@@ -2324,7 +2324,8 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 				pMuarGroup->bValid = TRUE;
 				pMuarGroup->Band = band_idx;
 				pMntEntry->muar_group_idx = i;
-				pMntEntry->muar_idx = (pMuarGroup->MuarGroupBase + pMuarGroup->Count++);
+				pMntEntry->muar_idx = (pMuarGroup->MuarGroupBase + i * 2);
+				pMuarGroup->Count++;
 				muar_idx = pMntEntry->muar_idx;
 				muar_group_base = pMuarGroup->MuarGroupBase;
 				bCreate = TRUE;
@@ -2333,7 +2334,8 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 					   (pMuarGroup->Band == band_idx)) {
 				NdisZeroMemory(pMntEntry, sizeof(MNT_STA_ENTRY));
 				pMntEntry->muar_group_idx = i;
-				pMntEntry->muar_idx = (pMuarGroup->MuarGroupBase + pMuarGroup->Count++);
+				pMntEntry->muar_idx = (pMuarGroup->MuarGroupBase + 2 * (i + 1));
+				pMuarGroup->Count++;
 				muar_idx = pMntEntry->muar_idx;
 				muar_group_base = pMuarGroup->MuarGroupBase;
 				bCreate = TRUE;
@@ -2386,7 +2388,7 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("index: %d\n", mnt_idx));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("entry: %02X:%02X:%02X:%02X:%02X:%02X\n", PRINT_MAC(p)));
+			 ("entry: "MACSTR"\n", MAC2STR(p)));
 
 	muar_entry.ucMuarIdx = muar_idx;
 	NdisMoveMemory(muar_entry.aucMacAddr, p, MAC_ADDR_LEN);
@@ -2402,12 +2404,23 @@ INT mtf_set_air_monitor_idx(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 
 	MtCmdMuarConfigSet(pAd, (UCHAR *)pdata_muar);
 
-	if (pAd->MonitrCnt[band_idx] > 0)
-		mnt_enable = 1 ;
-
+	/*total 16 STA, 1 otects control CR 820e5048[7:0]*/
+	/*MonitrCnt:		1,2  3,4  5,6  7,8	9,10   11,12  13,14	15,16*/
+	/*Bit:				 0	  1    2	3	 4		5	   6	  7*/
+	/*MUAR Index:		32	 36   40	44	 48 	52	   56	  60*/
+	/*					34	 38   42	46	 50 	54	   58	  62*/
+	totalMonitrCnt = pAd->MonitrCnt[band_idx];
+	if (totalMonitrCnt > 0) {
+		value = (totalMonitrCnt / 2);
+		remainder = (totalMonitrCnt % 2);
+		if (remainder == 1) {
+			pAd->MntEnable[band_idx] |= (1 << value);
+		}
+	}
+	mnt_enable = pAd->MntEnable[band_idx];
 	ret = mtf_set_air_monitor_enable(pAd, mnt_enable, band_idx);
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("<-- %s()\n", __func__));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<-- %s()[Band%d]MntEnable=0x%x\n", __func__, band_idx, mnt_enable));
 
 	os_free_mem(pdata_muar);
 	return ret;

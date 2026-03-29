@@ -891,7 +891,7 @@ UINT32 ShowPktAllocInfo(UINT show, UINT pCaller);
 #ifdef CONFIG_AP_SUPPORT
 INT set_qiscdump_proc(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 #endif
-VOID wifi_dump_info(VOID);
+VOID mt7915_wifi_dump_info(VOID);
 
 #ifdef RTMP_WLAN_HOOK_SUPPORT
 #include <os/rt_linux_txrx_hook.h>

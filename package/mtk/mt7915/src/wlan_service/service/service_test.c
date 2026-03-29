@@ -44,6 +44,7 @@ static s_int32 mt_serv_init_op(struct test_operation *ops)
 	ops->op_set_power_drop_level = mt_op_set_power_drop_level;
 	ops->op_get_antswap_capability = mt_op_get_antswap_capability;
 	ops->op_set_antswap = mt_op_set_antswap;
+	ops->op_set_eeprom_to_fw = mt_op_set_eeprom_to_fw;
 	ops->op_set_rx_filter_pkt_len = mt_op_set_rx_filter_pkt_len;
 	ops->op_set_freq_offset = mt_op_set_freq_offset;
 	ops->op_set_phy_counter = mt_op_set_phy_counter;
@@ -204,7 +205,7 @@ static s_int32 mt_serv_init_config(
 		configs->hdr_len = SERV_LENGTH_802_11;
 		configs->pl_len = 1;
 		configs->tx_len = 1058;
-		configs->fixed_payload = 1;
+		configs->fixed_payload = 2;
 		configs->max_pkt_ext = 2;
 		configs->retry = 1;
 
@@ -217,7 +218,7 @@ static s_int32 mt_serv_init_config(
 		configs->duty_cycle = 0;
 		configs->tx_time_param.pkt_tx_time_en = FALSE;
 		configs->tx_time_param.pkt_tx_time = 0;
-		configs->ipg_param.ipg = 0;
+		configs->ipg_param.ipg = 50;
 		configs->ipg_param.sig_ext = TEST_SIG_EXTENSION;
 		configs->ipg_param.slot_time = TEST_DEFAULT_SLOT_TIME;
 		configs->ipg_param.sifs_time = TEST_DEFAULT_SIFS_TIME;
@@ -284,11 +285,11 @@ static s_int32 mt_serv_init_config(
 		/* Tx frame init */
 		sys_ad_move_mem(&configs->template_frame, &template_frame, 32);
 		configs->addr1[0][0] = 0x00;
-		configs->addr1[1][0] = 0x11;
-		configs->addr1[2][0] = 0x22;
-		configs->addr1[3][0] = 0xAA;
-		configs->addr1[4][0] = 0xBB;
-		configs->addr1[5][0] = 0xCC;
+		configs->addr1[0][1] = 0x11;
+		configs->addr1[0][2] = 0x22;
+		configs->addr1[0][3] = 0xDD;
+		configs->addr1[0][4] = 0xEE;
+		configs->addr1[0][5] = 0xFF;
 		sys_ad_move_mem(&configs->addr2, &configs->addr1,
 				SERV_MAC_ADDR_LEN);
 		sys_ad_move_mem(&configs->addr3, &configs->addr1,
@@ -298,7 +299,7 @@ static s_int32 mt_serv_init_config(
 		configs->hdr_len = SERV_LENGTH_802_11;
 		configs->pl_len = 1;
 		configs->tx_len = 1024;
-		configs->fixed_payload = 1;
+		configs->fixed_payload = 2;
 		configs->max_pkt_ext = 2;
 		configs->retry = 1;
 
@@ -310,7 +311,7 @@ static s_int32 mt_serv_init_config(
 		configs->duty_cycle = 0;
 		configs->tx_time_param.pkt_tx_time_en = FALSE;
 		configs->tx_time_param.pkt_tx_time = 0;
-		configs->ipg_param.ipg = 0;
+		configs->ipg_param.ipg = 50;
 		configs->ipg_param.sig_ext = TEST_SIG_EXTENSION;
 		configs->ipg_param.slot_time = TEST_DEFAULT_SLOT_TIME;
 		configs->ipg_param.sifs_time = TEST_DEFAULT_SIFS_TIME;
@@ -806,7 +807,7 @@ s_int32 mt_serv_submit_tx(struct service_test *serv_test)
 
 		ret = mt_engine_subscribe_tx(ops, winfos,
 					     virtual_device,
-					     configs);
+					     configs, ctrl_band_idx);
 		if (ret)
 			goto err_out;
 	} else {
@@ -945,6 +946,30 @@ s_int32 mt_serv_start_rx(struct service_test *serv_test)
 		ret = mt_engine_start_rx(serv_test->test_winfo,
 					&serv_test->test_config[ctrl_band_idx],
 					serv_test->test_op, ctrl_band_idx);
+
+		/* he_tb rx enhance support */
+		if (configs->tx_mode == TEST_MODE_HE_TB) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: \x1b[32m Rx HE TB mode, run start tx\x1b[0m\n", __func__));
+
+			configs->tx_mode = TEST_MODE_HE_SU;
+
+			ret = mt_serv_submit_tx(serv_test);
+			if (ret) {
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+					("%s: submit tx err code:%u\n", __func__, ret));
+				return ret;
+			}
+
+			/* Start packet Tx */
+			ret = mt_serv_start_tx(serv_test);
+			if (ret) {
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+					("%s: start tx err code:%u\n", __func__, ret));
+				return ret;
+			}
+			configs->tx_mode = TEST_MODE_HE_TB;
+		}
 	} else {
 		ret = serv_test->test_op->op_start_rx(
 			serv_test->test_winfo,
@@ -963,11 +988,28 @@ s_int32 mt_serv_stop_rx(struct service_test *serv_test)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
+	/* he_tb rx enhance support */
+	struct test_configuration *configs;
+
+	configs = &serv_test->test_config[ctrl_band_idx];
 
 	if (!serv_test->engine_offload) {
 		ret = mt_engine_stop_rx(serv_test->test_winfo,
 					&serv_test->test_config[ctrl_band_idx],
 					serv_test->test_op, ctrl_band_idx);
+
+		/* he_tb rx enhance support */
+		if (configs->tx_mode == TEST_MODE_HE_TB) {
+			ret = mt_serv_stop_tx(serv_test);
+			if (ret)
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+					("%s: stop tx err code:%u\n", __func__, ret));
+
+			ret = mt_serv_revert_tx(serv_test);
+			if (ret)
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+					("%s: revert tx err code:%u\n", __func__, ret));
+		}
 	} else {
 		ret = serv_test->test_op->op_stop_rx(
 			serv_test->test_winfo,
@@ -1101,21 +1143,26 @@ s_int32 mt_serv_dpd_prek(struct service_test *serv_test)
 				serv_test->test_winfo,
 				PREK_DPD_5G_PROC);
 
+	if (ret)
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 5G err=0x%08x\n", __func__, ret));
+
 	ret = serv_test->test_op->op_dpd_prek(
 				serv_test->test_winfo,
 				PREK_DPD_2G_PROC);
 
 	if (ret)
 		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
-			("%s: err=0x%08x\n", __func__, ret));
+			("%s: 24G err=0x%08x\n", __func__, ret));
 
 	return ret;
 }
 
-s_int32 mt_serv_set_freq_offset(struct service_test *serv_test)
+s_int32 mt_serv_set_freq_offset(
+	struct service_test *serv_test, u_int32 band_idx)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
-	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
+	u_char ctrl_band_idx = band_idx;
 	struct test_configuration *configs;
 	struct test_operation *ops = serv_test->test_op;
 	u_int32 rf_freq_offset;
@@ -1197,16 +1244,16 @@ error:
 }
 
 s_int32 mt_serv_get_freq_offset(
-	struct service_test *serv_test, u_int32 *freq_offset)
+	struct service_test *serv_test, u_int32 *freq_offset,
+	u_int32 band_idx)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
-	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
 	struct test_operation *ops;
 
 	ops = serv_test->test_op;
 	ret = ops->op_get_freq_offset(
 			serv_test->test_winfo,
-			ctrl_band_idx,
+			band_idx,
 			freq_offset);
 
 	if (ret)
@@ -1218,11 +1265,12 @@ s_int32 mt_serv_get_freq_offset(
 
 s_int32 mt_serv_get_cfg_on_off(
 	struct service_test *serv_test,
+	u_int32 band_idx,
 	u_int32 type,
 	u_int32 *result)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
-	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
+	u_char ctrl_band_idx = band_idx;
 	struct test_operation *ops;
 
 	ops = serv_test->test_op;
@@ -1346,6 +1394,30 @@ s_int32 mt_serv_set_tssi(
 			serv_test->test_winfo,
 			on_off,
 			wf_sel);
+
+	if (ret)
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: err=0x%08x\n", __func__, ret));
+
+	return ret;
+}
+
+s_int32 mt_serv_get_rf_type_capability(
+	struct service_test *serv_test,
+	u_int32 band_idx,
+	u_int32 *tx_ant,
+	u_int32 *rx_ant)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	struct test_wlan_info *winfos;
+
+	if (!serv_test->engine_offload) {
+		winfos = serv_test->test_winfo;
+
+		ret = net_ad_get_rf_type_capability(winfos, band_idx, tx_ant, rx_ant);
+	} else {
+		ret = SERV_STATUS_SERV_TEST_NOT_SUPPORTED;
+	}
 
 	if (ret)
 		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
@@ -1961,37 +2033,18 @@ s_int32 mt_serv_set_band_mode(
 }
 
 s_int32 mt_serv_get_band_mode(
-	struct service_test *serv_test)
+	struct service_test *serv_test, u_int8 band_idx)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
-	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
-	u_int32 band_type;
+	u_char ctrl_band_idx = band_idx;
+	u_int32 band_type = TEST_BAND_TYPE_UNUSE;
 	struct test_operation *ops;
 
 	ops = serv_test->test_op;
 
 	if (!serv_test->engine_offload) {
-		/*
-		 * DLL will query two times per band0/band1 if DBDC chip set.
-		 * 0: no this band
-		 * 1: 2.4G
-		 * 2: 5G
-		 * 3. 2.4G+5G
-		 */
-		if (IS_TEST_DBDC(serv_test->test_winfo))
-			band_type = (ctrl_band_idx == TEST_DBDC_BAND0)
-				? TEST_BAND_TYPE_2_4G : TEST_BAND_TYPE_5G;
-		else {
-			/* Always report 2.4+5G */
-			band_type = TEST_BAND_TYPE_2_4G_5G;
-
-			/*
-			 * If IS_TEST_DBDC=0,
-			 * band_idx should not be 1 so return band_mode=0
-			 */
-			if (ctrl_band_idx == TEST_DBDC_BAND1)
-				band_type = TEST_BAND_TYPE_UNUSE;
-		}
+		ret = net_ad_get_band_mode(serv_test->test_winfo,
+				band_idx, &band_type);
 	} else {
 		ret = ops->op_set_band_mode(
 			serv_test->test_winfo,
@@ -2013,7 +2066,8 @@ s_int32 mt_serv_get_band_mode(
 		band_type |= TEST_BAND_TYPE_6G;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
-		("%s: band_type=%u\n", __func__, band_type));
+		("%s: band_idx: %d, band_type=%u\n", __func__,
+		band_idx, band_type));
 
 	BSTATE_SET_PARAM(serv_test, band_type, band_type);
 
@@ -2176,6 +2230,21 @@ s_int32 mt_serv_set_antswap(
 	ret = ops->op_set_antswap(
 			serv_test->test_winfo,
 			ant);
+
+	return ret;
+}
+
+s_int32 mt_serv_set_eeprom_to_fw(
+	struct service_test *serv_test)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+
+	struct test_operation *ops;
+
+	ops = serv_test->test_op;
+
+	ret = ops->op_set_eeprom_to_fw(
+			serv_test->test_winfo);
 
 	return ret;
 }
@@ -2542,7 +2611,9 @@ s_int32 mt_serv_continuous_tx(struct service_test *serv_test)
 	configs->channel = central_ch;
 	configs->rate = rate;
 	configs->ant_mask = ant_sel;
-	configs->tx_fd_mode = tx_fd_mode;
+	/*configs->tx_fd_mode = tx_fd_mode;*/
+	/* 3: payload OFDM */
+	configs->tx_fd_mode = 3;
 	configs->tx_tone_en = 1;
 
 	ret = mt_serv_dbdc_continuous_tx(serv_test);
@@ -2575,6 +2646,28 @@ s_int32 mt_serv_continuous_tx_stop(struct service_test *serv_test)
 	configs->tx_tone_en = 0;
 
 	ret = mt_serv_dbdc_continuous_tx(serv_test);
+
+	return ret;
+}
+
+s_int32 mt_serv_check_txv(struct service_test *serv_test)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_char ctrl_band_idx = serv_test->ctrl_band_idx;
+	struct test_configuration *configs = serv_test->test_config;
+	struct test_tx_stack *stack = &configs[ctrl_band_idx].stack;
+
+	if (!serv_test->engine_offload) {
+		return net_ad_check_txv(serv_test->test_winfo, ctrl_band_idx,
+				configs, stack->virtual_wtbl[0]);
+	} else {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: no supoort\n", __func__));
+	}
+
+	if (ret)
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: err=0x%08x\n", __func__, ret));
 
 	return ret;
 }
@@ -3253,10 +3346,12 @@ s_int32 mt_serv_set_ibf_profile_update(
 {
 	u_char ctrl_band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
 	s_int32 ret = SERV_STATUS_SUCCESS;
+	s_int32 tmplen = 0;
 	u_char wcid;
-	u_char nr, ndp_nss, pfmu_mem_row[4] = {0}, pfmu_mem_col[4] = {0};
+	u_char nr, ndp_nss = 0, pfmu_mem_row[4] = {0}, pfmu_mem_col[4] = {0};
 	u_char tx_ant_cfg, *addr1 = NULL;
-	u_char cmd_str[80], buf[6];
+	u_char cmd_str[80], buf[8];
+	u_int32 cmd_str_left;
 
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF,
@@ -3307,7 +3402,7 @@ s_int32 mt_serv_set_ibf_profile_update(
 	mt_serv_set_txbf_pfmu_tag_matrix(serv_test, nr, nc, 0, 0, 0, 0);
 
 	/* SNR */
-	sys_ad_zero_mem(buf, 4);
+	sys_ad_zero_mem(buf, 8);
 	mt_serv_set_txbf_pfmu_tag_snr(serv_test, buf);
 
 	/* SMART Antenna */
@@ -3320,7 +3415,7 @@ s_int32 mt_serv_set_ibf_profile_update(
 	mt_serv_set_txbf_pfmu_tag_rmsd_thrd(serv_test, 0);
 
 	/* MCS threshold */
-	sys_ad_zero_mem(buf, 6);
+	sys_ad_zero_mem(buf, 8);
 	mt_serv_set_txbf_pfmu_tag_mcs_thrd(serv_test, buf, &buf[3]);
 
 	/* Time out disable */
@@ -3362,18 +3457,37 @@ s_int32 mt_serv_set_ibf_profile_update(
 
 	wcid = 1;
 
-	snprintf(cmd_str, sizeof(cmd_str),
+	tmplen = snprintf(cmd_str, sizeof(cmd_str),
 	"%.2x:00:%.2x:00:00:00:%.2x:00:02:%.2x:%.2x:00:00:00:00:",
 					wcid, pfmu_idx, ndp_nss, nc, nr);
-	snprintf(&cmd_str[45], sizeof(cmd_str) - 45,
-	"%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 1 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
+	cmd_str_left = sizeof(cmd_str) - strlen(cmd_str);
+	tmplen = snprintf(cmd_str + strlen(cmd_str),
+					cmd_str_left,
+					"%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
 					pfmu_mem_row[0], pfmu_mem_col[0],
 					pfmu_mem_row[1], pfmu_mem_col[1],
 					pfmu_mem_row[2], pfmu_mem_col[2],
 					pfmu_mem_row[3], pfmu_mem_col[3]);
+	if (sys_snprintf_error(cmd_str_left, tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 2 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
 	mt_serv_set_sta_rec_bf_update(serv_test, cmd_str);
 
-	snprintf(cmd_str, sizeof(cmd_str), "%d", wcid);
+	tmplen = snprintf(cmd_str, sizeof(cmd_str), "%d", wcid);
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 3 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
 	mt_serv_set_sta_rec_bf_read(serv_test, cmd_str);
 
 	/* Configure WTBL */
@@ -3381,13 +3495,27 @@ s_int32 mt_serv_set_ibf_profile_update(
 
 	/* iwpriv ra0 set ManualAssoc =mac:222222222222-type:sta-wtbl:1 */
 			/* -ownmac:0-mode:aanac-bw:20-nss:2-pfmuId:0 */
-	snprintf(cmd_str, sizeof(cmd_str),
+	tmplen = snprintf(cmd_str, sizeof(cmd_str),
 	"mac:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x-type:sta-wtbl:1-ownmac:0-mode:",
 			addr1[0], addr1[1], addr1[2], addr1[3],
 			addr1[4], addr1[5]);
-	snprintf(&cmd_str[52], sizeof(cmd_str) - 52,
-	"aanac-bw:20-nss:%d-pfmuId:%d\n",
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 4 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
+	cmd_str_left = sizeof(cmd_str) - strlen(cmd_str);
+	tmplen = snprintf(cmd_str + strlen(cmd_str),
+		cmd_str_left,
+		"aanac-bw:20-nss:%d-pfmuId:%d\n",
 			(nc + 1), pfmu_idx);
+	if (sys_snprintf_error(cmd_str_left, tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 5 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
 	mt_serv_set_manual_assoc(serv_test, cmd_str);
 
 	return ret;
@@ -3399,11 +3527,12 @@ s_int32 mt_serv_set_ebf_profile_update(
 {
 	u_char ctrl_band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
 	s_int32 ret = SERV_STATUS_SUCCESS;
+	s_int32 tmplen = 0;
 	u_char wcid;
-	u_char nr, ndp_nss, pfmu_mem_row[4] = {0}, pfmu_mem_col[4] = {0};
+	u_char nr, ndp_nss = 0, pfmu_mem_row[4] = {0}, pfmu_mem_col[4] = {0};
 	u_char tx_ant_cfg, *addr1 = NULL;
-	u_char cmd_str[80], buf[6];
-
+	u_char cmd_str[80], buf[8];
+	u_int32 cmd_str_left;
 
 	tx_ant_cfg = CONFIG_GET_PARAM(serv_test, tx_ant, ctrl_band_idx);
 	switch (tx_ant_cfg) {
@@ -3447,7 +3576,7 @@ s_int32 mt_serv_set_ebf_profile_update(
 	mt_serv_set_txbf_pfmu_tag_matrix(serv_test, nr, nc, 0, 1, 0, 0);
 
 	/* SNR */
-	sys_ad_zero_mem(buf, 4);
+	sys_ad_zero_mem(buf, 8);
 	mt_serv_set_txbf_pfmu_tag_snr(serv_test, buf);
 
 	/* SMART Antenna */
@@ -3460,7 +3589,7 @@ s_int32 mt_serv_set_ebf_profile_update(
 	mt_serv_set_txbf_pfmu_tag_rmsd_thrd(serv_test, 0);
 
 	/* MCS threshold */
-	sys_ad_zero_mem(buf, 6);
+	sys_ad_zero_mem(buf, 8);
 	mt_serv_set_txbf_pfmu_tag_mcs_thrd(serv_test, buf, &buf[3]);
 
 	/* Invalid the tag */
@@ -3490,18 +3619,37 @@ s_int32 mt_serv_set_ebf_profile_update(
 
 	wcid = 1;
 
-	snprintf(cmd_str, sizeof(cmd_str),
+	tmplen = snprintf(cmd_str, sizeof(cmd_str),
 	"%.2x:00:%.2x:00:01:00:%.2x:00:02:%.2x:%.2x:00:00:00:00:",
 					wcid, pfmu_idx, ndp_nss, nc, nr);
-	snprintf(&cmd_str[45], sizeof(cmd_str) - 45,
-	"%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 1 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
+	cmd_str_left = sizeof(cmd_str) - strlen(cmd_str);
+	tmplen = snprintf(cmd_str + strlen(cmd_str),
+					cmd_str_left,
+					"%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
 					pfmu_mem_row[0], pfmu_mem_col[0],
 					pfmu_mem_row[1], pfmu_mem_col[1],
 					pfmu_mem_row[2], pfmu_mem_col[2],
 					pfmu_mem_row[3], pfmu_mem_col[3]);
+	if (sys_snprintf_error(cmd_str_left, tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 2 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
 	mt_serv_set_sta_rec_bf_update(serv_test, cmd_str);
 
-	snprintf(cmd_str, sizeof(cmd_str), "%d", wcid);
+	tmplen = snprintf(cmd_str, sizeof(cmd_str), "%d", wcid);
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 3 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
 	mt_serv_set_sta_rec_bf_read(serv_test, cmd_str);
 
 	/* Configure WTBL */
@@ -3509,13 +3657,27 @@ s_int32 mt_serv_set_ebf_profile_update(
 
 	/* iwpriv ra0 set ManualAssoc =mac:222222222222-type:sta-wtbl:1 */
 			/* -ownmac:0-mode:aanac-bw:20-nss:2-pfmuId:0 */
-	snprintf(cmd_str, sizeof(cmd_str),
+	tmplen = snprintf(cmd_str, sizeof(cmd_str),
 	"mac:%.2x:%.2x:%.2x:%.2x:%.2x:%.2x-type:sta-wtbl:1-ownmac:0-mode:",
 			addr1[0], addr1[1], addr1[2], addr1[3],
 			addr1[4], addr1[5]);
-	snprintf(&cmd_str[52], sizeof(cmd_str) - 52,
-	"aanac-bw:20-nss:%d-pfmuId:%d\n",
+	if (sys_snprintf_error(sizeof(cmd_str), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 4 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
+	cmd_str_left = sizeof(cmd_str) - strlen(cmd_str);
+	tmplen = snprintf(cmd_str + strlen(cmd_str),
+			cmd_str_left,
+			"aanac-bw:20-nss:%d-pfmuId:%d\n",
 			(nc + 1), pfmu_idx);
+	if (sys_snprintf_error(cmd_str_left, tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: 5 snprintf error(%d)!\n", __func__, tmplen));
+		return SERV_STATUS_AGENT_INVALID_PARAM;
+	}
+
 	mt_serv_set_manual_assoc(serv_test, cmd_str);
 
 	return ret;

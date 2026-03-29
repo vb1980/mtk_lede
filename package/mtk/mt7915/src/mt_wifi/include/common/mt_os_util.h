@@ -29,6 +29,13 @@ VOID os_free_mem(
 	PVOID mem
 );
 
+VOID BTM_Free_Peer_Entry(PVOID mem);
+#define BTM_free_Entry(a) \
+	do { \
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Free BTMPeerEntry!!\n", __func__)); \
+		BTM_Free_Peer_Entry(a); \
+	} while (0)
+
 VOID os_zero_mem(
 	PVOID ptr,
 	ULONG length

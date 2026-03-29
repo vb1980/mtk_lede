@@ -472,7 +472,7 @@ VOID LoopBack_Rx(RTMP_ADAPTER *pAd, UINT32 pktlen, UINT8 *pData)
 		UINT32 LPLength = 0;
 		INT32 TotalLength = (INT32)pktlen;
 		UINT8  *ptr = pData;
-		EVENT_RXD EvnRxD;
+		EVENT_RXD EvnRxD = {0};
 
 		/* FwCMDRspTxD_STRUC FwCMDRspTxD; */
 		if (pAd->LbCtrl.DebugMode) {

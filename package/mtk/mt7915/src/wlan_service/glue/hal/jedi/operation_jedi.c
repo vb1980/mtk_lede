@@ -410,6 +410,22 @@ s_int32 mt_op_set_antswap(
 	return ret;
 }
 
+s_int32 mt_op_set_eeprom_to_fw(
+	struct test_wlan_info *winfos)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	RTMP_ADAPTER *ad = NULL;
+
+	/* Get adapter from jedi driver first */
+	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
+	if (ad == NULL)
+		return SERV_STATUS_HAL_OP_INVALID_PAD;
+
+	MtCmdEfusBufferModeSet(ad, EEPROM_FLASH);
+
+	return ret;
+}
+
 s_int32 mt_op_get_thermal_value(
 	struct test_wlan_info *winfos,
 	struct test_configuration *test_configs)
@@ -587,11 +603,12 @@ s_int32 mt_op_restore_cr(
 s_int32 mt_op_set_ampdu_ba_limit(
 	struct test_wlan_info *winfos,
 	u_int8 wmm_idx,
-	u_int8 agg_limit)
+	u_int8 agg_limit,
+	u_char band_idx)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 
-	ret = mt_test_mac_set_ampdu_ba_limit(winfos, wmm_idx, agg_limit);
+	ret = mt_test_mac_set_ampdu_ba_limit(winfos, wmm_idx, agg_limit, band_idx);
 	if (ret)
 		ret = SERV_STATUS_HAL_OP_FAIL_SET_MAC;
 
@@ -2688,7 +2705,7 @@ s_int32 mt_op_group_prek(
 	if (ad == NULL)
 		return SERV_STATUS_HAL_OP_INVALID_PAD;
 
-	if (op < 0 || op >= PREK_GROUP_OP_NUM) {
+	if (op >= PREK_GROUP_OP_NUM) {
 		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 			("%s: Invalid op\n", __func__));
 		return SERV_STATUS_HAL_OP_FAIL;
@@ -2717,7 +2734,7 @@ s_int32 mt_op_dpd_prek(
 	if (ad == NULL)
 		return SERV_STATUS_HAL_OP_INVALID_PAD;
 
-	if (op < 0 || op >= PREK_DPD_OP_NUM) {
+	if (op >= PREK_DPD_OP_NUM) {
 		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 			("%s: Invalid op\n", __func__));
 		return SERV_STATUS_HAL_OP_FAIL;

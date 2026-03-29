@@ -245,7 +245,7 @@ static BOOLEAN ap_rx_peer_response_allowed(struct _RTMP_ADAPTER *pAd,
 {
 	PMAC_TABLE_ENTRY pEntry = NULL;
 	UCHAR WorkChannel = Elem->Channel;
-	struct freq_oper oper;
+	struct freq_oper oper = {0};
 
 #ifdef AUTOMATION
 	rx_peer_beacon_check(pAd, ie_list, Elem);
@@ -278,7 +278,14 @@ static BOOLEAN ap_rx_peer_response_allowed(struct _RTMP_ADAPTER *pAd,
 
 #ifdef DOT11_N_SUPPORT
 
-	hc_radio_query_by_channel(pAd, WorkChannel, &oper);
+	if (hc_radio_query_by_channel(pAd, WorkChannel, &oper) == HC_STATUS_FAIL) {
+		if (WMODE_CAP_2G(wdev->PhyMode) && (pAd->CommonCfg.bOverlapScanning == TRUE)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+				"it is OverlapScanning, ignore BEACON not in current Radio channel.\n");
+			return FALSE;
+		}
+	}
+
 
 	if (WorkChannel <= 14
 		&& (oper.ht_bw == HT_BW_40)
@@ -305,8 +312,8 @@ static BOOLEAN ap_rx_peer_response_allowed(struct _RTMP_ADAPTER *pAd,
 				if (((oper.cen_ch_1 + 2) != ie_list->Channel) &&
 					((oper.cen_ch_1 - 2) != ie_list->Channel)) {
 					/*
-									MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%02x:%02x:%02x:%02x:%02x:%02x is a legacy BSS (%d)\n",
-												Bssid[0], Bssid[1], Bssid[2], Bssid[3], Bssid[4], Bssid[5], Channel));
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, (""MACSTR" is a legacy BSS (%d)\n",
+								MAC2STR(ie_list->Addr2), Channel));
 					*/
 					return FALSE;
 				}
@@ -328,7 +335,9 @@ static BOOLEAN ap_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 	BOOLEAN LegacyBssExist = FALSE;
 	UCHAR MaxSupportedRate = 0;
 	struct legacy_rate *legacy_rate = &ie_list->cmm_ies.rate;
-#ifdef MWDS
+	BOOL APrecorded = FALSE;
+	int macidx = 0;
+#if defined(MWDS) || defined(DOT11K_RRM_SUPPORT)
 	int BssIdx = 0;
 	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 #endif
@@ -419,6 +428,35 @@ static BOOLEAN ap_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 		}
 	}
 #endif /* OCE_SUPPORT */
+#ifdef DOT11K_RRM_SUPPORT
+		/* Update ScanTab */
+		BssIdx = BssTableSearch(ScanTab, ie_list->Bssid, ie_list->Channel);
+		if (BssIdx == BSS_NOT_FOUND) {
+			/* discover new AP of this network, create BSS entry */
+			BssIdx = BssTableSetEntry(pAd, wdev, ScanTab, ie_list, RealRssi, LenVIE, pVIE);
+			if (BssIdx != BSS_NOT_FOUND) {/* check if BSS table full */
+				NdisMoveMemory(ScanTab->BssEntry[BssIdx].PTSF, &Elem->Msg[24], 4);
+				NdisMoveMemory(&ScanTab->BssEntry[BssIdx].TTSF[0], &Elem->TimeStamp.u.LowPart, 4);
+				NdisMoveMemory(&ScanTab->BssEntry[BssIdx].TTSF[4], &Elem->TimeStamp.u.LowPart, 4);
+				ScanTab->BssEntry[BssIdx].MinSNR = Elem->Signal % 10;
+				if (ScanTab->BssEntry[BssIdx].MinSNR == 0)
+					ScanTab->BssEntry[BssIdx].MinSNR = -5;
+				NdisMoveMemory(ScanTab->BssEntry[BssIdx].MacAddr, ie_list->Addr2, MAC_ADDR_LEN);
+			}
+		} else {
+			if (BssIdx < MAX_LEN_OF_BSS_TABLE) {
+				BSS_ENTRY *pBss = NULL;
+                        	pBss = &ScanTab->BssEntry[BssIdx];
+                        	if (pBss) {
+                                	pBss->Rssi = RealRssi;
+                                	COPY_MAC_ADDR(pBss->Bssid, ie_list->Bssid);
+                                	pBss->Channel = ie_list->Channel;
+                                }
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_LOUD,
+				"SYNC - UPDATE Info[%d], RSSI=%d, MAC=%02x:%02x:%02x:%02x:%02x:%02x\n", BssIdx, RealRssi, PRINT_MAC(ie_list->Bssid));
+			}
+		}
+#endif
 
 	if (LegacyBssExist && pAd->CommonCfg.DisableOLBCDetect == 0) {
 		pAd->ApCfg.LastOLBCDetectTime = pAd->Mlme.Now32;
@@ -452,7 +490,6 @@ static BOOLEAN ap_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 #ifdef WDS_SUPPORT
 
 	if (pAd->WdsTab.Mode[HcGetBandByWdev(wdev)] != WDS_DISABLE_MODE) {
-		if (pAd->WdsTab.flg_wds_init[HcGetBandByWdev(wdev)]) {
 			MAC_TABLE_ENTRY *pEntry;
 			/* check BEACON does in WDS TABLE. */
 			pEntry = WdsTableLookup(pAd, ie_list->Addr2, FALSE);
@@ -461,22 +498,29 @@ static BOOLEAN ap_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 				WdsPeerBeaconProc(pAd, pEntry, MaxSupportedRate, RatesLen, ie_list);
 			else {
 				if (!pEntry)
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-						 ("%s(), WdsTab for %02x:%02x:%02x:%02x:%02x:%02x not found!\n",
-						  __func__, PRINT_MAC(ie_list->Addr2)));
+					MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO,
+						 ("%s(), WdsTab for "MACSTR" not found!\n",
+						  __func__, MAC2STR(ie_list->Addr2)));
 				else {
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					MTWF_LOG(DBG_CAT_AP, CATAP_WDS, DBG_LVL_INFO,
 						 ("%s(), WdsTab[%d] is not enabled!\n",
 						  __func__, pEntry->func_tb_idx));
 				}
 			}
-		} else {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(), ERROR!! Beacon comes before wds_init\n", __func__));
-		}
 	}
 
 #endif /* WDS_SUPPORT */
-	bss_coex_insert_effected_ch_list(pAd, WorkChannel, ie_list, wdev);
+
+	if (WMODE_CAP_2G(wdev->PhyMode) && (WorkChannel != wdev->channel)) {
+		for (macidx = 0; macidx < pAd->CommonCfg.BssCoexApCnt; macidx++) {
+			if (MAC_ADDR_EQUAL(pAd->CommonCfg.BssCoexApMac[macidx], ie_list->Addr2)) {
+				APrecorded = TRUE;
+				break;
+			}
+		}
+		if (!APrecorded && (pAd->CommonCfg.BssCoexApCnt < AP_MAC_CNT))
+			bss_coex_insert_effected_ch_list(pAd, WorkChannel, ie_list, wdev);
+	}
 
 #ifdef MWDS
 		BssIdx = BssTableSearch(ScanTab, ie_list->Bssid, ie_list->Channel);
@@ -513,7 +557,7 @@ static BOOLEAN ap_probe_response_allowed(struct _RTMP_ADAPTER *pAd,
 {
 	BOOLEAN isNeedRsp = TRUE;
 	BSS_STRUCT *mbss;
-	struct freq_oper oper;
+	struct freq_oper oper = {0};
 	BOOLEAN isSsidMatched = FALSE;
 #ifdef OCE_SUPPORT
 		P_OCE_CTRL pOceCtrl = NULL;
@@ -530,7 +574,7 @@ static BOOLEAN ap_probe_response_allowed(struct _RTMP_ADAPTER *pAd,
 	pOceCtrl = &wdev->OceCtrl;
 
 	if (ProbeReqParam->IsOceCapability && ProbeReqParam->MaxChannelTime && (pOceCtrl->MaxChannelTimesUp ||
-		pAd->CommonCfg.BeaconPeriod <= ProbeReqParam->MaxChannelTime)) {
+		pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)] <= ProbeReqParam->MaxChannelTime)) {
 		pOceCtrl->MaxChannelTimesUp = FALSE;
 		pOceCtrl->MaxChannelTimerRunning = FALSE;
 		return FALSE;
@@ -587,6 +631,34 @@ static BOOLEAN ap_probe_response_allowed(struct _RTMP_ADAPTER *pAd,
 #endif
 	}
 
+#ifdef CONFIG_6G_SUPPORT
+	/* probe with short ssid */
+	if (ProbeReqParam->ShortSSID == mbss->ShortSSID)
+		isSsidMatched = TRUE;
+	else {
+		UINT16 reported_bss_num = wdev->ap6g_cfg.dsc_oob.repted_bss_cnt;
+		prepted_bss_info repted_bss_list = wdev->ap6g_cfg.dsc_oob.repted_bss_list;
+		struct _repted_bss_info *reported_bss = NULL;
+		UINT32 nshort_ssid;
+		UCHAR i;
+
+		/* reported short ssid */
+		if (reported_bss_num && repted_bss_list) {
+			for (i = 0; i < reported_bss_num; i++) {
+				reported_bss = repted_bss_list + i;
+				nshort_ssid = Crcbitbybitfast(reported_bss->ssid, reported_bss->ssid_len);
+				/* check ssid and short-ssid */
+				if ((ProbeReqParam->ShortSSID == nshort_ssid) ||
+					((ProbeReqParam->SsidLen == reported_bss->ssid_len) &&
+					NdisEqualMemory(ProbeReqParam->Ssid, reported_bss->ssid, (ULONG)ProbeReqParam->SsidLen))) {
+					isSsidMatched = TRUE;
+					break;
+				}
+			}
+		}
+	}
+#endif
+
 	if (((((ProbeReqParam->SsidLen == 0) && (!mbss->bHideSsid)) || isSsidMatched)
 #ifdef CONFIG_HOTSPOT
 		 && ProbeReqforHSAP(pAd, wdev->func_idx, ProbeReqParam)
@@ -607,13 +679,31 @@ static BOOLEAN ap_probe_response_allowed(struct _RTMP_ADAPTER *pAd,
 #ifdef BAND_STEERING
 		if (pAd->ApCfg.BandSteering
 		) {
-			BOOLEAN bBndStrgCheck = TRUE;
-
-			bBndStrgCheck = BndStrg_CheckConnectionReq(pAd, wdev, ProbeReqParam->Addr2, Elem, ProbeReqParam);
+			BOOLEAN bBndStrgCheck = BndStrg_CheckConnectionReq(pAd, wdev, ProbeReqParam->Addr2, Elem, ProbeReqParam);
 			if (bBndStrgCheck == FALSE)
 				return FALSE;
 		}
 #endif /* BAND_STEERING */
+
+#ifdef CUT_THROUGH
+	if (IS_ASIC_CAP(pAd, fASIC_CAP_CT)) {
+		UCHAR DbdcIdx = DBDC_BAND0;
+#ifdef DBDC_MODE
+		DbdcIdx = HcGetBandByWdev(wdev);
+
+		if ((DbdcIdx < DBDC_BAND_NUM) && pAd->IsLimitProbeResp) {
+#else
+		if (pAd->IsLimitProbeResp) {
+#endif
+			if (pAd->probe_rsp_cnt_per_b[DbdcIdx] >= pAd->probe_rsp_max_per_b[DbdcIdx]) {
+				struct tr_counter *tr_cnt = &pAd->tr_ctl.tr_cnt;
+
+				tr_cnt->tx_sw_probe_rsp_drop++;
+				return FALSE;
+			}
+		}
+	}
+#endif /*CUT_THROUGH*/
 
 	return isNeedRsp;
 }
@@ -630,7 +720,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	UCHAR ucETxBfCap;
 #endif /* TXBF_SUPPORT && VHT_TXBF_SUPPORT */
 #ifdef AP_QLOAD_SUPPORT
-	QLOAD_CTRL *pQloadCtrl = HcGetQloadCtrl(pAd);
+	QLOAD_CTRL *pQloadCtrl;
 #endif /* AP_QLOAD_SUPPORT */
 	ADD_HT_INFO_IE *addht;
 	UCHAR cfg_ht_bw;
@@ -660,9 +750,15 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	ie_info.phy_mode = PhyMode;
 	ie_info.wdev = wdev;
 
-#ifdef WAPP_SUPPORT
-	wapp_send_cli_probe_event(pAd, RtmpOsGetNetIfIndex(wdev->if_dev), ProbeReqParam->Addr2, Elem);
+#ifdef CONFIG_MAP_SUPPORT
+#if defined(WAPP_SUPPORT)
+	if (IS_MAP_CERT_ENABLE(pAd) || IS_MAP_BS_ENABLE(pAd) || IS_MAP_API_ENABLE(pAd)) {
+		/* Send event if MAP CERT/BS/API mode is enabled */
+		wapp_send_cli_probe_event(pAd, RtmpOsGetNetIfIndex(wdev->if_dev), ProbeReqParam->Addr2, Elem);
+	}
 #endif
+#endif /* CONFIG_MAP_SUPPORT */
+
 #ifdef WH_EVENT_NOTIFIER
 	{
 		EventHdlr pEventHdlrHook = NULL;
@@ -713,7 +809,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	MakeOutgoingFrame(pOutBuffer,				  &FrameLen,
 					  sizeof(HEADER_802_11),	  &ProbeRspHdr,
 					  TIMESTAMP_LEN,			  &FakeTimestamp,
-					  2,						  &pAd->CommonCfg.BeaconPeriod,
+					  2,						  &pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 					  2,						  &mbss->CapabilityInfo,
 					  1,						  &SsidIe,
 					  1,						  &mbss->SsidLen,
@@ -751,7 +847,18 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	} else
 #endif /* CONFIG_HOTSPOT_R2 */
 		FrameLen += build_rsn_ie(pAd, wdev, (UCHAR *)(pOutBuffer + FrameLen));
+#ifdef CONFIG_6G_SUPPORT
+	{
+		UINT32 queried_s_ssid = 0;
 
+		if (ProbeReqParam->ShortSSID)
+			queried_s_ssid = ProbeReqParam->ShortSSID;
+		else if (ProbeReqParam->SsidLen != 0)
+			queried_s_ssid =  Crcbitbybitfast(ProbeReqParam->Ssid, ProbeReqParam->SsidLen);
+
+		FrameLen += add_he_6g_rnr_ie(wdev, (UINT8 *)pOutBuffer, FrameLen, queried_s_ssid);
+	}
+#endif
 #ifdef DOT11V_MBSSID_SUPPORT
 	make_multiple_bssid_ie(pAd, wdev, &FrameLen, pOutBuffer,
 				pAd->ApCfg.dot11v_mbssid_bitmap[HcGetBandByWdev(wdev)], TRUE);
@@ -774,7 +881,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	else
 		pQloadCtrl = (wdev->channel > 14) ? HcGetQloadCtrlByRf(pAd, RFIC_5GHZ) : HcGetQloadCtrlByRf(pAd, RFIC_24GHZ);
 
-	if (pQloadCtrl->FlgQloadEnable != 0) {
+	if (pQloadCtrl && pQloadCtrl->FlgQloadEnable != 0) {
 #ifdef CONFIG_HOTSPOT_R2
 
 		if (mbss->HotSpotCtrl.QLoadTestEnable == 1)
@@ -793,6 +900,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 #ifdef CONFIG_DOT11U_INTERWORKING
 	if (mbss->GASCtrl.b11U_enable) {
 		ULONG TmpLen;
+		RTMP_SEM_LOCK(&mbss->GASCtrl.IeLock);
 		/* Interworking element */
 		MakeOutgoingFrame(pOutBuffer + FrameLen, &TmpLen,
 						  mbss->GASCtrl.InterWorkingIELen,
@@ -803,6 +911,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 						  mbss->GASCtrl.AdvertisementProtoIELen,
 						  mbss->GASCtrl.AdvertisementProtoIE, END_OF_ARGS);
 		FrameLen += TmpLen;
+		RTMP_SEM_UNLOCK(&mbss->GASCtrl.IeLock);
 	}
 #endif /* CONFIG_DOT11U_INTERWORKING */
 
@@ -899,12 +1008,12 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	FrameLen += build_vendor_ie(pAd, wdev, (pOutBuffer + FrameLen), VIE_PROBE_RESP
 	);
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
-	{	
+	{
 	RTMP_SPIN_LOCK(&mbss->probe_rsp_vendor_ie_lock);
 	ap_probe_rsp_vendor_ie_list = &mbss->ap_probe_rsp_vendor_ie_list;
 	ie_count = DlListLen(ap_probe_rsp_vendor_ie_list);
 	if (ie_count) {
-		DlListForEach(ap_probe_rsp_vendor_ie, ap_probe_rsp_vendor_ie_list, 
+		DlListForEach(ap_probe_rsp_vendor_ie, ap_probe_rsp_vendor_ie_list,
 			CUSTOMER_PROBE_RSP_VENDOR_IE, List) {
 			if (memcmp(ap_probe_rsp_vendor_ie->stamac, ProbeReqParam->Addr2, MAC_ADDR_LEN) == 0) {
 				found = TRUE;
@@ -915,8 +1024,8 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 		if (found && (ap_probe_rsp_vendor_ie->pointer != NULL)) {
 			ULONG TmpLen;
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("SYNC - Send Probe response to %02x:%02x:%02x:%02x:%02x:%02x...and add vendor ie2\n",
-			PRINT_MAC(ProbeReqParam->Addr2)));
+			("SYNC - Send Probe response to "MACSTR"...and add vendor ie2\n",
+			MAC2STR(ProbeReqParam->Addr2)));
 			hex_dump_with_lvl("send Probe rsp IE: ",ap_probe_rsp_vendor_ie->pointer ,
 				ap_probe_rsp_vendor_ie->length ,DBG_LVL_INFO);
 			MakeOutgoingFrame(pOutBuffer + FrameLen,
@@ -926,7 +1035,7 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 					END_OF_ARGS);
 			FrameLen += TmpLen;
 		}
-	}	
+	}
 	RTMP_SPIN_UNLOCK(&mbss->probe_rsp_vendor_ie_lock);
 	}
 #endif /*CUSTOMER_VENDOR_IE_SUPPORT*/
@@ -946,8 +1055,8 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 		if (ProbeReqParam->bRequestRssi == TRUE) {
 			MAC_TABLE_ENTRY *pEntry = NULL;
 
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("SYNC - Send PROBE_RSP to %02x:%02x:%02x:%02x:%02x:%02x...\n",
-					 PRINT_MAC(ProbeReqParam->Addr2)));
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("SYNC - Send PROBE_RSP to "MACSTR"...\n",
+					 MAC2STR(ProbeReqParam->Addr2)));
 			RalinkSpecificIe[5] |= 0x8;
 			pEntry = MacTableLookup(pAd, ProbeReqParam->Addr2);
 
@@ -977,32 +1086,32 @@ static BOOLEAN ap_probe_response_xmit(struct _RTMP_ADAPTER *pAd,
 	FrameLen += oce_build_ies(pAd, &ie_info, (MAC_ADDR_EQUAL(ProbeReqParam->Addr1, BROADCAST_ADDR) && ProbeReqParam->IsOceCapability));
 #endif /*OCE_FILS_SUPPORT */
 
+#ifndef HOSTAPD_WPA3_SUPPORT
+#ifdef CONFIG_MAP_SUPPORT
+	if (!(IS_MAP_ENABLE(pAd) && IS_MAP_CERT_ENABLE(pAd)))
+#endif
 	FrameLen +=  build_rsnxe_ie(&wdev->SecConfig,
 				    (UCHAR *)pOutBuffer + FrameLen);
+#endif /* HOSTAPD_WPA3_SUPPORT*/
 
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 	{
-		MAC_TABLE_ENTRY *pEntry = NULL;
+		ap_vendor_ie = &mbss->ap_vendor_ie;
+		RTMP_SPIN_LOCK(&ap_vendor_ie->vendor_ie_lock);
+		if (ap_vendor_ie->pointer != NULL) {
+			ULONG TmpLen;
 
-		pEntry = MacTableLookup(pAd, ProbeReqParam->Addr2);
-		if (pEntry != NULL) {
-			ap_vendor_ie = &pAd->ApCfg.MBSSID[pEntry->apidx].ap_vendor_ie;
-			RTMP_SPIN_LOCK(&ap_vendor_ie->vendor_ie_lock);
-			if (ap_vendor_ie->pointer != NULL) {
-				ULONG TmpLen;
-
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					("SYNC - Send Probe response to %02x:%02x:%02x:%02x:%02x:%02x...and add vendor ie\n",
-					PRINT_MAC(ProbeReqParam->Addr2)));
-				MakeOutgoingFrame(pOutBuffer + FrameLen,
-						&TmpLen,
-						ap_vendor_ie->length,
-						ap_vendor_ie->pointer,
-						END_OF_ARGS);
-				FrameLen += TmpLen;
-			}
-			RTMP_SPIN_UNLOCK(&ap_vendor_ie->vendor_ie_lock);
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("SYNC - Send Probe response to "MACSTR"...and add vendor ie\n",
+				MAC2STR(ProbeReqParam->Addr2)));
+			MakeOutgoingFrame(pOutBuffer + FrameLen,
+					&TmpLen,
+					ap_vendor_ie->length,
+					ap_vendor_ie->pointer,
+					END_OF_ARGS);
+			FrameLen += TmpLen;
 		}
+		RTMP_SPIN_UNLOCK(&ap_vendor_ie->vendor_ie_lock);
 	}
 #endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 

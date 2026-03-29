@@ -238,8 +238,8 @@ TDLS_InsertDiscoveryPeerEntryByMAC(
 		os_alloc_mem(NULL, (PUCHAR *)&pTdlsPeer, sizeof(TDLS_DISCOVERY_ENTRY));
 
 		if (pTdlsPeer) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n!!! Add %02x:%02x:%02x:%02x:%02x:%02x to discovery table !!!\n",
-					 pMacAddr[0], pMacAddr[1], pMacAddr[2], pMacAddr[3], pMacAddr[4], pMacAddr[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n!!! Add "MACSTR" to discovery table !!!\n",
+					 MAC2STR(pMacAddr)));
 			NdisZeroMemory(pTdlsPeer, sizeof(TDLS_DISCOVERY_ENTRY));
 			NdisMoveMemory(pTdlsPeer->Responder, pMacAddr, MAC_ADDR_LEN);
 			NdisGetSystemUpTime(&pTdlsPeer->InitRefTime);
@@ -268,7 +268,7 @@ VOID TDLS_DelDiscoveryEntryByMAC(
 	pListEntry = (RT_LIST_ENTRY *)pPeerEntry;
 
 	if (pPeerEntry) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Delete %02x:%02x:%02x:%02x:%02x:%02x from discovery table !!!\n",
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Delete "MACSTR" from discovery table !!!\n",
 				 pPeerEntry->Responder[0],
 				 pPeerEntry->Responder[1],
 				 pPeerEntry->Responder[2],
@@ -308,13 +308,8 @@ TDLS_MaintainDiscoveryEntryList(
 						USHORT		Reason = REASON_UNSPECIFY;
 						INT			idx;
 
-						MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-								 pPeerEntry->Responder[0],
-								 pPeerEntry->Responder[1],
-								 pPeerEntry->Responder[2],
-								 pPeerEntry->Responder[3],
-								 pPeerEntry->Responder[4],
-								 pPeerEntry->Responder[5]));
+						MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down "MACSTR" !!!\n",
+								 MAC2STR(pPeerEntry->Responder)));
 						idx = TDLS_SearchLinkId(pAd, pPeerEntry->Responder);
 
 						if (idx == -1 || idx == MAX_NUM_OF_TDLS_ENTRY)
@@ -336,13 +331,8 @@ TDLS_MaintainDiscoveryEntryList(
 					RTMP_SEM_LOCK(&pAd->StaCfg[0].TdlsInfo.TdlsDiscovPeerListSemLock);
 					pTempListEntry = pListEntry->pNext;
 					MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-							 ("\n !!! peer connect and retrycount > 2 Delete %02x:%02x:%02x:%02x:%02x:%02x from discovery table !!!\n",
-							  pPeerEntry->Responder[0],
-							  pPeerEntry->Responder[1],
-							  pPeerEntry->Responder[2],
-							  pPeerEntry->Responder[3],
-							  pPeerEntry->Responder[4],
-							  pPeerEntry->Responder[5]));
+							 ("\n !!! peer connect and retrycount > 2 Delete "MACSTR" from discovery table !!!\n",
+							  MAC2STR(pPeerEntry->Responder)));
 					delEntryList(pTdlsDiscoveryEnList, pListEntry);
 					os_free_mem(pPeerEntry);
 					pListEntry = pTempListEntry;
@@ -409,13 +399,8 @@ TDLS_MaintainDiscoveryEntryList(
 						RTMP_SEM_LOCK(&pAd->StaCfg[0].TdlsInfo.TdlsDiscovPeerListSemLock);
 						pTempListEntry = pListEntry->pNext;
 						MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-								 ("\n !!! peer disconnect  and over 5 sec Delete %02x:%02x:%02x:%02x:%02x:%02x from discovery table !!!\n",
-								  pPeerEntry->Responder[0],
-								  pPeerEntry->Responder[1],
-								  pPeerEntry->Responder[2],
-								  pPeerEntry->Responder[3],
-								  pPeerEntry->Responder[4],
-								  pPeerEntry->Responder[5]));
+								 ("\n !!! peer disconnect  and over 5 sec Delete "MACSTR" from discovery table !!!\n",
+								  MAC2STR(pPeerEntry->Responder)));
 						delEntryList(pTdlsDiscoveryEnList, pListEntry);
 						os_free_mem(pPeerEntry);
 						pListEntry = pTempListEntry;
@@ -470,8 +455,8 @@ TDLS_InsertBlackEntryByMAC(
 		os_alloc_mem(NULL, (PUCHAR *)&pTdlsBlack, sizeof(TDLS_BLACK_ENTRY));
 
 		if (pTdlsBlack) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Add %02x:%02x:%02x:%02x:%02x:%02x to black table!!!\n",
-					 pMacAddr[0], pMacAddr[1], pMacAddr[2], pMacAddr[3], pMacAddr[4], pMacAddr[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Add "MACSTR" to black table!!!\n",
+					 MAC2STR(pMacAddr)));
 			NdisZeroMemory(pTdlsBlack, sizeof(TDLS_BLACK_ENTRY));
 			NdisMoveMemory(pTdlsBlack->MacAddr, pMacAddr, MAC_ADDR_LEN);
 			NdisGetSystemUpTime(&pTdlsBlack->InitRefTime);
@@ -495,13 +480,8 @@ TDLS_DelBlackEntryByMAC(
 	pListEntry = (RT_LIST_ENTRY *)pBlackEntry;
 
 	if (pBlackEntry) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Delete %02x:%02x:%02x:%02x:%02x:%02x from black table!!!\n",
-				 pBlackEntry->MacAddr[0],
-				 pBlackEntry->MacAddr[1],
-				 pBlackEntry->MacAddr[2],
-				 pBlackEntry->MacAddr[3],
-				 pBlackEntry->MacAddr[4],
-				 pBlackEntry->MacAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Delete "MACSTR" from black table!!!\n",
+				 MAC2STR(pBlackEntry->MacAddr)));
 		delEntryList(pTdlsEnList, pListEntry);
 		os_free_mem(pBlackEntry);
 	}
@@ -525,14 +505,9 @@ TDLS_MaintainBlackList(
 			if (RTMP_TIME_AFTER(now_time, pBlackEntry->InitRefTime + (pAd->StaCfg[0].TdlsInfo.TdlsAutoDiscoveryPeriod * ((1000 * OS_HZ) / 1000)))) {
 				RTMP_SEM_LOCK(&pAd->StaCfg[0].TdlsInfo.TdlsBlackListSemLock);
 				pTempListEntry = pListEntry->pNext;
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n balck auto discovery after %d secs Delete %02x:%02x:%02x:%02x:%02x:%02x from black table !!!\n",
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n balck auto discovery after %d secs Delete "MACSTR" from black table !!!\n",
 						 pAd->StaCfg[0].TdlsInfo.TdlsAutoDiscoveryPeriod,
-						 pBlackEntry->MacAddr[0],
-						 pBlackEntry->MacAddr[1],
-						 pBlackEntry->MacAddr[2],
-						 pBlackEntry->MacAddr[3],
-						 pBlackEntry->MacAddr[4],
-						 pBlackEntry->MacAddr[5]));
+						 MAC2STR(pBlackEntry->MacAddr)));
 				delEntryList(pTdlsBlackenList, pListEntry);
 				os_free_mem(pBlackEntry);
 				pListEntry = pTempListEntry;
@@ -543,14 +518,9 @@ TDLS_MaintainBlackList(
 			if (RTMP_TIME_AFTER(now_time, pBlackEntry->InitRefTime + (pAd->StaCfg[0].TdlsInfo.TdlsDisabledPeriodByTeardown * ((1000 * OS_HZ) / 1000)))) {
 				RTMP_SEM_LOCK(&pAd->StaCfg[0].TdlsInfo.TdlsBlackListSemLock);
 				pTempListEntry = pListEntry->pNext;
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n black tdls bt teardown after %d secs Delete %02x:%02x:%02x:%02x:%02x:%02x from black table!!!\n",
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n black tdls bt teardown after %d secs Delete "MACSTR" from black table!!!\n",
 						 pAd->StaCfg[0].TdlsInfo.TdlsDisabledPeriodByTeardown,
-						 pBlackEntry->MacAddr[0],
-						 pBlackEntry->MacAddr[1],
-						 pBlackEntry->MacAddr[2],
-						 pBlackEntry->MacAddr[3],
-						 pBlackEntry->MacAddr[4],
-						 pBlackEntry->MacAddr[5]));
+						 MAC2STR(pBlackEntry->MacAddr)));
 				delEntryList(pTdlsBlackenList, pListEntry);
 				os_free_mem(pBlackEntry);
 				pListEntry = pTempListEntry;
@@ -576,8 +546,8 @@ TDLS_ValidIdLookup(
 		pTDLS = &pAd->StaCfg[0].TdlsInfo.TDLSEntry[idIdx];
 
 		if (pTDLS->Valid && MAC_ADDR_EQUAL(pAddr, pTDLS->MacAddr)) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TDLS_ValidIdLookup - Find Link ID with Peer Address %02x:%02x:%02x:%02x:%02x:%02x(%d)\n",
-					 pAddr[0], pAddr[1], pAddr[2], pAddr[3], pAddr[4], pAddr[5], idIdx));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TDLS_ValidIdLookup - Find Link ID with Peer Address "MACSTR"(%d)\n",
+					 MAC2STR(pAddr), idIdx));
 			break;
 		}
 	}
@@ -836,8 +806,7 @@ INT	Set_TdlsSetup_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			return FALSE;
 		}
 
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n%02x:%02x:%02x:%02x:%02x:%02x\n", macAddr[0], macAddr[1], macAddr[2],
-				 macAddr[3], macAddr[4], macAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"MACSTR"\n", MAC2STR(macAddr)));
 		NdisZeroMemory(&Tdls, sizeof(RT_802_11_TDLS));
 		Tdls.TimeOut = 0;
 		COPY_MAC_ADDR(Tdls.MacAddr, macAddr);
@@ -884,8 +853,7 @@ INT	Set_TdlsTearDown_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		MLME_TDLS_REQ_STRUCT	MlmeTdlsReq;
 		USHORT		Reason = REASON_UNSPECIFY;
 
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n%02x:%02x:%02x:%02x:%02x:%02x\n", macAddr[0], macAddr[1], macAddr[2],
-				 macAddr[3], macAddr[4], macAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n"MACSTR"\n", MAC2STR(macAddr)));
 		idx = TDLS_SearchLinkId(pAd, macAddr);
 
 		if (idx == -1 || idx == MAX_NUM_OF_TDLS_ENTRY) {
@@ -936,9 +904,8 @@ INT	Set_TdlsDiscoveryReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	/* TDLS will not be supported when Adhoc mode */
 	if (INFRA_ON(pAd)) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Discovery Peer %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PeerMacAddr[0], PeerMacAddr[1], PeerMacAddr[2],
-				 PeerMacAddr[3], PeerMacAddr[4], PeerMacAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Discovery Peer "MACSTR"\n",
+				 MAC2STR(PeerMacAddr));
 		MlmeEnqueue(pAd,
 					TDLS_STATE_MACHINE,
 					MT2_MLME_TDLS_DISCOVER_REQ,
@@ -977,9 +944,8 @@ INT	Set_TdlsTunneledReqProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 	/* TDLS will not be supported when Adhoc mode */
 	if (INFRA_ON(pAd)) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Discovery Peer %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PeerMacAddr[0], PeerMacAddr[1], PeerMacAddr[2],
-				 PeerMacAddr[3], PeerMacAddr[4], PeerMacAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n Discovery Peer "MACSTR"\n",
+				 MAC2STR(PeerMacAddr)));
 		MlmeEnqueue(pAd,
 					TDLS_STATE_MACHINE,
 					MT2_MLME_TDLS_TUNNELED_REQ,
@@ -1192,8 +1158,8 @@ INT	Set_TdlsChannelSwitch_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		if (i != 6)
 			return FALSE;
 
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nChannel Switch Peer %02x:%02x:%02x:%02x:%02x:%02x-%02x\n",
-				 PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5], TargetChannel));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nChannel Switch Peer "MACSTR"-%02x\n",
+				 MAC2STR(PeerMAC), TargetChannel));
 
 		/* TDLS will not be supported when Adhoc mode */
 		if (INFRA_ON(pAd)) {
@@ -1204,8 +1170,8 @@ INT	Set_TdlsChannelSwitch_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			LinkId = TDLS_SearchLinkId(pAd, PeerMAC);
 
 			if (LinkId == -1 || LinkId == MAX_NUM_OF_TDLS_ENTRY) {
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d):  can not find from %02x:%02x:%02x:%02x:%02x:%02x on TDLS entry !!!\n",
-						 __func__, __LINE__, PeerMAC[0], PeerMAC[1], PeerMAC[2], PeerMAC[3], PeerMAC[4], PeerMAC[5]));
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d):  can not find from "MACSTR" on TDLS entry !!!\n",
+						 __func__, __LINE__, MAC2STR(PeerMAC)));
 				return FALSE;
 			}
 
@@ -1418,8 +1384,8 @@ TDLS_InitPeerEntryRateCapability(
 
 		UCHAR band = HcGetBandByWdev(wdev);
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("TDLS - Receive Peer HT Capable STA from %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  PRINT_MAC(pEntry->Addr)));
+				 ("TDLS - Receive Peer HT Capable STA from "MACSTR"\n",
+				  MAC2STR(pEntry->Addr)));
 
 		if ((pHtCapability->HtCapInfo.GF) &&
 			wlan_config_get_greenfield(wdev) &&
@@ -1637,8 +1603,8 @@ VOID TDLS_CntlOidTDLSRequestProc(
 	BOOLEAN		TimerCancelled;
 	INT			Idx, i;
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CNTL - TDLS_CntlOidTDLSRequestProc set %02x:%02x:%02x:%02x:%02x:%02x with Valid=%d, Status=%d\n",
-			 pTDLS->MacAddr[0], pTDLS->MacAddr[1], pTDLS->MacAddr[2], pTDLS->MacAddr[3], pTDLS->MacAddr[4], pTDLS->MacAddr[5],
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CNTL - TDLS_CntlOidTDLSRequestProc set "MACSTR" with Valid=%d, Status=%d\n",
+			 MAC2STR(pTDLS->MacAddr),
 			 pTDLS->Valid, pTDLS->Status));
 
 	if (!IS_TDLS_SUPPORT(pAd)) {
@@ -1679,7 +1645,7 @@ VOID TDLS_CntlOidTDLSRequestProc(
 			 * Copy the alternate MAC address to the entry for TDLS connection *
 			 */
 			COPY_MAC_ADDR(pTDLS->MacAddr, pInfo->wfd_alternate_mac_addr_ie);
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("WFD alternate mac address is:%02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pTDLS->MacAddr)));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("WFD alternate mac address is:"MACSTR"\n", MAC2STR(pTDLS->MacAddr)));
 		}
 	}
 
@@ -1822,8 +1788,8 @@ INT TDLS_SearchLinkId(
 			empty |= 1;
 
 		if (pTDLS->Valid && MAC_ADDR_EQUAL(pAddr, pTDLS->MacAddr)) {
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TDLS_SearchLinkId - Find Link ID with Peer Address %02x:%02x:%02x:%02x:%02x:%02x(%d)\n",
-					 pAddr[0], pAddr[1], pAddr[2], pAddr[3], pAddr[4], pAddr[5], i));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TDLS_SearchLinkId - Find Link ID with Peer Address "MACSTR"(%d)\n",
+					 MAC2STR(pAddr), i));
 			break;
 		}
 	}
@@ -2631,7 +2597,6 @@ BOOLEAN PeerTdlsSetupConfSanity(
 			break;
 
 		case IE_ADD_HT:
-		case IE_ADD_HT2:
 			if (pEid->Len >= sizeof(ADD_HT_INFO_IE)) {
 				/* This IE allows extension, but we can ignore extra bytes beyond our knowledge , so only */
 				/* copy first sizeof(ADD_HT_INFO_IE) */
@@ -3617,8 +3582,8 @@ VOID TDLS_LinkMaintenance(
 					PLIST_HEADER	pTdlsDiscovryEnList = &pAd->StaCfg[0].TdlsInfo.TdlsDiscovPeerList;
 #endif /* TDLS_AUTOLINK_SUPPORT // */
 					MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN,
-							 ("ageout %02x:%02x:%02x:%02x:%02x:%02x from TDLS #%d after %d-sec silence\n",
-							  PRINT_MAC(pEntry->Addr), idx, TDLS_ENTRY_AGEOUT_TIME));
+							 ("ageout "MACSTR" from TDLS #%d after %d-sec silence\n",
+							  MAC2STR(pEntry->Addr), idx, TDLS_ENTRY_AGEOUT_TIME));
 					NdisAcquireSpinLock(&pAd->StaCfg[0].TdlsInfo.TDLSEntryLock);
 					pTDLS->Token = 0;
 					pTDLS->Valid = FALSE;
@@ -3674,18 +3639,16 @@ INT Set_TdlsEntryInfo_Display_Proc(
 		if ((pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].Valid) && (pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].Status == TDLS_MODE_CONNECTED)) {
 			PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacTabMatchWCID];
 
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02x:%02x:%02x:%02x:%02x:%02x\n",
-					 pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[0], pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[1], pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[2],
-					 pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[3], pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[4], pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, (MACSTR"\n",
+					 MAC2STR(pAd->StaCfg[0].TdlsInfo.TDLSEntry[i].MacAddr)));
 			/*MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%-8d\n", pAd->StaCfg[0].DLSEntry[i].TimeOut)); */
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n"));
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n%-19s%-4s%-4s%-4s%-4s%-7s%-7s%-7s", "MAC", "AID", "BSS", "PSM", "WMM", "RSSI0", "RSSI1", "RSSI2"));
 #ifdef DOT11_N_SUPPORT
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%-8s%-10s%-6s%-6s%-6s%-6s", "MIMOPS", "PhMd", "BW", "MCS", "SGI", "STBC"));
 #endif /* DOT11_N_SUPPORT */
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n%02X:%02X:%02X:%02X:%02X:%02X  ",
-					 pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
-					 pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]));
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n"MACSTR"  ",
+					 MAC2STR(pEntry->Addr)));
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%-4d", (int)pEntry->Aid));
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%-4d", (int)pEntry->func_tb_idx));
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%-4d", (int)pEntry->PsMode));
@@ -4123,8 +4086,8 @@ TDLS_SendOutActionFrame(
 
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s() -Cannot find pEntry(%2x:%2x:%2x:%2x:%2x:%2x) in MacTab!\n",
-				  __func__, PRINT_MAC(pSrcBufVA)));
+				 ("%s() -Cannot find pEntry("MACSTR") in MacTab!\n",
+				  __func__, MAC2STR(pSrcBufVA)));
 		/* Resourece is low, system did not allocate virtual address */
 		/* return NDIS_STATUS_FAILURE directly to upper layer */
 		RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_FAILURE);

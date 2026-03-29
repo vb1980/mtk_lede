@@ -108,17 +108,24 @@ static VOID free_hwcmd(os_kref *ref)
 static VOID HwCtrlCmdHandler(RTMP_ADAPTER *pAd)
 {
 	PHwCmdQElmt	cmdqelmt;
-	NDIS_STATUS	NdisStatus = NDIS_STATUS_SUCCESS;
 	NTSTATUS		ntStatus;
 	HwCmdHdlr		Handler = NULL;
 	HW_CTRL_T *pHwCtrl = &pAd->HwCtrl;
 	UINT32			process_cnt = 0;
 
 	while (pAd && pHwCtrl->HwCtrlQ.size > 0) {
-		NdisStatus = NDIS_STATUS_SUCCESS;
+
+		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST) ||
+			!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP)) {
+			MTWF_DBG(pAd, DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "System halted, exit HwCtrlCmdHandler!(HwCtrlQ.size = %d)\n",
+					  pHwCtrl->HwCtrlQ.size);
+			break;
+		}
+
 		/* For worst case, avoid process HwCtrlQ too long which cause RCU_sched stall */
 		process_cnt++;
-		if((!in_interrupt()) && (process_cnt >= (MAX_LEN_OF_HWCTRL_QUEUE>>4))) {/*process_cnt-16*/
+		if ((!in_interrupt()) && (process_cnt >= HWCTRL_QUE_SCH)) {/*process_cnt-16*/
 			process_cnt = 0;
 			OS_SCHEDULE();
 		}
@@ -134,15 +141,13 @@ static VOID HwCtrlCmdHandler(RTMP_ADAPTER *pAd)
 			goto free_cmd;
 
 
-		if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST) && RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP)) {
-			Handler = HwCtrlValidCmd(cmdqelmt);
+		Handler = HwCtrlValidCmd(cmdqelmt);
 
-			if (Handler) {
-				ntStatus = Handler(pAd, cmdqelmt);
+		if (Handler) {
+			ntStatus = Handler(pAd, cmdqelmt);
 
-				if (cmdqelmt->CallbackFun)
-					cmdqelmt->CallbackFun(pAd, cmdqelmt->CallbackArgs);
-			}
+			if (cmdqelmt->CallbackFun)
+				cmdqelmt->CallbackFun(pAd, cmdqelmt->CallbackArgs);
 		}
 #ifdef DBG_STARVATION
 		starv_dbg_put(&cmdqelmt->starv);
@@ -275,7 +280,7 @@ INT ser_init(RTMP_ADAPTER *pAd)
 		return NDIS_STATUS_FAILURE;
 	}
 
-	return TRUE;
+	return NDIS_STATUS_SUCCESS;
 }
 
 
@@ -289,6 +294,145 @@ INT ser_exit(RTMP_ADAPTER *pAd)
 	return ret;
 }
 #endif /* ERR_RECOVERY */
+
+#ifdef MTK_FE_RESET_RECOVER
+
+static int mtk_fe_event(struct notifier_block *this, unsigned long event, void *ptr)
+{
+	struct mtk_notifier_block *nb = (struct mtk_notifier_block *)this;
+	RTMP_ADAPTER *pAd = nb->priv;
+	P_ERR_RECOVERY_CTRL_T pErrRecoveryCtrl = &pAd->ErrRecoveryCtl;
+#ifdef WIFI_UNIFIED_COMMAND
+	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+#endif /* WIFI_UNIFIED_COMMAND */
+
+	if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP))
+		return NOTIFY_DONE;
+
+	switch (event) {
+	case MTK_FE_START_RESET:
+		MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"receive fe reset(hang) event, trigger ser by FE\n");
+		atomic_set(&pErrRecoveryCtrl->notify_fe, 1);
+#ifdef WIFI_UNIFIED_COMMAND
+		if (cap->uni_cmd_support)
+			UniCmdSER(pAd, UNI_SER_ACTION_SET_TRIGGER, SER_SET_L1_RECOVER, DBDC_BAND0);
+		else
+#endif /* WIFI_UNIFIED_COMMAND */
+			CmdExtSER(pAd, SER_ACTION_RECOVER, SER_SET_L1_RECOVER, DBDC_BAND0);
+		break;
+	case MTK_FE_RESET_DONE:
+		MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"receive fe reset done event, continue SER\n");
+		complete(&pErrRecoveryCtrl->fe_reset_done);
+		break;
+	default:
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+
+unsigned int mtk_fe_reset_notifier_init(struct _RTMP_ADAPTER  *pAd)
+{
+	int err = NDIS_STATUS_FAILURE;
+	P_ERR_RECOVERY_CTRL_T pErrRecoveryCtrl = &pAd->ErrRecoveryCtl;
+	struct mtk_notifier_block *mtk_nb = &pErrRecoveryCtrl->mtk_nb;
+
+	init_completion(&pErrRecoveryCtrl->fe_reset_done);
+	atomic_set(&pErrRecoveryCtrl->notify_fe, 0);
+
+	mtk_nb->priv = pAd;
+	mtk_nb->nb.notifier_call = mtk_fe_event;
+
+	err = register_netdevice_notifier(&mtk_nb->nb);
+
+	if (err)
+		return err;
+
+	rtnl_lock();
+	call_netdevice_notifiers(MTK_WIFI_CHIP_ONLINE, pAd->net_dev);
+	rtnl_unlock();
+
+	return err;
+}
+
+void  mtk_fe_reset_notifier_exit(struct _RTMP_ADAPTER  *pAd)
+{
+	P_ERR_RECOVERY_CTRL_T pErrRecoveryCtrl = &pAd->ErrRecoveryCtl;
+	struct mtk_notifier_block *mtk_nb = &pErrRecoveryCtrl->mtk_nb;
+
+	rtnl_lock();
+	call_netdevice_notifiers(MTK_WIFI_CHIP_OFFLINE, pAd->net_dev);
+	rtnl_unlock();
+	unregister_netdevice_notifier(&mtk_nb->nb);
+}
+#endif
+
+#ifdef WF_RESET_SUPPORT
+static INT wf_reset_ctrl_task(ULONG context)
+{
+	RTMP_ADAPTER *pAd;
+	RTMP_OS_TASK *task;
+	int status = 0;
+
+	task = (RTMP_OS_TASK *)context;
+	pAd = (PRTMP_ADAPTER)RTMP_OS_TASK_DATA_GET(task);
+
+	if (pAd == NULL)
+		return 0;
+
+	RtmpOSTaskCustomize(task);
+	NdisAcquireSpinLock(&pAd->wf_reset_lock);
+	pAd->wf_reset_state = RTMP_TASK_STAT_RUNNING;
+	NdisReleaseSpinLock(&pAd->wf_reset_lock);
+
+	while (task && !RTMP_OS_TASK_IS_KILLED(task)) {
+		if (RtmpOSTaskWait(pAd, task, &status) == FALSE)
+			break;
+
+		wf_reset_func(pAd);
+	}
+
+	NdisAcquireSpinLock(&pAd->wf_reset_lock);
+	pAd->wf_reset_state = RTMP_TASK_STAT_UNKNOWN;
+	NdisReleaseSpinLock(&pAd->wf_reset_lock);
+	status = RtmpOSTaskNotifyToExit(task);
+	return status;
+}
+
+INT32 wf_reset_init(RTMP_ADAPTER *pAd)
+{
+	INT Status = 0;
+	RTMP_OS_TASK *task = &pAd->wf_reset_task;
+
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("===> %s()\n", __func__));
+
+	NdisAllocateSpinLock(pAd, &pAd->wf_reset_lock);
+	pAd->wf_reset_state = RTMP_TASK_STAT_INITED;
+	RTMP_OS_TASK_INIT(task, "wf_reset_task", pAd);
+	Status = RtmpOSTaskAttach(task, wf_reset_ctrl_task, (ULONG)task);
+
+	if (Status == NDIS_STATUS_FAILURE) {
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s: unable to start wf reset task\n", RTMP_OS_NETDEV_GET_DEVNAME(pAd->net_dev)));
+		return NDIS_STATUS_FAILURE;
+	}
+
+	return Status;
+}
+INT32 wf_reset_exit(RTMP_ADAPTER *pAd)
+{
+	INT32 ret;
+
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("===> %s()\n", __func__));
+
+	/*kill task*/
+	ret = RtmpOSTaskKill(&pAd->wf_reset_task);
+	NdisFreeSpinLock(&pAd->wf_reset_lock);
+	return ret;
+}
+#endif /* WF_RESET_SUPPORT */
 
 
 #ifdef DBG_STARVATION
@@ -338,7 +482,7 @@ static void hwctrl_starv_block_init(struct starv_log *ctrl, struct _HW_CTRL_T *h
 */
 UINT32 HwCtrlInit(RTMP_ADAPTER *pAd)
 {
-	INT Status = 0;
+	INT Status;
 	HW_CTRL_T *pHwCtrl = &pAd->HwCtrl;
 	HwCmdQ *cmdq = &pHwCtrl->HwCtrlQ;
 	RTMP_OS_TASK *pTask = &pHwCtrl->HwCtrlTask;
@@ -365,6 +509,9 @@ UINT32 HwCtrlInit(RTMP_ADAPTER *pAd)
 
 #ifdef ERR_RECOVERY
 	Status = ser_init(pAd);
+	if (Status == NDIS_STATUS_FAILURE)
+		MTWF_DBG(pAd, DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "ser_init() return NDIS_STATUS_FAILURE\n");
 #endif /* ERR_RECOVERY */
 	return NDIS_STATUS_SUCCESS;
 }
@@ -406,14 +553,16 @@ NDIS_STATUS HwCtrlEnqueueCmd(
 	HW_CTRL_T *pHwCtrl = &pAd->HwCtrl;
 
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)) {
-		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("--->%s - NIC is not exist!!\n", __func__));
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("--->%s(%d) - NIC is not exist!!\n", __func__, __LINE__));
 		return NDIS_STATUS_FAILURE;
 	}
 
 	status = os_alloc_mem(pAd, (PUCHAR *)&cmdqelmt, sizeof(HwCmdQElmt));
 
-	if (cmdqelmt == NULL)
+	if (cmdqelmt == NULL) {
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("--->%s(%d) - os_alloc_mem failed!!\n", __func__, __LINE__));
 		return NDIS_STATUS_RESOURCES;
+	}
 
 	NdisZeroMemory(cmdqelmt, sizeof(HwCmdQElmt));
 	/*initial lock*/
@@ -431,6 +580,7 @@ NDIS_STATUS HwCtrlEnqueueCmd(
 	if (HwCtrlTxd.InformationBufferLength > 0) {
 		status = os_alloc_mem(pAd, (PUCHAR *)&cmdqelmt->buffer, HwCtrlTxd.InformationBufferLength);
 		if (cmdqelmt->buffer == NULL) {
+			MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("--->%s(%d) - os_alloc_mem failed!!\n", __func__, __LINE__));
 			status =  NDIS_STATUS_RESOURCES;
 			goto end;
 		}
@@ -454,6 +604,7 @@ NDIS_STATUS HwCtrlEnqueueCmd(
 	if (!(pHwCtrl->HwCtrlQ.CmdQState & RTMP_TASK_CAN_DO_INSERT) ||
 		(pHwCtrl->HwCtrlQ.size >= MAX_LEN_OF_HWCTRL_QUEUE)) {
 		NdisReleaseSpinLock(&pHwCtrl->HwCtrlQLock);
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("--->%s(%d) - HWCtrlQ size (%d) overflow!!\n", __func__, __LINE__, pHwCtrl->HwCtrlQ.size));
 		status = NDIS_STATUS_FAILURE;
 		goto end;
 	}
@@ -486,7 +637,7 @@ NDIS_STATUS HwCtrlEnqueueCmd(
 	/*wait handle*/
 	wait_time = HwCtrlTxd.wait_time ? HwCtrlTxd.wait_time : HWCTRL_CMD_TIMEOUT;
 	if (!RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(&cmdqelmt->ack_done, RTMPMsecsToJiffies(wait_time))) {
-		status = NDIS_STATUS_FAILURE;
+		status = NDIS_STATUS_TIMEOUT;
 		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): HwCtrl CmdTimeout, TYPE:%d,ID:%d!!\n",
 			__func__, cmdqelmt->type, cmdqelmt->command));
 	}

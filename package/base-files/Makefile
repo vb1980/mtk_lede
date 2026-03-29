@@ -269,6 +269,8 @@ else
 	$(if $(CONFIG_IPK_FILES_CHECKSUMS),, \
 		rm -f $(1)/sbin/pkg_check)
 endif
+	$(if $(CONFIG_PACKAGE_wifi-profile), \
+		rm -f $(1)/sbin/wifi)
 endef
 
 ifneq ($(DUMP),1)

@@ -69,6 +69,8 @@ typedef struct {
 #define OP_CLASS_84 84
 #define OP_CLASS_115 115
 #define OP_CLASS_127 127
+#define OP_CLASS_129 129
+#define OP_CLASS_125 125
 #define OP_CLASS_130 130
 #ifdef MAP_R2
 #define TX_MAX_STREAM 4
@@ -76,6 +78,10 @@ typedef struct {
 #endif
 
 extern COUNTRY_REGION_CH_DESC Country_Region_ChDesc_5GHZ[];
+#ifdef MAP_6E_SUPPORT
+extern COUNTRY_REGION_CH_DESC Country_Region_ChDesc_6GHZ[];
+#endif
+
 /*
 	Table E-1Â—Operating classes in the United States  (11N)
 */
@@ -85,7 +91,7 @@ REG_CLASS reg_class_fcc[] = {
 	{2,  118, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0},																DFS_50_100_BEHAVIOR},
 	{3,  124, FREQ_5G00,   BW_20, {149, 153, 157, 161, 0},															NOMADICBEHAVIOR},
 	{4,  121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 0},						DFS_50_100_BEHAVIOR},
-	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 0},						LICENSEEXEMPTBEHAVIOR},
+	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 169, 173, 177, 0},	LICENSEEXEMPTBEHAVIOR},
 	{6,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0},												COMMON},
 	{7,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0},												COMMON},
 	{8,  102, FREQ_4G89,   BW_10, {11, 13, 15, 17, 19, 0},															COMMON},
@@ -102,13 +108,13 @@ REG_CLASS reg_class_fcc[] = {
 	{22, 116, FREQ_5G00,   BW_40, {36, 44, 0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{23, 119, FREQ_5G00,   BW_40, {52, 60, 0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{24, 122, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 0},														PRIMARYCHANNELLOWERBEHAVIOR | DFS_50_100_BEHAVIOR},
-	{25, 126, FREQ_5G00,   BW_40, {149, 157, 0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{26, 126, FREQ_5G00,   BW_40, {149, 157, 0},																	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
+	{25, 126, FREQ_5G00,   BW_40, {149, 157, 165, 173, 0},	PRIMARYCHANNELLOWERBEHAVIOR},
+	{26, 126, FREQ_5G00,   BW_40, {149, 157, 165, 173, 0},	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
 	{27, 117, FREQ_5G00,   BW_40, {40, 48, 0},																		PRIMARYCHANNELUPPERBEHAVIOR},
 	{28, 120, FREQ_5G00,   BW_40, {56, 64, 0},																		PRIMARYCHANNELUPPERBEHAVIOR},
 	{29, 123, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 0},													NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR | DFS_50_100_BEHAVIOR},
-	{30, 127, FREQ_5G00,   BW_40, {153, 161, 0},																	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
-	{31, 127, FREQ_5G00,   BW_40, {153, 161, 0},																	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{30, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0},	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{31, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0},	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
 	{32,  83, FREQ_2G407,  BW_40, {1, 2, 3, 4, 5, 6, 7, 0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
 	{33,  84, FREQ_2G407,  BW_40, {5, 6, 7, 8, 9, 10, 11, 0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
 	{128, 128, FREQ_5G00,  BW_80, {0},																			COMMON},
@@ -233,7 +239,7 @@ REG_CLASS_VHT reg_class_vht_fcc[] = {
 	{2,  118, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0}, {0},																DFS_50_100_BEHAVIOR},
 	{3,  124, FREQ_5G00,   BW_20, {149, 153, 157, 161, 0}, {0},														NOMADICBEHAVIOR},
 	{4,  121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 0}, {0},				DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 0}, {0},                                                    LICENSEEXEMPTBEHAVIOR},
+	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 169, 173, 177, 0}, {0},  LICENSEEXEMPTBEHAVIOR},
 	{6,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0}, {0},												COMMON},
 	{7,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0}, {0},												COMMON},
 	{8,  102, FREQ_4G89,   BW_10, {11, 13, 15, 17, 19, 0}, {0},															COMMON},
@@ -250,18 +256,18 @@ REG_CLASS_VHT reg_class_vht_fcc[] = {
 	{22, 116, FREQ_5G00,   BW_40, {36, 44, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{23, 119, FREQ_5G00,   BW_40, {52, 60, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{24, 122, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 140, 0},	{0},											DFS_50_100_BEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{25, 126, FREQ_5G00,   BW_40, {149, 157, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{26, 126, FREQ_5G00,   BW_40, {149, 157, 0}, {0},																	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
+	{25, 126, FREQ_5G00,   BW_40, {149, 157, 165, 173, 0}, {0},	PRIMARYCHANNELLOWERBEHAVIOR},
+	{26, 126, FREQ_5G00, BW_40, {149, 157, 165, 173, 0}, {0}, LICENSEEXEMPTBEHAVIOR|PRIMARYCHANNELLOWERBEHAVIOR},
 	{27, 117, FREQ_5G00,   BW_40, {40, 48, 0}, {0},																		PRIMARYCHANNELUPPERBEHAVIOR},
 	{28, 120, FREQ_5G00,   BW_40, {56, 64, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
 	{29, 123, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 144, 0}, {0},												NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{30, 127, FREQ_5G00,   BW_40, {153, 161, 0}, {0},																	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
-	{31, 127, FREQ_5G00,   BW_40, {153, 161, 0},	{0},																LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{30, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0}, {0},	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{31, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0}, {0}, LICENSEEXEMPTBEHAVIOR|PRIMARYCHANNELUPPERBEHAVIOR},
 	{32,  83, FREQ_2G407,  BW_40, {1, 2, 3, 4, 5, 6, 7, 0}, {0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
 	{33,  84, FREQ_2G407,  BW_40, {5, 6, 7, 8, 9, 10, 11, 0}, {0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
-	{128, 128, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},													USEEIRPFORVHTTXPOWENV},
-	{129, 129, FREQ_5G00,   BW_160, {0}, {50, 114, 0},																	USEEIRPFORVHTTXPOWENV},
-	{130, 130, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},													PLUS_80 | USEEIRPFORVHTTXPOWENV},
+	{128, 128, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 171, 0}, USEEIRPFORVHTTXPOWENV},
+	{129, 129, FREQ_5G00,   BW_160, {0}, {50, 114, 163, 0},	USEEIRPFORVHTTXPOWENV},
+	{130, 130, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 171, 0}, PLUS_80 | USEEIRPFORVHTTXPOWENV},
 	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
 };
 
@@ -363,6 +369,51 @@ REG_CLASS_VHT reg_class_vht_jp[] = {
 	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
 };
 
+/*
+*	Table E-4—Operating classes in Global
+*/
+REG_CLASS_VHT reg_class_global[] = {
+	{0, 0, 0, 0, {0}, {0}, 0},			/* Invlid entry */
+	{81,  0, FREQ_2G407,  BW_25, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0}, {0},								COMMON},
+	{82,  0, FREQ_2G414,  BW_25, {14, 0}, {0},																		COMMON},
+	{83,  0, FREQ_2G407,  BW_40, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}, {0},												PRIMARYCHANNELLOWERBEHAVIOR},
+	{84,  0, FREQ_2G407,  BW_40, {5, 6, 7, 8, 9, 10, 11, 12, 13, 0}, {0},											PRIMARYCHANNELUPPERBEHAVIOR},
+	{94,  0, FREQ_3G00,   BW_20, {133, 137, 0}, {0},																CCA_EDBEHAVIOR},
+	{95,  0, FREQ_3G00,   BW_10, {132, 134, 136, 138, 0}, {0},														CCA_EDBEHAVIOR},
+	{96,  0, FREQ_3G0025, BW_5,  {131, 132, 133, 134, 135, 136, 137, 138, 0}, {0},									CCA_EDBEHAVIOR},
+	{101, 0, FREQ_4G85,   BW_20, {21, 25, 0}, {0},																	COMMON},
+	{102, 0, FREQ_4G89,   BW_10, {11, 13, 15, 17, 19, 0}, {0},														COMMON},
+	{103, 0, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0}, {0},											COMMON},
+	{104, 0, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																PRIMARYCHANNELLOWERBEHAVIOR},
+	{105, 0, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																PRIMARYCHANNELUPPERBEHAVIOR},
+	{106, 0, FREQ_4G00,   BW_20, {191, 195, 0}, {0},																COMMON},
+	{107, 0, FREQ_4G00,   BW_10, {189, 191, 193, 195, 197, 0}, {0},													COMMON},
+	{108, 0, FREQ_4G0025, BW_5,  {188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 0}, {0},						COMMON},
+	{109, 0, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
+	{110, 0, FREQ_4G00,   BW_10, {183, 184, 185, 186, 187, 188, 189, 0}, {0},										COMMON},
+	{111, 0, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
+	{112, 0, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																COMMON},
+	{113, 0, FREQ_5G00,   BW_10, {7, 8, 9, 10, 11, 0}, {0},															COMMON},
+	{114, 0, FREQ_5G0025, BW_5,  {6, 7, 8, 9, 10, 11, 0}, {0},														COMMON},
+	{115, 0, FREQ_5G00,   BW_20, {36, 40, 44, 48, 0}, {0},															USEEIRPFORVHTTXPOWENV},
+	{116, 0, FREQ_5G00,   BW_40, {36, 44, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{117, 0, FREQ_5G00,   BW_40, {40, 48, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{118, 0, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0}, {0},															DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{119, 0, FREQ_5G00,   BW_40, {52, 60, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR | DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{120, 0, FREQ_5G00,   BW_40, {56, 64, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR | DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{121, 0, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 0}, {0},				DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{122, 0, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 140, 0}, {0},											PRIMARYCHANNELLOWERBEHAVIOR | DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{123, 0, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 144, 0}, {0},											PRIMARYCHANNELUPPERBEHAVIOR | DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{124, 0, FREQ_5G00,   BW_20, {149, 153, 157, 161, 0}, {0},														NOMADICBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{125, 0, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 169, 0}, {0},                                            LICENSEEXEMPTBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{126, 0, FREQ_5G00,   BW_40, {149, 157, 0}, {0},																PRIMARYCHANNELLOWERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{127, 0, FREQ_5G00,   BW_40, {153, 161, 0}, {0},																PRIMARYCHANNELUPPERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
+	{128, 0, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},												USEEIRPFORVHTTXPOWENV},
+	{129, 0, FREQ_5G00,   BW_160, {0}, {50, 114, 0},																USEEIRPFORVHTTXPOWENV},
+	{130, 0, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},												PLUS_80 | USEEIRPFORVHTTXPOWENV},
+	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
+};
+
 REG_CLASS_VHT reg_class_vht_cn[] = {
 	{0, 0, 0, 0, {0}, {0}, 0},			/* Invlid entry */
 	{1,  115, FREQ_5G00,   BW_20, {36, 40, 44, 48, 0}, {0},																USEEIRPFORVHTTXPOWENV},
@@ -391,7 +442,7 @@ REG_CLASS_HE reg_class_he_fcc[] = {
 	{2,  118, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0}, {0},																DFS_50_100_BEHAVIOR},
 	{3,  124, FREQ_5G00,   BW_20, {149, 153, 157, 161, 0}, {0},														NOMADICBEHAVIOR},
 	{4,  121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 0}, {0},				DFS_50_100_BEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 0}, {0},                                                    LICENSEEXEMPTBEHAVIOR},
+	{5,  125, FREQ_5G00,   BW_20, {149, 153, 157, 161, 165, 169, 173, 177, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
 	{6,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0}, {0},												COMMON},
 	{7,  103, FREQ_4G9375, BW_5,  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0}, {0},												COMMON},
 	{8,  102, FREQ_4G89,   BW_10, {11, 13, 15, 17, 19, 0}, {0},															COMMON},
@@ -408,18 +459,18 @@ REG_CLASS_HE reg_class_he_fcc[] = {
 	{22, 116, FREQ_5G00,   BW_40, {36, 44, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{23, 119, FREQ_5G00,   BW_40, {52, 60, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{24, 122, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 140, 0},	{0},											DFS_50_100_BEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{25, 126, FREQ_5G00,   BW_40, {149, 157, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{26, 126, FREQ_5G00,   BW_40, {149, 157, 0}, {0},																	LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
+	{25, 126, FREQ_5G00,   BW_40, {149, 157, 165, 173, 0}, {0},	PRIMARYCHANNELLOWERBEHAVIOR},
+	{26, 126, FREQ_5G00, BW_40, {149, 157, 165, 173, 0}, {0}, LICENSEEXEMPTBEHAVIOR|PRIMARYCHANNELLOWERBEHAVIOR},
 	{27, 117, FREQ_5G00,   BW_40, {40, 48, 0}, {0},																		PRIMARYCHANNELUPPERBEHAVIOR},
 	{28, 120, FREQ_5G00,   BW_40, {56, 64, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
 	{29, 123, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 144, 0}, {0},												NOMADICBEHAVIOR | DFS_50_100_BEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR | USEEIRPFORVHTTXPOWENV},
-	{30, 127, FREQ_5G00,   BW_40, {153, 161, 0}, {0},																	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
-	{31, 127, FREQ_5G00,   BW_40, {153, 161, 0},	{0},																LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{30, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0}, {0},	NOMADICBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
+	{31, 127, FREQ_5G00,   BW_40, {153, 161, 169, 177, 0}, {0}, LICENSEEXEMPTBEHAVIOR|PRIMARYCHANNELUPPERBEHAVIOR},
 	{32,  83, FREQ_2G407,  BW_40, {1, 2, 3, 4, 5, 6, 7, 0}, {0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
 	{33,  84, FREQ_2G407,  BW_40, {5, 6, 7, 8, 9, 10, 11, 0}, {0},														LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
-	{128, 128, FREQ_5G00,  BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},													USEEIRPFORVHTTXPOWENV},
-	{129, 129, FREQ_5G00,  BW_160, {0}, {50, 114, 0},																	USEEIRPFORVHTTXPOWENV},
-	{130, 130, FREQ_5G00,  BW_80, {0}, {42, 58, 106, 122, 138, 155, 0},													PLUS_80 | USEEIRPFORVHTTXPOWENV},
+	{128, 128, FREQ_5G00,  BW_80, {0}, {42, 58, 106, 122, 138, 155, 171, 0}, USEEIRPFORVHTTXPOWENV},
+	{129, 129, FREQ_5G00,  BW_160, {0}, {50, 114, 163, 0}, USEEIRPFORVHTTXPOWENV},
+	{130, 130, FREQ_5G00,  BW_80, {0}, {42, 58, 106, 122, 138, 155, 171, 0}, PLUS_80 | USEEIRPFORVHTTXPOWENV},
 	{131, 131, FREQ_5G94,  BW_20, {0}, {1, 5, 9, 13, 17, 21, 25, 29, 33, 37,
 										41, 45, 49, 53, 57, 61, 65, 69, 73, 77,
 										81, 85, 89, 93, 97, 101, 105, 109, 113, 117,
@@ -472,7 +523,7 @@ REG_CLASS_HE reg_class_he_ce[] = {
 										83, 91, 99, 107, 115, 123, 131, 139, 147, 155,
 										163, 171, 179, 187, 195, 203, 211, 219, 227, 0},								COMMON},
 	{133, 133, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151,
-										167, 183, 199, 215, 0},														COMMON},
+										167, 183, 199, 215, 0},															COMMON},
 	{134, 134, FREQ_5G94,  BW_160, {0}, {15, 47, 79, 111, 143, 175, 207, 0},											COMMON},
 	{135, 135, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151, 167, 183, 199, 215, 0},				PLUS_80},
 	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
@@ -484,64 +535,30 @@ REG_CLASS_HE reg_class_he_ce[] = {
 REG_CLASS_HE reg_class_he_jp[] = {
 	{0, 0, 0, 0, {0}, {0}, 0},			/* Invlid entry */
 	{1,  115, FREQ_5G00,   BW_20, {34, 36, 38, 40, 42, 44, 46, 48, 0}, {0},											COMMON},
-	{2,  112, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																	COMMON},
-	{3,  112, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																COMMON},
-	{4,  112, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																COMMON},
-	{5,  112, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																COMMON},
-	{6,  112, FREQ_5G00,   BW_20, {8, 12, 16, 0}, {0},																COMMON},
-	{7,  109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
-	{8,  109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
-	{9,  109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
-	{10, 109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
-	{11, 109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0},														COMMON},
-	{12, 113, FREQ_5G00,   BW_10, {7, 8, 9, 11, 0}, {0},																COMMON},
-	{13, 113, FREQ_5G00,   BW_10, {7, 8, 9, 11, 0}, {0},																COMMON},
-	{14, 113, FREQ_5G00,   BW_10, {7, 8, 9, 11, 0}, {0},																COMMON},
-	{15, 113, FREQ_5G00,   BW_10, {7, 8, 9, 11, 0}, {0},																COMMON},
-	{16, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0},											COMMON},
-	{17, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0},											COMMON},
-	{18, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0},											COMMON},
-	{19, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0},											COMMON},
-	{20, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0},											COMMON},
-	{21, 114, FREQ_5G0025, BW_5,  {6, 7, 8, 9, 10, 11, 0}, {0},														COMMON},
-	{22, 114, FREQ_5G0025, BW_5,  {6, 7, 8, 9, 10, 11, 0}, {0},														COMMON},
-	{23, 114, FREQ_5G0025, BW_5,  {6, 7, 8, 9, 10, 11, 0}, {0},														COMMON},
-	{24, 114, FREQ_5G0025, BW_5,  {6, 7, 8, 9, 10, 11, 0}, {0},														COMMON},
-	{25, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
-	{26, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
-	{27, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
-	{28, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
-	{29, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0},									COMMON},
+	{8,  109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{11, 109, FREQ_4G00,   BW_20, {184, 188, 192, 196, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{17, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{20, 110, FREQ_4G00,   BW_10, {183, 184, 185, 187, 188, 189, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{25, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{26, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
+	{29, 111, FREQ_4G0025, BW_5,  {182, 183, 184, 185, 186, 187, 188, 189, 0}, {0}, LICENSEEXEMPTBEHAVIOR},
 	{30,  81, FREQ_2G407,  BW_25, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0}, {0},									LICENSEEXEMPTBEHAVIOR},
 	{31,  82, FREQ_2G414,  BW_25, {14, 0}, {0},																		LICENSEEXEMPTBEHAVIOR},
 	{32, 118, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0}, {0},															COMMON},
 	{33, 118, FREQ_5G00,   BW_20, {52, 56, 60, 64, 0}, {0},															COMMON},
 	{34, 121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 0}, {0},						DFS_50_100_BEHAVIOR},
-	{35, 121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 0}, {0},						DFS_50_100_BEHAVIOR},
 	{36, 116, FREQ_5G00,   BW_40, {36, 44, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
 	{37, 119, FREQ_5G00,   BW_40, {52, 60, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
-	{38, 119, FREQ_5G00,   BW_40, {52, 60, 0}, {0},																		PRIMARYCHANNELLOWERBEHAVIOR},
 	{39, 122, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 140, 0}, {0},													PRIMARYCHANNELLOWERBEHAVIOR | DFS_50_100_BEHAVIOR},
-	{40, 122, FREQ_5G00,   BW_40, {100, 108, 116, 124, 132, 0}, {0},													PRIMARYCHANNELLOWERBEHAVIOR | DFS_50_100_BEHAVIOR},
 	{41, 117, FREQ_5G00,   BW_40, {40, 48, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
 	{42, 120, FREQ_5G00,   BW_40, {56, 64, 0}, {0},																		PRIMARYCHANNELUPPERBEHAVIOR},
-	{43, 120, FREQ_5G00,   BW_40, {56, 64, 0}, {0},																		PRIMARYCHANNELUPPERBEHAVIOR},
 	{44, 123, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 144, 0}, {0},													PRIMARYCHANNELUPPERBEHAVIOR | DFS_50_100_BEHAVIOR},
-	{45, 123, FREQ_5G00,   BW_40, {104, 112, 120, 128, 136, 0}, {0},													PRIMARYCHANNELUPPERBEHAVIOR | DFS_50_100_BEHAVIOR},
 	{46, 104, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{47, 104, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{48, 104, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{49, 104, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
-	{50, 104, FREQ_4G00,   BW_40, {184, 192, 0}, {0},																	PRIMARYCHANNELLOWERBEHAVIOR},
 	{51, 105, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
-	{52, 105, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
-	{53, 105, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
-	{54, 105, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
-	{55, 105, FREQ_4G00,   BW_40, {188, 196, 0}, {0},																	PRIMARYCHANNELUPPERBEHAVIOR},
 	{56,  83, FREQ_2G407,  BW_40, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}, {0},													LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELLOWERBEHAVIOR},
 	{57,  84, FREQ_2G407,  BW_40, {5, 6, 7, 8, 9, 10, 11, 12, 13, 0}, {0},												LICENSEEXEMPTBEHAVIOR | PRIMARYCHANNELUPPERBEHAVIOR},
 	{58, 121, FREQ_5G00,   BW_20, {100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 0}, {0},						NOMADICBEHAVIOR | LICENSEEXEMPTBEHAVIOR},
-	{128, 128, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 144, 0},												USEEIRPFORVHTTXPOWENV},
+	{128, 128, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 138, 0},												USEEIRPFORVHTTXPOWENV},
 	{129, 129, FREQ_5G00,   BW_160, {0}, {50, 114, 0},																	USEEIRPFORVHTTXPOWENV},
 	{130, 130, FREQ_5G00,   BW_80, {0}, {42, 58, 106, 122, 0},															PLUS_80 | USEEIRPFORVHTTXPOWENV},
 	{131, 131, FREQ_5G94,  BW_20, {0}, {1, 5, 9, 13, 17, 21, 25, 29, 33, 37,
@@ -554,7 +571,7 @@ REG_CLASS_HE reg_class_he_jp[] = {
 										83, 91, 99, 107, 115, 123, 131, 139, 147, 155,
 										163, 171, 179, 187, 195, 203, 211, 219, 227, 0},								COMMON},
 	{133, 133, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151,
-										167, 183, 199, 215, 0},														COMMON},
+										167, 183, 199, 215, 0},															COMMON},
 	{134, 134, FREQ_5G94,  BW_160, {0}, {15, 47, 79, 111, 143, 175, 207, 0},											COMMON},
 	{135, 135, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151, 167, 183, 199, 215, 0},				PLUS_80},
 	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
@@ -584,7 +601,7 @@ REG_CLASS_HE reg_class_he_cn[] = {
 										83, 91, 99, 107, 115, 123, 131, 139, 147, 155,
 										163, 171, 179, 187, 195, 203, 211, 219, 227, 0},								COMMON},
 	{133, 133, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151,
-										167, 183, 199, 215, 0},														COMMON},
+										167, 183, 199, 215, 0},															COMMON},
 	{134, 134, FREQ_5G94,  BW_160, {0}, {15, 47, 79, 111, 143, 175, 207, 0},											COMMON},
 	{135, 135, FREQ_5G94,  BW_80, {0}, {7, 23, 39, 55, 71, 87, 103, 119, 135, 151, 167, 183, 199, 215, 0},				PLUS_80},
 	{0, 0, 0, 0, {0}, {0}, 0}			/* end */
@@ -853,7 +870,11 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	BOOLEAN ret = FALSE;
 	PCHANNEL_CTRL pChCtrl = NULL;
+	UCHAR vht_bw = 0;
+	UCHAR ht_bw = 0;
 
+	vht_bw = wlan_config_get_vht_bw(wdev);
+	ht_bw = wlan_config_get_ht_bw(wdev);
 #ifdef DOT11_HE_AX
 	if ((WMODE_CAP_AX(wdev->PhyMode))) {
 		PREG_CLASS_HE reg_class = (PREG_CLASS_HE)get_reg_table_by_country(
@@ -861,6 +882,7 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 		if (reg_class) {
 			do {
 			/* find  channel_set */
+				ret = FALSE;
 				if (reg_class[i].start_freq == FREQ_5G00) {
 					if ((reg_class[i].spacing == BW_80) ||
 						(reg_class[i].spacing == BW_160))
@@ -869,12 +891,22 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 						channel = reg_class[i].channel_set[j];
 					for (j = 0; channel != 0;) {
 #ifdef DOT11_VHT_AC
-					if (reg_class[i].spacing == BW_80) {
+					if ((reg_class[i].spacing == BW_80) && (vht_bw >= VHT_BW_80)) {
 						ret = RadarChannelCheck(pAd,
 							(reg_class[i].center_freq[j] - 2));
-					} else if (reg_class[i].spacing == BW_160) {
-						ret = TRUE;
-					} else
+					} else if ((reg_class[i].spacing == BW_160) && (vht_bw >= VHT_BW_160)) {
+						ret = FALSE;
+					} else if ((reg_class[i].spacing == BW_40) && (ht_bw >= HT_BW_40)) {
+						if ((RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+							RadarChannelCheck(pAd, reg_class[i].channel_set[j] + 4) &&
+							(reg_class[i].behavior_limit_set & PRIMARYCHANNELLOWERBEHAVIOR)) ||
+							(RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+							RadarChannelCheck(pAd, reg_class[i].channel_set[j] - 4) &&
+							(reg_class[i].behavior_limit_set & PRIMARYCHANNELUPPERBEHAVIOR)))
+							ret = TRUE;
+						else
+							ret = FALSE;
+					} else if (reg_class[i].spacing == BW_20)
 #endif
 					{
 						ret = RadarChannelCheck(pAd,
@@ -945,6 +977,7 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 			pAd->CommonCfg.CountryCode, wdev->PhyMode);
 		if (reg_class) {
 			do {
+				ret = FALSE;
 			/* find  channel_set */
 				if (reg_class[i].start_freq == FREQ_5G00) {
 					if ((reg_class[i].spacing == BW_80) ||
@@ -954,12 +987,22 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 						channel = reg_class[i].channel_set[j];
 					for (j = 0; channel != 0;) {
 #ifdef DOT11_VHT_AC
-					if (reg_class[i].spacing == BW_80) {
+					if ((reg_class[i].spacing == BW_80) && (vht_bw >= VHT_BW_80)) {
 						ret = RadarChannelCheck(pAd,
 							(reg_class[i].center_freq[j] - 2));
-					} else if (reg_class[i].spacing == BW_160) {
-						ret = TRUE;
-					} else
+					} else if ((reg_class[i].spacing == BW_160) && (vht_bw >= VHT_BW_160)) {
+						ret = FALSE;
+					} else if ((reg_class[i].spacing == BW_40) && (ht_bw >= HT_BW_40)) {
+						if ((RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+							RadarChannelCheck(pAd, reg_class[i].channel_set[j] + 4) &&
+							(reg_class[i].behavior_limit_set & PRIMARYCHANNELLOWERBEHAVIOR)) ||
+							(RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+							RadarChannelCheck(pAd, reg_class[i].channel_set[j] - 4) &&
+							(reg_class[i].behavior_limit_set & PRIMARYCHANNELUPPERBEHAVIOR)))
+							ret = TRUE;
+						else
+							ret = FALSE;
+					} else if (reg_class[i].spacing == BW_20)
 #endif
 					{
 						ret = RadarChannelCheck(pAd,
@@ -1027,13 +1070,25 @@ void wapp_get_cac_cap(IN PRTMP_ADAPTER pAd,
 		PREG_CLASS reg_class = (PREG_CLASS)get_reg_table_by_country(
 			pAd->CommonCfg.CountryCode, wdev->PhyMode);
 			do {
+				ret = FALSE;
 				/* find  channel_set */
 				if (reg_class[i].start_freq == FREQ_5G00) {
 					channel = reg_class[i].channel_set[j];
 					for (j = 0; channel != 0;) {
-						ret = RadarChannelCheck(pAd,
-							reg_class[i].channel_set[j]);
-
+						if ((reg_class[i].spacing == BW_40) && (ht_bw >= HT_BW_40)) {
+							if ((RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+								RadarChannelCheck(pAd, reg_class[i].channel_set[j] + 4) &&
+								(reg_class[i].behavior_limit_set & PRIMARYCHANNELLOWERBEHAVIOR)) ||
+								(RadarChannelCheck(pAd, reg_class[i].channel_set[j]) &&
+								RadarChannelCheck(pAd, reg_class[i].channel_set[j] - 4) &&
+								(reg_class[i].behavior_limit_set & PRIMARYCHANNELUPPERBEHAVIOR)))
+								ret = TRUE;
+							else
+								ret = FALSE;
+						} else if (reg_class[i].spacing == BW_20) {
+							ret = RadarChannelCheck(pAd,
+								reg_class[i].channel_set[j]);
+						}
 						if (ret == TRUE) {
 							dfs_ch = TRUE;
 							cac_cap->opcap[l].op_class =
@@ -1084,6 +1139,9 @@ UCHAR get_regulatory_class(RTMP_ADAPTER *pAd, UCHAR Channel, USHORT PhyMode, str
 	int i = 1; /* skip Invlid entry */
 	UCHAR regclass = 0;
 	UINT16 bw = BW_20;
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	UINT16 reg_cap_bw = BW_20;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	UCHAR cfg_ht_bw = wlan_config_get_ht_bw(wdev);
 #ifdef DOT11_VHT_AC
 	UCHAR cfg_vht_bw = wlan_config_get_vht_bw(wdev);
@@ -1093,6 +1151,17 @@ UCHAR get_regulatory_class(RTMP_ADAPTER *pAd, UCHAR Channel, USHORT PhyMode, str
 #endif /*DOT11_HE_AX*/
 
 	UCHAR reg_domain = pAd->reg_domain;
+#ifdef CONFIG_MAP_SUPPORT
+	if (IS_MAP_TURNKEY_ENABLE(pAd)) {
+		cfg_ht_bw = wlan_operate_get_ht_bw(wdev);
+#ifdef DOT11_VHT_AC
+		cfg_vht_bw = wlan_operate_get_vht_bw(wdev);
+#endif /*DOT11_VHT_AC*/
+#ifdef DOT11_HE_AX
+		cfg_he_bw = wlan_operate_get_he_bw(wdev);
+#endif /*DOT11_HE_AX*/
+	}
+#endif
 
 	if (WMODE_CAP_N(PhyMode)) {
 		if (cfg_ht_bw)
@@ -1160,18 +1229,37 @@ UCHAR get_regulatory_class(RTMP_ADAPTER *pAd, UCHAR Channel, USHORT PhyMode, str
 			  cfg_ht_bw,
 			  bw));
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	/*reg_cap_bw limit check of channel to fix op class = 0 for Ch 149 BW 160 */
+	reg_cap_bw = get_channel_bw_cap(wdev, Channel);
+	if (bw > reg_cap_bw) {
+		if (!(bw == BW_8080 && (reg_cap_bw == BW_80 || reg_cap_bw == BW_160))) {
+			/* if bw cap of channel is lower than .dat bw config, follow reg_cap_bw*/
+			bw = reg_cap_bw;
+
+			/*for ch 149, max reg _cap_bw is 80MHz, even config is 160
+			  *cfg_he_bw and cfg_vht_bw should also be updated to find
+			  *right center freq and operating class
+			  */
+			if (reg_cap_bw == BW_80) {
+				cfg_he_bw = HE_BW_80;
+				cfg_vht_bw = VHT_BW_80;
+			}
+		}
+	}
+#endif /*#ZERO_LOSS_CSA_SUPPORT*/
 #ifdef DOT11_HE_AX
 	if (WMODE_CAP_AX(PhyMode)) {
 		PREG_CLASS_HE reg_class_he = (PREG_CLASS_HE)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
 
+		UCHAR ch_band = wlan_config_get_ch_band(wdev);
 		if (reg_class_he) {
-			UCHAR ch_band = wlan_config_get_ch_band(wdev);
 
 			do {
 				if (BW_VALUE[reg_class_he[i].spacing] >= BW_VALUE[bw]) {
 					/* find  channel_set */
 					if (is_channel_in_channelset(reg_class_he[i].channel_set, Channel) ||
-						(is_channel_in_channelset(reg_class_he[i].center_freq, vht_cent_ch_freq(Channel, cfg_he_bw, ch_band)))) {
+						(is_channel_in_channelset(reg_class_he[i].center_freq, vht_cent_ch_freq(Channel, cfg_vht_bw, ch_band)))) {
 						regclass = (reg_domain == REG_LOCAL) ? \
 						reg_class_he[i].reg_class : \
 						reg_class_he[i].global_class;
@@ -1181,14 +1269,28 @@ UCHAR get_regulatory_class(RTMP_ADAPTER *pAd, UCHAR Channel, USHORT PhyMode, str
 				i++;
 			} while (reg_class_he[i].reg_class != 0);
 		}
+		i = 1;
+		if (!regclass) {
+			do {
+				if (BW_VALUE[reg_class_global[i].spacing] >= BW_VALUE[bw]) {
+					/* find  channel_set */
+					if (is_channel_in_channelset(reg_class_global[i].channel_set, Channel) ||
+						(is_channel_in_channelset(reg_class_global[i].center_freq, vht_cent_ch_freq(Channel, cfg_he_bw, ch_band)))) {
+						regclass = reg_class_global[i].reg_class;
+						break;
+					}
+				}
+				i++;
+			} while (reg_class_global[i].reg_class != 0);
+		}
 	} else
 #endif /* DOT11_HE_AX */
 #ifdef DOT11_VHT_AC
 	if (WMODE_CAP_AC(PhyMode)) {
 		PREG_CLASS_VHT reg_class_vht = (PREG_CLASS_VHT)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
 
+		UCHAR ch_band = wlan_config_get_ch_band(wdev);
 		if (reg_class_vht) {
-			UCHAR ch_band = wlan_config_get_ch_band(wdev);
 
 			do {
 				if (BW_VALUE[reg_class_vht[i].spacing] >= BW_VALUE[bw]) {
@@ -1203,6 +1305,20 @@ UCHAR get_regulatory_class(RTMP_ADAPTER *pAd, UCHAR Channel, USHORT PhyMode, str
 				}
 				i++;
 			} while (reg_class_vht[i].reg_class != 0);
+		}
+		i = 1;
+		if (!regclass) {
+			do {
+				if (BW_VALUE[reg_class_global[i].spacing] >= BW_VALUE[bw]) {
+					/* find  channel_set */
+					if (is_channel_in_channelset(reg_class_global[i].channel_set, Channel) ||
+						(is_channel_in_channelset(reg_class_global[i].center_freq, vht_cent_ch_freq(Channel, cfg_vht_bw, ch_band)))) {
+						regclass = reg_class_global[i].reg_class;
+						break;
+					}
+				}
+				i++;
+			} while (reg_class_global[i].reg_class != 0);
 		}
 	} else
 #endif /* DOT11_VHT_AC */
@@ -1460,14 +1576,131 @@ static UCHAR ChannelPreferredSanity(
 	return 0;
 }
 
+#ifdef MAP_6E_SUPPORT
+UCHAR map_set_op_class_info_6g(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	wdev_op_class_info_ext *op_class)
+{
+	UCHAR i = 0, j = 0, k = 0, op_index = 0, seen = 0;
+	UCHAR chnNum = 0;
+	UCHAR vht_bw;
+	UCHAR ht_bw;
+	USHORT PhyMode = wdev->PhyMode;
+	PREG_CLASS reg_class = NULL;
+	PREG_CLASS_VHT reg_class_vht = NULL;
+#ifdef DOT11_HE_AX
+	PREG_CLASS_HE reg_class_he = NULL;
+	PCH_DESC pChDesc;
+	UCHAR chValid;
+	UCHAR center_freq;
+#endif /* DOT11_HE_AX */
+
+#ifdef DOT11_HE_AX
+	if (WMODE_CAP_AX(PhyMode)) {
+		reg_class_he = (PREG_CLASS_HE)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+	} else
+#endif /* DOT11_HE_AX */
+		if (WMODE_CAP_AC(PhyMode))
+			reg_class_vht = (PREG_CLASS_VHT)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+		else if (WMODE_CAP_2G(PhyMode) || WMODE_CAP_5G(PhyMode))
+			reg_class = (PREG_CLASS)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+		else
+			return 0;
+
+	vht_bw = wlan_config_get_vht_bw(wdev);
+	ht_bw = wlan_config_get_ht_bw(wdev);
+	for (i = 1;; i++) {
+		chnNum = 0;
+		seen = 0;
+#ifdef DOT11_HE_AX
+		if (!(WMODE_CAP_AX(PhyMode)))
+			break;
+
+		if (reg_class_he[i].reg_class == 0) {
+			/*End of Op Class Table Reached*/
+			break;
+		}
+		for (k = 0; k < op_index; k++) {
+			if (reg_class_he[i].global_class == op_class->opClassInfoExt[k].op_class) {
+				/*This is a duplicate entry in opclass list*/
+				seen = 1;
+				break;
+			}
+		}
+		if (seen)
+			continue;
+
+		if (vht_bw != VHT_BW_160 && reg_class_he[i].global_class == 134) {
+			continue;
+		}
+
+		if (vht_bw < VHT_BW_80 && reg_class_he[i].global_class == 133) {
+			continue;
+		}
+
+		if (vht_bw != VHT_BW_8080 && reg_class_he[i].global_class == 135) {
+			continue;
+		}
+
+		if (ht_bw != HT_BW_40 && reg_class_he[i].global_class == 132) {
+			continue;
+		}
+		if ((reg_class_he[i].global_class >= 131 &&
+			reg_class_he[i].global_class <= 135)){
+			op_class->opClassInfoExt[op_index].op_class = reg_class_he[i].global_class;
+			for (j = 0; j <= MAX_NUM_OF_CHANNELS; j++) {
+				if ((op_class->opClassInfoExt[op_index].op_class == 131 ||
+					op_class->opClassInfoExt[op_index].op_class == 132) && reg_class_he[i].center_freq[j] != 0) {
+					/* if (reg_class_he[i].center_freq[j] != 0) {
+						if (ChannelPreferredSanity(pAd, wdev,
+							reg_class_he[i].center_freq[j])) { */
+					if (1) {
+						op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+							reg_class_he[i].center_freq[j];
+						chnNum++;
+					}
+				} else {
+					/*80Mhz centre frequencies*/
+					if (reg_class_he[i].center_freq[j] != 0) {
+						chValid = 0;
+						pChDesc = Country_Region_ChDesc_6GHZ[pAd->CommonCfg.CountryRegionForABand].pChDesc;
+						center_freq = reg_class_he[i].center_freq[j];
+						while (pChDesc->FirstChannel) {
+							if ((center_freq >= pChDesc->FirstChannel) &&
+								(center_freq < (pChDesc->FirstChannel + (4*pChDesc->NumOfCh)))) {
+								chValid = 1;
+								break;
+							}
+							pChDesc++;
+						}
+						if (chValid) {
+							op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+								reg_class_he[i].center_freq[j];
+							chnNum++;
+						}
+					}
+				}
+			}
+		}
+#endif /* DOT11_HE_AX */
+		if (chnNum) {
+			op_class->opClassInfoExt[op_index].num_of_ch = chnNum;
+			op_index++;
+		}
+	}
+	return op_index;
+}
 
 UCHAR map_set_op_class_info(
 	PRTMP_ADAPTER pAd,
 	struct wifi_dev *wdev,
-	wdev_op_class_info *op_class)
+	wdev_op_class_info_ext *op_class)
 {
 	UCHAR i = 0, j = 0, k = 0, op_index = 0, seen = 0;
 	UCHAR chnNum = 0;
+	UCHAR vht_bw = 0;
+	UCHAR ht_bw = 0;
 	USHORT PhyMode = wdev->PhyMode;
 	PREG_CLASS reg_class = NULL;
 	PREG_CLASS_VHT reg_class_vht = NULL;
@@ -1490,6 +1723,215 @@ UCHAR map_set_op_class_info(
 	} else
 		return 0;
 
+	vht_bw = wlan_config_get_vht_bw(wdev);
+	ht_bw = wlan_config_get_ht_bw(wdev);
+	for (i = 1;; i++) {
+		chnNum = 0;
+		seen = 0;
+#ifdef DOT11_HE_AX
+		if (WMODE_CAP_AX(PhyMode)) {
+			if (reg_class_he[i].reg_class == 0) {
+				/*End of Op Class Table Reached*/
+				break;
+			}
+			for (k = 0; k < op_index; k++) {
+				if (reg_class_he[i].global_class == op_class->opClassInfoExt[k].op_class) {
+					/*This is a duplicate entry in opclass list*/
+					seen = 1;
+					break;
+				}
+			}
+			if (seen) {
+				continue;
+			}
+
+			if (vht_bw != VHT_BW_160 && reg_class_he[i].global_class == 129) {
+				continue;
+			}
+
+			if (vht_bw < VHT_BW_80 && reg_class_he[i].global_class == 128) {
+				continue;
+			}
+
+			if (vht_bw != VHT_BW_8080 && reg_class_he[i].global_class == 130) {
+				continue;
+			}
+
+			if (ht_bw != HT_BW_40 && ((reg_class_he[i].global_class == 116) || (reg_class_he[i].global_class == 117) ||
+				(reg_class_he[i].global_class == 119) || (reg_class_he[i].global_class == 120) ||
+				(reg_class_he[i].global_class == 122) || (reg_class_he[i].global_class == 123) ||
+				(reg_class_he[i].global_class == 126) || (reg_class_he[i].global_class == 127) ||
+				(reg_class_he[i].global_class == 83) || (reg_class_he[i].global_class == 84))) {
+				continue;
+			}
+
+			if ((reg_class_he[i].global_class >= OP_CLASS_81 &&
+				reg_class_he[i].global_class <= OP_CLASS_84) ||
+				(reg_class_he[i].global_class >= OP_CLASS_115 &&
+				reg_class_he[i].global_class <= OP_CLASS_130)){
+				op_class->opClassInfoExt[op_index].op_class = reg_class_he[i].global_class;
+	for (j = 0; j <= 14; j++) {
+		/*Check for 20Mhz and 40Mhz classes only, otherwise channel sanity will fail*/
+		if (op_class->opClassInfoExt[op_index].op_class <= OP_CLASS_127) {
+			if (reg_class_he[i].channel_set[j] != 0) {
+				if (ChannelPreferredSanity(pAd, wdev,
+					reg_class_he[i].channel_set[j])) {
+					if ((UNII4BandSupport(pAd) == FALSE) &&
+						op_class->opClassInfoExt[op_index].op_class > OP_CLASS_125 &&
+							reg_class_he[i].channel_set[j] >= 163) {
+						continue;
+					}
+					op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+						reg_class_he[i].channel_set[j];
+					chnNum++;
+				}
+			}
+		} else {
+			/*80Mhz centre frequencies*/
+		if (reg_class_he[i].center_freq[j] != 0) {
+			chValid = 0;
+			pChDesc = Country_Region_ChDesc_5GHZ[pAd->CommonCfg.CountryRegionForABand].pChDesc;
+			center_freq = reg_class_he[i].center_freq[j];
+			while (pChDesc->FirstChannel) {
+				if ((center_freq >= pChDesc->FirstChannel) &&
+					(center_freq < (pChDesc->FirstChannel + (4*pChDesc->NumOfCh)))) {
+					if (op_class->opClassInfoExt[op_index].op_class == OP_CLASS_129 &&
+						pChDesc->NumOfCh < 8) {
+						pChDesc++;
+						continue;
+					}
+					chValid = 1;
+					break;
+				}
+				pChDesc++;
+			}
+			if ((UNII4BandSupport(pAd) == FALSE) && (center_freq >= 163) &&
+				(reg_class_he[i].global_class > OP_CLASS_125))
+				chValid = 0;
+			if (chValid) {
+				op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+					reg_class_he[i].center_freq[j];
+				chnNum++;
+			}
+		}
+		}
+	}
+			}
+		} else
+#endif /* DOT11_HE_AX */
+		if (WMODE_CAP_AC(PhyMode)) {
+			if (reg_class_vht[i].reg_class == 0) {
+				/*End of Op Class Table Reached*/
+				break;
+			}
+			for (k = 0; k < op_index; k++) {
+				if (reg_class_vht[i].global_class == op_class->opClassInfoExt[k].op_class) {
+					/*This is a duplicate entry in opclass list*/
+					seen = 1;
+					break;
+				}
+			}
+			if (seen) {
+				continue;
+			}
+			if ((reg_class_vht[i].global_class >= OP_CLASS_81 &&
+				reg_class_vht[i].global_class <= OP_CLASS_84) ||
+				(reg_class_vht[i].global_class >= OP_CLASS_115 &&
+				reg_class_vht[i].global_class <= OP_CLASS_130)){
+				op_class->opClassInfoExt[op_index].op_class = reg_class_vht[i].global_class;
+				for (j = 0; j <= 14; j++) {
+					/*Check for 20Mhz and 40Mhz classes only, otherwise channel sanity will fail*/
+					if (op_class->opClassInfoExt[op_index].op_class <= OP_CLASS_127) {
+						if (reg_class_vht[i].channel_set[j] != 0) {
+							if (ChannelPreferredSanity(pAd, wdev,
+								reg_class_vht[i].channel_set[j])) {
+								op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+									reg_class_vht[i].channel_set[j];
+								chnNum++;
+							}
+						}
+					} else {
+						/*80Mhz centre frequencies*/
+						if (reg_class_vht[i].center_freq[j] != 0) {
+								op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+									reg_class_vht[i].center_freq[j];
+								chnNum++;
+						}
+					}
+				}
+			}
+		} else if ((WMODE_CAP_2G(PhyMode) ||
+			WMODE_CAP_5G(PhyMode))) {
+			if (reg_class[i].reg_class == 0) {
+				break;
+			}
+			for (k = 0; k < op_index; k++) {
+				if (reg_class[i].global_class == op_class->opClassInfoExt[k].op_class) {
+					seen = 1;
+					break;
+				}
+			}
+			if (seen) {
+				continue;
+			}
+			if ((reg_class[i].global_class >= OP_CLASS_115 &&
+				reg_class[i].global_class <= OP_CLASS_130) ||
+				(reg_class[i].global_class >= OP_CLASS_81 &&
+				reg_class[i].global_class <= OP_CLASS_84)){
+				op_class->opClassInfoExt[op_index].op_class = reg_class[i].global_class;
+				for (j = 0; j <= 14; j++) {
+					if (reg_class[i].channel_set[j] != 0) {
+						if (ChannelPreferredSanity(pAd, wdev,
+							reg_class[i].channel_set[j])) {
+							op_class->opClassInfoExt[op_index].ch_list[chnNum] =
+								reg_class[i].channel_set[j];
+							chnNum++;
+						}
+					}
+				}
+			}
+		}
+		if (chnNum) {
+			op_class->opClassInfoExt[op_index].num_of_ch = chnNum;
+			op_index++;
+		}
+	}
+	return op_index;
+}
+#else
+UCHAR map_set_op_class_info(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	wdev_op_class_info *op_class)
+{
+	UCHAR i = 0, j = 0, k = 0, op_index = 0, seen = 0;
+	UCHAR chnNum = 0;
+	UCHAR vht_bw = 0;
+	UCHAR ht_bw = 0;
+	USHORT PhyMode = wdev->PhyMode;
+	PREG_CLASS reg_class = NULL;
+	PREG_CLASS_VHT reg_class_vht = NULL;
+#ifdef DOT11_HE_AX
+	PREG_CLASS_HE reg_class_he = NULL;
+	PCH_DESC pChDesc;
+	UCHAR chValid;
+	UCHAR center_freq;
+#endif /* DOT11_HE_AX */
+
+#ifdef DOT11_HE_AX
+	if (WMODE_CAP_AX(PhyMode)) {
+		reg_class_he = (PREG_CLASS_HE)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+	} else
+#endif /* DOT11_HE_AX */
+	if (WMODE_CAP_AC(PhyMode)) {
+		reg_class_vht = (PREG_CLASS_VHT)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+	} else if (WMODE_CAP_2G(PhyMode) || WMODE_CAP_5G(PhyMode)) {
+		reg_class = (PREG_CLASS)get_reg_table_by_country(pAd->CommonCfg.CountryCode, PhyMode);
+	} else
+		return 0;
+
+	vht_bw = wlan_config_get_vht_bw(wdev);
+	ht_bw = wlan_config_get_ht_bw(wdev);
 	for (i = 1;; i++) {
 		chnNum = 0;
 		seen = 0;
@@ -1509,6 +1951,27 @@ UCHAR map_set_op_class_info(
 			if (seen) {
 				continue;
 			}
+
+			if (vht_bw != VHT_BW_160 && reg_class_he[i].global_class == 129) {
+				continue;
+			}
+
+			if (vht_bw != VHT_BW_80 && reg_class_he[i].global_class == 128) {
+				continue;
+			}
+
+			if (vht_bw != VHT_BW_8080 && reg_class_he[i].global_class == 130) {
+				continue;
+			}
+
+			if (ht_bw != HT_BW_40 && ((reg_class_he[i].global_class == 116) || (reg_class_he[i].global_class == 117) ||
+				(reg_class_he[i].global_class == 119) || (reg_class_he[i].global_class == 120) ||
+				(reg_class_he[i].global_class == 122) || (reg_class_he[i].global_class == 123) ||
+				(reg_class_he[i].global_class == 126) || (reg_class_he[i].global_class == 127) ||
+				(reg_class_he[i].global_class == 83) || (reg_class_he[i].global_class == 84))) {
+				continue;
+			}
+
 			if ((reg_class_he[i].global_class >= OP_CLASS_81 &&
 				reg_class_he[i].global_class <= OP_CLASS_84) ||
 				(reg_class_he[i].global_class >= OP_CLASS_115 &&
@@ -1630,6 +2093,7 @@ UCHAR map_set_op_class_info(
 	return op_index;
 }
 
+#endif
 
 #endif /* CONFIG_MAP_SUPPORT */
 

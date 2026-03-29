@@ -391,9 +391,9 @@ static VOID ge_sta_dump_queue(RTMP_ADAPTER *pAd, UINT16 wcid, enum PACKET_TYPE p
 	}
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nDump TxQ[%d] of TR_ENTRY(ID:%d,\
-				MAC:%02x:%02x:%02x:%02x:%02x:%02x),\
+				MAC:"MACSTR"),\
 				enq_cap = %d, ps_state = %s\n",
-				qidx, tr_entry->wcid, PRINT_MAC(tr_entry->Addr),
+				qidx, tr_entry->wcid, MAC2STR(tr_entry->Addr),
 				tr_entry->enq_cap,
 				tr_entry->ps_state == PWR_ACTIVE ? "PWR_ACTIVE" : "PWR_SAVE"));
 
@@ -590,9 +590,9 @@ static INT32 ge_dump_all_sw_queue(RTMP_ADAPTER *pAd)
 		tr_entry = &tr_ctl->tr_entry[i];
 
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nDump TR_ENTRY(ID:%d,\
-				MAC:%02x:%02x:%02x:%02x:%02x:%02x),\
+				MAC:"MACSTR"),\
 				enq_cap = %d, ps_state = %s\n",
-				tr_entry->wcid, PRINT_MAC(tr_entry->Addr),
+				tr_entry->wcid, MAC2STR(tr_entry->Addr),
 				tr_entry->enq_cap,
 				tr_entry->ps_state == PWR_ACTIVE ? "PWR_ACTIVE" : "PWR_SAVE"));
 
@@ -1312,8 +1312,7 @@ start_kick:
 
 		MTWF_LOG(DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("<--%s():pTxBlk.TxPktList.Num=%d, deq_info.pkt_cnt=%d\n",
 				 __func__, pTxBlk->TxPacketList.Number, deq_info->pkt_cnt));
-		break;
-	} while (pTxBlk->TxPacketList.Number < deq_info->pkt_cnt);
+	} while (0);
 
 	RTMP_IRQ_UNLOCK(&tr_entry->txq_lock[q_idx], IrqFlags);
 
@@ -1386,6 +1385,10 @@ static INT32 ge_deq_high_prio_pkt(RTMP_ADAPTER *pAd, TX_BLK *tx_blk)
 		}
 
 		pkt = get_high_prio_pkt(pAd);
+
+		if (!pkt)
+			continue;
+
 		wcid = RTMP_GET_PACKET_WCID(pkt);
 
 		if (!IS_WCID_VALID(pAd, wcid)) {
@@ -1504,6 +1507,10 @@ static INT32 ge_deq_mgmt_pkt(RTMP_ADAPTER *pAd, TX_BLK *tx_blk)
 		}
 
 		pkt = get_mgmt_pkt(pAd);
+
+		if (!pkt)
+			return NDIS_STATUS_FAILURE;
+
 		wcid = RTMP_GET_PACKET_WCID(pkt);
 
 		if (!IS_WCID_VALID(pAd, wcid)) {
@@ -2028,7 +2035,6 @@ VOID ge_tx_pkt_deq_func(RTMP_ADAPTER *pAd, UINT8 idx)
 				NdisZeroMemory((UCHAR *)pTxPacketList, sizeof(QUEUE_HEADER));
 #endif /* MT7626_REDUCE_TX_OVERHEAD */
 				if (!qm_ops->deq_data_pkt_v2(pAd, max_cnt, &deq_info, pTxPacketList)) {
-					need_schedule = FALSE;
 					break;
 				}
 			}
@@ -2041,7 +2047,6 @@ VOID ge_tx_pkt_deq_func(RTMP_ADAPTER *pAd, UINT8 idx)
 #endif
 		} else {
 			if (qm_ops->deq_data_pkt(pAd, pTxBlk, max_cnt, &deq_info)) {
-				need_schedule = FALSE;
 				break;
 			}
 		}
@@ -2319,6 +2324,7 @@ static INT qm_for_wsys_notify_handle(struct notify_entry *ne, INT event_id, VOID
 	struct _RTMP_ADAPTER *ad = ne->priv;
 	struct wifi_dev *wdev = info->wdev;
 	struct qm_ops *qm = ad->qm_ops;
+	struct _STA_TR_ENTRY *tr_entry = (struct _STA_TR_ENTRY *)info->v;
 
 	MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 		("%s(): event_id: %d, wdev=%d\n", __func__, event_id, info->wdev->wdev_idx));
@@ -2328,9 +2334,12 @@ static INT qm_for_wsys_notify_handle(struct notify_entry *ne, INT event_id, VOID
 		if (qm->bss_clean_queue)
 			qm->bss_clean_queue(ad, wdev);
 		break;
+	case WSYS_NOTIFY_DISCONNT_ACT:
+		if (qm->sta_clean_queue)
+			qm->sta_clean_queue(ad, tr_entry->wcid);
+		break;
 	case WSYS_NOTIFY_OPEN:
 	case WSYS_NOTIFY_CONNT_ACT:
-	case WSYS_NOTIFY_DISCONNT_ACT:
 	case WSYS_NOTIFY_LINKUP:
 	case WSYS_NOTIFY_LINKDOWN:
 	case WSYS_NOTIFY_STA_UPDATE:

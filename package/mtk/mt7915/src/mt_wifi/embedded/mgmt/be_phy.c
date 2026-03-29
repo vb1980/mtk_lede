@@ -139,6 +139,8 @@ static BOOLEAN cal_cent_ch_ate(UCHAR prim_ch, CHAR ext_cha, UCHAR *cen_ch)
 	return TRUE;
 }
 
+
+
 static BOOLEAN phy_freq_adjust(struct wifi_dev *wdev, struct freq_cfg *cfg, struct freq_oper *op)
 {
 	UCHAR reg_cap_bw;
@@ -199,10 +201,10 @@ static BOOLEAN phy_freq_adjust(struct wifi_dev *wdev, struct freq_cfg *cfg, stru
 	if (op->bw == BW_40) {
 		if (is_testmode_wdev(wdev->wdev_type)) {
 			cal_cent_ch_ate(op->prim_ch, op->ext_cha, &op->cen_ch_1);
-		} else {
+	} else {
 			if (cal_ht_cent_ch(op->prim_ch, op->bw, op->ext_cha, &op->cen_ch_1) != TRUE) {
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s : buggy here.\n", __func__));
+					("%s : buggy here.\n", __func__));
 				return FALSE;
 			}
 		}
@@ -227,12 +229,23 @@ static BOOLEAN phy_freq_adjust(struct wifi_dev *wdev, struct freq_cfg *cfg, stru
 static VOID phy_freq_update(struct wifi_dev *wdev, struct freq_oper *oper)
 {
 	struct wlan_operate *op = (struct wlan_operate *)wdev->wpf_op;
-
+#ifdef CONFIG_MAP_SUPPORT
+	struct _RTMP_ADAPTER *ad = NULL;
+#endif
 	op->phy_oper.ch_band = oper->ch_band;
 	op->phy_oper.prim_ch = oper->prim_ch;
 	operate_loader_prim_ch(op);
 	op->phy_oper.cen_ch_1 = oper->cen_ch_1;
 	op->phy_oper.cen_ch_2 = oper->cen_ch_2;
+#ifdef CONFIG_MAP_SUPPORT
+	ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
+	if (IS_MAP_TURNKEY_ENABLE(ad) || IS_MAP_BS_ENABLE(ad)) {
+		if (oper->bw != op->phy_oper.wdev_bw ||
+			oper->ht_bw != op->ht_oper.ht_bw) {
+			wdev->map_indicate_channel_change = 1;
+		}
+	}
+#endif
 	op->phy_oper.wdev_bw = oper->bw;
 	op->ht_oper.ht_bw = oper->ht_bw;
 	operate_loader_ht_bw(op);
@@ -285,27 +298,29 @@ static VOID phy_freq_decision(struct wifi_dev *wdev, struct freq_oper *want, str
 VOID phy_freq_get_cfg(struct wifi_dev *wdev, struct freq_cfg *fcfg)
 {
 	struct wlan_config *cfg = (struct wlan_config *)wdev->wpf_cfg;
-#ifdef BW_VENDOR10_CUSTOM_FEATURE
 	struct _RTMP_ADAPTER *pAd = (struct _RTMP_ADAPTER *)wdev->sys_handle;
-#endif
+	UCHAR BandIdx = HcGetBandByWdev(wdev);
 
 	os_zero_mem(fcfg, sizeof(struct freq_cfg));
 	fcfg->prim_ch = wdev->channel;
 	fcfg->ch_band = cfg->phy_conf.ch_band;
 	fcfg->cen_ch_2 = cfg->phy_conf.cen_ch_2;
+
+	if (
 #ifdef BW_VENDOR10_CUSTOM_FEATURE
-	if (IS_APCLI_SYNC_PEER_DEAUTH_ENBL(pAd)) {
+		IS_APCLI_SYNC_PEER_DEAUTH_ENBL(pAd) ||
+#endif
+		(pAd->CommonCfg.bBssCoexEnable &&
+		pAd->CommonCfg.BssCoexScanLastResult[BandIdx].bNeedFallBack)) {
 		fcfg->ht_bw = wlan_operate_get_ht_bw(wdev);
 		fcfg->ext_cha = wlan_operate_get_ext_cha(wdev);
 		fcfg->vht_bw = wlan_operate_get_vht_bw(wdev);
 	} else {
-#endif
 		fcfg->ht_bw = cfg->ht_conf.ht_bw;
 		fcfg->ext_cha = cfg->ht_conf.ext_cha;
 		fcfg->vht_bw = cfg->vht_conf.vht_bw;
-#ifdef BW_VENDOR10_CUSTOM_FEATURE
 	}
-#endif
+
 #ifdef DOT11_HE_AX
 	fcfg->ap_bw = cfg->phy_conf.ap_bw;
 	fcfg->ap_cen_ch = cfg->phy_conf.ap_cen_ch;
@@ -340,8 +355,12 @@ VOID operate_loader_phy(struct wifi_dev *wdev, struct freq_cfg *cfg)
 	struct wifi_dev *tdev = NULL;
 	struct _RTMP_ADAPTER *ad = NULL;
 
-	if (wdev == NULL)
+	if (wdev == NULL) {
+		MTWF_DBG(NULL, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_ERROR,
+				 "wdev NULL!");
 		return;
+	}
+
 	ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -353,15 +372,22 @@ VOID operate_loader_phy(struct wifi_dev *wdev, struct freq_cfg *cfg)
 			  cfg->cen_ch_2,
 			  wdev->PhyMode));
 	os_zero_mem(&oper_dev, sizeof(oper_dev));
-	if (!phy_freq_adjust(wdev, cfg, &oper_dev))
-		goto end;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s(): oper_dev after adjust: bw(%d), prim_ch(%d), cen_ch_1(%d), cen_ch_2(%d),ext_cha(%d)!\n", __func__,
-			  oper_dev.bw,
-			  oper_dev.prim_ch,
-			  oper_dev.cen_ch_1,
-			  oper_dev.cen_ch_2,
-			  oper_dev.ext_cha));
+
+	if (!phy_freq_adjust(wdev, cfg, &oper_dev)) {
+		MTWF_DBG(ad, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_ERROR,
+				 "phy_freq_adjust failed!");
+		return;
+	}
+	MTWF_DBG(ad, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_TRACE,
+			"oper_dev after adjust: bw(%d), prim_ch(%d), cen_ch_1(%d), cen_ch_2(%d),ext_cha(%d)!\n",
+			oper_dev.bw,
+			oper_dev.prim_ch,
+			oper_dev.cen_ch_1,
+			oper_dev.cen_ch_2,
+			oper_dev.ext_cha);
+
+	phy_freq_update(wdev, &oper_dev);
+
 	/*get last radio result for hdev check and update*/
 	phy_freq_decision(wdev, &oper_dev, &oper_radio);
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -395,7 +421,7 @@ VOID operate_loader_phy(struct wifi_dev *wdev, struct freq_cfg *cfg)
 
 #ifdef CONFIG_AP_SUPPORT
 #ifdef MT_DFS_SUPPORT
-    DfsCacNormalStart(ad, wdev, RD_NORMAL_MODE);
+	DfsCacNormalStart(ad, wdev, RD_NORMAL_MODE);
 
 	/* Perform CAC & Radar Detect only for DFS Channel */
 	if (DfsRadarChannelCheck(ad, wdev, oper_radio.cen_ch_2, oper_radio.bw)) {
@@ -404,13 +430,15 @@ VOID operate_loader_phy(struct wifi_dev *wdev, struct freq_cfg *cfg)
 #endif
 #endif
 
-end:
 	wdev_sync_prim_ch(ad, wdev);
 	band_idx = HcGetBandByWdev(wdev);
 	for (i = 0; i < WDEV_NUM_MAX; i++) {
 		tdev = ad->wdev_list[i];
-		if (tdev && HcIsRadioAcq(tdev) && (band_idx == HcGetBandByWdev(tdev)))
+		if (tdev && HcIsRadioAcq(tdev) && (band_idx == HcGetBandByWdev(tdev))) {
+			if (tdev == wdev)
+				continue;
 			phy_freq_update(tdev, &oper_dev);
+		}
 	}
 }
 
@@ -465,6 +493,7 @@ INT32 wlan_operate_set_ch_band(struct wifi_dev *wdev, UCHAR ch_band)
 {
 	struct freq_cfg cfg;
 
+	os_zero_mem(&cfg, sizeof(cfg));
 	phy_freq_get_cfg(wdev, &cfg);
 	cfg.ch_band = ch_band;
 	operate_loader_phy(wdev, &cfg);
@@ -475,6 +504,7 @@ INT32 wlan_operate_set_prim_ch(struct wifi_dev *wdev, UCHAR prim_ch)
 {
 	struct freq_cfg cfg;
 
+	os_zero_mem(&cfg, sizeof(cfg));
 	phy_freq_get_cfg(wdev, &cfg);
 	cfg.prim_ch = prim_ch;
 	operate_loader_phy(wdev, &cfg);
@@ -535,6 +565,8 @@ INT32 wlan_operate_set_cen_ch_2(struct wifi_dev *wdev, UCHAR cen_ch_2)
 {
 	struct wlan_operate *op = (struct wlan_operate *) wdev->wpf_op;
 	struct freq_cfg cfg;
+
+	os_zero_mem(&cfg, sizeof(cfg));
 
 	if (!op) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,

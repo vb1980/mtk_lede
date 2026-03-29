@@ -1426,7 +1426,7 @@ BOOLEAN CFG80211DRV_OpsSetChannel(RTMP_ADAPTER *pAd, VOID *pData)
 			BCN_UPDATE_IE_CHG);
 		AsicEnableIbssSync(
 			pAd,
-			pAd->CommonCfg.BeaconPeriod,
+			pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 			pAd->StaCfg[0].wdev.OmacIdx,
 			OPMODE_ADHOC);
 		Set_SSID_Proc(pAd, (RTMP_STRING *)pAd->StaCfg[0].Ssid);
@@ -1448,7 +1448,7 @@ BOOLEAN CFG80211DRV_OpsJoinIbss(
 
 	pIbssInfo = (CMD_RTPRIV_IOCTL_80211_IBSS *)pData;
 	pAd->StaCfg[0].bAutoReconnect = TRUE;
-	pAd->CommonCfg.BeaconPeriod = pIbssInfo->BeaconInterval;
+	pAd->CommonCfg.BeaconPeriod[DBDC_BAND0] = pIbssInfo->BeaconInterval;
 
 	if (pIbssInfo->privacy) {
 		SET_AKM_OPEN(wdev->SecConfig.AKMMap);
@@ -1501,7 +1501,7 @@ BOOLEAN CFG80211DRV_OpsJoinIbss(
 
 	AsicEnableIbssSync(
 		pAd,
-		pAd->CommonCfg.BeaconPeriod,
+		pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
 		pAd->StaCfg[0].wdev.OmacIdx,
 		OPMODE_ADHOC);
 	Set_SSID_Proc(pAd, (RTMP_STRING *)pIbssInfo->Ssid);
@@ -1743,8 +1743,8 @@ BOOLEAN CFG80211DRV_FILL_STAInfo(
 
 	if (pEntry->Sst != SST_ASSOC) {
 		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[%s](%d):idx: %d, mac: %02X:%02X:%02X:%02X:%02X:%02X is disassociated\n",
-			__func__, __LINE__, pEntry->wcid, PRINT_MAC(pEntry->Addr)));
+			("[%s](%d):idx: %d, mac: "MACSTR" is disassociated\n",
+			__func__, __LINE__, pEntry->wcid, MAC2STR(pEntry->Addr)));
 		return FALSE;
 	}
 
@@ -1753,8 +1753,8 @@ BOOLEAN CFG80211DRV_FILL_STAInfo(
 		/* only dump the apcli entry which not a RepeaterCli */
 		if (IS_REPT_LINK_UP(pEntry->pReptCli)) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("[%s](%d):idx: %d, mac: %02X:%02X:%02X:%02X:%02X:%02X REPT linkup\n",
-			__func__, __LINE__, pEntry->wcid, PRINT_MAC(pEntry->Addr)));
+			("[%s](%d):idx: %d, mac: "MACSTR" REPT linkup\n",
+			__func__, __LINE__, pEntry->wcid, MAC2STR(pEntry->Addr)));
 			return FALSE;
 		}
 	}
@@ -2143,7 +2143,7 @@ BOOLEAN CFG80211DRV_FILL_STAInfo(
 				bss_capability = mbss->CapabilityInfo;
 				bss_shorttime_en  = wdev->bUseShortSlotTime;
 				bss_dtim = mbss->DtimPeriod;
-				bss_bcn_interval = pAd->CommonCfg.BeaconPeriod;
+				bss_bcn_interval = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 				break;
 			}
 		}
@@ -3314,7 +3314,7 @@ VOID CFG80211_RegRuleApply(
 				if (ChanId > CFG80211_NUM_OF_CHAN_2GHZ)
 					continue;
 			}
-			BandIdx = HcGetBandByChannel(pAd, ChanId);
+			BandIdx = HcGetBandByChannelRange(pAd, ChanId);
 			pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 
 			/* zero first */
@@ -3388,7 +3388,7 @@ VOID CFG80211_ConnectResultInform(
 	IN UCHAR					FlgIsSuccess)
 {
 	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdCB;
-#ifdef HOSTAPD_MAP_SUPPORT
+#ifndef APCLI_CFG80211_SUPPORT
 	CFG80211DBG(DBG_LVL_TRACE, ("80211> dont inform cfg as apcli uses driver implementation\n"));
 #else
 
@@ -3607,9 +3607,9 @@ BOOLEAN CFG80211_checkScanTable(
 
 		if (bss) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Fake New %s(%02x:%02x:%02x:%02x:%02x:%02x) in Kernel_ScanTable with CH[%d][%d] BI:%d len:%d\n",
+					 ("Fake New %s("MACSTR") in Kernel_ScanTable with CH[%d][%d] BI:%d len:%d\n",
 					  pApCliEntry->MlmeAux.Ssid,
-					  PRINT_MAC(pApCliEntry->MlmeAux.Bssid), bss->channel->center_freq, pBssEntry->Channel,
+					  MAC2STR(pApCliEntry->MlmeAux.Bssid), bss->channel->center_freq, pBssEntry->Channel,
 					  pApCliEntry->MlmeAux.BeaconPeriod, pBssEntry->VarIeFromProbeRspLen));
 			CFG80211OS_PutBss(pWiphy, bss);
 			isOk = TRUE;

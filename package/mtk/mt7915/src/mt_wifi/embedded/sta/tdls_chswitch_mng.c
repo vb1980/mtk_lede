@@ -585,8 +585,8 @@ TDLS_PeerChannelSwitchReqAction(
 										&PeerChSwitchTime,
 										&PeerChSwitchTimeOut)) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s():  from %02x:%02x:%02x:%02x:%02x:%02x Sanity Check Fail !!!\n",
-				  __func__, PRINT_MAC(PeerAddr)));
+				 ("%s():  from "MACSTR" Sanity Check Fail !!!\n",
+				  __func__, MAC2STR(PeerAddr)));
 		return;
 	}
 
@@ -595,16 +595,16 @@ TDLS_PeerChannelSwitchReqAction(
 		TDLS_SendNullFrame(pAd, pAd->CommonCfg.TxRate, TRUE, FALSE);
 	}
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s():  from %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-			 __func__, PRINT_MAC(PeerAddr)));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("%s():  from "MACSTR" !!!\n",
+			 __func__, MAC2STR(PeerAddr)));
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("300. %ld !!!\n", (jiffies * 1000) / OS_HZ));
 	/* Drop not within my TDLS Table that created before ! */
 	LinkId = TDLS_SearchLinkId(pAd, PeerAddr);
 
 	if (LinkId == -1 || LinkId == MAX_NUM_OF_TDLS_ENTRY) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s() - can not find from %02x:%02x:%02x:%02x:%02x:%02x on TDLS entry !!!\n",
-				  __func__, PRINT_MAC(PeerAddr)));
+				 ("%s() - can not find from "MACSTR" on TDLS entry !!!\n",
+				  __func__, MAC2STR(PeerAddr)));
 		return;
 	}
 
@@ -752,8 +752,8 @@ TDLS_PeerChannelSwitchRspAction(
 	if (!IS_TDLS_SUPPORT(pAd))
 		return;
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() - from %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-			 __func__, PRINT_MAC(PeerAddr)));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() - from "MACSTR" !!!\n",
+			 __func__, MAC2STR(PeerAddr)));
 	hex_dump("TDLS peer channel switch response receive pack", Elem->Msg, Elem->MsgLen);
 
 	if (!PeerTdlsChannelSwitchRspSanity(pAd,
@@ -1144,8 +1144,8 @@ TDLS_ChannelSwitchTimeAction(
 	struct wifi_dev *wdev = &pAd->StaCfg[0].wdev;
 	UCHAR ext_cha = wlan_operate_get_ext_cha(wdev);
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Channel switch procedure for (%02x:%02x:%02x:%02x:%02x:%02x)\n",
-			 PRINT_MAC(pTDLS->MacAddr)));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Channel switch procedure for ("MACSTR")\n",
+			 MAC2STR(pTDLS->MacAddr)));
 	NdisGetSystemUpTime(&Now);
 
 	/* TODO: shiang-7603 */
@@ -1214,8 +1214,8 @@ TDLS_ChannelSwitchTimeOutAction(
 	UCHAR ext_cha = wlan_operate_get_ext_cha(wdev);
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN,
-			 ("Channel switch timeout , terminate the channel switch procedure (%02x:%02x:%02x:%02x:%02x:%02x)\n",
-			  PRINT_MAC(pTDLS->MacAddr)));
+			 ("Channel switch timeout , terminate the channel switch procedure ("MACSTR")\n",
+			  MAC2STR(pTDLS->MacAddr)));
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Channel switch timeout\n"));
 	pTdlsControl->bChannelSwitchWaitSuccess = FALSE;
 	pTdlsControl->bDoingPeriodChannelSwitch = FALSE;

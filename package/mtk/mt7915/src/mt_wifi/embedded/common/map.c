@@ -247,6 +247,13 @@ UCHAR getNonOpChnNum(
 	return nonOpChnNum;
 }
 
+UCHAR getAutoChannelSkipListNum(
+		IN PRTMP_ADAPTER pAd,
+		IN struct wifi_dev *wdev)
+{
+	return pAd->ApCfg.AutoChannelSkipListNum;
+}
+
 VOID setNonOpChnList(
 	IN PRTMP_ADAPTER pAd,
 	IN struct wifi_dev *wdev,
@@ -276,6 +283,21 @@ VOID setNonOpChnList(
 	} else
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("No Non Op Channel\n"));
+
+
+}
+
+VOID setAutoChannelSkipList(
+	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
+	IN wdev_chn_info * chn_list)
+{
+
+	UCHAR i = 0;
+
+	for (i = 0; i < chn_list->AutoChannelSkipListNum; i++)
+		chn_list->AutoChannelSkipList[i] =
+			pAd->ApCfg.AutoChannelSkipList[i];
 
 
 }
@@ -468,6 +490,13 @@ INT ReadMapParameterFromFile(
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("MAP_MODE=%d\n", pAd->MAPMode));
 	}
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+	if (RTMPGetKeyParameter("MapAccept3Addr", tmpbuf, 25, pBuffer, TRUE)) {
+		pAd->MapAccept3Addr = (UCHAR) os_str_tol(tmpbuf, 0, 10);
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			("MapAccept3Addr=%d\n", pAd->MapAccept3Addr));
+	}
+#endif
 #ifdef APCLI_SUPPORT
 #ifdef ROAMING_ENHANCE_SUPPORT
 		if (IS_MAP_TURNKEY_ENABLE(pAd))
@@ -480,7 +509,7 @@ INT ReadMapParameterFromFile(
 #ifdef CONFIG_MAP_SUPPORT
 			struct wifi_dev *wdev = pAd->wdev_list[j];
 			if (wdev && wdev->wdev_type == WDEV_TYPE_AP)
-				map_make_vend_ie(pAd, (UCHAR)wdev->BssIdx);
+				map_make_vend_ie(pAd, (UCHAR)wdev->func_idx);
 #endif /* CONFIG_MAP_SUPPORT */
 			}
 		}
@@ -522,6 +551,7 @@ static inline VOID remove_vlan_tag(RTMP_ADAPTER *pAd, PNDIS_PACKET pkt)
 	UCHAR *pSrcBuf;
 	UINT16 VLAN_LEN = 4;
 	UCHAR extra_field_offset = 2 * ETH_ALEN;
+	struct sk_buff *skb = RTPKT_TO_OSPKT(pkt);
 
 	pSrcBuf = GET_OS_PKT_DATAPTR(pkt);
 	ASSERT(pSrcBuf);
@@ -532,6 +562,7 @@ static inline VOID remove_vlan_tag(RTMP_ADAPTER *pAd, PNDIS_PACKET pkt)
 	RtmpOsSkbResetNetworkHeader(RTPKT_TO_OSPKT(pkt));
 	RtmpOsSkbResetTransportHeader(RTPKT_TO_OSPKT(pkt));
 	RtmpOsSkbResetMacLen(RTPKT_TO_OSPKT(pkt));
+	skb->vlan_tci = 0;
 }
 
 BOOLEAN add_vlan_tag(void *packet, UINT16 vlan_id, UCHAR vlan_pcp)
@@ -545,7 +576,7 @@ BOOLEAN add_vlan_tag(void *packet, UINT16 vlan_id, UCHAR vlan_pcp)
 	skb = vlan_insert_tag(skb, htons(ETH_P_8021Q), vlan_tci);
 	if (skb) {
 		skb->protocol = htons(ETH_P_8021Q);
-		skb->vlan_tci = 0;
+		skb->vlan_tci = htons(vlan_tci);
 		return TRUE;
 	} else {
 		return FALSE;
@@ -589,9 +620,9 @@ BOOLEAN map_ts_tx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 
 	pkt_type = (pSrcBuf[12] << 8) | pSrcBuf[13];
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		("%s() on %s, DevPeerRole=%02x, profile=%02x, vlan_tagged:%d, DA:%pM, SA:%pM, pkt_type0x%x pkt_vid(%d) conf_vid(%d)\n",
+		("%s() on %s, DevPeerRole=%02x, profile=%02x, vlan_tagged:%d, DA:"MACSTR" SA:"MACSTR", pkt_type0x%x pkt_vid(%d) conf_vid(%d)\n",
 		__func__, wdev->if_dev->name, peer_entry->DevPeerRole, peer_entry->profile, vlan_tagged,
-		pSrcBuf, (pSrcBuf+6), pkt_type, pkt_vid, conf_vid));
+		MAC2STR(pSrcBuf), MAC2STR(pSrcBuf+6), pkt_type, pkt_vid, conf_vid));
 
 	/*pass through all vlan tagged packet with transparent vlan id*/
 	if (vlan_tagged && is_vid_configed(pkt_vid, wdev->MAPCfg.bitmap_trans_vlan))
@@ -610,7 +641,7 @@ BOOLEAN map_ts_tx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 				remove_vlan_tag(pAd, pkt);
 			} else
 				goto fail;
-		} else if (peer_entry->profile != 0x02) {
+		} else if (peer_entry->profile < 0x02) {
 			if (pkt_vid != wdev->MAPCfg.primary_vid) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					("map_ts_tx_process %s drop pkts with vid(%d) not equal to primary vlan(%d)\n",
@@ -622,21 +653,20 @@ BOOLEAN map_ts_tx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 					wdev->if_dev->name, pkt_vid));
 			/*map r1 device*/
 			remove_vlan_tag(pAd, pkt);
-		} else if (peer_entry->profile == 0x02) {
+		} else if (peer_entry->profile >= 0x02) {
 			/*	map r2 device check whether the vid is included
 			 *	in the recent received ts policy-TBD
 			 */
 		}
 	} else {
-		if (peer_entry->profile == 0x02) {
+		if (peer_entry->profile >= 0x02) {
 			/*	should we assume that if primary vlan id has been
 			 *	configured, we should add the primary vid to these
 			 *	packets without any vlan tags, including the 1905 and
 			 *	EAPOL message???
 			 */
-			pkt_type = (UINT16)((pSrcBuf[12] << 8) | pSrcBuf[13]);
-			if (wdev->MAPCfg.primary_vid != INVALID_VLAN_ID &&
-				(pkt_type == PKT_TYPE_1905 || pkt_type == ETH_TYPE_EAPOL)) {
+			/* tag all packets sending on R2/R3 Backhual */
+			if (IS_VALID_VID(wdev->MAPCfg.primary_vid)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("map_ts_tx_process %s add tag for r2 vid=%d to untaged ptk\n",
 						wdev->if_dev->name, wdev->MAPCfg.primary_vid));
@@ -669,9 +699,9 @@ BOOLEAN map_ts_rx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 
 	pkt_type = (pSrcBuf[12] << 8) | pSrcBuf[13];
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		("%s() on %s, DevPeerRole=%02x, profile=%02x, vlan_tagged:%d, DA:%pM, SA:%pM, pkt_type0x%x pkt_vid(%d)\n",
+		("%s() on %s, DevPeerRole=%02x, profile=%02x, vlan_tagged:%d, DA:"MACSTR", SA:"MACSTR", pkt_type0x%x pkt_vid(%d)\n",
 		__func__, wdev->if_dev->name, peer_entry->DevPeerRole, peer_entry->profile, vlan_tagged,
-		pSrcBuf, (pSrcBuf+6), pkt_type, pkt_vid));
+		MAC2STR(pSrcBuf), MAC2STR(pSrcBuf+6), pkt_type, pkt_vid));
 
 	if (vlan_tagged && is_vid_configed(pkt_vid, wdev->MAPCfg.bitmap_trans_vlan))
 		goto suc;
@@ -681,17 +711,19 @@ BOOLEAN map_ts_rx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 
 	if (vlan_tagged) {
 		if (peer_entry->DevPeerRole == 0 ||
-			peer_entry->profile != 0x02) {
+			peer_entry->profile < 0x02) {
 			/*	normal sta drop the packet with vlan which is send from
 			 *	normal station or map r1 device
 			 */
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s drop ptk vid=%d,entry=%p,DevPeerRole=%02x, profile=%02x\n",
-				wdev->if_dev->name, pkt_vid,
-				peer_entry, peer_entry->DevPeerRole,
-				peer_entry->profile));
-			goto fail;
-		} else if (peer_entry->profile == 0x02) {
+			if (wdev->MAPCfg.fh_vid != INVALID_VLAN_ID) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					("%s drop ptk vid=%d,entry=%p,DevPeerRole=%02x, profile=%02x\n",
+					wdev->if_dev->name, pkt_vid,
+					peer_entry, peer_entry->DevPeerRole,
+					peer_entry->profile));
+				goto fail;
+			}
+		} else if (peer_entry->profile >= 0x02) {
 			/*	map r2 device check whether the vid is included
 			 *	in the recent received ts policy
 			*/
@@ -707,17 +739,17 @@ BOOLEAN map_ts_rx_process(RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 	} else {
 		if (peer_entry->DevPeerRole == 0) {
 			/*if this bss has been configured, add the corresponding vid*/
-			if (wdev->MAPCfg.fh_vid != INVALID_VLAN_ID ||
-				wdev->MAPCfg.primary_vid != INVALID_VLAN_ID) {
+			if (IS_VALID_VID(wdev->MAPCfg.fh_vid) ||
+				IS_VALID_VID(wdev->MAPCfg.primary_vid)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					("map_ts_rx_process %s add for station vid=%d\n",
 					wdev->if_dev->name, wdev->MAPCfg.fh_vid));
-				if (!add_vlan_tag(pkt, wdev->MAPCfg.fh_vid != INVALID_VLAN_ID ?
+				if (!add_vlan_tag(pkt, IS_VALID_VID(wdev->MAPCfg.fh_vid) ?
 					wdev->MAPCfg.fh_vid : wdev->MAPCfg.primary_vid, wdev->MAPCfg.primary_pcp))
 					goto fail;
 			}
-		} else if (peer_entry->profile != 0x02) {
-			if (wdev->MAPCfg.primary_vid != INVALID_VLAN_ID) {
+		} else if (peer_entry->profile < 0x02) {
+			if (IS_VALID_VID(wdev->MAPCfg.primary_vid)) {
 				/*if received a packet from map r1 device, add a vlan tag*/
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("map_ts_rx_process %s add for R1 with primary vid=%d\n",
@@ -894,12 +926,12 @@ VOID map_blacklist_del(
 
 	if (pListEntry) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("[%s] : pMacAddr = %02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(pMacAddr)));
+			("[%s] : pMacAddr = "MACSTR"\n", __func__, MAC2STR(pMacAddr)));
 		delEntryList(pBlackList, pListEntry);
 		os_free_mem(pListEntry);
 	} else {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("[%s] : Entry not present in list [%02X:%02X:%02X:%02X:%02X:%02X]\n", __func__, PRINT_MAC(pMacAddr)));
+			("[%s] : Entry not present in list ["MACSTR"]\n", __func__, MAC2STR(pMacAddr)));
 	}
 }
 
@@ -918,7 +950,7 @@ VOID map_blacklist_show(
 		pBlEntry = (PBS_BLACKLIST_ENTRY)pListEntry;
 		while (pBlEntry != NULL) {
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("STA :: %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pBlEntry->addr)));
+				("STA :: "MACSTR"\n", MAC2STR(pBlEntry->addr)));
 			pListEntry = pListEntry->pNext;
 			pBlEntry = (PBS_BLACKLIST_ENTRY)pListEntry;
 		}

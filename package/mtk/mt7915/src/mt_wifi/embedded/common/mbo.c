@@ -64,33 +64,32 @@ static MBO_ERR_CODE MboInsertAttrById(
 	case MBO_ATTR_AP_CAP_INDCATION:
 		MboAttr.AttrID		= MBO_ATTR_AP_CAP_INDCATION;
 		MboAttr.AttrLen	= 1;
-		MboAttr.AttrBody[0] = pMboCtrl->MboCapIndication;
+		if (pMboCtrl->CellularPreference)
+			MboAttr.AttrBody[0] = pMboCtrl->MboCapIndication;
+		else
+			MboAttr.AttrBody[0] = 0;
 		break;
 #ifdef CONFIG_STA_SUPPORT
 /* yiwei mbo */
 /* tmply hard code */
 	case MBO_ATTR_STA_NOT_PREFER_CH_REP:
+		idx = 0;
 		MboAttr.AttrID		= MBO_ATTR_STA_NOT_PREFER_CH_REP;
-		if (pMboCtrl->npc[0].ch) {
-			idx = 0;
-			MboAttr.AttrLen         = 4;
-			MboAttr.AttrBody[idx++] = pMboCtrl->reg_class;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].ch;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].pref;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].reason_code;
-		}
+		MboAttr.AttrLen         = 4;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].reg_class;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].ch;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].pref;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[0].reason_code;
 		break;
 
 	case MBO_ATTR_STA_NOT_PREFER_CH_REP_2ND:
-		MboAttr.AttrID		= MBO_ATTR_STA_NOT_PREFER_CH_REP;
-		if (pMboCtrl->npc[1].ch) {
-			idx = 0;
-			MboAttr.AttrLen         = 4;
-			MboAttr.AttrBody[idx++] = pMboCtrl->reg_class;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].ch;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].pref;
-			MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].reason_code;
-		}
+		idx = 0;
+		MboAttr.AttrID          = MBO_ATTR_STA_NOT_PREFER_CH_REP;
+		MboAttr.AttrLen         = 4;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].reg_class;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].ch;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].pref;
+		MboAttr.AttrBody[idx++] = pMboCtrl->npc[1].reason_code;
 		break;
 
 	case MBO_ATTR_STA_CDC:
@@ -175,7 +174,15 @@ static MBO_ERR_CODE MboCollectAttribute(
 #ifdef CONFIG_STA_SUPPORT
 	case MBO_FRAME_TYPE_ASSOC_REQ:
 		ErrCode = MboInsertAttrById(wdev, pAttrLen, pAttrBuf, MBO_ATTR_STA_NOT_PREFER_CH_REP);
+		if (ErrCode != MBO_SUCCESS)
+			break;
 		ErrCode = MboInsertAttrById(wdev, pAttrLen, pAttrBuf, MBO_ATTR_STA_NOT_PREFER_CH_REP_2ND);
+		if (ErrCode != MBO_SUCCESS)
+			break;
+		ErrCode = MboInsertAttrById(wdev, pAttrLen, pAttrBuf, MBO_ATTR_STA_CDC);
+		if (ErrCode != MBO_SUCCESS)
+			break;
+		break;
 	case MBO_FRAME_TYPE_PROBE_REQ:
 		ErrCode = MboInsertAttrById(wdev, pAttrLen, pAttrBuf, MBO_ATTR_STA_CDC);
 		break;
@@ -229,69 +236,27 @@ VOID MakeMboOceIE(
 	if (IS_OCE_ENABLE(wdev))
 		OceCollectAttribute(pAd, wdev, pEntry, &AttrLen, pAttrBuf, FrameType);
 #endif /* OCE_SUPPORT */
-	IELen = 4 + AttrLen;
+	if (AttrLen) {
+		IELen = 4 + AttrLen;
 
-	MakeOutgoingFrame(pFrameBuf,						&TempLen,
+		MakeOutgoingFrame(pFrameBuf,						&TempLen,
 						1,								&IEId,
 						1,								&IELen,
 						4,								MBO_OCE_OUIBYTE,
 						AttrLen,						pAttrBuf,
 						END_OF_ARGS);
 
-	*pFrameLen = *pFrameLen + TempLen;
+		*pFrameLen = *pFrameLen + TempLen;
+	} else {
+		MTWF_DBG(pAd, DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"[%s] AttrLen is zero thus MBO-OCE-IE not added\n", __func__);
+	}
 	MlmeFreeMemory(pAttrBuf);
 	return;
 }
 
 #ifdef CONFIG_STA_SUPPORT
-BOOLEAN MboAssocDisallowLookup(PRTMP_ADAPTER pAd, UCHAR *pAddr)
-{
-	MBO_ASSOC_DISALLOW_INFO * pMboADInfo[MAX_ASSOC_DISALLOW_AP_NUM] = {NULL};
-	UINT32 i;
-
-	for (i = 0; i < MAX_ASSOC_DISALLOW_AP_NUM; i++) {
-		pMboADInfo[i] = &pAd->ApCfg.MBSSID[i].wdev.MboCtrl.ADInfo[i];
-		if (pMboADInfo[i]) {
-			if (MAC_ADDR_EQUAL(pAddr, pMboADInfo[i]->Bssid)) {
-				if (pMboADInfo[i]->bAssocDisallow)
-					return TRUE;
-				else
-					return FALSE;
-			} else if (MAC_ADDR_EQUAL(ZERO_MAC_ADDR, pMboADInfo[i]->Bssid))
-				return FALSE;
-		}
-	}
-	return FALSE;
-}
-
-VOID MboAssocDisallowUpdate(PRTMP_ADAPTER pAd, UCHAR *pAddr, UINT8 AssocDisallowReason, BOOLEAN pAssocDisallow)
-{
-	MBO_ASSOC_DISALLOW_INFO * pMboADInfo[MAX_ASSOC_DISALLOW_AP_NUM] = {NULL};
-	UINT32 i;
-
-	for (i = 0; i < MAX_ASSOC_DISALLOW_AP_NUM; i++) {
-		pMboADInfo[i] = &pAd->ApCfg.MBSSID[i].wdev.MboCtrl.ADInfo[i];
-		if (pMboADInfo[i]) {
-			if (MAC_ADDR_EQUAL(pAddr, pMboADInfo[i]->Bssid)) {
-				if (pAssocDisallow)
-					pMboADInfo[i]->bAssocDisallow = TRUE;
-				else
-					pMboADInfo[i]->bAssocDisallow = FALSE;
-
-				pMboADInfo[i]->AssocDisallowReason = AssocDisallowReason;
-			} else if (MAC_ADDR_EQUAL(ZERO_MAC_ADDR, pMboADInfo[i]->Bssid)) {
-				if (pAssocDisallow) {
-					pMboADInfo[i]->bAssocDisallow = TRUE;
-					COPY_MAC_ADDR(pMboADInfo[i]->Bssid, pAddr);
-					pMboADInfo[i]->AssocDisallowReason = AssocDisallowReason;
-					break;
-				}
-			}
-		}
-	}
-}
-
-VOID MboParseApMboIE(PRTMP_ADAPTER pAd, UCHAR *pAddr, UCHAR *buf, UCHAR len)
+BOOLEAN MboParseApMboIE(PRTMP_ADAPTER pAd, UCHAR *pAddr, UCHAR *buf, UCHAR len)
 {
 	UCHAR *pos = NULL;
 	UCHAR ParsedLen = 0;
@@ -301,7 +266,7 @@ VOID MboParseApMboIE(PRTMP_ADAPTER pAd, UCHAR *pAddr, UCHAR *buf, UCHAR len)
 	if (!pAddr) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("%s - pAddr is NULL!!!\n", __func__));
-		return;
+		return bMboAPAssocDisallow;
 	}
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
@@ -323,7 +288,6 @@ VOID MboParseApMboIE(PRTMP_ADAPTER pAd, UCHAR *pAddr, UCHAR *buf, UCHAR len)
 		switch (eid_ptr->Eid) {
 		case MBO_ATTR_AP_ASSOC_DISALLOW:
 			bMboAPAssocDisallow = TRUE;
-			MboAssocDisallowUpdate(pAd, pAddr, eid_ptr->Octet[0], bMboAPAssocDisallow);
 			break;
 		default:
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
@@ -336,9 +300,7 @@ VOID MboParseApMboIE(PRTMP_ADAPTER pAd, UCHAR *pAddr, UCHAR *buf, UCHAR len)
 		eid_ptr = (PEID_STRUCT)((UCHAR *)eid_ptr + 2 + eid_ptr->Len);
 	}
 
-	if (!bMboAPAssocDisallow)
-		MboAssocDisallowUpdate(pAd, pAddr, MBO_AP_ASSOC_ALLOW, bMboAPAssocDisallow);
-
+	return bMboAPAssocDisallow;
 }
 #endif /* CONFIG_STA_SUPPORT */
 MBO_ERR_CODE ReadMboParameterFromFile(
@@ -465,10 +427,10 @@ static VOID MboUpdateNRElement(
 	os_alloc_mem(NULL, (UCHAR **)&myOwnBss, sizeof(BSS_ENTRY));
 	if (myOwnBss == NULL)
 		return;
+	NdisZeroMemory(myOwnBss, sizeof(BSS_ENTRY));
 	if (bInsertMyOwnBss) {
 		COPY_MAC_ADDR(pNeighborEntry->Bssid, mbss->wdev.bssid);
 		pBssEntry = myOwnBss;
-		NdisZeroMemory(pBssEntry, sizeof(BSS_ENTRY));
 
 		pBssEntry->CapabilityInfo = pMbss->CapabilityInfo;
 
@@ -600,15 +562,15 @@ static VOID MboUpdateNRElement(
 			    (pBssEntry->AKMMap == pWdev->SecConfig.AKMMap) &&
 			    (pBssEntry->PairwiseCipher == pWdev->SecConfig.PairwiseCipher) &&
 			     NdisCmpMemory(pBssEntry->FT_MDIE.MdId, pWdev->FtCfg.FtMdId, FT_MDID_LEN) == 0) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("AP(%02x:%02x:%02x:%02x:%02x:%02x) same in FT Domain\n",
-				PRINT_MAC(pNeighborEntry->Bssid)));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("AP("MACSTR") same in FT Domain\n",
+				MAC2STR(pNeighborEntry->Bssid)));
 			pNeighborEntry->CandidatePref = 255;
 		}
 	}
 #endif /* DOT11R_FT_SUPPORT */
 	else
 		pNeighborEntry->CandidatePref = MBO_AP_DEFAULT_CAND_PREF;
-	if (myOwnBss)
+	if (myOwnBss) 
 		os_free_mem(myOwnBss);
 }
 
@@ -626,7 +588,7 @@ INT SetMboNRIndicateProc(
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	struct wifi_dev *pWdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 
-	if (IS_MBO_ENABLE(pWdev)) {
+	if (!IS_MBO_ENABLE(pWdev)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s MBO is disabled %d\n", __func__, pWdev->MboCtrl.bMboEnable));
 		return FALSE;
@@ -664,10 +626,9 @@ INT MboIndicateNeighborReportToDaemon(
 {
 #ifdef DOT11K_RRM_SUPPORT
 #ifdef AP_SCAN_SUPPORT
-	UINT32 loop = 0, k = 0;
+	UINT32 loop = 0;
 	DAEMON_EVENT_NR_LIST NeighborRepList;
 	BOOLEAN bNewlist = !AppendMode;
-	UINT8 max_bss = 0;
 	struct _wapp_nr_info *pNeighborEntry = NULL;
 	UINT8 TotalReportNum = 0;
 	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, pWdev);
@@ -675,7 +636,7 @@ INT MboIndicateNeighborReportToDaemon(
 	if (ScanTab == NULL)
 		return FALSE;
 
-	if (IS_RRM_ENABLE(pWdev)) {
+	if (!IS_RRM_ENABLE(pWdev)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("%s RRM is disabled %d\n", __func__, pWdev->RrmCfg.bDot11kRRMEnable));
 		return FALSE;
@@ -683,49 +644,24 @@ INT MboIndicateNeighborReportToDaemon(
 
 	NdisZeroMemory(&NeighborRepList, sizeof(DAEMON_EVENT_NR_LIST));
 
-
 	if (ScanTab->BssNr > 0) {
 
 		BssTableSortByRssi(ScanTab, FALSE);
 
 		TotalReportNum = ReportNum < (ScanTab->BssNr + pAd->ApCfg.BssidNum) ?
-				ReportNum : (ScanTab->BssNr + pAd->ApCfg.BssidNum);
+			ReportNum : (ScanTab->BssNr + pAd->ApCfg.BssidNum);
 		NeighborRepList.TotalNum = TotalReportNum;
 
 		/* insert our own bss info into NR list first */
 		for (loop = 0; loop < pAd->ApCfg.BssidNum; loop++) {
-			pNeighborEntry = &NeighborRepList.EvtNRInfo[NeighborRepList.CurrNum++];
-			/* if AP has multiple bss, add all VAP in neighbor report */
-			MboUpdateNRElement(pAd, pWdev, NULL, pNeighborEntry, loop);
-			max_bss++;
-
-			for (k = 0; k < ScanTab->BssNr; k++) {/* minus our own NR entry */
-				BSS_ENTRY *pBssEntry;
-				wapp_nr_info *pNeighborEntry;
-				if ((pAd->ApCfg.BssidNum + k) >= ReportNum)
-					break;
-
-				pBssEntry = &ScanTab->BssEntry[k];
+			if (NeighborRepList.CurrNum < PER_EVENT_LIST_MAX_NUM) {
 				pNeighborEntry = &NeighborRepList.EvtNRInfo[NeighborRepList.CurrNum];
-
 				NeighborRepList.CurrNum++;
-
-				/* Regulatory class would be determined in MboUpdateNRElement()*/
-				pBssEntry->RegulatoryClass = 0;
-				MboUpdateNRElement(pAd, pWdev, pBssEntry, pNeighborEntry, pWdev->func_idx);
-
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("%s - append NO. %u len %u BSSID %02X:%02X:%02X:%02X:%02X:%02X Chnum %d BssidInfo %X\n"
-						 "PhyType %x RegulatoryClass %x Privacy %d SSID %s\n",
-						 __func__, k, (UINT32)sizeof(wapp_nr_info), PRINT_MAC(pNeighborEntry->Bssid),
-						 pNeighborEntry->ChNum, pNeighborEntry->BssidInfo,
-						 pNeighborEntry->PhyType, pNeighborEntry->RegulatoryClass,
-						 pBssEntry->Privacy, pBssEntry->Ssid));
-				hex_dump("neighbor_entry", (UCHAR *)pNeighborEntry, sizeof(wapp_nr_info));
-
+				/* if AP has multiple bss, add all VAP in neighbor report */
+				MboUpdateNRElement(pAd, pWdev, NULL, pNeighborEntry, loop);
 			}
-
-			if ((max_bss % 4 == 0) || (max_bss == pAd->ApCfg.BssidNum)) {
+			if ((NeighborRepList.CurrNum % PER_EVENT_LIST_MAX_NUM == 0) ||
+					(NeighborRepList.CurrNum == pAd->ApCfg.BssidNum)) {
 				NeighborRepList.Newlist = bNewlist;
 				bNewlist = FALSE;
 				/* indicate the last sublist to daemon */
@@ -735,6 +671,63 @@ INT MboIndicateNeighborReportToDaemon(
 
 				NdisZeroMemory(&NeighborRepList, sizeof(DAEMON_EVENT_NR_LIST));
 			}
+		}
+
+		NdisZeroMemory(&NeighborRepList, sizeof(DAEMON_EVENT_NR_LIST));
+
+		for (loop = 0; loop < ScanTab->BssNr; loop++) { /* minus our own NR entry */
+			BSS_ENTRY *pBssEntry;
+			wapp_nr_info *pNeighborEntry;
+
+			if (loop >= MAX_LEN_OF_BSS_TABLE)
+				break;
+
+			if (NeighborRepList.CurrNum >= PER_EVENT_LIST_MAX_NUM)
+				break;
+
+			pBssEntry = &ScanTab->BssEntry[loop];
+
+			pNeighborEntry = &NeighborRepList.EvtNRInfo[NeighborRepList.CurrNum];
+			NeighborRepList.CurrNum++;
+			if (pBssEntry) {
+				/* Regulatory class would be determined in
+				 * MboUpdateNRElement() */
+				pBssEntry->RegulatoryClass = 0;
+				MboUpdateNRElement(pAd, pWdev, pBssEntry, pNeighborEntry, pWdev->func_idx);
+
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						("append NO. %u len %u BSSID "MACSTR" Chnum %d BssidInfo %X\n"
+						 "PhyType %x RegulatoryClass %x Privacy %d SSID %s\n",
+						 loop, (UINT32)sizeof(wapp_nr_info), MAC2STR(pNeighborEntry->Bssid),
+						 pNeighborEntry->ChNum, pNeighborEntry->BssidInfo,
+						 pNeighborEntry->PhyType, pNeighborEntry->RegulatoryClass,
+						 pBssEntry->Privacy, pBssEntry->Ssid));
+				hex_dump("neighbor_entry", (UCHAR *)pNeighborEntry, sizeof(wapp_nr_info));
+			}
+
+			if ((NeighborRepList.CurrNum > 0) &&
+					(NeighborRepList.CurrNum % PER_EVENT_LIST_MAX_NUM == 0)) {
+				NeighborRepList.Newlist = bNewlist;
+				bNewlist = FALSE;
+				/* indicate the sublist to daemon */
+				WextMboSendNeighborReportToDaemonEvent(pWdev->if_dev,
+						&NeighborRepList,
+						sizeof(DAEMON_EVENT_NR_LIST));
+
+				NdisZeroMemory(&NeighborRepList, sizeof(DAEMON_EVENT_NR_LIST));
+			}
+		}
+
+		if ((NeighborRepList.CurrNum > 0) &&
+				(NeighborRepList.CurrNum < PER_EVENT_LIST_MAX_NUM)) {
+			NeighborRepList.Newlist = bNewlist;
+			bNewlist = FALSE;
+			/* indicate the last sublist to daemon */
+			WextMboSendNeighborReportToDaemonEvent(pWdev->if_dev,
+					&NeighborRepList,
+					sizeof(DAEMON_EVENT_NR_LIST));
+
+			NdisZeroMemory(&NeighborRepList, sizeof(DAEMON_EVENT_NR_LIST));
 		}
 	} else {   /*cert env will really have 0 AP alive, indicate ourself anyway*/
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -746,21 +739,23 @@ INT MboIndicateNeighborReportToDaemon(
 		NeighborRepList.Newlist = TRUE;
 		/* insert our own bss info into NR list first */
 		for (loop = 0; loop < pAd->ApCfg.BssidNum; loop++) {
-			pNeighborEntry = &NeighborRepList.EvtNRInfo[NeighborRepList.CurrNum++];
+			if (NeighborRepList.CurrNum < PER_EVENT_LIST_MAX_NUM) {
+				pNeighborEntry = &NeighborRepList.EvtNRInfo[NeighborRepList.CurrNum];
+				NeighborRepList.CurrNum++;
 
-			MboUpdateNRElement(pAd, pWdev, NULL, pNeighborEntry, loop);
-			max_bss++;
-			/* indicate our own bss to daemon */
-			if ((max_bss % 4 == 0) || (max_bss == pAd->ApCfg.BssidNum)) {
-				WextMboSendNeighborReportToDaemonEvent(pWdev->if_dev,
-						&NeighborRepList,
-						sizeof(DAEMON_EVENT_NR_LIST));
-				NeighborRepList.Newlist = FALSE;
-				NeighborRepList.CurrNum = 0;
+				MboUpdateNRElement(pAd, pWdev, NULL, pNeighborEntry, loop);
+				/* indicate our own bss to daemon */
+				if ((NeighborRepList.CurrNum % PER_EVENT_LIST_MAX_NUM == 0) ||
+						(NeighborRepList.CurrNum == pAd->ApCfg.BssidNum)) {
+					WextMboSendNeighborReportToDaemonEvent(pWdev->if_dev,
+							&NeighborRepList,
+							sizeof(DAEMON_EVENT_NR_LIST));
+					NeighborRepList.Newlist = FALSE;
+					NeighborRepList.CurrNum = 0;
+				}
 			}
 		}
 	}
-
 #endif /* AP_SCAN_SUPPORT */
 #endif /* DOT11K_RRM_SUPPORT */
 
@@ -781,7 +776,7 @@ INT MBO_MsgHandle(
 	pMboCtrl = &pAd->ApCfg.MBSSID[APIndex].wdev.MboCtrl;
 	pWdev = &pAd->ApCfg.MBSSID[APIndex].wdev;
 
-	if (IS_MBO_ENABLE(pWdev)) {
+	if (!IS_MBO_ENABLE(pWdev)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("%s MBO is disabled %d\n", __func__, pWdev->MboCtrl.bMboEnable));
 		return FALSE;
@@ -1054,8 +1049,8 @@ VOID MboParseStaMboIE(PRTMP_ADAPTER pAd, struct wifi_dev *pWdev, struct _MAC_TAB
 				pEntry->bIndicateNPC = TRUE;
 				pEntry->bindicate_NPC_event= TRUE;
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s, %u npc_num %d mac_addr %02X:%02X:%02X:%02X:%02X:%02X bIndicateNPC %d\n"
-					, __func__, __LINE__, pMboStaInfoNPC->npc_num, PRINT_MAC(pMboStaInfoNPC->mac_addr), pEntry->bIndicateNPC));
+				("%s, %u npc_num %d mac_addr "MACSTR" bIndicateNPC %d\n"
+					, __func__, __LINE__, pMboStaInfoNPC->npc_num, MAC2STR(pMboStaInfoNPC->mac_addr), pEntry->bIndicateNPC));
 				break;
 		default:
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -1104,9 +1099,9 @@ static VOID WextMboSendStaDisassocToDaemonEvent(
 
 	if (pStaDisassocInfo && MAC_ADDR_EQUAL(pStaDisassocInfo->mac_addr, ZERO_MAC_ADDR)) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%s [%02x:%02x:%02x:%02x:%02x:%02x] sizeof %u \
+				("%s ["MACSTR"] sizeof %u \
 					report_buf_len %d buflen %d msg_type %s\n",
-				__func__, PRINT_MAC(pStaDisassocInfo->mac_addr), (UINT32)sizeof(MBO_EVENT_STA_DISASSOC), ReportBufLen, buflen, MboMsgTypeToString(MsgType)));
+				__func__, MAC2STR(pStaDisassocInfo->mac_addr), (UINT32)sizeof(MBO_EVENT_STA_DISASSOC), ReportBufLen, buflen, MboMsgTypeToString(MsgType)));
 
 		RtmpOSWrielessEventSend(pNetDev, RT_WLAN_EVENT_CUSTOM,
 					OID_802_11_MBO_MSG, NULL, (PUCHAR)buf, buflen);
@@ -1406,7 +1401,7 @@ VOID Send_WNM_Notify_Req_toAP(
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = 0x6f;
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = 0x9a;
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = 0x02;
-			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = pMboCtrl->reg_class;
+			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = pMboCtrl->npc[i].reg_class;
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = pMboCtrl->npc[i].ch;
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = pMboCtrl->npc[i].pref;
 			WNMFrame->u.WNM_NOTIFY_REQ.Variable[idx++] = pMboCtrl->npc[i].reason_code;
@@ -1448,7 +1443,7 @@ INT SetMboChPrefProc(
 	struct wifi_dev *pWdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 	P_MBO_CTRL pMboCtrl = &pWdev->MboCtrl;
 
-	if (IS_MBO_ENABLE(pWdev)) {
+	if (!IS_MBO_ENABLE(pWdev)) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
 				("%s MBO is disabled %d\n", __func__, pWdev->MboCtrl.bMboEnable));
 		return FALSE;
@@ -1477,13 +1472,13 @@ INT SetMboChPrefProc(
 
 	if (req_type != CLEAR_PREF) {
 		for (i = 0; i < MBO_NPC_MAX_LEN; i++) {
-			pMboCtrl->reg_class = reg_class;
 			if (pMboCtrl->npc[i].ch > 0)
 				continue;
 			else {
 				pMboCtrl->npc[i].ch = channel;
 				pMboCtrl->npc[i].pref = pref;
 				pMboCtrl->npc[i].reason_code = reason_code;
+				pMboCtrl->npc[i].reg_class = reg_class;
 			}
 			break;
 		}
@@ -1491,10 +1486,8 @@ INT SetMboChPrefProc(
 		NdisZeroMemory(pMboCtrl->npc, sizeof(pMboCtrl->npc));
 	}
 
-	if (req_type != PRESET_PREF) {
+	if (req_type != PRESET_PREF)
 		Send_WNM_Notify_Req_toAP(pAd, pWdev);
-		NdisZeroMemory(pMboCtrl->npc, sizeof(pMboCtrl->npc));
-	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("%s - channel %d, pref %d, reason_code %d\n",

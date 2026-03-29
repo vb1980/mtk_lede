@@ -293,9 +293,8 @@ INT TYPE_FUNC FT_KDP_CMD_R0KH_InfoShow(RTMP_ADAPTER * pAd, RTMP_STRING * pArgv)
 		} /* End of for */
 
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF,
-				 ("\n%03d. MAC = 0x%02x:%02x:%02x:%02x:%02x:%02x\n",
-				  IdInfo, pInfo->MAC[0], pInfo->MAC[1], pInfo->MAC[2],
-				  pInfo->MAC[3], pInfo->MAC[4], pInfo->MAC[5]));
+				 ("\n%03d. MAC = "MACSTR"\n",
+				  IdInfo, MAC2STR(pInfo->MAC)));
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF,
 				 ("%03d. IP  = %d.%d.%d.%d\n", IdInfo,
 				  (pInfo->IP & 0x000000FF) >> 0,
@@ -660,7 +659,7 @@ static VOID TYPE_FUNC FT_RRB_CMD_SimSend(
 	IN	CHAR				*pArgv)
 {
 	FT_KDP_EVT_ACTION ActionCB, *pActionCB;
-	UCHAR MacPeer[6];
+	UCHAR MacPeer[6] = {0};
 
 	pActionCB = &ActionCB;
 	pActionCB->RequestType = FT_CMD_UtilNumGet(&pArgv);
@@ -767,9 +766,8 @@ static VOID TYPE_FUNC FT_R1KH_InfoShow(
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("\nHashIdx=%d\n", HashIdx));
 
 		while (pEntry != NULL) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("StaMac=%02x:%02x:%02x:%02x:%02x:%02x, ",
-					 pEntry->StaMac[0], pEntry->StaMac[1], pEntry->StaMac[2],
-					 pEntry->StaMac[3], pEntry->StaMac[4], pEntry->StaMac[5]));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("StaMac="MACSTR", ",
+					 MAC2STR(pEntry->StaMac)));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("\nKeyLifeTime=%d, ", pEntry->KeyLifeTime));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF, ("\nRassocDeadline=%d\n",
 					 pEntry->RassocDeadline));
@@ -986,10 +984,8 @@ Note:
 static VOID TYPE_FUNC FT_RIC_CMD_StatusDisplay(FT_RIC_STATUS *pRspStatus)
 {
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_OFF,
-			 ("\nAP MAC = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  pRspStatus->AP_MAC[0], pRspStatus->AP_MAC[1],
-			  pRspStatus->AP_MAC[2], pRspStatus->AP_MAC[3],
-			  pRspStatus->AP_MAC[4], pRspStatus->AP_MAC[5]));
+			 ("\nAP MAC = "MACSTR"\n",
+			  MAC2STR(pRspStatus->AP_MAC)));
 
 	if (pRspStatus->FlgHasBaResource == TRUE) {
 		if (pRspStatus->FlgIsBaAccepted == TRUE)
@@ -1085,7 +1081,7 @@ static VOID TYPE_FUNC FT_RIC_CMD_SimRscReq(
 	FT_ELM_RIC_DATA_INFO *pElmDataInfoRsp;
 	UCHAR *pFrame, *pFrameRDIE, *pFrameNextRDIE, *pFrameRSC;
 	UINT32 FilledLen, RdieLen, RscLen, RspLen = 0;
-	UCHAR MacPeer[6];
+	UCHAR MacPeer[6] = {0};
 	BOOLEAN RspStatus[8];
 	UINT32 IdStatus, RDIE_Index;
 
@@ -1190,7 +1186,7 @@ static VOID TYPE_FUNC FT_RIC_CMD_SimRscReqEnd(
 	IN	INT32				Argc,
 	IN	CHAR				*pArgv)
 {
-	UCHAR MacPeer[6];
+	UCHAR MacPeer[6] = {0};
 	/* get selected AP mac address */
 	FT_CMD_UtilMacGet(&pArgv, MacPeer);
 

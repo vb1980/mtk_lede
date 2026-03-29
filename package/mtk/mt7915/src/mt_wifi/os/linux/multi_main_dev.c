@@ -88,6 +88,23 @@ int multi_inf_get_count(void)
 	return count;
 }
 
+int multi_inf_active_cnt(void)
+{
+	int active_cnt = 0; /* use number 0 as default */
+	int idx;
+
+	for (idx = 0; idx < MAX_NUM_OF_INF; idx++) {
+		if (adapt_list[idx] != NULL) {
+			if (VIRTUAL_IF_NUM(adapt_list[idx]) != 0)
+				active_cnt++;
+		}
+	}
+	if (active_cnt == 0)
+		MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 "failed to find nonempty adapt_list!\n");
+	return active_cnt;
+}
+
 int multi_inf_get_idx(VOID *pAd)
 {
 	int idx = 0; /* use index 0 as default */
@@ -101,7 +118,9 @@ int multi_inf_get_idx(VOID *pAd)
 			 ("%s(): failed to find the index in adapt_list!\n", __func__));
 	return idx;
 }
+#ifndef MT76XX_COMBO_DUAL_DRIVER_SUPPORT
 EXPORT_SYMBOL(multi_inf_get_idx);
+#endif /* !MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
 
 /* Driver module load/unload function */
 static int __init wifi_drv_init_module(void)
@@ -109,14 +128,6 @@ static int __init wifi_drv_init_module(void)
 	int status = 0;
 
 	os_module_init();
-#ifdef RTMP_RBUS_SUPPORT
-	status = wbsys_module_init();
-
-	if (status)
-		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("Register RBUS device driver failed(%d)!\n", status));
-
-#endif /* RTMP_RBUS_SUPPORT */
 
 #ifdef RTMP_PCI_SUPPORT
 	status = rt_pci_init_module();
@@ -137,9 +148,6 @@ static void __exit wifi_drv_cleanup_module(void)
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			 ("Unregister PCI device driver\n"));
 #endif /* RTMP_PCI_SUPPORT */
-#ifdef RTMP_RBUS_SUPPORT
-	wbsys_module_exit();
-#endif /* RTMP_RBUS_SUPPORT */
 	os_module_exit();
 }
 

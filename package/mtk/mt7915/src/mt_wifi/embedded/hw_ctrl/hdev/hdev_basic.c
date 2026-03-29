@@ -93,8 +93,8 @@ VOID HdevObjShow(struct hdev_obj *obj)
 /*
 *
 */
-void bw_2_str(UCHAR bw, CHAR *bw_str);
-void extcha_2_str(UCHAR extcha, CHAR *ec_str);
+void bw_2_str(UCHAR bw, CHAR *bw_str, UINT max_str_size);
+void extcha_2_str(UCHAR extcha, CHAR *ec_str, UINT max_str_size);
 
 static VOID HdevShow(struct radio_dev *rdev)
 {
@@ -106,14 +106,26 @@ static VOID HdevShow(struct radio_dev *rdev)
 	UCHAR ech = pRadioCtrl->ExtCha;
 	UCHAR *pstr = NULL;
 	CHAR str[32] = "";
+	INT ret;
 
 	/*for 2.4G check*/
-	if (WMODE_CAP_2G(pm))
-		sprintf(str, "2.4GHz");
-	else if (WMODE_CAP_6G(pm))
-		sprintf(str, "6GHz");
-	else
-		sprintf(str, "5GHz");
+	/* do not change sequence due to 6GHz might include AC/GN then confused */
+	if (WMODE_CAP_6G(pm)) {
+		ret = sprintf(str, "6GHz");
+		if (ret < 0)
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str sprintf error\n");
+	} else if (WMODE_CAP_2G(pm)) {
+		ret = sprintf(str, "2.4GHz");
+		if (ret < 0)
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str sprintf error\n");
+	} else {
+		ret = sprintf(str, "5GHz");
+		if (ret < 0)
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str sprintf error\n");
+	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("==========%s band==========\n", str));
 	pstr = wmode_2_str(pm);
@@ -125,9 +137,9 @@ static VOID HdevShow(struct radio_dev *rdev)
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("ch\t: %d\n", ch));
 #ifdef DOT11_N_SUPPORT
 	if (WMODE_CAP_N(pm)) {
-		bw_2_str(bw, str);
+		bw_2_str(bw, str, sizeof(str));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("bw\t: %s\n", str));
-		extcha_2_str(ech, str);
+		extcha_2_str(ech, str, sizeof(str));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("extcha\t: %s\n", str));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("cen_ch\t: %d\n", c1));
 	}

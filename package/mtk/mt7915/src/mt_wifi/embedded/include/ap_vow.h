@@ -84,8 +84,10 @@ enum VOW_FEATURE {
 #define VOW_SPL_STA_NUM_LIMIT		4
 
 /* Multi client WMM parameter, for multi-client balance/near-far test */
-#define VOW_MULTI_CLIENT_CWMAX		6
-#define VOW_MULTI_CLIENT_CWMIN		5
+#define DL_MULTI_CLIENT_CWMAX		0x6
+#define DL_MULTI_CLIENT_CWMIN		0x5
+#define UL_MULTI_CLIENT_CWMAX		0x8
+#define UL_MULTI_CLIENT_CWMIN		0x6
 
 /* mcli schedule iwpriv cmd */
 #define MCLI_TCP_CNT_TH		1
@@ -236,9 +238,12 @@ enum {
 
 /* for mcli param configure */
 typedef struct _VOW_MCLI_SCH_CFG_T {
-	UINT32	tcp_cnt_th;		/* used to distinguish tcp or udp pair */
-	BOOLEAN	dl_wrr_en[DBDC_BAND_NUM];	/* enable DL wrr mechanism */
-	BOOLEAN schedule_cond_en[DBDC_BAND_NUM];	/* enable mcli schedule */
+	UINT32	tcp_cnt_th;	/* used to distinguish tcp or udp pair */
+	USHORT	mcli_tcp_num[DBDC_BAND_NUM];	/* record tcp traffic sta num */
+	BOOLEAN	dl_wrr_en;	/* enable DL wrr mechanism */
+	UINT8	sch_type;	/* record default sch_type */
+	UINT8	sch_policy;	/* record default sch_policy */
+	UINT8	apply_cnt;	/* for DBDC case, record sch apply cnt */
 	BOOLEAN schedule_cond_running[DBDC_BAND_NUM];	/* Indicate that the mcli schedule mechanism is running */
 	UINT8	cwmin[VOW_TRAFFIC_MODE_MAX][DBDC_BAND_NUM];	/* mcli shcedule DL/UL BE cwmin param */
 	UINT8	cwmax[VOW_TRAFFIC_MODE_MAX][DBDC_BAND_NUM];	/* mcli shcedule DL/UL BE cwmax param */

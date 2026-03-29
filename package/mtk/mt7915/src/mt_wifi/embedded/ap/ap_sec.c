@@ -259,6 +259,7 @@ INT APSecInit(
 #ifdef BCN_PROTECTION_SUPPORT
 	bcn_prot_init(pAd, wdev); /* bcn_prot_init should be placed after APPMFInit */
 #endif
+#ifndef HOSTAPD_WPA3_SUPPORT
 #ifdef DOT11_SAE_SUPPORT
 	if (pSecConfig->pwd_id_cnt == 0) {
 		pSecConfig->sae_cap.pwd_id_only = FALSE;
@@ -281,6 +282,7 @@ INT APSecInit(
 		sae_derive_pt(&pAd->SaeCfg, pSecConfig->PSK, pMbss->Ssid, pMbss->SsidLen, &pSecConfig->pwd_id_list_head, &pSecConfig->pt_list);
 	}
 #endif
+#endif /*HOSTAPD_WPA3_SUPPORT*/
 	/* Generate the corresponding RSNIE */
 	WPAMakeRSNIE(wdev->wdev_type, &wdev->SecConfig, NULL);
 
@@ -295,6 +297,7 @@ INT APSecInit(
 INT ap_sec_deinit(
 	IN struct wifi_dev *wdev)
 {
+#ifndef HOSTAPD_WPA3_SUPPORT
 #ifdef DOT11_SAE_SUPPORT
 	struct _SECURITY_CONFIG *sec_cfg = &wdev->SecConfig;
 
@@ -303,6 +306,7 @@ INT ap_sec_deinit(
 		sae_pk_deinit(&sec_cfg->sae_pk);
 	}
 #endif
+#endif /*HOSTAPD_WPA3_SUPPORT*/
 
 	return TRUE;
 }
@@ -574,8 +578,9 @@ VOID GroupRekeyExec(
 #endif /* A4_CONN */
 				entry_count++;
 				RTMPSetTimer(&pEntry->SecConfig.StartFor2WayTimer, ENQUEUE_EAPOL_2WAY_START_TIMER);
-				MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Rekey interval excess, Update Group Key for  %02X:%02X:%02X:%02X:%02X:%02X , DefaultKeyId= %x\n",
-						 PRINT_MAC(pEntry->Addr), pSecConfig->GroupKeyId));
+				MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+                        ("Rekey interval excess, Update Group Key for "MACSTR", DefaultKeyId= %x\n",
+						 MAC2STR(pEntry->Addr), pSecConfig->GroupKeyId));
 			}
 		}
 
@@ -807,8 +812,8 @@ INT Show_APSecurityInfo_Proc(
 		pSecConfig = &pEntry->SecConfig;
 
 		if (pEntry && IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02X:%02X:%02X:%02X:%02X:%02X\t%d\t%d\t%s\t\t%s\t\t%s\n",
-					 PRINT_MAC(pEntry->Addr),
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, (""MACSTR"\t%d\t%d\t%s\t\t%s\t\t%s\n",
+					 MAC2STR(pEntry->Addr),
 					 pEntry->Aid,
 					 pEntry->wcid,
 					 GetAuthModeStr(GET_SEC_AKM(pSecConfig)),
@@ -910,7 +915,8 @@ VOID WpaSend(RTMP_ADAPTER *pAdapter, UCHAR *pPacket, ULONG Len)
 	pData = (pPacket + LENGTH_802_3);
 	pEntry = MacTableLookup(pAdapter, Addr);
 	if (pEntry == NULL) {
-		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("WpaSend - No such MAC - %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(Addr)));
+		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+            ("WpaSend - No such MAC - "MACSTR"\n", MAC2STR(Addr)));
 		return;
 	}
 
@@ -1056,8 +1062,8 @@ INT RTMPAddPMKIDCache(
 	NdisMoveMemory(&pPMKIDCache->BSSIDInfo[CacheIdx].PMKID, PMKID, LEN_PMKID);
 	NdisMoveMemory(&pPMKIDCache->BSSIDInfo[CacheIdx].PMK, PMK, pmk_len);
 	MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s(): add %02x:%02x:%02x:%02x:%02x:%02x cache(%d) for ra%d\n",
-			  __func__, PRINT_MAC(pAddr), CacheIdx, apidx));
+			 ("%s(): add "MACSTR" cache(%d) for ra%d\n",
+			  __func__, MAC2STR(pAddr), CacheIdx, apidx));
 	return CacheIdx;
 }
 
@@ -1076,8 +1082,8 @@ INT RTMPSearchPMKIDCache(
 			&& MAC_ADDR_EQUAL(&pPMKIDCache->BSSIDInfo[i].MAC, pAddr)
 			&& (pPMKIDCache->BSSIDInfo[i].is_ft == is_ft)) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d) is_ft(%d) from IF(ra%d)\n",
-					  __func__, PRINT_MAC(pAddr), i, is_ft, apidx));
+					 ("%s():"MACSTR" cache(%d) is_ft(%d) from IF(ra%d)\n",
+					  __func__, MAC2STR(pAddr), i, is_ft, apidx));
 			break;
 		}
 	}
@@ -1105,8 +1111,8 @@ INT RTMPSearchPMKIDCacheByPmkId(
 			&& MAC_ADDR_EQUAL(&pPMKIDCache->BSSIDInfo[i].MAC, pAddr)
 			&& RTMPEqualMemory(pPmkId, &pPMKIDCache->BSSIDInfo[i].PMKID, LEN_PMKID)) {
 			MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("%s():%02x:%02x:%02x:%02x:%02x:%02x cache(%d) from IF(ra%d)\n",
-					  __func__, PRINT_MAC(pAddr), i, apidx));
+					 ("%s():"MACSTR" cache(%d) from IF(ra%d)\n",
+					  __func__, MAC2STR(pAddr), i, apidx));
 			break;
 		}
 	}

@@ -574,6 +574,8 @@ VOID BigInteger_BI2Bin(
 		if ((--ShiftIndex) == 0) {
 			ShiftIndex = 4;
 			BIArrayIndex--;
+			if (BIArrayIndex < 0)
+				break;
 			Number = pBI->pIntegerArray[BIArrayIndex];
 		} /* End of if */
 	} /* End of while */
@@ -609,6 +611,9 @@ VOID BigInteger_Bin2BI(
 	INT  ValueIndex, BIArrayIndex, ShiftIndex;
 	UINT32  Number;
 	BigInteger_AllocSize(pBI, Length);
+
+	if ((*pBI) == NULL)
+		return;
 
 	if ((*pBI)->pIntegerArray != NULL) {
 		Number = 0;
@@ -697,6 +702,11 @@ VOID BigInteger_Copy(
 	OUT PBIG_INTEGER *pBI_Result)
 {
 	BigInteger_AllocSize(pBI_Result, pBI_Copied->IntegerLength);
+	if ((*pBI_Result) == NULL) {
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"error!! (*pBI_Result) is NULL.\n");
+		return;
+	}
 	NdisCopyMemory((*pBI_Result)->pIntegerArray, pBI_Copied->pIntegerArray, (sizeof(UINT32) * (*pBI_Result)->ArrayLength));
 	(*pBI_Result)->ArrayLength = pBI_Copied->ArrayLength;
 	(*pBI_Result)->IntegerLength = pBI_Copied->IntegerLength;
@@ -809,11 +819,13 @@ VOID BigInteger_Add(
 	} else {
 		if  ((pFirstOperand->Signed == 1) & (pSecondOperand->Signed == -1)) {
 			BigInteger_Copy(pSecondOperand, &pTempBI);
-			pTempBI->Signed = 1;
+			if (pTempBI != NULL)
+				pTempBI->Signed = 1;
 			BigInteger_Sub(pFirstOperand, pTempBI, pBI_Result);
 		} else if ((pFirstOperand->Signed == -1) & (pSecondOperand->Signed == 1)) {
 			BigInteger_Copy(pFirstOperand, &pTempBI);
-			pTempBI->Signed = 1;
+			if (pTempBI != NULL)
+				pTempBI->Signed = 1;
 			BigInteger_Sub(pSecondOperand, pTempBI, pBI_Result);
 		} /* End of if */
 	} /* End of if */
@@ -2276,6 +2288,9 @@ VOID BigInteger_Mod_Mul(
 UCHAR BigInteger_is_zero(
 	IN PBIG_INTEGER pBI)
 {
+	if (pBI == NULL)
+		return FALSE;
+
 	BigInteger_ClearHighBits(pBI);
 
 	if (pBI->IntegerLength == 1
@@ -2289,6 +2304,9 @@ UCHAR BigInteger_is_zero(
 UCHAR BigInteger_is_one(
 	IN PBIG_INTEGER pBI)
 {
+	if (pBI == NULL)
+		return FALSE;
+
 	BigInteger_ClearHighBits(pBI);
 
 	if (pBI->IntegerLength == 1
@@ -2787,6 +2805,10 @@ UCHAR BigInteger_Sqrt(
 
 	/*DEBUGPRINT("input:");
 	BigInteger_Print(ptest);*/
+	if (ptest == NULL) {
+		res = FALSE;
+		goto Free;
+	}
 	x_len = (ptest->IntegerLength + 1) / 2;
 	os_alloc_mem(NULL, &x_buf, x_len);
 
@@ -2808,7 +2830,8 @@ UCHAR BigInteger_Sqrt(
 
 	x_buf[0] = x_first_byte;
 	BigInteger_Bin2BI(x_buf, x_len, &x);
-	BigInteger_is_one(x);
+	if (x != NULL)
+		BigInteger_is_one(x);
 
 	/* S is input, use Xi+1 = 1/2 * (Xi + S/Xi), if Xn+1 == Xn, sqrt(S) ~= Xn */
 	do {
@@ -2902,6 +2925,12 @@ VOID BigInteger_Shift_Right1(
 	else
 		BigInteger_Copy(pBI, &ptest);
 
+	if (ptest == NULL) {
+			MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"ptest is null!\n");
+			return;
+	}
+
 	len = ptest->IntegerLength;
 	BigInteger_AllocSize(&res, len);
 
@@ -2982,6 +3011,12 @@ VOID BigInteger_Shift_Left(
 		BigInteger_Bin2BI(test, sizeof(test), &ptest); /* debug usage */
 	else
 		BigInteger_Copy(pBI, &ptest);
+
+	if (ptest == NULL) {
+		MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"ptest is null!\n");
+		return;
+	}
 
 	len = ptest->IntegerLength + shift_dword * 4;
 

@@ -62,14 +62,13 @@ UCHAR CipherSuiteWpaNoneAesLen =
 		(_pStaCfg)->StaActive.AtimWin = (_pStaCfg)->MlmeAux.AtimWin;                                \
 		(_pStaCfg)->StaActive.CapabilityInfo = (_pStaCfg)->MlmeAux.CapabilityInfo;                  \
 		(_pStaCfg)->StaActive.ExtCapInfo = (_pStaCfg)->MlmeAux.ExtCapInfo;                  \
-		(_pAd)->CommonCfg.BeaconPeriod = (_pStaCfg)->MlmeAux.BeaconPeriod;                      \
+		(_pAd)->CommonCfg.BeaconPeriod[0] = (_pStaCfg)->MlmeAux.BeaconPeriod;                      \
 		(_pStaCfg)->StaActive.CfpMaxDuration = (_pStaCfg)->MlmeAux.CfpMaxDuration;                  \
 		(_pStaCfg)->StaActive.CfpPeriod = (_pStaCfg)->MlmeAux.CfpPeriod;                            \
 		(_pStaCfg)->StaActive.rate.sup_rate_len = (_pStaCfg)->MlmeAux.rate.sup_rate_len;            \
 		NdisMoveMemory((_pStaCfg)->StaActive.rate.sup_rate, (_pStaCfg)->MlmeAux.rate.sup_rate, (_pStaCfg)->MlmeAux.rate.sup_rate_len);\
 		(_pStaCfg)->StaActive.rate.ext_rate_len = (_pStaCfg)->MlmeAux.rate.ext_rate_len;            \
 		NdisMoveMemory((_pStaCfg)->StaActive.rate.ext_rate, (_pStaCfg)->MlmeAux.rate.ext_rate, (_pStaCfg)->MlmeAux.rate.ext_rate_len);\
-		NdisMoveMemory(&(_pAd)->CommonCfg.APEdcaParm, &(_pStaCfg)->MlmeAux.APEdcaParm, sizeof(EDCA_PARM));\
 		NdisMoveMemory(&(_pAd)->CommonCfg.APQosCapability, &(_pStaCfg)->MlmeAux.APQosCapability, sizeof(QOS_CAPABILITY_PARM));\
 		NdisMoveMemory(&(_pAd)->CommonCfg.APQbssLoad, &(_pStaCfg)->MlmeAux.APQbssLoad, sizeof(QBSS_LOAD_PARM));\
 		COPY_MAC_ADDR((_pEntry)->Addr, (_pStaCfg)->MlmeAux.Bssid);      \
@@ -112,7 +111,6 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	MLME_JOIN_REQ_STRUCT JoinReq;
 	PSTA_ADMIN_CONFIG pApCliEntry = GetStaCfgByWdev(pAd, wdev);
 	USHORT ifIndex = wdev->func_idx;
-	UINT32 MaxProbeReqCnt = 0;
 
 #ifdef DOT11W_PMF_SUPPORT
 	SCAN_CTRL *ScanCtrl;
@@ -122,7 +120,7 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	ASSERT(pApCliEntry);
 	if (!pApCliEntry)
 		return;
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) (%s) Probe Req Timeout.\n", __func__, wdev->if_dev->name));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Req Timeout.\n", __func__));
 
 	if (ifIndex >= MAX_APCLI_NUM)
 		return;
@@ -136,20 +134,11 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	}
 
 #ifdef APCLI_AUTO_CONNECT_SUPPORT
-
 	pApCliEntry->ApcliInfStat.ProbeReqCnt++;
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Req Timeout. ProbeReqCnt=%d\n",
+			 __func__, pApCliEntry->ApcliInfStat.ProbeReqCnt));
 
-	if( ScanCtrl->MaxProbeReqCnt > 20){
-		MaxProbeReqCnt = 11;
-	}
-	else{
-		MaxProbeReqCnt = ScanCtrl->MaxProbeReqCnt;
-	}
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_OFF, ("(%s) (%s) Probe Req Timeout. ProbeReqCnt=%d MaxProbeReqCnt=%d\n",
-			 __func__, wdev->if_dev->name, pApCliEntry->ApcliInfStat.ProbeReqCnt, MaxProbeReqCnt));
-
-	if (pApCliEntry->ApcliInfStat.ProbeReqCnt > MaxProbeReqCnt) {  //jiangdingyong add 2020.08.14  from 7 to 11
-
+	if (pApCliEntry->ApcliInfStat.ProbeReqCnt > 7) {
 
 #ifdef CONFIG_OWE_SUPPORT
 	sta_reset_owe_parameters(pAd, ifIndex);
@@ -158,15 +147,15 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 			if exceed the APCLI_MAX_PROBE_RETRY_NUM (7),
 			switch to try next candidate AP.
 		*/
-		ScanCtrl->PartialScan.bScanning = FALSE;
 		cntl_fsm_state_transition(wdev, CNTL_IDLE, __func__);
 		NdisZeroMemory(pApCliEntry->MlmeAux.Bssid, MAC_ADDR_LEN);
 		NdisZeroMemory(pApCliEntry->MlmeAux.Ssid, MAX_LEN_OF_SSID);
 		pApCliEntry->ApcliInfStat.ProbeReqCnt = 0;
 #ifdef DOT11W_PMF_SUPPORT
+
 		/* Driver Trigger New Scan Mode for Sigma DUT usage */
 		if ((pApCliEntry->ApCliAutoConnectType == TRIGGER_SCAN_BY_DRIVER
-#ifdef FOLLOW_HIDDEN_SSID_FEATURE   //songkeke add 2020.10.09
+#ifdef FOLLOW_HIDDEN_SSID_FEATURE
 		|| (pApCliEntry->ApCliAutoConnectType == TRIGGER_SCAN_BY_USER
 		&& pApCliEntry->ApcliInfStat.AutoConnectFlag == TRUE)
 #endif
@@ -179,11 +168,7 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 				Ssid.SsidLength = pApCliEntry->CfgSsidLen;
 				NdisZeroMemory(pApCliEntry->CfgApCliBssid, MAC_ADDR_LEN);
 				pApCliEntry->ApCliAutoConnectRunning = TRUE;
-				//after 7 probe then do PartialScan
-				printk("DSH----will triger PartialScan!!!! \n");
-				ScanCtrl->PartialScan.pwdev = wdev;
-				ScanCtrl->PartialScan.bScanning = TRUE;
-				//ApSiteSurvey_by_wdev(pAd, &Ssid, SCAN_ACTIVE, FALSE, &pApCliEntry->wdev);
+				ApSiteSurvey_by_wdev(pAd, &Ssid, SCAN_ACTIVE, FALSE, &pApCliEntry->wdev);
 				return;
 			}
 		}
@@ -241,8 +226,8 @@ static VOID join_iterate_by_cfg(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 			COPY_MAC_ADDR(JoinReq.Bssid, pApCliEntry->owe_trans_bssid);
 		} else
 #endif
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Ssid=%s, Bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, JoinReq.Ssid, PRINT_MAC(JoinReq.Bssid)));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Ssid=%s, Bssid="MACSTR"\n",
+			 __func__, JoinReq.Ssid, MAC2STR(JoinReq.Bssid)));
 	JoinParmFill(pAd, &JoinReq, BSS_NOT_FOUND);
 	MlmeEnqueueWithWdev(pAd, SYNC_FSM,  SYNC_FSM_JOIN_REQ, sizeof(MLME_JOIN_REQ_STRUCT), &JoinReq, ifIndex, wdev);
 
@@ -374,8 +359,8 @@ static VOID sta_cntl_priv_ibss_start(
 	}
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("CNTL - start a new IBSS = %02x:%02x:%02x:%02x:%02x:%02x ...\n",
-			  PRINT_MAC(pStaCfg->Bssid)));
+			 ("CNTL - start a new IBSS = "MACSTR" ...\n",
+			  MAC2STR(pStaCfg->Bssid)));
 	RTMPSendWirelessEvent(pAd, IW_START_IBSS_FLAG, NULL, BSS0, 0);
 }
 #endif /* CONFIG_STA_ADHOC_SUPPORT */
@@ -460,7 +445,12 @@ static VOID sta_cntl_connect_by_cfg(
 			ULONG bss_idx = BSS_NOT_FOUND;
 			BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, &pApCliEntry->wdev);
 
-			bss_idx = BssSsidTableSearchBySSID(ScanTab, (PCHAR)pApCliEntry->CfgSsid, pApCliEntry->CfgSsidLen);
+			if (!MAC_ADDR_EQUAL(pApCliEntry->CfgApCliBssid, ZERO_MAC_ADDR)) {
+				bss_idx = BssTableSearchWithSSID(ScanTab, pApCliEntry->CfgApCliBssid, (PCHAR)pApCliEntry->CfgSsid,
+					pApCliEntry->CfgSsidLen, wdev->channel);
+			} else {
+				bss_idx = BssSsidTableSearchBySSID(ScanTab, (PCHAR)pApCliEntry->CfgSsid, pApCliEntry->CfgSsidLen);
+			}
 
 			if (bss_idx == BSS_NOT_FOUND) {
 				MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
@@ -510,8 +500,8 @@ static VOID sta_cntl_connect_by_cfg(
 		return;
 	}
 
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Ssid=%s, Bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, JoinReq.Ssid, PRINT_MAC(JoinReq.Bssid)));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("(%s) Probe Ssid=%s, Bssid="MACSTR"\n",
+			 __func__, JoinReq.Ssid, MAC2STR(JoinReq.Bssid)));
 
 	cntl_fsm_state_transition(wdev, CNTL_WAIT_SYNC, __func__);
 	JoinParmFill(pAd, &JoinReq, BSS_NOT_FOUND);
@@ -812,8 +802,8 @@ static VOID sta_cntl_connect_by_bssid(
 	os_zero_mem(pStaCfg->ConnectinfoBssid, MAC_ADDR_LEN);
 	os_move_mem(pStaCfg->ConnectinfoBssid, data, MAC_ADDR_LEN);
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("ANDROID IOCTL::SIOCSIWAP %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  PRINT_MAC(pStaCfg->ConnectinfoBssid)));
+			 ("ANDROID IOCTL::SIOCSIWAP "MACSTR"\n",
+			  MAC2STR(pStaCfg->ConnectinfoBssid)));
 	/* find the desired BSS in the latest SCAN result table */
 	BssIdx = BssTableSearch(ScanTab, data, pStaCfg->MlmeAux.Channel);
 #ifdef WPA_SUPPLICANT_SUPPORT
@@ -877,8 +867,8 @@ static VOID sta_cntl_connect_by_bssid(
 					 ("CNTL - BSSID not found. start a new scan\n"));
 
 			if ((pStaCfg->ConnectinfoChannel  != 0) && (pStaCfg->Connectinfoflag == TRUE)) {
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CntlOidRTBssidProc BSSID %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 PRINT_MAC(pStaCfg->ConnectinfoBssid)));
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CntlOidRTBssidProc BSSID "MACSTR"\n",
+						 MAC2STR(pStaCfg->ConnectinfoBssid)));
 				wdev->channel = pStaCfg->ConnectinfoChannel;
 				MlmeEnqueueWithWdev(pAd, SYNC_FSM,  SYNC_FSM_JOIN_REQ,
 									sizeof(MLME_JOIN_REQ_STRUCT), &JoinReq, 0, wdev);
@@ -916,7 +906,8 @@ static VOID sta_cntl_connect_by_bssid(
 	pStaCfg->MlmeAux.BssIdx = 0;
 	pStaCfg->MlmeAux.SsidBssTab.BssNr = 1;
 	/* fix memory leak when trigger scan continuously */
-	BssEntryCopy(&pStaCfg->MlmeAux.SsidBssTab, &pStaCfg->MlmeAux.SsidBssTab.BssEntry[0], pInBss);
+	BssEntryCopy(&pStaCfg->MlmeAux.SsidBssTab,
+				&pStaCfg->MlmeAux.SsidBssTab.BssEntry[0], pInBss);
 	{
 		if (INFRA_ON(pStaCfg)) {
 			/* disassoc from current AP first */
@@ -1018,8 +1009,8 @@ static VOID sta_cntl_connect_by_bssid(
 
 			/* No active association, join the BSS immediately */
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("CNTL - joining %02x:%02x:%02x:%02x:%02x:%02x ...\n",
-					  PRINT_MAC(data)));
+					 ("CNTL - joining "MACSTR" ...\n",
+					  MAC2STR(data)));
 			JoinParmFill(pAd, &JoinReq, pStaCfg->MlmeAux.BssIdx);
 			MlmeEnqueueWithWdev(pAd, SYNC_FSM, SYNC_FSM_JOIN_REQ,
 								sizeof(MLME_JOIN_REQ_STRUCT), &JoinReq, 0, wdev);
@@ -1215,8 +1206,8 @@ static VOID sta_cntl_join_conf(
 			LinkUp(pAd, BSS_ADHOC, wdev, link_up_type, NULL);
 			cntl_fsm_state_transition(wdev, CNTL_IDLE, __func__);
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("CNTL - join the IBSS = %02x:%02x:%02x:%02x:%02x:%02x ...\n",
-					  PRINT_MAC(pStaCfg->Bssid)));
+					 ("CNTL - join the IBSS = "MACSTR" ...\n",
+					  MAC2STR(pStaCfg->Bssid)));
 			RTMP_IndicateMediaState(pAd, NdisMediaStateConnected);
 			pAd->ExtraInfo = GENERAL_LINK_UP;
 			RTMPSendWirelessEvent(pAd, IW_JOIN_IBSS_FLAG, NULL, BSS0, 0);
@@ -1245,7 +1236,11 @@ static VOID sta_cntl_join_conf(
 #endif /* DOT11R_FT_SUPPORT */
 #ifdef DOT11_SAE_SUPPORT
 			pAPEntry = GetAssociatedAPByWdev(pAd, wdev);
-			if ((IS_AKM_WPA3PSK(pStaCfg->wdev.SecConfig.AKMMap)) && (pAPEntry && (IS_AKM_WPA3PSK(pAPEntry->SecConfig.AKMMap)))) {
+			if ((IS_AKM_WPA3PSK(pStaCfg->wdev.SecConfig.AKMMap)) && (pAPEntry && (IS_AKM_WPA3PSK(pAPEntry->SecConfig.AKMMap)))
+#ifdef WSC_INCLUDED
+				&& pStaCfg->wdev.WscControl.bWscTrigger == FALSE
+#endif
+			) {
 				UCHAR if_addr[MAC_ADDR_LEN];
 				UCHAR pmkid[LEN_PMKID];
 				UCHAR pmk[LEN_PMK];
@@ -1882,11 +1877,11 @@ static VOID sta_cntl_disassoc_conf(
 	}
 }
 
-static VOID sta_cntl_scan(
+static BOOLEAN sta_cntl_scan(
 	VOID *elem_obj)
 {
 	MLME_QUEUE_ELEM *Elem;
-	ULONG BssIdx = BSS_NOT_FOUND;
+	ULONG BssIdx;
 	BSS_ENTRY *pCurrBss = NULL;
 	STA_ADMIN_CONFIG *pStaCfg;
 	RTMP_ADAPTER *pAd;
@@ -1899,29 +1894,36 @@ static VOID sta_cntl_scan(
 	ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 	ASSERT(pAd);
 	if (!pAd)
-		return;
-	CNTL_GET_STA_CFG(pAd, wdev, pStaCfg);
+		return FALSE;
+
+	pStaCfg = GetStaCfgByWdev(pAd, wdev);
+	ASSERT(pStaCfg);
+	if (!pStaCfg)
+		return FALSE;
+
 #ifdef CONFIG_ATE
 
 	/* Disable scanning when ATE is running. */
 	if (ATE_ON(pAd))
-		return;
+		return FALSE;
 
 #endif /* CONFIG_ATE */
 #ifdef P2P_SUPPORT
 
 	if (pAd->P2pCfg.P2pCounter.bStartScan == TRUE)
-		return;
+		return FALSE;
 
 #endif /* P2P_SUPPORT */
 	/* allocate memory */
 	os_alloc_mem(NULL, (UCHAR **) &pCurrBss, sizeof(BSS_ENTRY));
 
 	if (pCurrBss == NULL) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s: Allocate memory fail!!!\n", __func__));
-		return;
+		MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "Allocate memory fail!!!\n");
+		return FALSE;
 	}
+	/* fix memory leak when trigger scan continuously */
+	NdisZeroMemory(pCurrBss, sizeof(BSS_ENTRY));
 
 	/* reset state machine for scan request */
 	sync_cntl_fsm_to_idle_when_scan_req(pAd, wdev);
@@ -1935,161 +1937,27 @@ static VOID sta_cntl_scan(
 									pStaCfg->wdev.channel);
 
 		if (BssIdx != BSS_NOT_FOUND) {
-			os_move_mem(pCurrBss, &ScanTab->BssEntry[BssIdx],
-						sizeof(BSS_ENTRY));
+			/* fix memory leak when trigger scan continuously */
+			BssEntryCopy(NULL, pCurrBss, &ScanTab->BssEntry[BssIdx]);
 		}
 	}
 
-	MlmeEnqueueWithWdev(pAd, SYNC_FSM, SYNC_FSM_SCAN_REQ,
-						Elem->MsgLen, Elem->Msg, 0, wdev);
-	cntl_fsm_state_transition(wdev, CNTL_WAIT_SYNC, __func__);
+	if (pCurrBss != NULL) {
+		/* fix memory leak when trigger scan continuously */
+		BssEntryReset(NULL, pCurrBss);
 
-	if (pCurrBss != NULL)
 		os_free_mem(pCurrBss);
-}
-
-static VOID sta_cntl_scan_conf(
-	VOID *elem_obj)
-{
-	MLME_QUEUE_ELEM *Elem;
-	USHORT	status = MLME_SUCCESS;
-	PSTA_ADMIN_CONFIG pStaCfg;
-	RTMP_ADAPTER *pAd;
-	struct wifi_dev *wdev;
-	SCAN_INFO *ScanInfo;
-	BSS_TABLE *ScanTab = NULL;
-
-	Elem = (MLME_QUEUE_ELEM *)elem_obj;
-	wdev = Elem->wdev;
-	pAd = (RTMP_ADAPTER *)wdev->sys_handle;
-	ASSERT(pAd);
-	if (!pAd)
-		return;
-	CNTL_GET_STA_CFG(pAd, wdev, pStaCfg);
-	ScanInfo = &wdev->ScanInfo;
-	ScanTab = get_scan_tab_by_wdev(pAd, wdev);
-	os_move_mem(&status, Elem->Msg, sizeof(USHORT));
-#ifdef RT_CFG80211_SUPPORT
-	RTEnqueueInternalCmd(pAd, CMDTHREAD_SCAN_END, NULL, 0);
-#endif /* RT_CFG80211_SUPPORT */
-#ifdef LED_CONTROL_SUPPORT
-
-	/* */
-	/* Set LED status to previous status. */
-	/* */
-	if (pAd->LedCntl.bLedOnScanning) {
-		pAd->LedCntl.bLedOnScanning = FALSE;
-		RTMPSetLED(pAd, pAd->LedCntl.LedStatus, HcGetBandByWdev(wdev));
 	}
 
-#endif /* LED_CONTROL_SUPPORT */
-#ifdef DOT11N_DRAFT3
-
-	/* AP sent a 2040Coexistence mgmt frame, then station perform a scan, and then send back the respone. */
-	if ((pAd->CommonCfg.BSSCoexist2040.field.InfoReq == 1)
-		&& INFRA_ON(pStaCfg)
-		&& OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_SCAN_2040)) {
-		MAC_TABLE_ENTRY *pEntry;
-
-		pEntry = GetAssociatedAPByWdev(pAd, wdev);
-		ASSERT(pEntry);
-		if (!pEntry)
-			return;
-		Update2040CoexistFrameAndNotify(pAd, pEntry->wcid,
-										TRUE);
-	}
-
-#endif /* DOT11N_DRAFT3 */
-#ifdef WPA_SUPPLICANT_SUPPORT
-
-	if (pStaCfg->bAutoReconnect == TRUE &&
-		pAd->IndicateMediaState != NdisMediaStateConnected &&
-		(pStaCfg->wpa_supplicant_info.WpaSupplicantUP != WPA_SUPPLICANT_ENABLE_WITH_WEB_UI)) {
-		BssTableSsidSort(pAd, &pStaCfg->wdev, &pStaCfg->MlmeAux.SsidBssTab, (PCHAR)pStaCfg->MlmeAux.Ssid, pStaCfg->MlmeAux.SsidLen);
-		pStaCfg->MlmeAux.BssIdx = 0;
-		IterateOnBssTab(pAd, wdev);
-	}
-
-#endif /* WPA_SUPPLICANT_SUPPORT */
-
-	if (status == MLME_SUCCESS) {
-#ifdef WIDI_SUPPORT
-
-		if (pStaCfg->MlmeAux.OldChannel == 0)
-#endif /* WIDI_SUPPORT */
-		{
-			/*
-				Maintain Scan Table
-				MaxBeaconRxTimeDiff: 120 seconds
-				MaxSameBeaconRxTimeCount: 1
-			*/
-#ifdef CONFIG_MULTI_CHANNEL
-			bss_table_maintenance(pAd, &pStaCfg->wdev, ScanTab, 120, 4);
-#else
-			bss_table_maintenance(pAd, &pStaCfg->wdev, ScanTab, 120, 15);//WCNCR00212669 resloved show get_site_survey has few results
-#endif /* !CONFIG_MULTI_CHANNEL */
-		}
-
-#ifdef P2P_SUPPORT
-
-		if (!((pStaCfg->MlmeAux.ScanType == SCAN_P2P_SEARCH) || (pStaCfg->MlmeAux.ScanType == SCAN_P2P)))
-#endif /* P2P_SUPPORT */
-		{
-			RTMPSendWirelessEvent(pAd, IW_SCAN_COMPLETED_EVENT_FLAG, NULL, BSS0, 0);
-#ifdef WPA_SUPPLICANT_SUPPORT
-			RtmpOSWrielessEventSend(pAd->net_dev, RT_WLAN_EVENT_SCAN, -1, NULL, NULL, 0);
-#endif /* WPA_SUPPLICANT_SUPPORT */
-		}
-
-#ifdef P2P_SUPPORT
-
-		if (pAd->P2pCfg.P2pCounter.bStartScan &&
-			((pStaCfg->MlmeAux.ScanType == SCAN_P2P) || (pStaCfg->MlmeAux.ScanType == SCAN_P2P_SEARCH))) {
-			if (P2P_GO_ON(pAd))
-				P2PSetNextScanTimer(pAd, 10);
-			else
-				P2PSetListenTimer(pAd, 0);
-		}
-
-		pAd->P2pCfg.bPeriodicListen = TRUE;
-#endif /* P2P_SUPPORT */
-	}
-
-#ifdef IWSC_SUPPORT
-
-	if (pStaCfg->BssType == BSS_ADHOC) {
-		MlmeEnqueueWithWdev(pAd, IWSC_STATE_MACHINE, IWSC_MT2_MLME_SCAN_DONE, 0, NULL, 0, wdev);
+	if (MlmeEnqueueWithWdev(pAd, SYNC_FSM, SYNC_FSM_SCAN_REQ,
+						Elem->MsgLen, Elem->Msg, 0, wdev)) {
 		RTMP_MLME_HANDLER(pAd);
+		cntl_fsm_state_transition(wdev, CNTL_WAIT_SYNC, __func__);
+		return TRUE;
 	}
 
-#endif /* IWSC_SUPPORT */
-	cntl_fsm_state_transition(wdev, CNTL_IDLE, __func__);
-#ifdef CONFIG_APSTA_MIXED_SUPPORT
-	AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_AP);
-	{
-		INT BssIdx;
-		INT MaxNumBss = pAd->ApCfg.BssidNum;
-		struct wifi_dev *wdev;
+	return FALSE;
 
-		/* Enable beacon tx for all BSS */
-		for (BssIdx = 0; BssIdx < MaxNumBss; BssIdx++) {
-			UCHAR csa_count = 0;
-			wdev = &pAd->ApCfg.MBSSID[BssIdx].wdev;
-			csa_count = wdev->csa_count;
-			wdev->csa_count = 0;
-			if (wdev->bAllowBeaconing)
-				UpdateBeaconHandler(pAd, wdev, BCN_UPDATE_ENABLE_TX);
-			wdev->csa_count = csa_count;
-		}
-	}
-#endif /* CONFIG_APSTA_MIXED_SUPPORT */
-
-	/* enter psm after end of scan */
-	if (INFRA_ON(pStaCfg)) {
-		if (pStaCfg->WindowsPowerMode != Ndis802_11PowerModeCAM &&
-			!pStaCfg->PwrMgmt.bDoze)
-			RTMP_SLEEP_FORCE_AUTO_WAKEUP(pAd, pStaCfg);
-	}
 }
 
 static VOID sta_cntl_reset_all_fsm(
@@ -2418,8 +2286,8 @@ VOID LinkUp_Infra(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, MAC_TABLE_ENTRY *pEn
 				{
 					if (pNetDev->priv_flags & IFF_EBRIDGE) {
 						COPY_MAC_ADDR(pAd->ApCfg.BridgeAddress, pNetDev->dev_addr);
-						MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, (" Bridge Addr = %02X:%02X:%02X:%02X:%02X:%02X. !!!\n",
-								 PRINT_MAC(pAd->ApCfg.BridgeAddress)));
+						MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR, (" Bridge Addr = "MACSTR". !!!\n",
+								 MAC2STR(pAd->ApCfg.BridgeAddress)));
 					}
 
 					pSkipEntry = RepeaterInvaildMacLookup(pAd, pNetDev->dev_addr);
@@ -2677,7 +2545,8 @@ VOID LinkUp_Infra(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, MAC_TABLE_ENTRY *pEn
 		pStaCfg->PeerMAPEnable = 0;
 
 #if defined(WAPP_SUPPORT)
-		if ((wdev->wdev_type == WDEV_TYPE_STA) && (tr_entry->PortSecured == WPA_802_1X_PORT_SECURED)) {
+		if ((IS_MAP_ENABLE(pAd) && wdev->wdev_type == WDEV_TYPE_STA) &&
+				(tr_entry->PortSecured == WPA_802_1X_PORT_SECURED)) {
 			/*For security NONE & WEP case*/
 			wapp_send_apcli_association_change(WAPP_APCLI_ASSOCIATED, pAd, pStaCfg);
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
@@ -2770,7 +2639,8 @@ VOID LinkUp_Infra(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, MAC_TABLE_ENTRY *pEn
 			P2P_GoStartUp(pAd, MAIN_MBSSID);
 		}
 	} else if (P2P_CLI_ON(pAd)) {
-		AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_STA);
+		AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
+			HW_BSSID_0, OPMODE_STA);
 
 		if (wdev->channel != pAd->P2PChannel) {
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Channel change , old channel:%d new channel:%d !!\n"
@@ -2785,10 +2655,11 @@ VOID LinkUp_Infra(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, MAC_TABLE_ENTRY *pEn
 #endif /* P2P_SUPPORT */
 #ifdef RT_CFG80211_P2P_CONCURRENT_DEVICE
 		if (CFG_P2PGO_ON(pAd))
-			AsicEnableApBssSync(pAd, pAd->CommonCfg.BeaconPeriod);
+			AsicEnableApBssSync(pAd, pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)]);
 		else
 #endif /* RT_CFG80211_P2P_CONCURRENT_DEVICE */
-			AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_STA);
+			AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
+				HW_BSSID_0, OPMODE_STA);
 
 	MacTableSetEntryRaCap(pAd, pEntry, &pStaCfg->MlmeAux.vendor_ie);
 #ifdef DOT11_VHT_AC
@@ -3154,6 +3025,7 @@ VOID LinkUp(RTMP_ADAPTER *pAd, UCHAR BssType, struct wifi_dev *wdev, UINT link_u
 			 ("!!! LINK UP !!! wdev(type=%d,func_idx=%d), (BssType=%d, AID=%d, ssid=%s, Channel=%d, CentralChannel = %d)\n",
 			  wdev->wdev_type, wdev->func_idx, BssType, pStaCfg->StaActive.Aid, pStaCfg->Ssid,
 			  wdev->channel, wlan_operate_get_cen_ch_1(wdev)));
+	pStaCfg->ApcliInfStat.ApCliRcvBeaconTime = pAd->Mlme.Now32;
 	NdisGetSystemUpTime(&Now);
 	pStaCfg->LastBeaconRxTime = Now;	/* last RX timestamp */
 #ifdef DOT11_N_SUPPORT
@@ -3431,7 +3303,8 @@ VOID LinkUp(RTMP_ADAPTER *pAd, UCHAR BssType, struct wifi_dev *wdev, UINT link_u
 				INT starttime = pAd->Mlme.channel_1st_staytime;
 
 				NdisGetSystemUpTime(&pAd->Mlme.BeaconNow32);
-				timeDiff = (pAd->Mlme.BeaconNow32 - pStaCfg->LastBeaconRxTime) % (pAd->CommonCfg.BeaconPeriod);
+				timeDiff = (pAd->Mlme.BeaconNow32 - pStaCfg->LastBeaconRxTime) %
+					(pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)]);
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("#####pAd->Mlme.Now32 %lu pStaCfg->LastBeaconRxTime %lu\n", pAd->Mlme.BeaconNow32, pStaCfg->LastBeaconRxTime));
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("####    timeDiff %ld\n", timeDiff));
 				AsicDisableSync(pAd, HW_BSSID_0);
@@ -3439,9 +3312,9 @@ VOID LinkUp(RTMP_ADAPTER *pAd, UCHAR BssType, struct wifi_dev *wdev, UINT link_u
 				if (starttime > timeDiff)
 					OS_WAIT((starttime - timeDiff));
 				else
-					OS_WAIT((starttime + (pAd->CommonCfg.BeaconPeriod - timeDiff)));
+					OS_WAIT((starttime + (pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)] - timeDiff)));
 
-				AsicEnableApBssSync(pAd, pAd->CommonCfg.BeaconPeriod);
+				AsicEnableApBssSync(pAd, pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)]);
 				Start_MCC(pAd);
 				/* pAd->MCC_DHCP_Protect = TRUE; */
 			}
@@ -3539,8 +3412,8 @@ INT LinkDown_Adhoc(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 
 #ifdef RT_CFG80211_SUPPORT
 	CFG80211OS_DelSta(pAd->net_dev, pStaCfg->Bssid);
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: del this ad-hoc %02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, PRINT_MAC(pStaCfg->Bssid)));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: del this ad-hoc "MACSTR"\n",
+			 __func__, MAC2STR(pStaCfg->Bssid)));
 #endif /* RT_CFG80211_SUPPORT */
 	return TRUE;
 }
@@ -3783,7 +3656,10 @@ INT LinkDown_Infra(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, BOOLEAN ReqByAP, ML
 				if (IS_MAP_TURNKEY_ENABLE(pAd)) {
 					pStaCfg->ApcliInfStat.Enable = FALSE;
 				}
-				wapp_send_apcli_association_change(WAPP_APCLI_DISASSOCIATED, pAd, pStaCfg);
+
+				if (IS_MAP_ENABLE(pAd))
+					wapp_send_apcli_association_change(WAPP_APCLI_DISASSOCIATED,
+						pAd, pStaCfg);
 #endif /*WAPP_SUPPORT*/
 			}
 
@@ -3903,6 +3779,7 @@ VOID LinkDown(RTMP_ADAPTER *pAd, UINT linkdown_type, struct wifi_dev *wdev, MLME
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("%s,wdev(null)(caller:%pS)\n",
 			__func__, OS_TRACE));
+		return;
 	}
 
 	pStaCfg = GetStaCfgByWdev(pAd, wdev);
@@ -3952,8 +3829,8 @@ VOID LinkDown(RTMP_ADAPTER *pAd, UINT linkdown_type, struct wifi_dev *wdev, MLME
 
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("[%s] wdev(type=%d,func_idx=%d),pEntry=%p,wcid=%d,addr=%02X:%02X:%02X:%02X:%02X:%02X\n",
-		 __func__, wdev->wdev_type, wdev->func_idx, (PVOID)pEntry, pEntry->wcid, PRINT_MAC(pEntry->Addr)));
+		("[%s] wdev(type=%d,func_idx=%d),pEntry=%p,wcid=%d,addr="MACSTR"\n",
+		 __func__, wdev->wdev_type, wdev->func_idx, (PVOID)pEntry, pEntry->wcid, MAC2STR(pEntry->Addr)));
 #ifdef MT_WOW_SUPPORT
 
 	if (pAd->WOW_Cfg.bWoWRunning) {
@@ -3982,7 +3859,6 @@ VOID LinkDown(RTMP_ADAPTER *pAd, UINT linkdown_type, struct wifi_dev *wdev, MLME
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("!!! LINK DOWN !!!\n"));
 	/* reset to not doing improved scan */
 	ScanInfo->bImprovedScan = FALSE;
-	pStaCfg->ApcliInfStat.ProbeReqCnt = 0;      //jiangdingyong add 2020.08.14
 #ifdef RT_CFG80211_SUPPORT
 
 	if (CFG80211DRV_OpsScanRunning(pAd))
@@ -4044,14 +3920,29 @@ VOID LinkDown(RTMP_ADAPTER *pAd, UINT linkdown_type, struct wifi_dev *wdev, MLME
 	if (wdev->wdev_type != WDEV_TYPE_REPEATER)
 		MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
 
+	/*delete ppe entry when apcli disconnect, avoid 4-way handshaking failure*/
+#ifdef WHNAT_SUPPORT
+	if (pAd->CommonCfg.whnat_en) {
+#ifdef CONFIG_FAST_NAT_SUPPORT
+		if (ppe_del_entry_by_mac != NULL) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_NOTICE,
+				"WHNAT Enable, Need Delete HNAT Entry When Disconnect!\n");
+			ppe_del_entry_by_mac(wdev->if_addr);
+		}
+#endif
+	}
+#endif
+
 #ifdef MT_MAC
 
 	if (ADHOC_ON(pAd)) {
 		/* TODO: Need to add. */
 	} else {
 		/* only non-repeater should do wdev_linkdown */
-		if (wdev->wdev_type == WDEV_TYPE_STA && wdev_do_linkdown(wdev) != TRUE)
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): link down fail!!\n", __func__));
+		if (wdev->wdev_type == WDEV_TYPE_STA) {
+			if ((wlan_operate_get_state(wdev) == WLAN_OPER_STATE_INVALID) || (wdev_do_linkdown(wdev) != TRUE))
+				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): link down fail!!\n", __func__));
+                }
 	}
 
 #endif /* MT_MAC */
@@ -4104,25 +3995,7 @@ VOID LinkDown(RTMP_ADAPTER *pAd, UINT linkdown_type, struct wifi_dev *wdev, MLME
 	/* Restore MlmeRate */
 	pAd->CommonCfg.MlmeRate = pAd->CommonCfg.BasicMlmeRate;
 	pAd->CommonCfg.RtsRate = pAd->CommonCfg.BasicMlmeRate;
-#ifdef DOT11_N_SUPPORT
 
-	/* TODO: shiang-6590, why we need to fallback to BW_20 here? How about the BW_10? */
-#if 0 //WCNCR00212357 STA的断开和连接会影响其它已经连接的STA 
-	if (wlan_operate_get_ht_bw(wdev) != BW_20) {
-#ifdef P2P_SUPPORT
-		PSTA_ADMIN_CONFIG pApCliEntry = NULL;
-
-		pApCliEntry = &pAd->StaCfg[BSS0];
-
-		if (!P2P_GO_ON(pAd) && (pApCliEntry->ApcliInfStat.Valid == FALSE))
-#endif /* P2P_SUPPORT */
-		{
-			wlan_operate_set_ht_bw(wdev, HT_BW_20, EXTCHA_NONE);
-		}
-	}
-#endif
-
-#endif /* DOT11_N_SUPPORT */
 	BandIdx  = HcGetBandByWdev(wdev);
 	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 	AsicSetTxStream(pAd, TxPath, OPMODE_STA, FALSE, BandIdx);
@@ -4700,7 +4573,6 @@ VOID sta_cntl_init(
 	sta_cntl_api_ops.cntl_reassoc_conf = sta_cntl_reassoc_conf;
 	sta_cntl_api_ops.cntl_disassoc_conf = sta_cntl_disassoc_conf;
 	sta_cntl_api_ops.cntl_scan_proc = sta_cntl_scan;
-	sta_cntl_api_ops.cntl_scan_conf = sta_cntl_scan_conf;
 	sta_cntl_api_ops.cntl_error_handle = sta_cntl_error_handle;
 	sta_cntl_api_ops.cntl_reset_all_fsm_proc = sta_cntl_reset_all_fsm;
 	wdev->cntl_api = &sta_cntl_api_ops;

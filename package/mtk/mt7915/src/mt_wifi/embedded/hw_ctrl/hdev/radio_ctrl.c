@@ -766,10 +766,6 @@ struct radio_dev *RcAcquiredBandForObj(
 	UCHAR is_default = 0;
 	RADIO_CTRL *pRadioCtrl = NULL;
 
-	/*Release first*/
-	if (obj->state == HOBJ_STATE_USED)
-		RcReleaseBandForObj(ctrl, obj);
-
 	rdev = rcGetHdevByPhyMode(ctrl, PhyMode, Channel);
 
 	/*can't get hdev by phymode, use default band*/
@@ -779,6 +775,16 @@ struct radio_dev *RcAcquiredBandForObj(
 			printk("[%s] rdev received NULL in 5G mode\n", __func__);
 		}
 		is_default = 1;
+	}
+
+	/*Don't release, if rdev changed will return false*/
+	if (obj->state == HOBJ_STATE_USED && rdev != obj->rdev) {
+		/* RcReleaseBandForObj(ctrl, obj);*/
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s(): can't change to BandIdx:%d,PhyMode=%d,Channel=%d,from BandIdx:%d,PhyMode=%d,Channel=%d\n",
+			__func__, rdev->pRadioCtrl->BandIdx, PhyMode, Channel, obj->rdev->pRadioCtrl->BandIdx,
+			obj->rdev->pRadioCtrl->PhyMode, obj->rdev->pRadioCtrl->Channel));
+		return NULL;
 	}
 
 	/*update phy mode for radio control*/
@@ -803,8 +809,10 @@ struct radio_dev *RcAcquiredBandForObj(
 	/*update hdev_obj information*/
 	obj->Idx = obj_idx;
 	obj->Type = ObjType;
-	obj->OmacIdx = GetOmacIdx(ctrl, ObjType, rdev, obj_idx);
-	HdevObjAdd(rdev, obj);
+	if (obj->state == HOBJ_STATE_NONE) {
+		obj->OmacIdx = GetOmacIdx(ctrl, ObjType, rdev, obj_idx);
+		HdevObjAdd(rdev, obj);
+	}
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 		("%s(): BandIdx:%d, PhyMode=%d,Channel=%d,OMACIDX=%d,pHdevObj=%p, tx_mode=%d\n",
 		__func__, pRadioCtrl->BandIdx, pRadioCtrl->PhyMode, pRadioCtrl->Channel, obj->OmacIdx, obj, obj->tx_mode));
@@ -850,8 +858,8 @@ INT32 RcUpdateChannel(struct radio_dev *rdev, UCHAR Channel, BOOLEAN scan)
 
 		NdisGetSystemUpTime(&CurJiffies);
 		pRadioCtrl->CurChannelUpTime = jiffies_to_usecs(CurJiffies);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s:orig_chan=%d, new_chan=%d, CurChanUpTime=%u\n",
-						__func__, pRadioCtrl->Channel, Channel, pRadioCtrl->CurChannelUpTime));
+		MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "orig_chan=%d, new_chan=%d, CurChanUpTime=%u\n",
+						pRadioCtrl->Channel, Channel, pRadioCtrl->CurChannelUpTime);
 	}
 #endif /*TR181_SUPPORT*/
 	pRadioCtrl->Channel = Channel;

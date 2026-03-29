@@ -30,6 +30,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
+#include <linux/rtnetlink.h>
 #include <linux/ethtool.h>
 #include <linux/wireless.h>
 #include <linux/proc_fs.h>
@@ -176,11 +177,7 @@ typedef struct usb_ctrlrequest devctrlrequest;
 #define STA_DRIVER_VERSION_SDIO		"3.0.0.0"
 
 #define PROFILE_PATH_RBUS			"/etc/Wireless/RT2860i.dat"
-#ifdef MT7622
-#define STA_PROFILE_PATH_RBUS	"/etc_ro/Wireless/RT2860STA/RT2860STA.dat"
-#else
 #define STA_PROFILE_PATH_RBUS	"/etc/Wireless/RT2860/RT2860.dat"
-#endif
 
 #ifdef CONFIG_STA_SUPPORT
 extern const struct iw_handler_def rt28xx_iw_handler_def;
@@ -315,6 +312,7 @@ enum {
 #define NDIS_STATUS_RESOURCES                   0x03
 #define NDIS_STATUS_PKT_REQUEUE			0x04
 #define NDIS_STATUS_MORE_PROCESSING_REQUIRED             0x05
+#define NDIS_STATUS_TIMEOUT                     0x06
 
 
 #define NDIS_SET_PACKET_STATUS(_p, _status)			do {} while (0)
@@ -513,7 +511,7 @@ typedef spinlock_t			OS_NDIS_SPIN_LOCK;
 	do { \
 		if ((_pTask)->kthread_task) { \
 			(_pTask)->kthread_running = TRUE; \
-			wake_up(&(_pTask)->kthread_q); \
+			wake_up_interruptible(&(_pTask)->kthread_q); \
 		} \
 	} while (0)
 #endif
@@ -719,7 +717,21 @@ typedef struct os_cookie	*POS_COOKIE;
 /***********************************************************************************
  *	OS debugging and printing related definitions and data structure
  ***********************************************************************************/
+#if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
 #define MTWF_PRINT	printk
+#else
+#define  printk(fmt, ...) printk(KERN_CONT fmt, ##__VA_ARGS__)
+#define MTWF_PRINT	pr_cont
+#endif
+#ifdef DBG_ENHANCE
+/* Mapping Wi-Fi driver log to syslog level */
+#define MTWF_PRINT_DBG_LVL_OFF		pr_crit
+#define MTWF_PRINT_DBG_LVL_ERROR	pr_err
+#define MTWF_PRINT_DBG_LVL_WARN		pr_warn
+#define MTWF_PRINT_DBG_LVL_TRACE	pr_notice
+#define MTWF_PRINT_DBG_LVL_INFO		pr_info
+#define MTWF_PRINT_OTHERS		    pr_devel
+#endif /* DBG_ENHANCE */
 
 #undef  ASSERT
 #ifdef DBG
@@ -750,7 +762,8 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 #define PCI_MAP_SINGLE_DEV(_pAd, _ptr, _size, _sd_idx, _dir)				\
 	linux_pci_map_single(((POS_COOKIE)(_pAd->OS_Cookie))->pDev, _ptr, _size, _sd_idx, _dir)
 
-
+#define PCI_DMA_MAPPING_ERROR(_handle, _ptr)	\
+	dma_mapping_error(&((struct pci_dev *)(_handle))->dev, _ptr)
 
 #define PCI_UNMAP_SINGLE(_pAd, _ptr, _size, _dir)						\
 	linux_pci_unmap_single(((POS_COOKIE)(_pAd->OS_Cookie))->pDev, _ptr, _size, _dir)
@@ -809,10 +822,13 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 #endif
 #endif
 
-/*only for debug usage, need to strip on MP release*/
-#define CONFIG_DBG_OOM
 
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+#define SKB_BUF_HEADROOM_RSV	128 /* max radiotap length */
+#else
 #define SKB_BUF_HEADROOM_RSV	(NET_SKB_PAD)
+#endif
+
 #define SKB_BUF_TAILROOM_RSV	(sizeof(struct skb_shared_info))
 
 #define SKB_BUF_HEADTAIL_RSV	(SKB_BUF_HEADROOM_RSV + SKB_BUF_TAILROOM_RSV)
@@ -919,11 +935,9 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 /* Get & Set NETDEV interface hardware type */
 #define RTMP_OS_NETDEV_GET_TYPE(_pNetDev)			((_pNetDev)->type)
 #define RTMP_OS_NETDEV_SET_TYPE(_pNetDev, _type)	((_pNetDev)->type = (_type))
-#ifdef SNIFFER_MT7615
+
 #define RTMP_OS_NETDEV_SET_TYPE_MONITOR(_pNetDev)	RTMP_OS_NETDEV_SET_TYPE(_pNetDev, ARPHRD_IEEE80211_RADIOTAP)
-#else
-#define RTMP_OS_NETDEV_SET_TYPE_MONITOR(_pNetDev)	RTMP_OS_NETDEV_SET_TYPE(_pNetDev, ARPHRD_IEEE80211_PRISM)
-#endif
+
 #define RTMP_OS_NETDEV_START_QUEUE(_pNetDev)	netif_start_queue((_pNetDev))
 #define RTMP_OS_NETDEV_STOP_QUEUE(_pNetDev)	netif_stop_queue((_pNetDev))
 #define RTMP_OS_NETDEV_WAKE_QUEUE(_pNetDev)	netif_wake_queue((_pNetDev))
@@ -1068,6 +1082,7 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 #ifdef CONFIG_FAST_NAT_SUPPORT
 extern int (*ra_sw_nat_hook_tx)(struct sk_buff *skb, int gmac_no);
 extern int (*ra_sw_nat_hook_rx)(struct sk_buff *skb);
+extern int (*ppe_del_entry_by_mac)(unsigned char *mac);
 extern void (*ppe_dev_register_hook) (VOID  *dev);
 extern void (*ppe_dev_unregister_hook) (VOID  *dev);
 
@@ -1182,20 +1197,6 @@ struct wifi_fwd_func_table {
 void RTMP_GetCurrentSystemTime(LARGE_INTEGER *time);
 int rt28xx_packet_xmit(VOID *skb);
 
-#ifdef RTMP_RBUS_SUPPORT
-#ifndef CONFIG_RALINK_FLASH_API
-void FlashWrite(UCHAR *p, ULONG a, ULONG b);
-void FlashRead(UCHAR *p, ULONG a, ULONG b);
-#endif /* CONFIG_RALINK_FLASH_API */
-
-int wl_proc_init(void);
-int wl_proc_exit(void);
-
-#if defined(CONFIG_RA_CLASSIFIER) || defined(CONFIG_RA_CLASSIFIER_MODULE)
-extern volatile unsigned long classifier_cur_cycle;
-extern int (*ra_classifier_hook_rx)(struct sk_buff *skb, unsigned long cycle);
-#endif /* defined(CONFIG_RA_CLASSIFIER)||defined(CONFIG_RA_CLASSIFIER_MODULE) */
-#endif /* RTMP_RBUS_SUPPORT */
 
 #if LINUX_VERSION_CODE <= 0x20402	/* Red Hat 7.1 */
 struct net_device *alloc_netdev(int sizeof_priv, const char *mask, void (*setup)(struct net_device *));
@@ -1508,6 +1509,9 @@ INT RtmpOSNetDevOpsAlloc(
 
 #include "os/rt_os.h"
 
+#ifdef WIFI_MD_COEX_SUPPORT
+UCHAR mt_get_active_pci_num(void);
+#endif
 
 #ifdef MULTI_INF_SUPPORT
 #ifdef RTMP_PCI_SUPPORT
@@ -1516,13 +1520,10 @@ void __exit rt_pci_cleanup_module(void);
 #endif /* RTMP_PCI_SUPPORT */
 
 
-#ifdef RTMP_RBUS_SUPPORT
-int __init wbsys_module_init(void);
-VOID __exit wbsys_module_exit(void);
-#endif /* RTMP_RBUS_SUPPORT */
 
 int multi_inf_adapt_reg(VOID *pAd);
 int multi_inf_adapt_unreg(VOID *pAd);
+int multi_inf_active_cnt(void);
 int multi_inf_get_count(void);
 int multi_inf_get_idx(VOID *pAd);
 #endif /* MULTI_INF_SUPPORT */

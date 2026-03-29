@@ -107,6 +107,9 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	BSS_STRUCT *pMbss = &pAd->ApCfg.MBSSID[mbss_idx];
 	struct wifi_dev *wdev = &pMbss->wdev;
 	const UCHAR *ssid_ie = NULL, *wpa_ie = NULL, *rsn_ie = NULL;
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	const UCHAR *rsnxe_ie = NULL;
+#endif
 	const UCHAR *supp_rates_ie = NULL;
 	const UCHAR *ext_supp_rates_ie = NULL, *ht_cap = NULL, *ht_info = NULL;
 	UINT16 radio_measurement = 0x00;
@@ -152,6 +155,8 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	const UCHAR *hs2_osen_ie = NULL;
 	PHOTSPOT_CTRL pHSCtrl = &pMbss->HotSpotCtrl;
 	PGAS_CTRL	pGasCtrl = &pMbss->GASCtrl;
+	INT32 Ret;
+	PUCHAR tmp_buf_ptr = NULL;
 #endif
 #ifdef HOSTAPD_11K_SUPPORT
 	const UCHAR *rrm_caps = NULL;
@@ -191,6 +196,10 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	ext_supp_rates_ie = cfg80211_find_ie(WLAN_EID_EXT_SUPP_RATES, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	ht_cap = cfg80211_find_ie(WLAN_EID_HT_CAPABILITY, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	ht_info = cfg80211_find_ie(CFG_HT_OP_EID, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	/*find	RSNXE IE in hostapd beacon tail*/
+	rsnxe_ie = cfg80211_find_ie(IE_RSNXE, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
+#endif
 
 #ifdef HOSTAPD_11K_SUPPORT
 	rrm_caps = cfg80211_find_ie(CFG_RRM_OP_EID, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
@@ -272,61 +281,101 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	hs2_indication_ie = (UCHAR *)cfg80211_find_vendor_ie(OUI_WFA, HS2_OUI_TYPE, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	if (hs2_indication_ie != NULL) {
 		EID_STRUCT *eid = (EID_STRUCT *)hs2_indication_ie;
-		if (pHSCtrl->HSIndicationIE) {
-			os_free_mem(pHSCtrl->HSIndicationIE);
-			pHSCtrl->HSIndicationIE = NULL;
+
+		Ret = os_alloc_mem(NULL, &tmp_buf_ptr, eid->Len + 2);
+		if (Ret != NDIS_STATUS_SUCCESS) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Not enough memory\n", __func__));
+			return FALSE;
 		}
-		os_alloc_mem(NULL, &pHSCtrl->HSIndicationIE, eid->Len + 2);
-		NdisMoveMemory(pHSCtrl->HSIndicationIE, hs2_indication_ie, eid->Len + 2);
+		NdisMoveMemory(tmp_buf_ptr, hs2_indication_ie, eid->Len + 2);
+
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->HSIndicationIE)
+			os_free_mem(pHSCtrl->HSIndicationIE);
+		pHSCtrl->HSIndicationIE = tmp_buf_ptr;
 		pHSCtrl->HSIndicationIELen = eid->Len + 2;
 		pHSCtrl->HotSpotEnable = 1;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 	} else
 		pHSCtrl->HotSpotEnable = 0;
 
 	p2p_ie = (UCHAR *)cfg80211_find_vendor_ie(OUI_WFA, P2P_OUI_TYPE, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	if (p2p_ie != NULL) {
 		EID_STRUCT *eid = (EID_STRUCT *)p2p_ie;
-		if (pHSCtrl->P2PIE) {
-			os_free_mem(pHSCtrl->P2PIE);
-			pHSCtrl->P2PIE = NULL;
+
+		Ret = os_alloc_mem(NULL, &tmp_buf_ptr, eid->Len + 2);
+		if (Ret != NDIS_STATUS_SUCCESS) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Not enough memory\n", __func__));
+			return FALSE;
 		}
-		os_alloc_mem(NULL, &pHSCtrl->P2PIE, eid->Len + 2);
-		NdisMoveMemory(pHSCtrl->P2PIE, p2p_ie, eid->Len + 2);
+		NdisMoveMemory(tmp_buf_ptr, p2p_ie, eid->Len + 2);
+
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->P2PIE)
+			os_free_mem(pHSCtrl->P2PIE);
+		pHSCtrl->P2PIE = tmp_buf_ptr;
 		pHSCtrl->P2PIELen = eid->Len + 2;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 	}
 
 	interworking_ie = cfg80211_find_ie(IE_INTERWORKING, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	if (interworking_ie != NULL) {
 		EID_STRUCT *eid = (EID_STRUCT *)interworking_ie;
-		if (pGasCtrl->InterWorkingIE) {
-			os_free_mem(pGasCtrl->InterWorkingIE);
-			pGasCtrl->InterWorkingIE = NULL;
+
+		Ret = os_alloc_mem(NULL, &tmp_buf_ptr, eid->Len + 2);
+		if (Ret != NDIS_STATUS_SUCCESS) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Not enough memory\n", __func__));
+			return FALSE;
 		}
-		os_alloc_mem(NULL, &pGasCtrl->InterWorkingIE, eid->Len + 2);
-		NdisMoveMemory(pGasCtrl->InterWorkingIE, interworking_ie, eid->Len + 2);
+		NdisMoveMemory(tmp_buf_ptr, interworking_ie, eid->Len + 2);
+
+		RTMP_SEM_LOCK(&pGasCtrl->IeLock);
+		if (pGasCtrl->InterWorkingIE)
+			os_free_mem(pGasCtrl->InterWorkingIE);
+		pGasCtrl->InterWorkingIE = tmp_buf_ptr;
 		pGasCtrl->InterWorkingIELen = eid->Len + 2;
+		RTMP_SEM_UNLOCK(&pGasCtrl->IeLock);
 	}
 	adv_proto_ie = cfg80211_find_ie(IE_ADVERTISEMENT_PROTO, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	if (adv_proto_ie != NULL) {
 		EID_STRUCT *eid = (EID_STRUCT *)adv_proto_ie;
-		if (pGasCtrl->AdvertisementProtoIE) {
-			os_free_mem(pGasCtrl->AdvertisementProtoIE);
-			pGasCtrl->AdvertisementProtoIE = NULL;
+
+		Ret = os_alloc_mem(NULL, &tmp_buf_ptr, eid->Len + 2);
+		if (Ret != NDIS_STATUS_SUCCESS) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Not enough memory\n", __func__));
+			return FALSE;
 		}
-		os_alloc_mem(NULL, &pGasCtrl->AdvertisementProtoIE, eid->Len + 2);
-		NdisMoveMemory(pGasCtrl->AdvertisementProtoIE, adv_proto_ie, eid->Len + 2);
+		NdisMoveMemory(tmp_buf_ptr, adv_proto_ie, eid->Len + 2);
+
+		RTMP_SEM_LOCK(&pGasCtrl->IeLock);
+		if (pGasCtrl->AdvertisementProtoIE)
+			os_free_mem(pGasCtrl->AdvertisementProtoIE);
+		pGasCtrl->AdvertisementProtoIE = tmp_buf_ptr;
 		pGasCtrl->AdvertisementProtoIELen = eid->Len + 2;
+		RTMP_SEM_UNLOCK(&pGasCtrl->IeLock);
 	}
 	roam_consort_ie = cfg80211_find_ie(IE_ROAMING_CONSORTIUM, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
 	if (roam_consort_ie != NULL) {
 		EID_STRUCT *eid = (EID_STRUCT *)roam_consort_ie;
-		if (pHSCtrl->RoamingConsortiumIE) {
-			os_free_mem(pHSCtrl->RoamingConsortiumIE);
-			pHSCtrl->RoamingConsortiumIE = NULL;
+
+		Ret = os_alloc_mem(NULL, &tmp_buf_ptr, eid->Len + 2);
+		if (Ret != NDIS_STATUS_SUCCESS) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: Not enough memory\n", __func__));
+			return FALSE;
 		}
-		os_alloc_mem(NULL, &pHSCtrl->RoamingConsortiumIE, eid->Len + 2);
-		NdisMoveMemory(pHSCtrl->RoamingConsortiumIE, roam_consort_ie, eid->Len + 2);
+		NdisMoveMemory(tmp_buf_ptr, roam_consort_ie, eid->Len + 2);
+
+		RTMP_SEM_LOCK(&pHSCtrl->IeLock);
+		if (pHSCtrl->RoamingConsortiumIE)
+			os_free_mem(pHSCtrl->RoamingConsortiumIE);
+		pHSCtrl->RoamingConsortiumIE = tmp_buf_ptr;
 		pHSCtrl->RoamingConsortiumIELen = eid->Len + 2;
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 	}
 
 	ext_cap_ie = cfg80211_find_ie(IE_EXT_CAPABILITY, pBeacon->beacon_tail, pBeacon->beacon_tail_len);
@@ -513,6 +562,10 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 	pMbss->RSNIE_Len[1] = 0;
 	NdisZeroMemory(pMbss->RSN_IE[0], MAX_LEN_OF_RSNIE);
 	NdisZeroMemory(pMbss->RSN_IE[1], MAX_LEN_OF_RSNIE);
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	/*reset RSNXE previous value*/
+	wdev->SecConfig.RSNXE_Val = 0;
+#endif
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("80211> pBeacon->privacy = %d\n", pBeacon->privacy));
 
 	if (pBeacon->privacy) {
@@ -549,6 +602,22 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 #endif
 		else
 			CFG80211_ParseBeaconIE(pAd, pMbss, wdev, (UCHAR *)wpa_ie, (UCHAR *)rsn_ie);
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+		/*Set RSNXE Value from RSNXE IE of hostapd*/
+		wdev->SecConfig.RSNXE_Val = 0;
+		wdev->SecConfig.SaePwe = 0;
+		if (rsnxe_ie != NULL) {
+			CFG80211DBG(DBG_LVL_INFO, ("80211> %s RSNXE_IE %d %d %d\n",
+				__func__, *rsnxe_ie, *(rsnxe_ie+1), *(rsnxe_ie+2)));
+
+			wdev->SecConfig.RSNXE_Val = *(rsnxe_ie+2);
+		}
+		if (pBeacon->crypto.sae_pwe) {
+			CFG80211DBG(DBG_LVL_INFO, ("80211> %s SAE_PWE = %d\n",
+				__func__, pBeacon->crypto.sae_pwe));
+			wdev->SecConfig.SaePwe = pBeacon->crypto.sae_pwe;
+		}
+#endif
 
 
 		if ((IS_CIPHER_NONE(wdev->SecConfig.PairwiseCipher)) &&
@@ -605,6 +674,12 @@ static INT CFG80211DRV_UpdateApSettingFromBeacon(PRTMP_ADAPTER pAd, UINT mbss_id
 		pAd->ApCfg.DtimPeriod = pBeacon->dtim_period;
 	}
 #endif
+
+#ifdef CONFIG_6G_SUPPORT
+	bssmnger_dereg_bmg_entry(wdev);
+	bssmnger_reg_bmg_entry(wdev);
+#endif
+
 	return TRUE;
 }
 
@@ -870,11 +945,11 @@ VOID CFG80211_UpdateBeacon(
 	else
 		RT28xx_UpdateBcnAndTimToMcu(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, beacon_len, pAd->ApCfg.MBSSID[apidx].wdev.bcn_buf.TimIELocationInBeacon, PKT_V2_BCN);
 #else
-	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev);
+	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, TRUE);
 #endif
 #else
 #ifdef RT_CFG80211_SUPPORT
-	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev);
+	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, TRUE);
 #else
 
 	RT28xx_UpdateBcnAndTimToMcu(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, beacon_len,
@@ -894,11 +969,11 @@ VOID CFG80211_UpdateBeacon(
 		RT28xx_UpdateBeaconToAsic(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, beacon_len,
 					pAd->ApCfg.MBSSID[apidx].wdev.bcn_buf.TimIELocationInBeacon, PKT_V1_BCN);
 #else
-	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev);
+	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, TRUE);
 #endif
 #else
 #ifdef RT_CFG80211_SUPPORT
-	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev);
+	arch_ops->archUpdateBeacon(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, TRUE);
 #else
 
 	RT28xx_UpdateBeaconToAsic(pAd, &pAd->ApCfg.MBSSID[apidx].wdev, beacon_len,
@@ -933,7 +1008,7 @@ BOOLEAN CFG80211DRV_OpsBeaconSet(VOID *pAdOrg, VOID *pData)
 		("############MakeBeacon for apidx %d OpsBeaconSet \n",
 		pBeacon->apidx));
 	Frame_Len = MakeBeacon(pAd, wdev, FALSE);
-	AsicUpdateBeacon(pAd, wdev);
+	AsicUpdateBeacon(pAd, wdev, TRUE);
 #else
 	CFG80211_UpdateBeacon(pAd, pBeacon->beacon_head, pBeacon->beacon_head_len,
 		pBeacon->beacon_tail, pBeacon->beacon_tail_len,
@@ -954,15 +1029,18 @@ BOOLEAN CFG80211DRV_SetQosParam(VOID *pAdOrg, VOID *pData, INT apindex)
 	PUCHAR pos;
 	int tmp = 0;
 
+	RTMP_SEM_LOCK(&pHSCtrl->IeLock);
 	if (pHSCtrl->QosMapSetIE) {
 		os_free_mem(pHSCtrl->QosMapSetIE);
 		pHSCtrl->QosMapSetIE = NULL;
 	}
-	if (qos_map == NULL)
+	if (qos_map == NULL) {
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 		return TRUE;
-
+	}
     os_alloc_mem(NULL, &pHSCtrl->QosMapSetIE, (2+(qos_map->num_des * 2) + 16));
 	if (pHSCtrl->QosMapSetIE == NULL) {
+		RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("QosMapSet Alloc Fail \n"));
 		return FALSE;
 	}
@@ -977,6 +1055,7 @@ BOOLEAN CFG80211DRV_SetQosParam(VOID *pAdOrg, VOID *pData, INT apindex)
 	}
 	memcpy(pos, (PUCHAR)qos_map->up, 16);
     pHSCtrl->QosMapSetIELen = 2+(qos_map->num_des * 2)+16;
+	RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 	for (tmp = 0; tmp < 21; tmp++) {
 		pHSCtrl->DscpException[tmp] = 0xff;
 		pHSCtrl->DscpException[tmp] |= (0xff << 8);
@@ -1081,7 +1160,6 @@ BOOLEAN CFG80211DRV_OpsBeaconAdd(VOID *pAdOrg, VOID *pData)
 	pMbss->StationKeepAliveTime = 60;
 #else
 	pAd->ApCfg.StaIdleTimeout = 300;
-	pMbss->StationKeepAliveTime = 0;
 #endif /* RT_CFG80211_P2P_MULTI_CHAN_SUPPORT */
 	AsicDisableSync(pAd, HW_BSSID_0);
 
@@ -1188,8 +1266,8 @@ BOOLEAN CFG80211DRV_OpsBeaconAdd(VOID *pAdOrg, VOID *pData)
 	/* AsicBssInfoUpdate(pAd, wdev->bss_info_argument); */
 	os_msec_delay(200);
 	HW_UPDATE_BSSINFO(pAd, &wdev->bss_info_argument);
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("New AP BSSID %02x:%02x:%02x:%02x:%02x:%02x (%d)\n",
-			 PRINT_MAC(wdev->bssid), wdev->PhyMode));
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("New AP BSSID "MACSTR" (%d)\n",
+			 MAC2STR(wdev->bssid), wdev->PhyMode));
 #ifdef DOT11_N_SUPPORT
 
 	if (WMODE_CAP_N(wdev->PhyMode) && (pAd->Antenna.field.TxPath == 2))
@@ -1285,7 +1363,7 @@ BOOLEAN CFG80211DRV_OpsBeaconAdd(VOID *pAdOrg, VOID *pData)
 #endif
 
 	FrameLen =  MakeBeacon(pAd, wdev, FALSE);
-	AsicUpdateBeacon(pAd, wdev);
+	AsicUpdateBeacon(pAd, wdev, TRUE);
 #else
 	CFG80211_UpdateBeacon(pAd, pBeacon->beacon_head, pBeacon->beacon_head_len,
 	pBeacon->beacon_tail, pBeacon->beacon_tail_len, TRUE, pBeacon->apidx);
@@ -2043,8 +2121,8 @@ INT CFG80211_ApUpdateStaPmkid(
 	pApPmkidEntry = (RT_CMD_AP_IOCTL_UPDATE_PMKID *)pData;
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s:==sta:%02x:%02x:%02x:%02x:%02x:%02x\n",
-					__func__, PRINT_MAC(pApPmkidEntry->sta)));
+				("%s:==sta:"MACSTR"\n",
+					__func__, MAC2STR(pApPmkidEntry->sta)));
 
 	pEntry = MacTableLookup(pAd, pApPmkidEntry->sta);
 
@@ -2055,15 +2133,15 @@ INT CFG80211_ApUpdateStaPmkid(
 			/*Add pmkid in existing pEntry*/
 			NdisCopyMemory(pEntry->PmkidByHostapd, pApPmkidEntry->pmkid, LEN_PMKID);
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s:added PMKID in pEntryAddress: %2x:%2x:%2x:%2x:%2x:%2x\n",
-						__func__, PRINT_MAC(pEntry->Addr)));
+				("%s:added PMKID in pEntryAddress: "MACSTR"\n",
+						__func__, MAC2STR(pEntry->Addr)));
 			hex_dump_with_lvl("PMKID:", pEntry->PmkidByHostapd, LEN_PMKID, DBG_LVL_TRACE);
 		} else {
 			/*Remove pmkid from existing pEntry*/
 			NdisZeroMemory(pEntry->PmkidByHostapd, LEN_PMKID);
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s:removed PMKID from pEntryAddress: %2x:%2x:%2x:%2x:%2x:%2x\n",
-						__func__, PRINT_MAC(pEntry->Addr)));
+				("%s:removed PMKID from pEntryAddress: "MACSTR"\n",
+						__func__, MAC2STR(pEntry->Addr)));
 		}
 	} else {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,

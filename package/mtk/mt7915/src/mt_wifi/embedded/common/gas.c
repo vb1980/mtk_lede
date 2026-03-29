@@ -82,6 +82,22 @@ VOID GASSetPeerCurrentState(
 	RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
 }
 
+VOID GASCtrlRemoveAllIE(PGAS_CTRL pGasCtrl)
+{
+	RTMP_SEM_LOCK(&pGasCtrl->IeLock);
+	if (pGasCtrl->InterWorkingIELen && pGasCtrl->InterWorkingIE) {
+		os_free_mem(pGasCtrl->InterWorkingIE);
+		pGasCtrl->InterWorkingIE = NULL;
+		pGasCtrl->InterWorkingIELen = 0;
+	}
+
+	if (pGasCtrl->AdvertisementProtoIELen && pGasCtrl->AdvertisementProtoIE) {
+		os_free_mem(pGasCtrl->AdvertisementProtoIE);
+		pGasCtrl->AdvertisementProtoIE = NULL;
+		pGasCtrl->AdvertisementProtoIELen = 0;
+	}
+	RTMP_SEM_UNLOCK(&pGasCtrl->IeLock);
+}
 
 #ifdef CONFIG_AP_SUPPORT
 void wext_send_locationIE_to_daemon_event(PNET_DEV net_dev, const char *location_buf,
@@ -157,7 +173,7 @@ VOID SendGASRsp(
 	UCHAR *Buf, *Pos;
 	GAS_FRAME *GASFrame;
 	ULONG FrameLen = 0, VarLen = 0, tmpValue = 0;
-	PGAS_CTRL pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	PGAS_CTRL pGASCtrl;
 	GAS_PEER_ENTRY *GASPeerEntry;
 	BOOLEAN Cancelled;
 	MAC_TABLE_ENTRY *pEntry = NULL;
@@ -169,6 +185,14 @@ VOID SendGASRsp(
 	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag, *GASQueryRspFragTmp;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE, ("%s\n", __func__));
+
+	if (Event->ControlIndex < MAX_MBSSID_NUM(pAd))
+		pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	else {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s:get error wdev idx!\n", __func__));
+		return;
+	}
+
 	RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
 	DlListForEach(GASPeerEntry, &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
 		if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
@@ -184,11 +208,6 @@ VOID SendGASRsp(
 	if (Event->u.GAS_RSP_DATA.AdvertisementProID == ACCESS_NETWORK_QUERY_PROTOCOL) {
 		/* Advertisement protocol element + Query response length field */
 		VarLen += 6;
-	}
-
-	if (Event->u.GAS_RSP_DATA.QueryRspLen > pGASCtrl->MMPDUSize) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_WARN, ("%s Data is too big\n", __func__));
-		return;
 	}
 
 	if (Event->EventType == GAS_RSP) {
@@ -220,14 +239,21 @@ VOID SendGASRsp(
 			GASPeerEntry->PostReplyTimerRunning = FALSE;
 		}
 
-		RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+		if (GASPeerEntry->InitPostReplyTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+			GASPeerEntry->InitPostReplyTimer = FALSE;
+		}
 
 		if (GASPeerEntry->GASRspBufferingTimerRunning) {
 			RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
 			GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
 		}
 
-		RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+		if (GASPeerEntry->InitGASRspBufferingTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+			GASPeerEntry->InitGASRspBufferingTimer = FALSE;
+		}
+
 		os_free_mem(GASPeerEntry);
 		return;
 	}
@@ -278,9 +304,12 @@ VOID SendGASRsp(
 		tmpValue = cpu2le16(Event->u.GAS_RSP_DATA.QueryRspLen);
 		NdisMoveMemory(Pos, &tmpValue, 2);
 		Pos += 2;
-		FrameLen +=	6;
+		FrameLen += 6;
 
-		NdisMoveMemory(Pos, Event->u.GAS_RSP_DATA.QueryRsp, Event->u.GAS_RSP_DATA.QueryRspLen);
+		if (Event->u.GAS_RSP_DATA.QueryRspLen > 0 &&
+			Event->u.GAS_RSP_DATA.QueryRspLen < pGASCtrl->MMPDUSize)
+			NdisMoveMemory(Pos, Event->u.GAS_RSP_DATA.QueryRsp, Event->u.GAS_RSP_DATA.QueryRspLen);
+
 		FrameLen += Event->u.GAS_RSP_DATA.QueryRspLen;
 		/* GASSetPeerCurrentState(pAd, Elem, WAIT_PEER_GAS_REQ); */
 		GASSetPeerCurrentState(pAd, Event, WAIT_PEER_GAS_REQ);
@@ -293,17 +322,21 @@ VOID SendGASRsp(
 			RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
 			GASPeerEntry->PostReplyTimerRunning = FALSE;
 		}
-		RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-		GASPeerEntry->FreeResource++;
+
+		if (GASPeerEntry->InitPostReplyTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+			GASPeerEntry->InitPostReplyTimer = FALSE;
+		}
 
 		if (GASPeerEntry->GASRspBufferingTimerRunning) {
 			RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
 			GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
 		}
 
-		RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-		GASPeerEntry->FreeResource++;
-		GASPeerEntry->FreeResource++;
+		if (GASPeerEntry->InitGASRspBufferingTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+			GASPeerEntry->InitGASRspBufferingTimer = FALSE;
+		}
 		os_free_mem(GASPeerEntry);
 	} else if (Event->EventType == GAS_RSP_MORE) {
 		GASFrame->u.GAS_INIT_RSP.DialogToken = Event->u.GAS_RSP_MORE_DATA.DialogToken;
@@ -320,7 +353,7 @@ VOID SendGASRsp(
 		tmpValue = 0;
 		NdisMoveMemory(Pos, &tmpValue, 2);
 		Pos += 2;
-		FrameLen +=	6;
+		FrameLen += 6;
 		/* GASSetPeerCurrentState(pAd, Elem, WAIT_GAS_CB_REQ); */
 		GASSetPeerCurrentState(pAd, Event, WAIT_GAS_CB_REQ);
 
@@ -333,6 +366,36 @@ VOID SendGASRsp(
 						 + GASFrame->u.GAS_INIT_RSP.GASComebackDelay);
 			GASPeerEntry->GASRspBufferingTimerRunning = TRUE;
 		}
+	} else {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s Invalid Event type %d\n",
+					__func__, Event->EventType));
+		RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
+		DlListDel(&GASPeerEntry->List);
+		DlListInit(&GASPeerEntry->GASQueryRspFragList);
+		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
+
+		if (GASPeerEntry->PostReplyTimerRunning) {
+			RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+			GASPeerEntry->PostReplyTimerRunning = FALSE;
+		}
+
+		if (GASPeerEntry->InitPostReplyTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+			GASPeerEntry->InitPostReplyTimer = FALSE;
+		}
+
+		if (GASPeerEntry->GASRspBufferingTimerRunning) {
+			RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+			GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
+		}
+
+		if (GASPeerEntry->InitGASRspBufferingTimer) {
+			RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+			GASPeerEntry->InitGASRspBufferingTimer = FALSE;
+		}
+		os_free_mem(GASPeerEntry);
+		os_free_mem(Buf);
+		return;
 	}
 
 	MiniportMMRequest(pAd, 0, Buf, FrameLen);
@@ -346,13 +409,12 @@ VOID ReceiveGASInitReq(
 {
 	GAS_EVENT_DATA *Event;
 	GAS_FRAME *GASFrame = (GAS_FRAME *)Elem->Msg;
-	GAS_PEER_ENTRY *GASPeerEntry, *GASPeerEntryTmp;
+	GAS_PEER_ENTRY *GASPeerEntry = NULL, *GASPeerEntryTmp = NULL;
 	PGAS_CTRL pGASCtrl = NULL;
 	UCHAR APIndex, *Pos, *Buf;
 	UINT16 VarLen;
 	UINT32 Len = 0;
-	BOOLEAN IsFound = FALSE, Cancelled;
-	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag, *GASQueryRspFragTmp;
+	BOOLEAN IsFound = FALSE;
 	PNET_DEV NetDev;
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE, ("%s\n", __func__));
 
@@ -370,7 +432,7 @@ VOID ReceiveGASInitReq(
 
 	if (!pGASCtrl) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("%s Can not find Peer Control DA=%02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(GASFrame->Hdr.Addr1)));
+				 ("%s Can not find Peer Control DA="MACSTR"\n", __func__, MAC2STR(GASFrame->Hdr.Addr1)));
 		return;
 	}
 
@@ -389,39 +451,14 @@ VOID ReceiveGASInitReq(
 		{
 			/* Query too many times, remove the peer address from list */
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE,
-					 ("%s Q %d, old 0x%x, 0x%x, %02x:%02x:%02x:%02x:%02x:%02x remove peer\n",
+					 ("%s Q %d, old 0x%x, 0x%x, "MACSTR" remove peer\n",
 					  __func__, GASPeerEntry->QueryNum, GASPeerEntry->DialogToken, GASFrame->u.GAS_INIT_REQ.DialogToken,
-					  GASPeerEntry->PeerMACAddr[0], GASPeerEntry->PeerMACAddr[1], GASPeerEntry->PeerMACAddr[2],
-					  GASPeerEntry->PeerMACAddr[3], GASPeerEntry->PeerMACAddr[4], GASPeerEntry->PeerMACAddr[5]));
+					  MAC2STR(GASPeerEntry->PeerMACAddr)));
 			RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
 			DlListForEachSafe(GASPeerEntry, GASPeerEntryTmp,
 				 &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
-				if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, GASFrame->Hdr.Addr2)) {
-					DlListForEachSafe(GASQueryRspFrag, GASQueryRspFragTmp,
-						 &GASPeerEntry->GASQueryRspFragList, GAS_QUERY_RSP_FRAGMENT, List) {
-						DlListDel(&GASQueryRspFrag->List);
-						os_free_mem(GASQueryRspFrag->FragQueryRsp);
-						os_free_mem(GASQueryRspFrag);
-					}
-					DlListDel(&GASPeerEntry->List);
-					DlListInit(&GASPeerEntry->GASQueryRspFragList);
-
-					if (GASPeerEntry->PostReplyTimerRunning) {
-						RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-						GASPeerEntry->PostReplyTimerRunning = FALSE;
-					}
-
-					RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-
-					if (GASPeerEntry->GASRspBufferingTimerRunning) {
-						RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-						GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
-					}
-
-					RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-					GASPeerEntry->FreeResource++;
-					os_free_mem(GASPeerEntry);
-				}
+				if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, GASFrame->Hdr.Addr2))
+					FreeGasPeerEntry(GASPeerEntry);
 			}
 			RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
 		}
@@ -436,7 +473,8 @@ VOID ReceiveGASInitReq(
 	}
 
 	NdisZeroMemory(GASPeerEntry, sizeof(*GASPeerEntry));
-	GASPeerEntry->AllocResource++;
+	GASPeerEntry->InitPostReplyTimer = FALSE;
+	GASPeerEntry->InitGASRspBufferingTimer = FALSE;
 	GASPeerEntry->CurrentState = WAIT_PEER_GAS_REQ;
 	GASPeerEntry->QueryNum++;
 	NdisMoveMemory(GASPeerEntry->PeerMACAddr, GASFrame->Hdr.Addr2, MAC_ADDR_LEN);
@@ -444,30 +482,33 @@ VOID ReceiveGASInitReq(
 	GASPeerEntry->Priv = pAd;
 	GASPeerEntry->peer_use_protected_dual = (GASFrame->Category == CATEGORY_PD) ? TRUE : FALSE;
 	GASPeerEntry->ControlIndex = APIndex;
-	RTMPInitTimer(pAd, &GASPeerEntry->PostReplyTimer,
-				  GET_TIMER_FUNCTION(PostReplyTimeout), GASPeerEntry, FALSE);
-
-	/*
-	   Add GASPeerEntry NULL check to remove KASAN warnings. If GasPeerEntry will be freed in timer task
-	   and no any protection, there is a risk may make below code take a NULL pointer and used.
-	 */
-	if (!GASPeerEntry) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s PostReplyTimeout\n", __func__));
-		return;
+	if (!GASPeerEntry->InitPostReplyTimer) {
+		RTMPInitTimer(pAd, &GASPeerEntry->PostReplyTimer,
+				GET_TIMER_FUNCTION(PostReplyTimeout), GASPeerEntry, FALSE);
+		/*
+		   Add GASPeerEntry NULL check to remove KASAN warnings. If GasPeerEntry will be freed in timer task
+		   and no any protection, there is a risk may make below code take a NULL pointer and used.
+		 */
+		if (!GASPeerEntry) {
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s PostReplyTimeout\n", __func__));
+			return;
+		}
+		GASPeerEntry->InitPostReplyTimer = TRUE;
 	}
-	GASPeerEntry->AllocResource++;
-	RTMPInitTimer(pAd, &GASPeerEntry->GASRspBufferingTimer,
-				  GET_TIMER_FUNCTION(GASRspBufferingTimeout), GASPeerEntry, FALSE);
 
-	/*
-	   Add GASPeerEntry NULL check to remove KASAN warnings. If GasPeerEntry will be freed in timer task
-	   and no any protection, there is a risk may make below code take a NULL pointer and used.
-	 */
-	if (!GASPeerEntry) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s GASRspBufferingTimeout\n", __func__));
-		return;
+	if (!GASPeerEntry->InitGASRspBufferingTimer) {
+		RTMPInitTimer(pAd, &GASPeerEntry->GASRspBufferingTimer,
+				GET_TIMER_FUNCTION(GASRspBufferingTimeout), GASPeerEntry, FALSE);
+		/*
+		   Add GASPeerEntry NULL check to remove KASAN warnings. If GasPeerEntry will be freed in timer task
+		   and no any protection, there is a risk may make below code take a NULL pointer and used.
+		 */
+		if (!GASPeerEntry) {
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s GASRspBufferingTimeout\n", __func__));
+			return;
+		}
+		GASPeerEntry->InitGASRspBufferingTimer = TRUE;
 	}
-	GASPeerEntry->AllocResource++;
 	DlListInit(&GASPeerEntry->GASQueryRspFragList);
 	RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
 	DlListAddTail(&pGASCtrl->GASPeerList, &GASPeerEntry->List);
@@ -520,6 +561,44 @@ error:
 	os_free_mem(GASPeerEntry);
 }
 
+VOID FreeGasPeerEntry(
+	IN GAS_PEER_ENTRY *GASPeerEntry)
+{
+	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag, *GASQueryRspFragTmp;
+	BOOLEAN Cancelled;
+
+	if (!GASPeerEntry)
+		return;
+
+	DlListForEachSafe(GASQueryRspFrag, GASQueryRspFragTmp,
+						 &GASPeerEntry->GASQueryRspFragList, GAS_QUERY_RSP_FRAGMENT, List) {
+		DlListDel(&GASQueryRspFrag->List);
+		os_free_mem(GASQueryRspFrag->FragQueryRsp);
+		os_free_mem(GASQueryRspFrag);
+	}
+	DlListDel(&GASPeerEntry->List);
+	DlListInit(&GASPeerEntry->GASQueryRspFragList);
+
+	if (GASPeerEntry->PostReplyTimerRunning) {
+		RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+		GASPeerEntry->PostReplyTimerRunning = FALSE;
+	}
+	if (GASPeerEntry->InitPostReplyTimer) {
+		RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
+		GASPeerEntry->InitPostReplyTimer = FALSE;
+	}
+
+	if (GASPeerEntry->GASRspBufferingTimerRunning) {
+		RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+		GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
+	}
+
+	if (GASPeerEntry->InitGASRspBufferingTimer) {
+		RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
+		GASPeerEntry->InitGASRspBufferingTimer = FALSE;
+	}
+	os_free_mem(GASPeerEntry);
+}
 
 static VOID SendGASCBRsp(
 	IN PRTMP_ADAPTER    pAd,
@@ -530,13 +609,19 @@ static VOID SendGASCBRsp(
 	UCHAR *Buf, *Pos;
 	GAS_FRAME *GASFrame;
 	ULONG FrameLen = 0, VarLen = 0, tmpLen = 0;
-	GAS_PEER_ENTRY *GASPeerEntry;
-	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag = NULL, *GASQueryRspFragTmp;
-	PGAS_CTRL pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	GAS_PEER_ENTRY *GASPeerEntry, *GASPeerEntryTmp;
+	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag = NULL;
+	PGAS_CTRL pGASCtrl;
 	BOOLEAN bGASQueryRspFragFound = FALSE, bPeerFound = FALSE;
-	BOOLEAN Cancelled;
 	MAC_TABLE_ENTRY *pEntry = NULL;
 	UCHAR WildcardBssid[MAC_ADDR_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	if (Event->ControlIndex < MAX_MBSSID_NUM(pAd))
+		pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	else {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s:get error wdev idx!\n", __func__));
+		return;
+	}
 
 	/* Pre-allocate max possible length */
 	os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*GASFrame)
@@ -551,7 +636,8 @@ static VOID SendGASCBRsp(
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE, ("%s\n", __func__));
 	RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
-	DlListForEach(GASPeerEntry, &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
+	DlListForEachSafe(GASPeerEntry, GASPeerEntryTmp,
+				 &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
 		if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
 			if (GASPeerEntry->AdvertisementProID == ACCESS_NETWORK_QUERY_PROTOCOL) {
 				/* Advertisement protocol element + Query response length field */
@@ -610,7 +696,7 @@ static VOID SendGASCBRsp(
 #endif /* DOT11W_PMF_SUPPORT */
 	else
 		GASFrame->Category = CATEGORY_PUBLIC;
-	
+
 	FrameLen += 1;
 	GASFrame->u.GAS_CB_RSP.Action = ACTION_GAS_CB_RSP;
 	FrameLen += 1;
@@ -640,42 +726,20 @@ static VOID SendGASCBRsp(
 			tmpLen = cpu2le16(GASQueryRspFrag->FragQueryRspLen);
 			NdisMoveMemory(Pos, &tmpLen, 2);
 			Pos += 2;
-			FrameLen +=	6;
-			NdisMoveMemory(Pos, GASQueryRspFrag->FragQueryRsp,
-						   GASQueryRspFrag->FragQueryRspLen);
+			FrameLen += 6;
+			if (GASQueryRspFrag->FragQueryRspLen > 0 &&
+					GASQueryRspFrag->FragQueryRspLen < pGASCtrl->MMPDUSize)
+				NdisMoveMemory(Pos, GASQueryRspFrag->FragQueryRsp,
+						GASQueryRspFrag->FragQueryRspLen);
 			FrameLen += GASQueryRspFrag->FragQueryRspLen;
 		} else {
 			tmpLen = 0;
 			NdisMoveMemory(Pos, &tmpLen, 2);
 			Pos += 2;
-			FrameLen +=	6;
+			FrameLen += 6;
 		}
-
-		DlListDel(&GASPeerEntry->List);
-		DlListForEachSafe(GASQueryRspFrag, GASQueryRspFragTmp,
-						  &GASPeerEntry->GASQueryRspFragList, GAS_QUERY_RSP_FRAGMENT, List) {
-			DlListDel(&GASQueryRspFrag->List);
-			os_free_mem(GASQueryRspFrag->FragQueryRsp);
-			os_free_mem(GASQueryRspFrag);
-			GASPeerEntry->FreeResource += 2;
-		}
-		DlListInit(&GASPeerEntry->GASQueryRspFragList);
+		FreeGasPeerEntry(GASPeerEntry);
 		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-
-		if (GASPeerEntry->PostReplyTimerRunning) {
-			RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-			GASPeerEntry->PostReplyTimerRunning = FALSE;
-		}
-
-		if (GASPeerEntry->GASRspBufferingTimerRunning) {
-			RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-			GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
-		}
-
-		RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-		GASPeerEntry->FreeResource += 1;
-		RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer,  &Cancelled);
-		os_free_mem(GASPeerEntry);
 	} else if (Event->EventType == GAS_CB_REQ_MORE) {
 		GASFrame->u.GAS_CB_RSP.DialogToken = Event->u.GAS_CB_REQ_MORE_DATA.DialogToken;
 		FrameLen += 1;
@@ -697,13 +761,22 @@ static VOID SendGASCBRsp(
 			NdisMoveMemory(Pos, &tmpLen, 2);
 			Pos += 2;
 			FrameLen += 6;
-			NdisMoveMemory(Pos, GASQueryRspFrag->FragQueryRsp,
+			if (GASQueryRspFrag->FragQueryRspLen > 0 &&
+					GASQueryRspFrag->FragQueryRspLen < pGASCtrl->MMPDUSize)
+				NdisMoveMemory(Pos, GASQueryRspFrag->FragQueryRsp,
 						GASQueryRspFrag->FragQueryRspLen);
 			FrameLen += GASQueryRspFrag->FragQueryRspLen;
 		}
 		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
 		/* GASSetPeerCurrentState(pAd, Elem, WAIT_GAS_CB_REQ); */
 		GASSetPeerCurrentState(pAd, Event, WAIT_GAS_CB_REQ);
+	} else {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s Invalid Event type %d\n",
+					__func__, Event->EventType));
+		FreeGasPeerEntry(GASPeerEntry);
+		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
+		os_free_mem(Buf);
+		return;
 	}
 
 	MiniportMMRequest(pAd, 0, Buf, FrameLen);
@@ -735,7 +808,7 @@ VOID ReceiveGASCBReq(
 
 	if (!pGASCtrl) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("%s Can not find Peer Control DA=%02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(GASFrame->Hdr.Addr1)));
+				 ("%s Can not find Peer Control DA="MACSTR"\n", __func__, MAC2STR(GASFrame->Hdr.Addr1)));
 		return;
 	}
 
@@ -773,12 +846,7 @@ VOID ReceiveGASCBReq(
 			Len += 1;
 			Event->u.GAS_CB_REQ_DATA.AdvertisementProID = GASPeerEntry->AdvertisementProID;
 			Len += 1;
-
-			if (pGASCtrl->ExternalANQPServerTest == 2)
-				Event->u.GAS_CB_REQ_DATA.StatusCode = SERVER_UNREACHABLE;
-			else
-				Event->u.GAS_CB_REQ_DATA.StatusCode = 0;
-
+			Event->u.GAS_CB_REQ_DATA.StatusCode = 0;
 			Len += 2;
 			SendGASCBRsp(pAd, (GAS_EVENT_DATA *)Buf);
 			/* MlmeEnqueue(pAd, GAS_STATE_MACHINE, GAS_CB_REQ, Len, Buf, 0); */
@@ -848,15 +916,39 @@ static BOOLEAN IsAdvertisementProIDValid(
 	return FALSE;
 }
 
+static VOID DelGasPeerEntry(
+	IN PRTMP_ADAPTER    pAd,
+	/* IN MLME_QUEUE_ELEM  *Elem) */
+	GAS_EVENT_DATA *Event)
+{
+	GAS_PEER_ENTRY *GASPeerEntry = NULL, *GASPeerEntryTmp = NULL;
+	PGAS_CTRL pGASCtrl = NULL;
 
-void PostReplyTimeout(
+	if (!Event)
+		return;
+
+	pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+
+	RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
+		DlListForEachSafe(GASPeerEntry, GASPeerEntryTmp,
+				 &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
+		if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
+			FreeGasPeerEntry(GASPeerEntry);
+			break;
+		}
+	}
+	RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
+}
+
+
+static void PostReplyTimeout(
 	IN PVOID SystemSpecific1,
 	IN PVOID FunctionContext,
 	IN PVOID SystemSpecific2,
 	IN PVOID SystemSpecific3)
 {
 	GAS_PEER_ENTRY *GASPeerEntry = (GAS_PEER_ENTRY *)FunctionContext;
-	PRTMP_ADAPTER pAd;
+	PRTMP_ADAPTER pAd = NULL;
 	GAS_EVENT_DATA Event;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE, ("%s\n", __func__));
@@ -867,28 +959,29 @@ void PostReplyTimeout(
 	}
 
 	pAd = GASPeerEntry->Priv;
+	if (!pAd) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("pAd is NULL\n"));
+		return;
+	}
 
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS)) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_OFF, ("%s: fRTMP_ADAPTER_HALT_IN_PROGRESS\n", __func__));
 		return;
 	}
-
-	GASPeerEntry->PostReplyTimerRunning = FALSE;
 	NdisMoveMemory(Event.PeerMACAddr, GASPeerEntry->PeerMACAddr, MAC_ADDR_LEN);
 	Event.ControlIndex = GASPeerEntry->ControlIndex;
 	MlmeEnqueue(pAd, GAS_STATE_MACHINE, DEL_PEER_ENTRY, sizeof(Event), (VOID *)&Event, 0);
 }
 BUILD_TIMER_FUNCTION(PostReplyTimeout);
 
-
-VOID GASRspBufferingTimeout(
+static VOID GASRspBufferingTimeout(
 	IN PVOID SystemSpecific1,
 	IN PVOID FunctionContext,
 	IN PVOID SystemSpecific2,
 	IN PVOID SystemSpecific3)
 {
 	GAS_PEER_ENTRY *GASPeerEntry = (GAS_PEER_ENTRY *)FunctionContext;
-	PRTMP_ADAPTER pAd;
+	PRTMP_ADAPTER pAd = NULL;
 	GAS_EVENT_DATA Event;
 
 
@@ -900,72 +993,21 @@ VOID GASRspBufferingTimeout(
 	}
 
 	pAd = GASPeerEntry->Priv;
+	if (!pAd) {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("pAd is NULL\n"));
+		return;
+	}
 
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS
 					   | fRTMP_ADAPTER_NIC_NOT_EXIST)) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_OFF, ("%s: fRTMP_ADAPTER_HALT_IN_PROGRESS\n", __func__));
 		return;
 	}
-
-	if (GASPeerEntry->GASRspBufferingTimerRunning) {
-		GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
-		NdisMoveMemory(Event.PeerMACAddr, GASPeerEntry->PeerMACAddr, MAC_ADDR_LEN);
-		Event.ControlIndex = GASPeerEntry->ControlIndex;
-		MlmeEnqueue(pAd, GAS_STATE_MACHINE, DEL_PEER_ENTRY, sizeof(Event), (VOID *)&Event, 0);
-	}
+	NdisMoveMemory(Event.PeerMACAddr, GASPeerEntry->PeerMACAddr, MAC_ADDR_LEN);
+	Event.ControlIndex = GASPeerEntry->ControlIndex;
+	MlmeEnqueue(pAd, GAS_STATE_MACHINE, DEL_PEER_ENTRY, sizeof(Event), (VOID *)&Event, 0);
 }
 BUILD_TIMER_FUNCTION(GASRspBufferingTimeout);
-
-static VOID DelGasPeerEntry(
-	IN PRTMP_ADAPTER    pAd,
-	/* IN MLME_QUEUE_ELEM  *Elem) */
-	GAS_EVENT_DATA *Event)
-{
-	GAS_PEER_ENTRY *GASPeerEntry = NULL;
-	PGAS_CTRL pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
-	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag, *GASQueryRspFragTmp;
-	UINT8 found = 0;
-	BOOLEAN Cancelled;
-
-	RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
-		/* Init PostReply timer */
-	DlListForEach(GASPeerEntry, &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
-		if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
-			found = 1;
-			break;
-		}
-	}
-
-	if (!found) {
-		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-		return;
-	}
-
-	DlListDel(&GASPeerEntry->List);
-	DlListForEachSafe(GASQueryRspFrag, GASQueryRspFragTmp,
-					  &GASPeerEntry->GASQueryRspFragList, GAS_QUERY_RSP_FRAGMENT, List) {
-		DlListDel(&GASQueryRspFrag->List);
-		os_free_mem(GASQueryRspFrag->FragQueryRsp);
-		os_free_mem(GASQueryRspFrag);
-	}
-	DlListInit(&GASPeerEntry->GASQueryRspFragList);
-
-	if (GASPeerEntry->PostReplyTimerRunning) {
-		RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-		GASPeerEntry->PostReplyTimerRunning = FALSE;
-	}
-
-	RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-
-	if (GASPeerEntry->GASRspBufferingTimerRunning) {
-		RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-		GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
-	}
-
-	RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-	os_free_mem(GASPeerEntry);
-	RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-}
 
 static VOID SendGASIndication(
 	IN PRTMP_ADAPTER    pAd,
@@ -975,11 +1017,18 @@ static VOID SendGASIndication(
 	PGAS_PEER_ENTRY GASPeerEntry;
 	/* GAS_EVENT_DATA *Event = (GAS_EVENT_DATA *)Elem->Msg; */
 	GAS_EVENT_DATA *GASRspEvent;
-	PGAS_CTRL pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	PGAS_CTRL pGASCtrl;
 	UCHAR *Buf;
 	UINT32 Len = 0;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_TRACE, ("%s\n", __func__));
+
+	if (Event->ControlIndex < MAX_MBSSID_NUM(pAd))
+		pGASCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].GASCtrl;
+	else {
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s:get error wdev idx!\n", __func__));
+		return;
+	}
 
 	/*
 	 * If advertisement protocol ID equals to the value
@@ -1003,7 +1052,8 @@ static VOID SendGASIndication(
 		/* GASSetPeerCurrentState(pAd, Elem, WAIT_GAS_RSP); */
 		GASSetPeerCurrentState(pAd, Event, WAIT_GAS_RSP);
 	} else if (IsAdvertisementProIDValid(pAd, Event->u.PEER_GAS_REQ_DATA.AdvertisementProID) &&
-			   pGASCtrl->ExternalANQPServerTest == 1) { /* server not reachable for 2F test */
+			(pGASCtrl->ExternalANQPServerTest == 1 ||/* server not reachable for 2F test */
+			 pGASCtrl->ExternalANQPServerTest == 2)) { /* server not reachable for 4F test */
 		BOOLEAN InList = FALSE;
 		RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
 		DlListForEach(GASPeerEntry, &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
@@ -1048,53 +1098,6 @@ static VOID SendGASIndication(
 		GASSetPeerCurrentState(pAd, Event, WAIT_GAS_RSP);
 		SendGASRsp(pAd, (GAS_EVENT_DATA *)Buf);
 		/* MlmeEnqueue(pAd, GAS_STATE_MACHINE, GAS_RSP, Len, Buf, 0); */
-		/* RTMP_MLME_HANDLER(pAd); */
-		os_free_mem(Buf);
-	} else if (IsAdvertisementProIDValid(pAd, Event->u.PEER_GAS_REQ_DATA.AdvertisementProID) &&
-			   pGASCtrl->ExternalANQPServerTest == 2) { /* server not reachable for 4F test */
-		BOOLEAN InList = FALSE;
-		RTMP_SEM_LOCK(&pGASCtrl->GASPeerListLock);
-		DlListForEach(GASPeerEntry, &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
-			if (MAC_ADDR_EQUAL(GASPeerEntry->PeerMACAddr, Event->PeerMACAddr)) {
-				InList = TRUE;
-				break;
-			}
-		}
-		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-		if (!InList) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
-				 ("%s: Event is not in GASPeerList\n", __func__));
-			return;
-		}
-
-		os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*GASRspEvent));
-
-		if (!Buf) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR, ("%s Not available memory\n", __func__));
-			return;
-		}
-
-		NdisZeroMemory(Buf, sizeof(*GASRspEvent));
-		GASRspEvent = (GAS_EVENT_DATA *)Buf;
-		GASRspEvent->ControlIndex = Event->ControlIndex;
-		Len += 1;
-		NdisMoveMemory(GASRspEvent->PeerMACAddr, Event->PeerMACAddr, MAC_ADDR_LEN);
-		Len += MAC_ADDR_LEN;
-		GASRspEvent->EventType = GAS_RSP_MORE;
-		Len += 2;
-		GASRspEvent->u.GAS_RSP_MORE_DATA.DialogToken = GASPeerEntry->DialogToken;
-		Len += 1;
-		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
-		GASRspEvent->u.GAS_RSP_MORE_DATA.StatusCode = 0;
-		Len += 2;
-		GASRspEvent->u.GAS_RSP_MORE_DATA.GASComebackDelay = 1;
-		Len += 2;
-		GASRspEvent->u.GAS_RSP_MORE_DATA.AdvertisementProID = GASPeerEntry->AdvertisementProID;
-		Len += 1;
-		/* GASSetPeerCurrentState(pAd, Elem, WAIT_GAS_RSP); */
-		GASSetPeerCurrentState(pAd, Event, WAIT_GAS_RSP);
-		SendGASRsp(pAd, (GAS_EVENT_DATA *)Buf);
-		/* MlmeEnqueue(pAd, GAS_STATE_MACHINE, GAS_RSP_MORE, Len, Buf, 0); */
 		/* RTMP_MLME_HANDLER(pAd); */
 		os_free_mem(Buf);
 	} else if (!IsAdvertisementProIDValid(pAd, Event->u.PEER_GAS_REQ_DATA.AdvertisementProID)) {
@@ -1162,6 +1165,7 @@ static VOID GASCtrlInit(IN PRTMP_ADAPTER pAd)
 		NdisZeroMemory(pGASCtrl, sizeof(*pGASCtrl));
 		NdisAllocateSpinLock(pAd, &pGASCtrl->GASPeerListLock);
 		DlListInit(&pGASCtrl->GASPeerList);
+		NdisAllocateSpinLock(pAd, &pGASCtrl->IeLock);
 	}
 
 #endif
@@ -1171,8 +1175,6 @@ VOID GASCtrlExit(IN PRTMP_ADAPTER pAd)
 {
 	PGAS_CTRL pGASCtrl;
 	GAS_PEER_ENTRY *GASPeerEntry, *GASPeerEntryTmp;
-	GAS_QUERY_RSP_FRAGMENT *GASQueryRspFrag, *GASQueryRspFragTmp;
-	BOOLEAN Cancelled;
 #ifdef CONFIG_AP_SUPPORT
 	UCHAR APIndex;
 #endif
@@ -1184,32 +1186,13 @@ VOID GASCtrlExit(IN PRTMP_ADAPTER pAd)
 		/* Remove all GAS peer entry */
 		DlListForEachSafe(GASPeerEntry, GASPeerEntryTmp,
 						  &pGASCtrl->GASPeerList, GAS_PEER_ENTRY, List) {
-			DlListDel(&GASPeerEntry->List);
-			DlListForEachSafe(GASQueryRspFrag, GASQueryRspFragTmp,
-							  &GASPeerEntry->GASQueryRspFragList, GAS_QUERY_RSP_FRAGMENT, List) {
-				DlListDel(&GASQueryRspFrag->List);
-				os_free_mem(GASQueryRspFrag->FragQueryRsp);
-				os_free_mem(GASQueryRspFrag);
-			}
-			DlListInit(&GASPeerEntry->GASQueryRspFragList);
-
-			if (GASPeerEntry->PostReplyTimerRunning) {
-				RTMPCancelTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-				GASPeerEntry->PostReplyTimerRunning = FALSE;
-			}
-
-			if (GASPeerEntry->GASRspBufferingTimerRunning) {
-				RTMPCancelTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-				GASPeerEntry->GASRspBufferingTimerRunning = FALSE;
-			}
-
-			RTMPReleaseTimer(&GASPeerEntry->PostReplyTimer, &Cancelled);
-			RTMPReleaseTimer(&GASPeerEntry->GASRspBufferingTimer, &Cancelled);
-			os_free_mem(GASPeerEntry);
+			FreeGasPeerEntry(GASPeerEntry);
 		}
 		DlListInit(&pGASCtrl->GASPeerList);
 		RTMP_SEM_UNLOCK(&pGASCtrl->GASPeerListLock);
 		NdisFreeSpinLock(&pGASCtrl->GASPeerListLock);
+		GASCtrlRemoveAllIE(pGASCtrl);
+		NdisFreeSpinLock(&pGASCtrl->IeLock);
 	}
 
 #endif /* CONFIG_AP_SUPPORT */
@@ -1258,7 +1241,7 @@ BOOLEAN GasEnable(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 
 	if (!pGASCtrl) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-				 ("%s Can not find Peer Control DA=%02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(GASFrame->Hdr.Addr1)));
+				 ("%s Can not find Peer Control DA="MACSTR"\n", __func__, MAC2STR(GASFrame->Hdr.Addr1)));
 		return FALSE;
 	}
 

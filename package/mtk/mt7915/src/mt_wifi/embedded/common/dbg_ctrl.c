@@ -38,17 +38,26 @@ INT set_fw_log_dest_dir(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT16 index;
 	CHAR last;
 	UINT32 max_len = sizeof(pAd->fw_log_ctrl.fw_log_dest_dir) - 1;
+	int ret;
 
 	for (index = 0; index < max_len; index++)
 		if (*(arg + index + 1) == '\0')
 			break;
 	last = *(arg + index);
 
-	if (last == '/')
-		snprintf(pAd->fw_log_ctrl.fw_log_dest_dir, max_len, "%sfw_log.bin", arg);
-	else
-		snprintf(pAd->fw_log_ctrl.fw_log_dest_dir, max_len, "%s/fw_log.bin", arg);
-
+	if (last == '/') {
+		ret = snprintf(pAd->fw_log_ctrl.fw_log_dest_dir, max_len, "%sfw_log.bin", arg);
+		if (os_snprintf_error(max_len, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return FALSE;
+		}
+	} else {
+		ret = snprintf(pAd->fw_log_ctrl.fw_log_dest_dir, max_len, "%s/fw_log.bin", arg);
+		if (os_snprintf_error(max_len, ret)) {
+			MTWF_PRINT("%s,%d,final_name snprintf error!\n", __func__, __LINE__);
+			return FALSE;
+		}
+	}
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("FW Binary log destination directory: %s\n", pAd->fw_log_ctrl.fw_log_dest_dir));
 
@@ -230,6 +239,8 @@ VOID fw_log_to_ethernet(
 	UINT16 data_len, header_len;
 	IP_V4_HDR *ipv4_hdr_ptr;
 	UINT16 checksum;
+	UINT8 i;
+	struct wifi_dev *tmpWdev = NULL;
 
 	if (pAd->fw_log_ctrl.fw_log_server_ip != 0xFFFFFFFF) {
 		dest_ip = pAd->fw_log_ctrl.fw_log_server_ip;
@@ -244,17 +255,26 @@ VOID fw_log_to_ethernet(
 		isPadding = 1;
 	}
 
-	skb = dev_alloc_skb(log_len + header_len + 2);
-	if (skb == NULL) {
-		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: failed to allocate sk_buff\n", __FUNCTION__));
+	/* find up wdev interface for fw log capture */
+	for (i = 0; i < WDEV_NUM_MAX; i++) {
+		tmpWdev = pAd->wdev_list[i];
+		if (tmpWdev && tmpWdev->if_up_down_state)
+			break;
+	}
+	if (i >= WDEV_NUM_MAX) {
+		MTWF_DBG(pAd, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"no wdev if up, can't capture fw log!\n");
 		return;
 	}
 
-#ifdef CONFIG_AP_SUPPORT
-	SET_OS_PKT_NETDEV(skb, pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev.if_dev);
-#else
-	SET_OS_PKT_NETDEV(skb, pAd->StaCfg[0].wdev.if_dev);
-#endif /* CONFIG_AP_SUPPORT */
+	skb = dev_alloc_skb(log_len + header_len + 2);
+	if (skb == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"failed to allocate sk_buff\n");
+		return;
+	}
+
+	SET_OS_PKT_NETDEV(skb, tmpWdev->if_dev);
 
 	OS_PKT_RESERVE(skb, header_len);
 
@@ -406,4 +426,134 @@ dbg_log_wrapper(
 }
 
 #endif /* FW_LOG_DUMP */
+
+#ifdef DBG
+#ifdef DBG_ENHANCE
+static BOOLEAN mtwf_dbg_prtCatLvl = TRUE; /* Print debug category and level */
+static BOOLEAN mtwf_dbg_prtIntfName = FALSE;/* Print interface name */
+static BOOLEAN mtwf_dbg_prtThreadId = FALSE;/* Print current thread ID */
+static BOOLEAN mtwf_dbg_prtFuncLine = TRUE;/* function name and line */
+
+void mtwf_dbg_option(
+	IN const BOOLEAN prtCatLvl,
+	IN const BOOLEAN prtIntfName,
+	IN const BOOLEAN prtThreadId,
+	IN const BOOLEAN prtFuncLine)
+{
+	mtwf_dbg_prtCatLvl = prtCatLvl;
+	mtwf_dbg_prtIntfName = prtIntfName;
+	mtwf_dbg_prtThreadId = prtThreadId;
+	mtwf_dbg_prtFuncLine = prtFuncLine;
+}
+
+void mtwf_dbg_prt(
+	IN RTMP_ADAPTER	*pAd,
+	IN const UINT32	dbgCat,
+	IN const UINT32	dbgLvl,
+	IN const INT8   *pFunc,
+	IN const UINT32	line,
+	IN const INT8   *pFmt,
+	...)
+{
+	va_list args;
+	INT8 strBuf[DBG_PRINT_BUF_SIZE];
+	INT32 prefixLen = 0;
+	INT32 avblBufLen = DBG_PRINT_BUF_SIZE;
+	POS_COOKIE pObj = NULL;
+	char *intf = NULL;
+	char chip[5];
+	INT ifIndex, ifType;
+	struct net_device *netDev = NULL;
+	struct wifi_dev *wdev = NULL;
+	INT ret;
+
+	if (pAd) {
+		ret = snprintf(chip, sizeof(chip), "%04X", pAd->ChipID);
+		if (os_snprintf_error(sizeof(chip), ret)) {
+			MTWF_PRINT("%s,%d,snprintf error!\n", __func__, __LINE__);
+			return;
+		}
+		pObj = (POS_COOKIE)pAd->OS_Cookie;
+	}
+
+	if (pObj) {
+		ifIndex = pObj->ioctl_if;
+		ifType = pObj->ioctl_if_type;
+
+		if (ifType == INT_MAIN || ifType == INT_MBSSID) {
+			if (pAd->hdev_ctrl && VALID_MBSS(pAd, ifIndex))
+				wdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
+		} else if (ifType == INT_APCLI) {
+			if (ifIndex < MAX_MULTI_STA)
+				wdev = &pAd->StaCfg[ifIndex].wdev;
+		} else if (ifType == INT_WDS) {
+			if (ifIndex < MAX_WDS_ENTRY)
+				wdev = &pAd->WdsTab.WdsEntry[ifIndex].wdev;
+		} else {
+		}
+
+		if (wdev) {
+			netDev = (struct net_device *) wdev->if_dev;
+			if (netDev)
+				intf = netDev->name;
+		}
+	}
+
+	/**
+	* Log message format:
+	* <chip>@[C<categore>][L<level>][<thread name>][<interface>],[<function>][<line>]: <log>
+	* For example: 7915@C13L1P13656apcli0,MacTableInsertEntry() 920: XXXX
+	*/
+	prefixLen = snprintf(strBuf, avblBufLen,
+						"%s@", intf?chip:"WiFi");
+	if (mtwf_dbg_prtCatLvl && ((avblBufLen - prefixLen) > 0))
+		prefixLen += snprintf(strBuf + prefixLen, avblBufLen - prefixLen,
+							"C%02dL%1d", dbgCat, dbgLvl);
+	if (mtwf_dbg_prtThreadId && ((avblBufLen - prefixLen) > 0))
+		prefixLen += snprintf(strBuf + prefixLen, avblBufLen - prefixLen,
+							"%s", current->comm);
+	if (mtwf_dbg_prtIntfName && intf && ((avblBufLen - prefixLen) > 0))
+		prefixLen += snprintf(strBuf + prefixLen, avblBufLen - prefixLen,
+							"%s", intf);
+	if (mtwf_dbg_prtFuncLine && ((avblBufLen - prefixLen) > 0))
+		prefixLen += snprintf(strBuf + prefixLen, avblBufLen - prefixLen,
+							",%s() %d", pFunc, line);
+	if ((avblBufLen - prefixLen) > 0)
+		prefixLen += snprintf(strBuf + prefixLen, avblBufLen - prefixLen,
+							": ");
+
+	if ((avblBufLen - prefixLen) > 0) {
+		va_start(args, pFmt);
+		ret = vsnprintf(strBuf + prefixLen, avblBufLen - prefixLen, pFmt, args);
+		if (os_snprintf_error(avblBufLen - prefixLen, ret)) {
+			MTWF_PRINT("%s,%d,snprintf error!\n", __func__, __LINE__);
+			va_end(args);
+			return;
+		}
+		va_end(args);
+	}
+
+	switch (dbgLvl)	{
+	case DBG_LVL_OFF:
+		MTWF_PRINT_DBG_LVL_OFF("%s", strBuf);
+		break;
+	case DBG_LVL_ERROR:
+		MTWF_PRINT_DBG_LVL_ERROR("%s", strBuf);
+		break;
+	case DBG_LVL_WARN:
+		MTWF_PRINT_DBG_LVL_WARN("%s", strBuf);
+		break;
+	case DBG_LVL_TRACE:
+		MTWF_PRINT_DBG_LVL_TRACE("%s", strBuf);
+		break;
+	case DBG_LVL_INFO:
+		MTWF_PRINT_DBG_LVL_INFO("%s", strBuf);
+		break;
+	default:
+		MTWF_PRINT_OTHERS("%s", strBuf);
+		break;
+	}
+}
+#endif /* DBG_ENHANCE */
+#endif /* DBG */
 

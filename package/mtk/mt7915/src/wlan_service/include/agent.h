@@ -340,6 +340,11 @@ struct agent_cli_act_handler {
 	s_int32 (*handler)(struct service_test *serv_test);
 };
 
+struct agent_cli_show_handler {
+	u_char name[100];
+	s_int32 (*handler)(struct service_test *serv_test);
+};
+
 struct agent_cli_set_w_handler {
 	u_char name[100];
 	s_int32 (*handler)(struct service_test *serv_test,
@@ -366,6 +371,7 @@ s_int32 mt_agent_hqa_cmd_handler(
 s_int32 mt_agent_init_service(struct service *serv);
 s_int32 mt_agent_exit_service(struct service *serv);
 s_int32 mt_agent_cli_act(u_char *name, struct service *serv);
+s_int32 mt_agent_cli_show(u_char *name, struct service *serv);
 s_int32 mt_agent_cli_set_w(u_char *name, struct service *serv, u_char *param);
 s_int32 mt_agent_cli_set_dw(u_char *name, struct service *serv, u_char *param);
 s_int32 mt_agent_cli_set_ext(u_char *name,
@@ -380,6 +386,8 @@ s_int32 mt_agent_set_rxant(
 	struct service_test *serv_test, u_char *arg);
 s_int32 mt_agent_set_bw(
 	struct service_test *serv_test, u_char *arg);
+s_int32 mt_agent_show_TxDone(
+	struct service_test *serv_test);
 #ifdef TXBF_SUPPORT
 s_int32 mt_agent_set_txbf_dut_init_proc(
 	struct service_test *serv_test, u_char *arg);

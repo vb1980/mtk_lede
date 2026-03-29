@@ -24,18 +24,8 @@
 VOID ht_oper_init(struct wifi_dev *wdev, struct ht_op *obj)
 {
 	/*initial ht_phy_info value*/
-#ifdef BW_VENDOR10_CUSTOM_FEATURE
-	struct _RTMP_ADAPTER *pAd = (struct _RTMP_ADAPTER *)wdev->sys_handle;
-	if (IS_APCLI_SYNC_PEER_DEAUTH_ENBL(pAd)) {
-		obj->ht_bw = wlan_operate_get_ht_bw(wdev);
-		obj->ext_cha = wlan_operate_get_ext_cha(wdev);
-	} else {
-#endif
-		obj->ht_bw = HT_BW_20;
-		obj->ext_cha = EXTCHA_NONE;
-#ifdef BW_VENDOR10_CUSTOM_FEATURE
-	}
-#endif
+	obj->ht_bw = wlan_operate_get_ht_bw(wdev);
+	obj->ext_cha = wlan_operate_get_ext_cha(wdev);
 	obj->ht_ldpc = wlan_config_get_ht_ldpc(wdev);
 	obj->ht_stbc = wlan_config_get_ht_stbc(wdev);
 	obj->ht_gi = wlan_config_get_ht_gi(wdev);
@@ -79,6 +69,7 @@ static VOID ht_oper_set_ext_cha(struct wifi_dev *wdev, UCHAR ext_cha)
 	struct wifi_dev *twdev;
 	UCHAR i;
 
+	os_zero_mem(&cfg, sizeof(cfg));
 	/*update extcha since radio is changed*/
 	for (i = 0; i < WDEV_NUM_MAX; i++) {
 		twdev = ad->wdev_list[i];
@@ -130,13 +121,13 @@ VOID operate_loader_trx_stream(struct wifi_dev *wdev, struct wlan_operate *op, U
 	switch (cur_op_rx_stream) {
 	case 4:
 		op->ht_status.ht_cap_ie.MCSSet[3] =  0xff;
-
+		/* fall through */
 	case 3:
 		op->ht_status.ht_cap_ie.MCSSet[2] =  0xff;
-
+		/* fall through */
 	case 2:
 		op->ht_status.ht_cap_ie.MCSSet[1] =  0xff;
-
+		/* fall through */
 	case 1:
 
 	default:
@@ -156,10 +147,13 @@ VOID operate_loader_eap_trx_stream(struct wifi_dev *wdev, struct wlan_operate *o
 	switch (cur_op_rx_stream) {
 	case 4:
 		op->ht_status.ht_cap_ie.MCSSet[3] = wdev->eap.eapmcsset[3];
+		/* fall through */
 	case 3:
 		op->ht_status.ht_cap_ie.MCSSet[2] = wdev->eap.eapmcsset[2];
+		/* fall through */
 	case 2:
 		op->ht_status.ht_cap_ie.MCSSet[1] = wdev->eap.eapmcsset[1];
+		/* fall through */
 	case 1:
 		op->ht_status.ht_cap_ie.MCSSet[0] = wdev->eap.eapmcsset[0];
 		break;
@@ -501,12 +495,6 @@ UCHAR wlan_operate_get_ht_bw(struct wifi_dev *wdev)
 {
 	struct wlan_operate *op = (struct wlan_operate *) wdev->wpf_op;
 
-    if (!op) 
-    {
-        MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: op NULL\n", __func__));
-        return 0;
-    }
-
 	return op->ht_oper.ht_bw;
 }
 
@@ -527,12 +515,6 @@ UCHAR wlan_operate_get_ht_ldpc(struct wifi_dev *wdev)
 UCHAR wlan_operate_get_ext_cha(struct wifi_dev *wdev)
 {
 	struct wlan_operate *op = (struct wlan_operate *) wdev->wpf_op;
-
-    if (!op) 
-    {
-        MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: op NULL\n", __func__));
-        return 0;
-    }
 
 	return op->ht_oper.ext_cha;
 }
@@ -567,7 +549,19 @@ UINT32 wlan_operate_get_frag_thld(struct wifi_dev *wdev)
 
 	return op->ht_oper.frag_thld;
 }
-EXPORT_SYMBOL(wlan_operate_get_frag_thld);
+
+UINT32 mt7915_wlan_operate_get_frag_thld(struct wifi_dev *wdev)
+{
+	struct wlan_operate *op;
+	if (!wdev)
+		return DEFAULT_FRAG_THLD;
+	op = (struct wlan_operate *) wdev->wpf_op;
+	if (!op)
+		return DEFAULT_FRAG_THLD;
+
+	return op->ht_oper.frag_thld;
+}
+EXPORT_SYMBOL(mt7915_wlan_operate_get_frag_thld);
 
 UCHAR wlan_operate_get_rts_pkt_thld(struct wifi_dev *wdev)
 {

@@ -166,23 +166,37 @@ static struct ieee80211_sband_iftype_data iwl_he_capa = {
 				IEEE80211_HE_MAC_CAP0_HTC_HE,
 			.mac_cap_info[1] =
 				IEEE80211_HE_MAC_CAP1_TF_MAC_PAD_DUR_16US |
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
+				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_RX_QOS_8,
+#else
 				IEEE80211_HE_MAC_CAP1_MULTI_TID_AGG_QOS_8,
+#endif
 			.mac_cap_info[2] =
 				IEEE80211_HE_MAC_CAP2_32BIT_BA_BITMAP |
 				IEEE80211_HE_MAC_CAP2_ACK_EN,
 			.mac_cap_info[3] =
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
+				IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_VHT_2,
+#else
 				IEEE80211_HE_MAC_CAP3_GRP_ADDR_MULTI_STA_BA_DL_MU |
 				IEEE80211_HE_MAC_CAP3_MAX_A_AMPDU_LEN_EXP_VHT_2,
+#endif
 			.mac_cap_info[4] = IEEE80211_HE_MAC_CAP4_AMDSU_IN_AMPDU,
 			.phy_cap_info[0] =
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0))
 				IEEE80211_HE_PHY_CAP0_DUAL_BAND |
+#endif
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_IN_2G |
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_40MHZ_80MHZ_IN_5G |
 				IEEE80211_HE_PHY_CAP0_CHANNEL_WIDTH_SET_160MHZ_IN_5G,
 			.phy_cap_info[1] =
 				IEEE80211_HE_PHY_CAP1_DEVICE_CLASS_A |
 				IEEE80211_HE_PHY_CAP1_LDPC_CODING_IN_PAYLOAD |
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
+				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_TX_MAX_NSTS,
+#else
 				IEEE80211_HE_PHY_CAP1_MIDAMBLE_RX_MAX_NSTS,
+#endif
 			.phy_cap_info[2] =
 				IEEE80211_HE_PHY_CAP2_NDP_4x_LTF_AND_3_2US |
 				IEEE80211_HE_PHY_CAP2_STBC_TX_UNDER_80MHZ |
@@ -1004,10 +1018,20 @@ VOID CFG80211OS_Scaning(
 	}
 
 	if (!mgmt->u.probe_resp.timestamp) {
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
+		struct timespec64 tv;
+		UINT64 ts;
+
+		ktime_get_real_ts64(&tv);
+		ts = ((UINT64) tv.tv_sec * 1000000000) + tv.tv_nsec;
+		do_div(ts, 1000);
+		mgmt->u.probe_resp.timestamp = ts;
+#else
 		struct timeval tv;
 
 		do_gettimeofday(&tv);
 		mgmt->u.probe_resp.timestamp = ((UINT64) tv.tv_sec * 1000000) + tv.tv_usec;
+#endif
 	}
 
 	/* inform 80211 a scan is got */

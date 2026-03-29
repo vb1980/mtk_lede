@@ -161,11 +161,22 @@ VOID ApCliIfDown(PRTMP_ADAPTER pAd);
 VOID ApCliIfMonitor(PRTMP_ADAPTER pAd);
 VOID apcli_sync_wdev(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
 VOID ApCliIfMonitor(RTMP_ADAPTER *pAd);
-
+#ifdef APCLI_SUPPORT
+INT Set_apcli_ocv_support_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING * arg);
+#endif
 #ifdef DOT11_SAE_SUPPORT
 INT set_apcli_sae_group_proc(
     IN PRTMP_ADAPTER pAd,
     IN RTMP_STRING *arg);
+INT Set_apcli_sae_pk_only_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING *arg);
+
+INT Set_apcli_sae_pk_proc(
+	IN PRTMP_ADAPTER pAd,
+	IN RTMP_STRING * arg);
 #endif
 
 #ifdef CONFIG_OWE_SUPPORT

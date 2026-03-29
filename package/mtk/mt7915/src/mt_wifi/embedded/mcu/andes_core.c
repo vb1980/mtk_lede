@@ -641,6 +641,10 @@ static INT32 AndesDequeueAndKickOutCmdMsgs(RTMP_ADAPTER *ad)
 
 		if (msg->retry_times > 1) {
 			OS_PKT_COPY(RTPKT_TO_OSPKT(net_pkt), msg->retry_pkt);
+			if (msg->retry_pkt == NULL) {
+				msg->retry_times = 0;
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): Allocate memory failed!\n", __func__));
+			}
 		}
 
 		if (chip_ops->kick_out_cmd_msg != NULL)
@@ -650,8 +654,13 @@ static INT32 AndesDequeueAndKickOutCmdMsgs(RTMP_ADAPTER *ad)
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					 ("kick out msg fail\n"));
 
-			if (ret == NDIS_STATUS_FAILURE)
+			if (ret == NDIS_STATUS_FAILURE) {
+				if (msg->retry_pkt) {
+					RTMPFreeNdisPacket(ad, msg->retry_pkt);
+					msg->retry_pkt = NULL;
+				}
 				AndesForceFreeCmdMsg(msg);
+			}
 
 			break;
 		}
@@ -934,7 +943,7 @@ INT32 MtCmdSendMsg(PRTMP_ADAPTER ad, struct cmd_msg *msg)
 /*
 *
 */
-INT register_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne)
+INT mt7915_register_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne)
 {
 	INT ret;
 
@@ -942,18 +951,18 @@ INT register_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne)
 
 	return ret;
 }
-EXPORT_SYMBOL(register_fw_cmd_notifier);
+EXPORT_SYMBOL(mt7915_register_fw_cmd_notifier);
 /*
 *
 */
-INT unregister_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne)
+INT mt7915_unregister_fw_cmd_notifier(struct _RTMP_ADAPTER *ad, struct notify_entry *ne)
 {
 	INT ret;
 
 	ret = mt_notify_chain_unregister(&ad->MCUCtrl.fw_cmd_notify_head, ne);
 	return ret;
 }
-EXPORT_SYMBOL(unregister_fw_cmd_notifier);
+EXPORT_SYMBOL(mt7915_unregister_fw_cmd_notifier);
 
 /*
 *

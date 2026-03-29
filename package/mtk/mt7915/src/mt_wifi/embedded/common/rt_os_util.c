@@ -116,9 +116,9 @@ VOID RtmpDrvMaxRateGet(
 		ULONG DataRate = 0;
 
 		get_rate_he(MCS, BW, Antenna, 0, &DataRate);
-		if (ShortGI == 1)
+		if (ShortGI == FIXED_GI_16_US)
 			DataRate = (DataRate * 967) >> 10;
-		if (ShortGI == 2)
+		if (ShortGI == FIXED_GI_32_US)
 			DataRate = (DataRate * 870) >> 10;
 		*pRate = (UINT32)DataRate;
 		*pRate = *pRate * 1000000;

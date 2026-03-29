@@ -26,108 +26,92 @@
 
 #include	"rt_config.h"
 #include "hdev/hdev.h"
-#include <linux/mtd/mtd.h>
-#include <linux/mtd/partitions.h>
-/*decision flash api by compiler flag*/
-#ifdef CONFIG_PROPRIETARY_DRIVER
-/*
-* @ used for proprietary driver support, can't read/write mtd on driver
-* @ read: mtd flash patrition use request firmware to load
-* @ write: write not support, use ated to write to flash
-*/
-static void flash_bin_read(void *ctrl, UCHAR *p, ULONG a, ULONG b)
-{
-	struct _RTMP_ADAPTER *ad = ((struct hdev_ctrl *) ctrl)->priv;
-	UCHAR *buffer = NULL;
-	UINT32 len;
-	UCHAR *name = get_dev_eeprom_binary(ad);
-
-	/*load from request firmware*/
-	os_load_code_from_bin(ad, &buffer, name, &len);
-
-	if (len > 0 && buffer != NULL) {
-		os_move_mem(p, buffer + a, b);
-		os_free_mem(buffer);
-	} else if (buffer != NULL)
-		os_free_mem(buffer);
-}
-
-static void flash_bin_write(void *ctrl, UCHAR *p, ULONG a, ULONG b)
-{
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		 ("proprietary driver not support flash write, will write on ated.\n"));
-}
-
-#define flash_read(_ctrl, _ptr, _offset, _len) flash_bin_read(_ctrl, _ptr, _offset, _len)
-#define flash_write(_ctrl, _ptr, _offset, _len) flash_bin_write(_ctrl, _ptr, _offset, _len)
-
-#else
-
-#ifdef CONFIG_RALINK_FLASH_API
-/*
-* @ The flag "CONFIG_RALINK_FLASH_API" is used for APSoC Linux SDK
-*/
-
-int32_t FlashRead(
-	uint32_t *dst,
-	uint32_t *src,
-	uint32_t count);
-
-int32_t FlashWrite(
-	uint16_t *source,
-	uint16_t *destination,
-	uint32_t numBytes);
-
-#define flash_read(_ctrl, _ptr, _offset, _len) FlashRead((uint16_t *)_ptr, (uint16_t *)_offset, (uint32_t)_len)
-#define flash_write(_ctrl, _ptr, _offset, _len) FlashWrite(_ptr, _offset, _len)
-
-#else
-/*============================================================================*/
-#ifdef RA_MTD_RW_BY_NUM
-
-/*
-* @ The flag "CONFIG_RALINK_FLASH_API" is used for APSoC Linux SDK
-*/
-
-#if defined(CONFIG_RT2880_FLASH_32M)
-#define MTD_NUM_FACTORY 5
-#else
-#define MTD_NUM_FACTORY 2
-#endif
-extern int ra_mtd_write(int num, loff_t to, size_t len, const u_char *buf);
-extern int ra_mtd_read(int num, loff_t from, size_t len, u_char *buf);
-
-#define flash_read(_ctrl, _ptr, _offset, _len) ra_mtd_read(MTD_NUM_FACTORY, 0, (size_t)_len, _ptr)
-#define flash_write(_ctrl, _ptr, _offset, _len) ra_mtd_write(MTD_NUM_FACTORY, 0, (size_t)_len, _ptr)
-
-#else
 
 #ifdef CONFIG_WIFI_MTD
-/*
-* @ used mtd mode flash partition from proprietary driver mt_wifi_mtd.c
-*/
-int mt_mtd_write_nm_wifi(char *name, loff_t to, size_t len, const u_char *buf);
-int mt_mtd_read_nm_wifi(char *name, loff_t from, size_t len, u_char *buf);
+#include <linux/mtd/mtd.h>
+#include <linux/slab.h>
 
-#define flash_read(_ctrl, _ptr, _offset, _len) mt_mtd_read_nm_wifi("factory", _offset&0xFFFF, (size_t)_len, _ptr)
-#define flash_write(_ctrl, _ptr, _offset, _len) mt_mtd_write_nm_wifi("factory", _offset&0xFFFF, (size_t)_len, _ptr)
+static int mt_mtd_read_nm_wifi(char *name, loff_t from, size_t len, u_char *buf)
+{
+	int ret;
+	size_t rdlen;
+	struct mtd_info *mtd;
 
-#else
-/*
-* @ use sdk export func.
-*/
+	mtd = get_mtd_device_nm(name);
+	if (IS_ERR(mtd))
+		return -1;
 
-extern int ra_mtd_write_nm(char *name, loff_t to, size_t len, const u_char *buf);
-extern int ra_mtd_read_nm(char *name, loff_t from, size_t len, u_char *buf);
+	ret = mtd_read(mtd, from, len, &rdlen, buf);
 
-#define flash_read(_ctrl, _ptr, _offset, _len) ra_mtd_read_nm("factory", _offset&0xFFFF, (size_t)_len, _ptr)
-#define flash_write(_ctrl, _ptr, _offset, _len) ra_mtd_write_nm("factory", _offset&0xFFFF, (size_t)_len, _ptr)
+	if (rdlen != len)
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+				("warning: mt_mtd_read_nm: rdlen is not equal to len\n"));
 
-#endif /*CONFIG_WIFI_MTD*/
-#endif /*RA_MTD_RW_BY_NUM*/
-#endif /* CONFIG_RALINK_FLASH_API */
-#endif /*CONFIG_PROPRIETERY_DRIVER*/
+	put_mtd_device(mtd);
+	return ret;
+}
 
+static int mt_mtd_write_nm_wifi(char *name, loff_t to, size_t len, const u_char *buf)
+{
+	int ret = -1;
+	size_t rdlen, wrlen;
+	struct mtd_info *mtd;
+	struct erase_info ei;
+	u_char *bak = NULL;
+
+	mtd = get_mtd_device_nm(name);
+	if (IS_ERR(mtd))
+		return -1;
+
+	if (len > mtd->erasesize) {
+		put_mtd_device(mtd);
+		return -E2BIG;
+	}
+
+	bak = kmalloc(mtd->erasesize, GFP_KERNEL);
+	if (bak == NULL) {
+		put_mtd_device(mtd);
+		return -ENOMEM;
+	}
+
+	ret = mtd_read(mtd, 0, mtd->erasesize, &rdlen, bak);
+	if (ret != 0) {
+		put_mtd_device(mtd);
+		kfree(bak);
+		return ret;
+	}
+
+	if (rdlen != mtd->erasesize)
+		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+				("warning: mt_mtd_write: rdlen is not equal to erasesize\n"));
+
+	memcpy(bak + to, buf, len);
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
+	ei.mtd = mtd;
+	ei.callback = NULL;
+	ei.priv = 0;
+#endif
+	ei.addr = 0;
+	ei.len = mtd->erasesize;
+	
+	ret = mtd_erase(mtd, &ei);
+	if (ret != 0) {
+		put_mtd_device(mtd);
+		kfree(bak);
+		return ret;
+	}
+
+	ret = mtd_write(mtd, 0, mtd->erasesize, &wrlen, bak);
+
+	put_mtd_device(mtd);
+	kfree(bak);
+	return ret;
+}
+#endif /* CONFIG_WIFI_MTD */
+
+#define flash_read(_ctrl, _ptr, _offset, _len) mt_mtd_read_nm_wifi("Factory", _offset, (size_t)_len, _ptr)
+#define flash_write(_ctrl, _ptr, _offset, _len) mt_mtd_write_nm_wifi("Factory", _offset, (size_t)_len, _ptr)
 
 void RtmpFlashRead(
 	void *hdev_ctrl,
@@ -135,14 +119,7 @@ void RtmpFlashRead(
 	ULONG a,
 	ULONG b)
 {
-	size_t retlen;
-	struct mtd_info *mtd_info = get_mtd_device_nm("factory");
-	if (IS_ERR(mtd_info) || mtd_info == NULL) {
-		printk("ERROR: failed to find 'Factory' mtd partiton\n");
-		return;
-	}
-	mtd_read(mtd_info, a, b, &retlen, p);
-	put_mtd_device(mtd_info);
+	flash_read(hdev_ctrl, p, a, b);
 }
 
 void RtmpFlashWrite(
@@ -151,14 +128,7 @@ void RtmpFlashWrite(
 	ULONG a,
 	ULONG b)
 {
-	size_t retlen;
-	struct mtd_info *mtd_info = get_mtd_device_nm("factory");
-	if (IS_ERR(mtd_info) || mtd_info == NULL) {
-		printk("ERROR: failed to find 'Factory' mtd partiton\n");
-		return;
-	}
-	mtd_write(mtd_info, a, b, &retlen, p);
-	put_mtd_device(mtd_info);
+	flash_write(hdev_ctrl, p, a, b);
 }
 
 

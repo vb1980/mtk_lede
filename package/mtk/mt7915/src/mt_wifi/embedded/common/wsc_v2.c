@@ -334,6 +334,17 @@ BOOLEAN	WscParseV2SubItem(
 	pEid = (PEID_STRUCT) (pData + 3);
 	hex_dump("WscParseV2SubItem - pData", (pData + 3), DataLen - 3);
 	while ((Length + 2 + pEid->Len) <= (DataLen - 3)) {
+		switch (pEid->Eid) {
+		case WFA_EXT_ID_VERSION2:
+#ifdef CONFIG_MAP_SUPPORT
+		case WFA_EXT_ID_MAP_EXT_ATTRIBUTE:
+#endif
+			if (pEid->Len != sizeof(UCHAR))
+				return FALSE;
+			break;
+		default:
+			break;
+		}
 		if (pEid->Eid == SubID) {
 			*pOutBufLen = pEid->Len;
 			NdisMoveMemory(pOutBuf, &pEid->Octet[0], pEid->Len);

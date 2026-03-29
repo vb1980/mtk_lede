@@ -22,22 +22,22 @@
 #endif /* VOW_SUPPORT */
 
 /*Local function*/
-static VOID get_network_type_str(UINT32 Type, CHAR *str)
+static VOID get_network_type_str(UINT32 Type)
 {
 	if (Type & NETWORK_INFRA)
-		snprintf(str, 128, "%s", "NETWORK_INFRA");
+		MTWF_PRINT("NETWORK_INFRA\n");
 	else if (Type & NETWORK_P2P)
-		snprintf(str, 128, "%s", "NETWORK_P2P");
+		MTWF_PRINT("NETWORK_P2P\n");
 	else if (Type & NETWORK_IBSS)
-		snprintf(str, 128, "%s", "NETWORK_IBSS");
+		MTWF_PRINT("NETWORK_IBSS\n");
 	else if (Type & NETWORK_MESH)
-		snprintf(str, 128, "%s", "NETWORK_MESH");
+		MTWF_PRINT("NETWORK_MESH\n");
 	else if (Type & NETWORK_BOW)
-		snprintf(str, 128, "%s", "NETWORK_BOW");
+		MTWF_PRINT("NETWORK_BOW\n");
 	else if (Type & NETWORK_WDS)
-		snprintf(str, 128, "%s", "NETWORK_WDS");
+		MTWF_PRINT("NETWORK_WDS\n");
 	else
-		snprintf(str, 128, "%s", "UND");
+		MTWF_PRINT("UND\n");
 }
 
 /*
@@ -68,8 +68,13 @@ static VOID update_igmpinfo(struct wifi_dev *wdev, BOOLEAN bActive)
 		if (IgmpSnEnableTVMode(ad,
 			wdev,
 			wdev->IsTVModeEnable,
-			wdev->TVModeType))
-			Enable = wdev->TVModeType;
+			wdev->TVModeType)) {
+			if (wdev->TVModeType > IGMP_TVM_MODE_DISABLE) {
+				Enable = wdev->TVModeType;
+				CmdMcastAllowNonMemberEnable(ad, IGMPSN_G_POLICY, 1);
+			}
+		} else
+			CmdMcastAllowNonMemberEnable(ad, IGMPSN_G_POLICY, 0);
 #endif	/* IGMP_TVM_SUPPORT */
 		CmdMcastCloneEnable(ad, Enable, devinfo->BandIdx, devinfo->OwnMacIdx);
 
@@ -104,7 +109,7 @@ static VOID dump_devinfo(struct _WIFI_INFO_CLASS *class)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("OwnMacIdx: %d\n", devinfo->OwnMacIdx));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("OwnMacAddr: %x:%x:%x:%x:%x:%x\n", PRINT_MAC(devinfo->OwnMacAddr)));
+			("OwnMacAddr: "MACSTR"\n", MAC2STR(devinfo->OwnMacAddr)));
 	}
 }
 
@@ -115,41 +120,26 @@ static VOID dump_bssinfo(struct _WIFI_INFO_CLASS *class)
 {
 	BSS_INFO_ARGUMENT_T *bss = NULL;
 	struct wifi_dev *wdev = NULL;
-	CHAR str[128] = "";
 
 	DlListForEach(bss, &class->Head, BSS_INFO_ARGUMENT_T, list) {
 		wdev = (struct wifi_dev *)bss->priv;
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("#####WdevIdx (%d)#####\n", wdev->wdev_idx));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("State: %d\n", bss->bss_state));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("Bssid: %x:%x:%x:%x:%x:%x\n", PRINT_MAC(bss->Bssid)));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("CipherSuit: %d\n", bss->CipherSuit));
-		get_network_type_str(bss->NetworkType, str);
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("NetworkType: %s\n", str));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("OwnMacIdx: %d\n", bss->OwnMacIdx));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("BssInfoFeature: %x\n", bss->u4BssInfoFeature));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("ConnectionType: %d\n", bss->u4ConnectionType));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("BcMcWlanIdx: %d\n", bss->bmc_wlan_idx));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("BssIndex: %d\n", bss->ucBssIndex));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("PeerWlanIdx: %d\n", bss->peer_wlan_idx));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("WmmIdx: %d\n", bss->WmmIdx));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("BcTransmit: (Mode/BW/MCS) %d/%d/%d\n", bss->BcTransmit.field.MODE,
-			   bss->BcTransmit.field.BW, bss->BcTransmit.field.MCS));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("McTransmit: (Mode/BW/MCS) %d/%d/%d\n", bss->McTransmit.field.MODE,
-			   bss->BcTransmit.field.BW, bss->BcTransmit.field.MCS));
+		MTWF_PRINT("#####WdevIdx (%d)#####\n", wdev->wdev_idx);
+		MTWF_PRINT("State: %d\n", bss->bss_state);
+		MTWF_PRINT("Bssid: "MACSTR"\n", MAC2STR(bss->Bssid));
+		MTWF_PRINT("CipherSuit: %d\n", bss->CipherSuit);
+		MTWF_PRINT("NetworkType: ");
+		get_network_type_str(bss->NetworkType);
+		MTWF_PRINT("OwnMacIdx: %d\n", bss->OwnMacIdx);
+		MTWF_PRINT("BssInfoFeature: %x\n", bss->u4BssInfoFeature);
+		MTWF_PRINT("ConnectionType: %d\n", bss->u4ConnectionType);
+		MTWF_PRINT("BcMcWlanIdx: %d\n", bss->bmc_wlan_idx);
+		MTWF_PRINT("BssIndex: %d\n", bss->ucBssIndex);
+		MTWF_PRINT("PeerWlanIdx: %d\n", bss->peer_wlan_idx);
+		MTWF_PRINT("WmmIdx: %d\n", bss->WmmIdx);
+		MTWF_PRINT("BcTransmit: (Mode/BW/MCS) %d/%d/%d\n", bss->BcTransmit.field.MODE,
+			   bss->BcTransmit.field.BW, bss->BcTransmit.field.MCS);
+		MTWF_PRINT("McTransmit: (Mode/BW/MCS) %d/%d/%d\n", bss->McTransmit.field.MODE,
+			   bss->BcTransmit.field.BW, bss->BcTransmit.field.MCS);
 	}
 }
 
@@ -166,7 +156,7 @@ static VOID dump_starec(struct _WIFI_INFO_CLASS *class)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("#####MacEntry (%d)#####\n", tr_entry->wcid));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("PeerAddr: %x:%x:%x:%x:%x:%x\n", PRINT_MAC(tr_entry->Addr)));
+			("PeerAddr: "MACSTR"\n", MAC2STR(tr_entry->Addr)));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("WlanIdx: %d\n", starec->WlanIdx));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -307,7 +297,7 @@ static VOID del_bssinfo(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev)
 /*
 *
 */
-static VOID del_starec(struct _RTMP_ADAPTER *ad, struct _STA_TR_ENTRY *tr_entry)
+VOID del_starec(struct _RTMP_ADAPTER *ad, struct _STA_TR_ENTRY *tr_entry)
 {
 	struct _WIFI_SYS_INFO *wsys = &ad->WifiSysInfo;
 	struct _STA_REC_CTRL_T *starec = &tr_entry->StaRec, *tmp;
@@ -512,6 +502,7 @@ VOID wifi_sys_dump(struct _RTMP_ADAPTER *ad)
 /*
 *
 */
+#define INVALID_OMAC_VALUE 255
 INT wifi_sys_update_devinfo(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev, struct _DEV_INFO_CTRL_T *new)
 {
 	INT len = sizeof(wdev->DevInfo) - sizeof(wdev->DevInfo.list);
@@ -525,6 +516,7 @@ INT wifi_sys_update_devinfo(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev, str
 		del_devinfo(ad, wdev);
 		/*release hw resource*/
 		HcReleaseRadioForWdev(wdev->sys_handle, wdev);
+		wdev->OmacIdx = INVALID_OMAC_VALUE;
 	}
 	return 0;
 }
@@ -787,15 +779,55 @@ end:
 	return TRUE;
 }
 
+/* add to handle wifi_sys operation race condition */
+BOOLEAN wifi_sys_op_lock(struct wifi_dev *wdev)
+{
+	UINT32 ret = 0;
+	INT sp_ret;
+	BOOLEAN status;
+
+	RTMP_SEM_EVENT_TIMEOUT(&wdev->wdev_op_lock, WIFI_LINK_MAX_TIME, ret);
+	if (!ret) {
+		sp_ret = snprintf(wdev->dbg_wdev_op_lock_caller, sizeof(wdev->dbg_wdev_op_lock_caller), "%pS", OS_TRACE);
+		if (os_snprintf_error(sizeof(wdev->dbg_wdev_op_lock_caller), sp_ret)) {
+			MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "snprintf error!\n");
+			return FALSE;
+		}
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%pS(%d): get wdev_op_lock.\n", OS_TRACE, wdev->wdev_idx));
+		wdev->wdev_op_lock_flag = TRUE;
+		status = TRUE;
+	} else {
+		MTWF_DBG(wdev->sys_handle, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "%pS(%d): get wdev_op_lock fail!! The latest caller with the lock: %s\n",
+			OS_TRACE, wdev->wdev_idx, wdev->dbg_wdev_op_lock_caller);
+		ASSERT(FALSE);
+		/* force unlock */
+		wdev->wdev_op_lock_flag = FALSE;
+		NdisZeroMemory(wdev->dbg_wdev_op_lock_caller, sizeof(wdev->dbg_wdev_op_lock_caller));
+		RTMP_SEM_EVENT_UP(&wdev->wdev_op_lock);
+		status = FALSE;
+	}
+
+	return status;
+}
+
+/* add to handle wifi_sys operation race condition */
+VOID wifi_sys_op_unlock(struct wifi_dev *wdev)
+{
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%pS(%d): release wdev_op_lock.\n", OS_TRACE, wdev->wdev_idx));
+	if (wdev->wdev_op_lock_flag) {
+		wdev->wdev_op_lock_flag = FALSE;
+		NdisZeroMemory(wdev->dbg_wdev_op_lock_caller, sizeof(wdev->dbg_wdev_op_lock_caller));
+		RTMP_SEM_EVENT_UP(&wdev->wdev_op_lock);
+	}
+}
+
 /*
 *
 */
 INT wifi_sys_open(struct wifi_dev *wdev)
 {
 	struct WIFI_SYS_CTRL *wsys;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
-	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
+	UINT32 ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&wsys, sizeof(struct WIFI_SYS_CTRL));
 
@@ -807,19 +839,10 @@ INT wifi_sys_open(struct wifi_dev *wdev)
 	os_zero_mem(wsys, sizeof(struct WIFI_SYS_CTRL));
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		("%s(), wdev idx = %d\n", __func__, wdev->wdev_idx));
-	
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_OPEN_CLOSE)
-	{
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;
-		}
+
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
 	if (!wdev->DevInfo.WdevActive && (wlan_operate_get_state(wdev) == WLAN_OPER_STATE_INVALID)) {
@@ -831,19 +854,18 @@ INT wifi_sys_open(struct wifi_dev *wdev)
 		fill_devinfo(wdev->sys_handle, wdev, TRUE, &wsys->DevInfoCtrl);
 		wsys->wdev = wdev;
 		/*update to hwctrl*/
-		HW_WIFISYS_OPEN(wdev->sys_handle, wsys);
-	} else if (ad->wf_lock_op & WDEV_LOCK_OP_OPEN_CLOSE){
-		/* add to handle wifi_sys operation race condition */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Not enqueue!! WdevActive=%d, wpf_op=%d\n", 
-		__func__, wdev->DevInfo.WdevActive, wlan_operate_get_state(wdev)));
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): release wf_link_lock.\n", __func__, wdev->wdev_idx));
-		if (ad->wf_link_lock_flag) {
-			ad->wf_link_lock_flag = FALSE;
-			ad->wf_link_timestamp = 0;
-			RTMP_SEM_EVENT_UP(&ad->wf_link_lock);
+		ret = HW_WIFISYS_OPEN(wdev->sys_handle, wsys);
+		if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+			__func__, wdev->wdev_idx));
+			wifi_sys_op_unlock(wdev);
 		}
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not enqueue!! WdevActive=%d, wpf_op=%d\n",
+		__func__, wdev->DevInfo.WdevActive, wlan_operate_get_state(wdev)));
+		wifi_sys_op_unlock(wdev);
 	}
-	
+
 	if (wsys)
 		os_free_mem(wsys);
 
@@ -856,9 +878,7 @@ INT wifi_sys_open(struct wifi_dev *wdev)
 INT wifi_sys_close(struct wifi_dev *wdev)
 {
 	struct WIFI_SYS_CTRL *wsys;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
-	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
+	UINT32 ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&wsys, sizeof(struct WIFI_SYS_CTRL));
 
@@ -870,19 +890,10 @@ INT wifi_sys_close(struct wifi_dev *wdev)
 	os_zero_mem(wsys, sizeof(struct WIFI_SYS_CTRL));
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s, wdev idx = %d\n",
 		__func__, wdev->wdev_idx));
-	
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_OPEN_CLOSE)
-	{
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;
-		}
+
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
 	if (wlan_operate_get_state(wdev) == WLAN_OPER_STATE_VALID) {
@@ -900,17 +911,16 @@ INT wifi_sys_close(struct wifi_dev *wdev)
 		/*notify other module will release hw resource*/
 		call_wsys_notifieriers(WSYS_NOTIFY_CLOSE, wdev, NULL);
 		/*update to hwctrl*/
-		HW_WIFISYS_CLOSE(wdev->sys_handle, wsys);
-	} else if (ad->wf_lock_op & WDEV_LOCK_OP_OPEN_CLOSE) {
-		/* add to handle wifi_sys operation race condition */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Not enqueue!! wpf_op=%d\n", 
-		__func__, wlan_operate_get_state(wdev)));
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): release wf_link_lock.\n", __func__, wdev->wdev_idx));
-		if (ad->wf_link_lock_flag) {
-			ad->wf_link_lock_flag = FALSE;
-			ad->wf_link_timestamp = 0;
-			RTMP_SEM_EVENT_UP(&ad->wf_link_lock);
+		ret = HW_WIFISYS_CLOSE(wdev->sys_handle, wsys);
+		if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+			__func__, wdev->wdev_idx));
+			wifi_sys_op_unlock(wdev);
 		}
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not enqueue!! WdevActive=%d, wpf_op=%d\n",
+		__func__, wdev->DevInfo.WdevActive, wlan_operate_get_state(wdev)));
+		wifi_sys_op_unlock(wdev);
 	}
 
 	if (wsys)
@@ -928,8 +938,7 @@ INT wifi_sys_disconn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	struct _RTMP_ADAPTER *ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
 	struct _STA_TR_ENTRY *tr_entry = &ad->tr_ctl.tr_entry[entry->tr_tb_idx];
 	struct _STA_REC_CTRL_T *new_sta;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
+	UINT32 ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&wsys, sizeof(struct WIFI_SYS_CTRL));
 	if (!wsys) {
@@ -938,18 +947,10 @@ INT wifi_sys_disconn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	}
 	os_zero_mem(wsys, sizeof(struct WIFI_SYS_CTRL));
 	new_sta = &wsys->StaRecCtrl;
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_CONN_DISCONN)
-	{
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;
-		}
+
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
 	if (entry->EntryState == ENTRY_STATE_SYNC) {
@@ -974,23 +975,22 @@ INT wifi_sys_disconn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 		/*notify other module will release starec*/
 		call_wsys_notifieriers(WSYS_NOTIFY_DISCONNT_ACT, wdev, tr_entry);
 		/*send event for release starec*/
-		HW_WIFISYS_PEER_LINKDOWN(ad, wsys);
+		ret = HW_WIFISYS_PEER_LINKDOWN(wdev->sys_handle, wsys);
+		if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+			__func__, wdev->wdev_idx));
+			wifi_sys_op_unlock(wdev);
+		}
 #ifdef CONFIG_AP_SUPPORT
 
 		if (wdev->wdev_type == WDEV_TYPE_AP)
 			CheckBMCPortSecured(ad, entry, FALSE);
 
 #endif /* CONFIG_AP_SUPPORT */
-	}	else if (ad->wf_lock_op & WDEV_LOCK_OP_CONN_DISCONN) {
-		/* add to handle wifi_sys operation race condition */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Not enqueue!! entry->EntryState=%d\n", 
-		__func__, entry->EntryState));
-		if (ad->wf_link_lock_flag) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): release wf_link_lock.\n", __func__, wdev->wdev_idx));
-			ad->wf_link_lock_flag = FALSE;
-			ad->wf_link_timestamp = 0;
-			RTMP_SEM_EVENT_UP(&ad->wf_link_lock);
-		}
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not enqueue!! entry->EntryState=%d\n",
+			__func__, entry->EntryState));
+		wifi_sys_op_unlock(wdev);
 	}
 
 	if (wsys)
@@ -1022,8 +1022,7 @@ INT wifi_sys_conn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	PEER_LINKUP_HWCTRL *lu_ctrl = NULL;
 	UINT32 features = 0;
 	UCHAR state = 0;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
+	UINT32 ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&wsys, sizeof(struct WIFI_SYS_CTRL));
 	if (!wsys) {
@@ -1031,17 +1030,9 @@ INT wifi_sys_conn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 		return FALSE;
 	}
 
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_CONN_DISCONN) {
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;
-		}
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
 	/*indicate mac entry under sync to hw*/
@@ -1081,8 +1072,13 @@ INT wifi_sys_conn_act(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	}
 
 	wsys->wdev = wdev;
-	HW_WIFISYS_PEER_LINKUP(ad, wsys);
-	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+	ret = HW_WIFISYS_PEER_LINKUP(ad, wsys);
+	if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+		__func__, wdev->wdev_idx));
+		wifi_sys_op_unlock(wdev);
+	}
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 			 ("===> AsicStaRecUpdate called by (%s), wcid=%d, PortSecured=%d, AKMMap=%d\n",
 			  __func__, entry->wcid, sta_rec->ConnectionState, entry->SecConfig.AKMMap));
 
@@ -1110,8 +1106,7 @@ INT wifi_sys_linkup(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	UINT16 wcid;
 	UCHAR *addr = NULL;
 	struct tx_rx_ctl *tr_ctl = &ad->tr_ctl;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
+	UINT32 ret;
 
  	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s, wdev idx = %d\n",
  		__func__, wdev->wdev_idx));
@@ -1123,28 +1118,20 @@ INT wifi_sys_linkup(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 	}
 
 	/*if interface down up should not run ap link up (for apstop/apstart check)*/
-	if (!HcIsRadioAcq(wdev))
+	if (!HcIsRadioAcq(wdev)) {
+		os_free_mem(wsys);
 		return TRUE;
-
+	}
 	os_zero_mem(wsys, sizeof(struct WIFI_SYS_CTRL));
 
 	bss = &wsys->BssInfoCtrl;
-	
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_LINK_UP_DOWN) {
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;
-		}
+
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
-	//if (WDEV_BSS_STATE(wdev) == BSS_INIT) {
-	if (WDEV_BSS_STATE(wdev) == BSS_INIT && HcIsRadioAcq(wdev)) { 
+	if (WDEV_BSS_STATE(wdev) == BSS_INIT) {
 #ifdef CONFIG_AP_SUPPORT
 		ap_key_table_init(ad, wdev);
 #endif
@@ -1212,17 +1199,16 @@ INT wifi_sys_linkup(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry)
 		}
 		/*update to hw ctrl*/
 		wsys->wdev = wdev;
-		HW_WIFISYS_LINKUP(ad, wsys);
-	}	else if (ad->wf_lock_op & WDEV_LOCK_OP_LINK_UP_DOWN) {
-		/* add to handle wifi_sys operation race condition */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Not enqueue!! bss_state=%d\n", 
-		__func__, WDEV_BSS_STATE(wdev)));
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): release wf_link_lock.\n", __func__, wdev->wdev_idx));
-		if (ad->wf_link_lock_flag) {
-			ad->wf_link_lock_flag = FALSE;
-			ad->wf_link_timestamp = 0;
-			RTMP_SEM_EVENT_UP(&ad->wf_link_lock);
+		ret = HW_WIFISYS_LINKUP(ad, wsys);
+		if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+			__func__, wdev->wdev_idx));
+			wifi_sys_op_unlock(wdev);
 		}
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not enqueue!! bss_state=%d\n",
+			__func__, WDEV_BSS_STATE(wdev)));
+		wifi_sys_op_unlock(wdev);
 	}
 
 	if (wsys)
@@ -1240,8 +1226,7 @@ INT wifi_sys_linkdown(struct wifi_dev *wdev)
 	UINT32 features = 0;
 	struct _RTMP_ADAPTER *ad = wdev->sys_handle;
 	struct tx_rx_ctl *tr_ctl = &ad->tr_ctl;
-	/* add to handle wifi_sys operation race condition */
-	UINT32 ret = 0;
+	UINT32 ret;
 
  	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(), wdev idx = %d\n",
  		__func__, wdev->wdev_idx));
@@ -1253,18 +1238,10 @@ INT wifi_sys_linkdown(struct wifi_dev *wdev)
 	os_zero_mem(wsys, sizeof(struct WIFI_SYS_CTRL));
 
 	bss = &wsys->BssInfoCtrl;
-	
-	/* add to handle wifi_sys operation race condition */
-	if (ad->wf_lock_op & WDEV_LOCK_OP_LINK_UP_DOWN) {
-		RTMP_SEM_EVENT_TIMEOUT(&ad->wf_link_lock, WIFI_LINK_MAX_TIME, ret);
-		if (!ret) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): get wf_link_lock.\n", __func__, wdev->wdev_idx));
-			NdisGetSystemUpTime(&ad->wf_link_timestamp);
-			ad->wf_link_lock_flag = TRUE; 
-		} else {
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(%d): get wf_link_lock fail!!\n", __func__, wdev->wdev_idx));
-			return FALSE;	
-		}
+
+	if (!wifi_sys_op_lock(wdev)) {
+		os_free_mem(wsys);
+		return FALSE;
 	}
 
 	if (WDEV_BSS_STATE(wdev) >= BSS_INITED) {
@@ -1293,22 +1270,26 @@ INT wifi_sys_linkdown(struct wifi_dev *wdev)
 				sta_rec->WlanIdx = bss->bmc_wlan_idx;
 				sta_rec->priv = tr_entry;
 			}
+			/* Disable txbf on apcli when linkdown so that txbf can be enabled
+			** when linkup next time */
+			if (wdev->wdev_type == WDEV_TYPE_STA) {
+				ad->fgApCliBfStaRecRegister[bss->ucBandIdx] = FALSE;
+			}
 		}
 		/*update to hwctrl for hw seting*/
 		wsys->wdev = wdev;
 		/*notify other module will leave bss*/
 		call_wsys_notifieriers(WSYS_NOTIFY_LINKDOWN, wdev, NULL);
-		HW_WIFISYS_LINKDOWN(ad, wsys);
-	} else if (ad->wf_lock_op & WDEV_LOCK_OP_LINK_UP_DOWN) {
-		/* add to handle wifi_sys operation race condition */
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Not enqueue!! bss_state=%d\n", 
-		__func__, WDEV_BSS_STATE(wdev)));
-		if (ad->wf_link_lock_flag) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): release wf_link_lock.\n", __func__, wdev->wdev_idx));
-			ad->wf_link_lock_flag = FALSE;
-			ad->wf_link_timestamp = 0;
-			RTMP_SEM_EVENT_UP(&ad->wf_link_lock);
+		ret = HW_WIFISYS_LINKDOWN(ad, wsys);
+		if (ret != NDIS_STATUS_SUCCESS && ret != NDIS_STATUS_TIMEOUT) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Enqueue failed!! wdev_idx=%d\n",
+			__func__, wdev->wdev_idx));
+			wifi_sys_op_unlock(wdev);
 		}
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s: Not enqueue!! bss_state=%d\n",
+			__func__, WDEV_BSS_STATE(wdev)));
+		wifi_sys_op_unlock(wdev);
 	}
 
 	if (wsys)
@@ -1406,6 +1387,15 @@ VOID WifiSysUpdatePortSecur(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, ASIC_SEC
 			wapp_send_cli_join_event(pAd, pEntry);
 #endif /* WAPP_SUPPORT */
 #endif /* defined(MWDS) || defined(CONFIG_MAP_SUPPORT) || defined(WAPP_SUPPORT) */
+#ifdef ENHANCE_STAT_SUPPORT
+			RtmpOSWrielessEventSend(pEntry->wdev->if_dev,
+				RT_WLAN_EVENT_CUSTOM,
+				IW_STA_CONNECTED_EVENT_FLAG,
+				NULL,
+				(PUCHAR)pEntry->Addr,
+				MAC_ADDR_LEN);
+
+#endif
 		}
 #endif /* HOSTAPD_MAP_SUPPORT */
 
@@ -1481,6 +1471,7 @@ VOID wifi_sys_update_wds(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry)
 	if (org->ConnectionState) {
 		os_zero_mem(&wsys, sizeof(wsys));
 		starec_feature_decision(wdev, pEntry->ConnectionType, pEntry, &features);
+		fill_starec(wdev, pEntry, tr_entry, sta_ctrl);
 		sta_ctrl->BssIndex = wdev->bss_info_argument.ucBssIndex;
 		sta_ctrl->ConnectionState = org->ConnectionState;
 		sta_ctrl->ConnectionType = pEntry->ConnectionType;

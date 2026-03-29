@@ -134,6 +134,10 @@ enum {
 #define TXDONE_VER_MASK (0x7 << 16)
 #define TXDONE_VER_SHIFT 16
 
+#define TXDONE_PKT_TYPE_SHIFT_V0 29
+#define TXDONE_PKT_TYPE_MASK_VALUE_V0 0x7
+#define TXDONE_PKT_TYPE_MASK_V0 (TXDONE_PKT_TYPE_MASK_VALUE_V0 << TXDONE_PKT_TYPE_SHIFT_V0)
+
 /*  TXDONE E1 DW2~DWN */
 #define TXDONE_MSDU_ID_MASK 0x7fff
 #define TXDONE_MSDU_ID_SHIFT 0
@@ -281,6 +285,10 @@ BOOLEAN in_altx_filter_list(HEADER_802_11 *pHeader);
 VOID mtf_write_tmac_info_fixed_rate(struct _RTMP_ADAPTER *pAd, UCHAR *tmac_info, struct _MAC_TX_INFO *info,
 					union _HTTRANSMIT_SETTING *pTransmit);
 UINT32 mtf_get_packet_type(struct _RTMP_ADAPTER *pAd, VOID *rx_packet);
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+UINT32 mtf_trans_rxd_into_radiotap(RTMP_ADAPTER *pAd, VOID *rx_packet, struct _RX_BLK *rx_blk);
+#endif
+
 INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *pRxBlk, PNDIS_PACKET pRxPacket);
 UINT32 mtf_txdone_handle(struct _RTMP_ADAPTER *pAd, VOID *ptr, UINT8 resource_idx);
 INT32 mtf_txs_handler(struct _RTMP_ADAPTER *pAd, VOID *rx_packet);
@@ -322,5 +330,6 @@ VOID mtf_txpower_boost_profile(struct _RTMP_ADAPTER *pAd, RTMP_STRING *tmpbuf, R
 #ifdef SINGLE_SKU_V2
 VOID mtf_txpower_sku_cfg_para(struct _RTMP_ADAPTER *pAd);
 #endif
+void mtf_get_snr(RTMP_ADAPTER *pAd, UINT16 wcid, UCHAR *pData);
 #endif
 

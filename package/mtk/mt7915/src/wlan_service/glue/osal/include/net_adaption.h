@@ -82,7 +82,7 @@
 
 #define TEST_MAX_PATTERN_SIZE	128
 
-#define TEST_MAX_PKT_LEN	1496
+#define TEST_MAX_PKT_LEN	8192
 #define TEST_MIN_PKT_LEN	25
 #define TEST_MAX_BKCR_NUM	30
 
@@ -570,7 +570,7 @@ union _test_eeprom_antenna {
 struct test_backup_params {
 	boolean en_tx_burst;
 	boolean en_bss_coex;
-	u_int16 bcn_prd;
+	u_int16 bcn_prd[TEST_DBDC_BAND_NUM];
 	boolean premable;
 	boolean greenap;
 	union _test_eeprom_antenna antenna;
@@ -1144,6 +1144,8 @@ struct test_wlan_info {
 
 	/*connsys emi total phy memory size*/
 	unsigned long long emi_phy_size;
+	/*tx thread idx*/
+	u_char thread_idx;
 };
 
 /* Test control register read/write for service */
@@ -1275,6 +1277,8 @@ struct test_operation {
 	s_int32 (*op_set_antswap)(
 			struct test_wlan_info *winfos,
 			u_int32 ant);
+	s_int32 (*op_set_eeprom_to_fw)(
+			struct test_wlan_info *winfos);
 	s_int32 (*op_get_thermal_value)(
 		struct test_wlan_info *winfos,
 		struct test_configuration *test_configs);
@@ -1577,7 +1581,8 @@ struct test_operation {
 	s_int32 (*op_set_ampdu_ba_limit)(
 		struct test_wlan_info *winfos,
 		u_int8 wmm_idx,
-		u_int8 agg_limit);
+		u_int8 agg_limit,
+		u_char band_idx);
 	s_int32 (*op_set_sta_pause_cr)(
 		struct test_wlan_info *winfos);
 	s_int32 (*op_set_ifs_cr)(
@@ -1681,10 +1686,9 @@ struct test_tmr_info {
  *****************************************************************************/
 s_int32 net_ad_init_thread(
 	struct test_wlan_info *winfos,
-	struct test_configuration *configs,
-	enum service_thread_list thread_idx);
+	struct test_configuration *configs);
 s_int32 net_ad_release_thread(
-	u_char thread_idx);
+	struct test_wlan_info *winfos);
 s_int32 net_ad_backup_cr(
 	struct test_wlan_info *winfos,
 	struct test_bk_cr *test_bkcr,
@@ -1740,6 +1744,9 @@ s_int32 net_ad_post_tx(
 s_int32 net_ad_rx_done_handle(
 	struct test_wlan_info *winfos,
 	void *rx_blk);
+s_int32 net_ad_get_band_mode(
+	struct test_wlan_info *winfos,
+	u_char band_idx, u_int32 *band_type);
 s_int32 net_ad_set_band_mode(
 	struct test_wlan_info *winfos,
 	struct test_band_state *band_state);
@@ -1775,6 +1782,7 @@ s_int32 net_ad_set_wmm_param_by_qid(
 	struct test_configuration *configs);
 s_int32 net_ad_clean_sta_q(
 	struct test_wlan_info *winfos,
+	u_char band_idx,
 	u_char wcid);
 s_int32 net_ad_set_auto_resp(
 	struct test_wlan_info *winfos,
@@ -1945,4 +1953,14 @@ s_int32 net_ad_get_virtual_dev(
 	u_int8 band_idx,
 	u_int8 wmm_idx,
 	void **virtual_device);
+s_int32 net_ad_check_txv(
+	struct test_wlan_info *winfos,
+	u_int8 band_idx,
+	struct test_configuration *configs,
+	void *virtual_wtbl);
+s_int32 net_ad_get_rf_type_capability(
+	struct test_wlan_info *winfos,
+	u_int8 band_idx,
+	u_int32 *tx_ant,
+	u_int32 *rx_ant);
 #endif /* __NET_ADAPTION_H__ */

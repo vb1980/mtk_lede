@@ -206,7 +206,7 @@ VOID APMlmePeriodicExec(
 					pAd,
 					get_default_wdev(pAd),
 					BCN_UPDATE_ALL_AP_RENEW);
-				AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0, OPMODE_AP);
+				AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0], HW_BSSID_0, OPMODE_AP);
 			} else
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Carrier gone\n"));
 		}
@@ -261,6 +261,9 @@ VOID APMlmePeriodicExec(
 		for (mbss_idx = 0; mbss_idx < pAd->ApCfg.BssidNum; mbss_idx++)
 			a4_proxy_maintain(pAd, mbss_idx);
 		pAd->a4_need_refresh = FALSE;
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+		eth_update_list(pAd);
+#endif
 #endif /* A4_CONN */
 #ifdef WH_EVENT_NOTIFIER
 		WHCMlmePeriodicExec(pAd);
@@ -271,6 +274,13 @@ VOID APMlmePeriodicExec(
 #endif
 
 	}
+
+#ifdef LOW_POWER_SUPPORT
+	/* AP idle state check */
+	if (pAd->Mlme.PeriodicRound % (MLME_TASK_EXEC_MULTIPLE * AP_IDLE_COUNT_UNIT) == 0) {
+		ApIdleStateCheck(pAd);
+	}
+#endif
 
 #ifdef AP_SCAN_SUPPORT
 	AutoChannelSelCheck(pAd);
@@ -304,7 +314,7 @@ VOID APMlmePeriodicExec(
 		INT loop;
 		ULONG Now32;
 		MAC_TABLE_ENTRY *pEntry;
-#if 0 //def MAC_REPEATER_SUPPORT  // reslov:partialscan后又做一次SiteSurvey
+#ifdef MAC_REPEATER_SUPPORT
 
 		if (pAd->ApCfg.bMACRepeaterEn)
 			RTMPRepeaterReconnectionCheck(pAd);
@@ -335,7 +345,7 @@ VOID APMlmePeriodicExec(
 #ifdef DOT11_N_SUPPORT
 		{
 			INT IdBss = 0;
-			UCHAR ht_protect_en = 1;
+			UCHAR ht_protect_en;
 			BSS_STRUCT *pMbss = NULL;
 
 			for (IdBss = 0; IdBss < pAd->ApCfg.BssidNum; IdBss++) {
@@ -351,7 +361,24 @@ VOID APMlmePeriodicExec(
 			}
 		}
 #endif /* DOT11_N_SUPPORT */
+#ifdef CONFIG_MAP_SUPPORT
+	if (IS_MAP_BS_ENABLE(pAd)) {
+		INT IdBss = 0;
+		BSS_STRUCT *pMbss = NULL;
+		struct wifi_dev *wdev;
 
+		for (IdBss = 0; IdBss < pAd->ApCfg.BssidNum; IdBss++) {
+			pMbss = &pAd->ApCfg.MBSSID[IdBss];
+			wdev = &pMbss->wdev;
+			if ((pMbss == NULL) || (wdev == NULL) || (wdev->pHObj == NULL))
+				continue;
+			if (wdev->map_indicate_channel_change) {
+				wdev->map_indicate_channel_change = 0;
+				wapp_send_ch_change_rsp(pAd, wdev, wdev->channel);
+			}
+		}
+	}
+#endif
 #ifdef A_BAND_SUPPORT
 	if (bSupport5G && (pAd->CommonCfg.bIEEE80211H == 1)) {
 		INT IdBss = 0;
@@ -361,6 +388,9 @@ VOID APMlmePeriodicExec(
 		struct DOT11_H *pDot11hTest = NULL;
 		struct wifi_dev *wdev;
 		UCHAR BandIdx;
+#ifdef CONFIG_MAP_SUPPORT
+		UCHAR bandId = 255;
+#endif
 
 		for (i = 0; i < DBDC_BAND_NUM; i++)
 			BandInCac[i] = FALSE;
@@ -378,10 +408,20 @@ VOID APMlmePeriodicExec(
 				continue;
 #ifdef MT_DFS_SUPPORT
 #ifdef CONFIG_MAP_SUPPORT
-			if (IS_MAP_TURNKEY_ENABLE(pAd)) {
-				if (wdev->map_indicate_channel_change && (wdev->map_radar_detect == 0)) {
-					wdev->map_indicate_channel_change = 0;
-					wapp_send_ch_change_rsp(pAd, wdev, wdev->channel);
+			if (IS_MAP_TURNKEY_ENABLE(pAd) || IS_MAP_BS_ENABLE(pAd)) {
+				if (wdev->map_indicate_channel_change && bandId != HcGetBandByWdev(wdev)) {
+					if (wdev->map_radar_detect == 1) {
+						wdev->map_indicate_channel_change = 0;
+						wdev->map_radar_detect = 0;
+						wapp_send_ch_change_rsp(pAd, wdev, wdev->channel);
+						bandId = HcGetBandByWdev(wdev);
+					} else if (wdev->map_radar_detect == 0) {
+						wdev->map_indicate_channel_change = 0;
+						wapp_send_ch_change_rsp(pAd, wdev, wdev->channel);
+						bandId = HcGetBandByWdev(wdev);
+					} else if (wdev->map_radar_detect == 2) {
+							wdev->map_radar_detect--;
+					}
 				}
 			}
 #endif
@@ -398,8 +438,10 @@ VOID APMlmePeriodicExec(
 						wapp_send_cac_stop(pAd, RtmpOsGetNetIfIndex(wdev->if_dev), wdev->channel, TRUE);
 					}
 #endif
+					pAd->CommonCfg.DfsParameter.cac_channel = wdev->channel;
 					MlmeEnqueue(pAd, DFS_STATE_MACHINE, DFS_CAC_END, 0, NULL, HcGetBandByWdev(wdev));
-					AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod, HW_BSSID_0,  OPMODE_AP);
+					AsicSetSyncModeAndEnable(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0],
+						HW_BSSID_0, OPMODE_AP);
 					pDot11hTest->RDMode = RD_NORMAL_MODE;
 				}
 			} else

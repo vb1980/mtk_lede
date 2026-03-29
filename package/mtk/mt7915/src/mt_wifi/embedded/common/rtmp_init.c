@@ -29,6 +29,9 @@
 #include "phy/rlm_cal_cache.h"
 #endif /* RLM_CAL_CACHE_SUPPORT */
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+#include "hdev/hdev_basic.h"
+#endif /* ZERO_LOSS_CSA_SUPPORT */
 
 #ifdef OS_ABL_FUNC_SUPPORT
 /* Os utility link: printk, scanf */
@@ -297,7 +300,7 @@ INT32 WfHifSysInit(RTMP_ADAPTER *pAd, HIF_INFO_T *pHifInfo)
 
 #ifdef CUT_THROUGH
 	if (IS_ASIC_CAP(pAd, fASIC_CAP_CT)) {
-		VOID *pktTokenCb;
+		VOID *pktTokenCb = NULL;
 
 		status = token_init(&pktTokenCb, pAd);
 		hc_set_ct_cb(pAd->hdev_ctrl, pktTokenCb);
@@ -689,6 +692,23 @@ VOID UserCfgExit(RTMP_ADAPTER *pAd)
 		BndStrg_Release(pAd);
 	}
 #endif /* BAND_STEERING */
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	{
+		BOOLEAN Cancelled;
+		int i;
+
+		for (i = 0; i < DBDC_BAND_NUM; i++) {
+			/*cancel and release CSA0Event timer*/
+			RTMPCancelTimer(&pAd->Dot11_H[i].CSALastBcnTxEventTimer, &Cancelled);
+			RTMPReleaseTimer(&pAd->Dot11_H[i].CSALastBcnTxEventTimer, &Cancelled);
+
+			/*cancel and release last bcn timer*/
+			RTMPCancelTimer(&pAd->Dot11_H[i].ChnlSwitchStaNullAckWaitTimer, &Cancelled);
+			RTMPReleaseTimer(&pAd->Dot11_H[i].ChnlSwitchStaNullAckWaitTimer, &Cancelled);
+		}
+	}
+#endif /* ZERO_LOSS_CSA_SUPPORT */
+
 #ifdef RADIUS_MAC_ACL_SUPPORT
 		{
 			PLIST_HEADER pListHeader = NULL;
@@ -718,6 +738,8 @@ VOID UserCfgExit(RTMP_ADAPTER *pAd)
 	pAd->ApCfg.set_ch_async_flag = FALSE;
 	pAd->ApCfg.iwpriv_event_flag = FALSE;
 	complete_all(&pAd->ApCfg.set_ch_aync_done);
+	ChannelOpCtrlDeinit(pAd);
+
 #ifdef CONFIG_STA_SUPPORT
 
 	do {
@@ -758,6 +780,12 @@ VOID UserCfgExit(RTMP_ADAPTER *pAd)
 	sae_cfg_deinit(pAd, &pAd->SaeCfg);
 #endif /* DOT11_SAE_SUPPORT */
 #if defined(DOT11_SAE_SUPPORT) || defined(CONFIG_OWE_SUPPORT)
+#ifdef MULTI_INF_SUPPORT
+	/* The group info shared by all interface so make sure all interface down
+	 * before calling group_info_bi_deinit
+	 */
+	if (multi_inf_active_cnt() == 0)
+#endif
 	group_info_bi_deinit();
 #endif
 #ifdef DOT11_SAE_SUPPORT
@@ -768,7 +796,7 @@ VOID UserCfgExit(RTMP_ADAPTER *pAd)
 	RTMP_SEM_LOCK(&pAd->LowRateCtrl.BlackListLock);
 		DlListForEach(pBlackSta, &pAd->LowRateCtrl.BlackList, BLACK_STA, List) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("Remove from blklist, %02x:%02x:%02x:%02x:%02x:%02x\n", PRINT_MAC(pBlackSta->Addr)));
+					("Remove from blklist, "MACSTR"\n", MAC2STR(pBlackSta->Addr)));
 			tmp = pBlackSta;
 			pBlackSta = DlListEntry(pBlackSta->List.Prev, BLACK_STA, List);
 			DlListDel(&(tmp->List));
@@ -843,7 +871,9 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 	RTMP_ARCH_OP *arch_ops = hc_get_arch_ops(pAd->hdev_ctrl);
 #endif
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)pAd->hdev_ctrl;
+#endif
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("--> UserCfgInit\n"));
 	/*init wifi profile*/
 	wpf_init(pAd);
@@ -1041,6 +1071,20 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 	}
 
 #ifdef CONFIG_AP_SUPPORT
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	pAd->Zero_Loss_Enable = 0;
+	pAd->Csa_Action_Frame_Enable = 0;
+	pAd->ZeroLossStaCount = 0;
+	pAd->ucSTATimeout = 500;
+	pAd->ZeroLossStaPsQLimit = 600;
+	for (i = 0; i < DBDC_BAND_NUM; i++) {
+		struct radio_dev *prdev = &(ctrl->rdev[i]);
+
+		RTMPInitTimer(pAd, &pAd->Dot11_H[i].CSALastBcnTxEventTimer, GET_TIMER_FUNCTION(CSALastBcnTxEventTimeout), prdev, FALSE);
+		RTMPInitTimer(pAd, &pAd->Dot11_H[i].ChnlSwitchStaNullAckWaitTimer, GET_TIMER_FUNCTION(ChnlSwitchStaNullAckWaitTimeout), &(ctrl->rdev[i]), FALSE);
+		pAd->Dot11_H[i].ChannelSwitchTriggerCSACount = 0;
+	}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #ifdef AP_SCAN_SUPPORT
 	os_zero_mem(&pAd->ApCfg.ACSCheckTime, sizeof(UINT32) * DBDC_BAND_NUM);
 	os_zero_mem(&pAd->ApCfg.ACSCheckCount, sizeof(UINT32) * DBDC_BAND_NUM);
@@ -1114,7 +1158,8 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 	pAd->CommonCfg.REGBACapability.word = pAd->CommonCfg.BACapability.word;
 #endif /* DOT11_N_SUPPORT */
 	pAd->CommonCfg.TxRate = RATE_6;
-	pAd->CommonCfg.BeaconPeriod = 100;     /* in mSec*/
+	for (i = 0; i < DBDC_BAND_NUM; i++)
+		pAd->CommonCfg.BeaconPeriod[i] = 100;   /* in mSec*/
 #ifdef STREAM_MODE_SUPPORT
 
 	if (cap->FlgHwStreamMode) {
@@ -1177,6 +1222,12 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 #ifdef MT7915
 		/*Limit 256 max station number*/
 		pAd->ApCfg.MaxStaNum = MAX_NUM_OF_MT7915_STA;
+
+		/*Per-band limit STA*/
+		for (band_idx = 0; band_idx < DBDC_BAND_NUM; band_idx++) {
+			pAd->ApCfg.BandMaxStaNum[band_idx] = 0;
+			pAd->ApCfg.perBandStaCount[band_idx] = 0;
+		}
 #endif
 
 		pAd->ApCfg.BssidNum = MAX_MBSSID_NUM(pAd);
@@ -1206,6 +1257,9 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 
 			/* dot1x related per BSS */
 			mbss->wdev.SecConfig.radius_srv_num = 0;
+#ifdef RADIUS_ACCOUNTING_SUPPORT
+			mbss->wdev.SecConfig.radius_acct_srv_num = 0;
+#endif
 			mbss->wdev.SecConfig.NasIdLen = 0;
 			mbss->wdev.SecConfig.IEEE8021X = FALSE;
 			mbss->wdev.SecConfig.PreAuth = FALSE;
@@ -1310,7 +1364,7 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 			pAd->ApCfg.MBSSID[j].ap_vendor_ie.length = 0;
 			pAd->ApCfg.MBSSID[j].ap_vendor_ie.pointer = NULL;
-			NdisAllocateSpinLock(pAd, &pAd->ApCfg.MBSSID[j].ap_vendor_ie.vendor_ie_lock);			
+			NdisAllocateSpinLock(pAd, &pAd->ApCfg.MBSSID[j].ap_vendor_ie.vendor_ie_lock);
 			NdisAllocateSpinLock(pAd, &pAd->ApCfg.MBSSID[j].probe_rsp_vendor_ie_lock);
 			DlListInit(&mbss->ap_probe_rsp_vendor_ie_list);
 			pAd->ApCfg.ap_probe_rsp_vendor_ie_count = 0;
@@ -1401,11 +1455,7 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 #if defined(RTMP_PCI_SUPPORT) && defined(RTMP_RBUS_SUPPORT)
 		pAd->bWscDriverAutoUpdateCfg = (IS_RBUS_INF(pAd)) ? FALSE : TRUE;
 #else
-#ifdef RTMP_RBUS_SUPPORT
-		pAd->bWscDriverAutoUpdateCfg = FALSE;
-#else
 		pAd->bWscDriverAutoUpdateCfg = TRUE;
-#endif
 #endif /* defined(RTMP_PCI_SUPPORT) && defined (RTMP_RBUS_SUPPORT) */
 #endif /* CONFIG_AP_SUPPORT */
 #endif /* WSC_INCLUDED */
@@ -1481,15 +1531,17 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 			pAd->MldQuerySendTick = QUERY_SEND_PERIOD;
 #endif
 	}
-
+	pAd->ApCfg.ObssGBandChanBitMap = 0;
 #ifdef VOW_SUPPORT
-	pAd->vow_cfg.mcli_sch_cfg.tcp_cnt_th = 200;
+	pAd->vow_cfg.mcli_sch_cfg.tcp_cnt_th = 3;/* Need Consider TCPACK */
 	for (i = 0; i < DBDC_BAND_NUM; i++) {
-		pAd->vow_cfg.mcli_sch_cfg.dl_wrr_en[i] = TRUE;
-		pAd->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_DL_MODE][i] = VOW_MULTI_CLIENT_CWMIN;
-		pAd->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_DL_MODE][i] = VOW_MULTI_CLIENT_CWMAX;
-		pAd->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_UL_MODE][i] = VOW_MULTI_CLIENT_CWMIN + 1;
-		pAd->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_UL_MODE][i] = VOW_MULTI_CLIENT_CWMAX + 1;
+		pAd->vow_cfg.mcli_sch_cfg.mcli_tcp_num[i] = 0;
+		pAd->vow_cfg.mcli_sch_cfg.dl_wrr_en = TRUE;
+		pAd->vow_cfg.mcli_sch_cfg.apply_cnt = 0;
+		pAd->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_DL_MODE][i] = DL_MULTI_CLIENT_CWMAX;
+		pAd->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_DL_MODE][i] = DL_MULTI_CLIENT_CWMIN;
+		pAd->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_UL_MODE][i] = UL_MULTI_CLIENT_CWMAX;
+		pAd->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_UL_MODE][i] = UL_MULTI_CLIENT_CWMAX;
 	}
 #endif
 
@@ -1537,6 +1589,8 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 	pAd->ApCfg.set_ch_async_flag = FALSE;
 	pAd->ApCfg.iwpriv_event_flag = FALSE;
 	RTMP_OS_INIT_COMPLETION(&pAd->ApCfg.set_ch_aync_done);
+	ChannelOpCtrlInit(pAd);
+
 #ifdef DOT11_SAE_SUPPORT
 	sae_cfg_init(pAd, &pAd->SaeCfg);
 #endif /* DOT11_SAE_SUPPORT */
@@ -1602,12 +1656,14 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 
 	/* Clear channel ctrl buffer */
 	hc_init_ChCtrl(pAd);
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\x1b[1;33m [UserCfgInit] - Clear channel ctrl buffer \x1b[m \n"));
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		("\x1b[1;33m [UserCfgInit] - Clear channel ctrl buffer \x1b[m\n"));
 	pAd->CommonCfg.ChGrpEn = 0;
 	NdisZeroMemory(pAd->CommonCfg.ChGrpChannelList, (MAX_NUM_OF_CHANNELS)*sizeof(UCHAR));
 	pAd->CommonCfg.ChGrpChannelNum = 0;
 
 #ifdef WIFI_MD_COEX_SUPPORT
+	pAd->idcState = TRUE;
 	LteSafeChannelInit(pAd);
 #endif
 
@@ -1679,6 +1735,11 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 	pAd->monitor_ctrl.FrameType = FC_TYPE_RSVED;
 	pAd->monitor_ctrl.FilterSize = RX_DATA_BUFFER_SIZE + sizeof(struct mtk_radiotap_header);
 #endif /* SNIFFER_SUPPORT */
+
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+	pAd->monitor_ctrl.bMonitorOn = FALSE;
+#endif
+
 	pAd->bPS_Retrieve = 1;
 	pAd->CommonCfg.bTXRX_RXV_ON = 0;
 	pAd->parse_rxv_stat_enable = 0;
@@ -1722,12 +1783,6 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 
 	pAd->cp_support = 3;
 	pAd->multi_cli_nums_eap_th = MULTI_CLIENT_NUMS_EAP_TH;
-#if defined(MT7615) || defined(MT7622) || defined(MT7663)
-	pAd->ucRxvRecordEn = 0;
-	pAd->ucRxRateRecordEn = 0;
-	pAd->prxvbstartelmt = NULL;
-	pAd->prxvbcurelmt = NULL;
-#endif /* #if defined(MT7615) || defined(MT7622) || defined(MT7663) */
 #ifdef FQ_SCH_SUPPORT
 	if ((!IS_MT7615(pAd) && (!(pAd->fq_ctrl.enable & FQ_READY)))) {
 		pAd->fq_ctrl.enable = FQ_NEED_ON | FQ_NO_PKT_STA_KEEP_IN_LIST | FQ_ARRAY_SCH;
@@ -2023,6 +2078,15 @@ VOID UserCfgInit(RTMP_ADAPTER *pAd)
 			pStaCfg->TdlsInfo.TdlsAutoDiscoveryPeriod = TDLS_AUTO_DISCOVERY_PERIOD;
 #endif /* TDLS_AUTOLINK_SUPPORT */
 #endif /* DOT11Z_TDLS_SUPPORT */
+#ifdef DOT11_HE_AX
+#ifdef WIFI_TWT_SUPPORT
+#ifdef APCLI_SUPPORT
+			pStaCfg->aeTWTReqState = TWT_REQ_STATE_IDLE;
+			NdisZeroMemory(pStaCfg->arTWTFlow, sizeof(pStaCfg->arTWTFlow));
+			NdisZeroMemory(&pStaCfg->rTWTPlanner, sizeof(pStaCfg->rTWTPlanner));
+#endif /* APCLI_SUPPORT */
+#endif /* WIFI_TWT_SUPPORT */
+#endif /* DOT11_HE_AX */
 		}
 	}
 #endif
@@ -2090,11 +2154,12 @@ if (IS_MT7626(pAd))
 	}
 
 #ifdef PKT_BUDGET_CTRL_SUPPORT
-	pAd->pbc_bound[PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE;
-	pAd->pbc_bound[PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK;
-	pAd->pbc_bound[PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO;
-	pAd->pbc_bound[PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI;
-	pAd->pbc_bound[PBC_AC_MGMT] = PBC_WMM_UP_DEFAULT_MGMT;
+	pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE;
+	pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK;
+	pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO;
+	pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI;
+	pAd->pbc_bound[DBDC_BAND0][PBC_AC_MGMT] = PBC_WMM_UP_DEFAULT_MGMT;
+	pAd->pbc_qos_en = FALSE;
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
 #ifdef TX_AGG_ADJUST_WKR
 	pAd->TxAggAdjsut = TRUE;
@@ -2107,7 +2172,15 @@ if (IS_MT7626(pAd))
 #endif /* DHCP_UC_SUPPORT */
 
 	for (i = 0; i < DBDC_BAND_NUM; i++) {
-		pAd->CommonCfg.ucEDCCACtrl[i] = TRUE; /* EDCCA default is ON. */
+		pAd->CommonCfg.u1EDCCACtrl[i] = TRUE; /* EDCCA default is ON. */
+		pAd->CommonCfg.u1EDCCAMode[i] = FALSE; /* EDCCAMode default is OFF. */
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, (" edcca band %d set to true\n", i));
+	}
+	/*Initial threshold value*/
+	for (i = 0 ; i < DBDC_BAND_NUM ; i++) {
+		UINT j;
+		for (j = 0; j < EDCCA_MAX_BW_NUM ; j++)
+			pAd->CommonCfg.u1EDCCAThreshold[i][j] = 0x7f;
 	}
 #ifdef DSCP_PRI_SUPPORT
 	{
@@ -2135,7 +2208,11 @@ if (IS_MT7626(pAd))
 	for (i = 0; i < MAC_ADDR_LEN; i++)
 		pAd->fw_log_ctrl.fw_log_server_mac[i] = 0xFF;
 	pAd->fw_log_ctrl.fw_log_server_ip = 0xFFFFFFFF;
-	sprintf(pAd->fw_log_ctrl.fw_log_dest_dir, DEFAULT_FW_LOG_DESTINATION);
+
+	if (sprintf(pAd->fw_log_ctrl.fw_log_dest_dir, DEFAULT_FW_LOG_DESTINATION) < 0) {
+		MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "fw_log_dest_dir sprintf error!!!\n");
+	}
 #endif /* FW_LOG_DUMP */
 #ifdef RATE_PRIOR_SUPPORT
 	DlListInit(&pAd->LowRateCtrl.BlackList);
@@ -2164,13 +2241,19 @@ if (IS_MT7626(pAd))
     if (pAd->bIsLowPower == TRUE)
         pAd->WaitBeaconTime = 110;
 #endif
+
+#ifdef LOW_POWER_SUPPORT
+	pAd->ApCfg.ApIdleTimeout = 0;
+	NdisZeroMemory(pAd->ApIdleCount, sizeof(pAd->ApIdleCount));
+#endif
+
 #ifdef DABS_QOS
 	NdisAllocateSpinLock(pAd, &qos_param_table_lock);
 	OS_SPIN_LOCK_BH(&qos_param_table_lock);
 	memset(&qos_param_table[0], 0, sizeof(struct qos_param_rec)*MAX_QOS_PARAM_TBL);
 	OS_SPIN_UNLOCK_BH(&qos_param_table_lock);
 #endif
-
+	pAd->CommonCfg.need_fallback = 0;
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("<-- UserCfgInit\n"));
 }
 
@@ -2239,7 +2322,7 @@ Return Value:
 Note:
 ========================================================================
 */
-VOID RTMP_TimerListAdd(RTMP_ADAPTER *pAd, VOID *pRsc)
+VOID RTMP_TimerListAdd(RTMP_ADAPTER *pAd, VOID *pRsc, char *timer_name)
 {
 	LIST_HEADER *pRscList = &pAd->RscTimerCreateList;
 	LIST_RESOURCE_OBJ_ENTRY *pObj;
@@ -2264,6 +2347,7 @@ VOID RTMP_TimerListAdd(RTMP_ADAPTER *pAd, VOID *pRsc)
 		return;
 	} else {
 		pObj->pRscObj = pRsc;
+		pObj->timer_name = timer_name;
 		insertTailList(pRscList, (RT_LIST_ENTRY *)pObj);
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: add timer obj %lx!\n", __func__, (ULONG)pRsc));
 	}
@@ -2361,6 +2445,9 @@ VOID RTMP_AllTimerListRelease(RTMP_ADAPTER *pAd)
 	LIST_RESOURCE_OBJ_ENTRY *pObj, *pObjOld;
 	BOOLEAN Cancel;
 	RALINK_TIMER_STRUCT *pTimer;
+	NDIS_SPIN_LOCK *timer_lock;
+
+	timer_lock = &pAd->TimerSemLock;
 	/* try to find old entry */
 	pObj = (LIST_RESOURCE_OBJ_ENTRY *)(pRscList->pHead);
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Size=%d\n", __func__, pRscList->size));
@@ -2369,11 +2456,13 @@ VOID RTMP_AllTimerListRelease(RTMP_ADAPTER *pAd)
 		if (pObj == NULL)
 			break;
 
-		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Cancel timer obj %lx!\n", __func__,
-				 (ULONG)(pObj->pRscObj)));
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Cancel timer obj %lx, name: %s!\n", __func__,
+				 (ULONG)(pObj->pRscObj), (char *)(pObj->timer_name)));
+		RTMP_SEM_LOCK(timer_lock);
 		pObjOld = pObj;
 		pObj = pObj->pNext;
 		pTimer = (RALINK_TIMER_STRUCT *)pObjOld->pRscObj;
+		RTMP_SEM_UNLOCK(timer_lock);
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Timer is allocated by %pS,Valid:%d,Lock:%lx,State:%d\n",
 				 __func__,
 				 pTimer->pCaller, pTimer->Valid, (ULONG)pTimer->timer_lock, pTimer->State));
@@ -2404,16 +2493,17 @@ VOID RTMP_AllTimerListRelease(RTMP_ADAPTER *pAd)
 
 	========================================================================
 */
-VOID RTMPInitTimer(
+VOID _RTMPInitTimer(
 	IN	RTMP_ADAPTER *pAd,
 	IN	RALINK_TIMER_STRUCT *pTimer,
 	IN	VOID *pTimerFunc,
 	IN	VOID *pData,
-	IN	BOOLEAN	 Repeat)
+	IN	BOOLEAN	 Repeat,
+	IN	CHAR * timer_name)
 {
 	pTimer->timer_lock = &pAd->TimerSemLock;
 	RTMP_SEM_LOCK(pTimer->timer_lock);
-	RTMP_TimerListAdd(pAd, pTimer);
+	RTMP_TimerListAdd(pAd, pTimer, timer_name);
 	/* Set Valid to TRUE for later used.*/
 	/* It will crash if we cancel a timer or set a timer */
 	/* that we haven't initialize before.*/
@@ -2736,15 +2826,8 @@ INT RtmpRaDevCtrlInit(VOID *pAdSrc, RTMP_INF_TYPE infType)
 
 	RTMP_SEM_EVENT_INIT(&(pAd->AutoRateLock), &pAd->RscSemMemList);
 
-	/* add to handle wifi_sys operation race condition */
-	RTMP_SEM_EVENT_INIT(&(pAd->wf_link_lock), &pAd->RscSemMemList);
-	pAd->wf_link_lock_flag = FALSE;
-	pAd->wf_link_timestamp = 0;
-	pAd->MonitorSemaphore = TRUE;
-	pAd->wf_lock_op = WDEV_LOCK_OP_ALL;
-
 	pAd->IoctlHandleFlag = FALSE;
-	
+
 #ifdef WIFI_MD_COEX_SUPPORT
 	NdisAllocateSpinLock(pAd, &pAd->LteSafeChCtrl.SafeChDbLock);
 #endif
@@ -2776,6 +2859,7 @@ INT RtmpRaDevCtrlInit(VOID *pAdSrc, RTMP_INF_TYPE infType)
 	}
 
 #endif /* MCS_LUT_SUPPORT */
+	pAd->NopListBk = NULL;
 
 	return 0;
 }
@@ -2795,12 +2879,6 @@ BOOLEAN RtmpRaDevCtrlExit(IN VOID *pAdSrc)
 #ifdef WIFI_MD_COEX_SUPPORT
 	NdisFreeSpinLock(&pAd->LteSafeChCtrl.SafeChDbLock);
 #endif
-
-	/* add to handle wifi_sys operation race condition */
-	RTMP_SEM_EVENT_DESTORY(&(pAd->wf_link_lock));
-	pAd->wf_link_lock_flag = FALSE;
-	pAd->wf_link_timestamp = 0;
-	pAd->MonitorSemaphore = FALSE;
 
 	pAd->IoctlHandleFlag = FALSE;
 
@@ -2824,6 +2902,10 @@ BOOLEAN RtmpRaDevCtrlExit(IN VOID *pAdSrc)
 	}
 
 #endif
+	if (pAd->NopListBk) {
+		os_free_mem(pAd->NopListBk);
+	}
+
 	wpf_config_exit(pAd);
 	RTMPFreeAdapter(pAd);
 	return TRUE;
@@ -2884,22 +2966,196 @@ VOID AntCfgInit(RTMP_ADAPTER *pAd)
 			 pAd->RxAnt.Pair1SecondaryRxAnt));
 }
 #ifdef CFG_SUPPORT_CSI
+/*csi family*/
+static struct genl_family csi_genl_family = {
+	  .id = GENL_ID_GENERATE,
+	  .hdrsize = 0,
+	  .name = CSI_GENL_NAME,
+	  .version = 1,
+	  .maxattr = CSI_ATTR_MAX,
+};
+
+/*csi policy*/
+static struct nla_policy csi_genl_policy[CSI_ATTR_MAX + 1] = {
+	[CSI_ATTR_REPORT_MSG] = { .type = NLA_STRING },
+};
+
+/*csi ops init*/
+static struct genl_ops csi_genl_ops[] = {
+	{
+		.cmd = CSI_OPS_REPORT,
+		.flags = 0,
+		.policy = csi_genl_policy,
+		.doit = csi_genl_recv_doit,
+		.dumpit = NULL,
+	}
+};
+
+static int send_msg_reply(PRTMP_ADAPTER pAd, struct genl_info *info, char *cmd_msg)
+{
+	struct sk_buff *skb = NULL;
+	void *msg_head = NULL;
+	struct CSI_INFO_T *prCSIInfo;
+
+	prCSIInfo = &pAd->rCSIInfo;
+
+	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
+
+	if (!skb) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: csi skb alloc fail!!!\n", __func__));
+		return -1;
+	}
+
+	msg_head = genlmsg_put(skb, 0, info->snd_seq + 1, prCSIInfo->csi_genl_family, 0, CSI_OPS_REPORT);
+
+	if (!msg_head) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: csi genl header alloc fail!!!\n", __func__));
+		return -1;
+	}
+
+	if (nla_put_string(skb, CSI_ATTR_REPORT_MSG, cmd_msg)) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: nla_put_attr fail!!!\n", __func__));
+		return -1;
+	}
+
+	genlmsg_end(skb, msg_head);
+
+	if (genlmsg_reply(skb, info)) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: genl reply status fail!!!\n", __func__));
+		return -1;
+	}
+
+	return 0;
+}
+
+int csi_genl_recv_doit(struct sk_buff *skb_temp, struct genl_info *info)
+{
+	struct nlattr *na = NULL;
+	UINT32 recvd_dump_num = 0;
+	PNET_DEV dev = NULL;
+	PRTMP_ADAPTER pAd = NULL;
+	char cmd_msg[32] = {0};
+	char dev_string[16] = {0};
+	struct CSI_INFO_T *prCSIInfo;
+	UINT32 loop_cnt = 0;
+
+	if (!info || !skb_temp) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: genl_info or skb null!\n", __func__));
+		return -1;
+	}
+
+	/*step1: parse the net dev and request dump number*/
+	na = info->attrs[CSI_ATTR_REPORT_MSG];
+
+	if (!na) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("get attr fail!!!\n"));
+		return -1;
+	}
+
+
+	if (nla_validate(na, na->nla_len, CSI_ATTR_MAX, csi_genl_policy)) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("nla_validate fail!!!\n"));
+		return -1;
+	}
+
+	os_move_mem(cmd_msg, (char *)nla_data(na), na->nla_len);
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+	("from usr space: %s .\n", cmd_msg));
+
+	strncpy(dev_string, rstrtok(cmd_msg, "-"), sizeof(dev_string));
+	recvd_dump_num = simple_strtol(rstrtok(NULL, "-"), 0, 10);
+
+	/*get our pAd*/
+	dev = dev_get_by_name(genl_info_net(info), dev_string);
+	GET_PAD_FROM_NET_DEV(pAd, dev);
+	prCSIInfo = &pAd->rCSIInfo;
+
+	/*step2: send our status: used buffer*/
+	if (recvd_dump_num == 0) {
+		os_zero_mem(cmd_msg, sizeof(cmd_msg));
+		snprintf(cmd_msg, sizeof(cmd_msg), "%s-%d", dev_string, prCSIInfo->u4CSIBufferUsed);
+		send_msg_reply(pAd, info, cmd_msg);
+	} else {
+		/*step2:  Or start reporting csi data*/
+		/*TBD: make_csi_nlmsg_complete(pAd)*/
+		loop_cnt = recvd_dump_num;
+
+		while (loop_cnt--) {
+			if (make_csi_nlmsg_fragment(pAd)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: make nl msg fail!!!\n", __func__));
+				break;
+			}
+			if (genlmsg_reply(prCSIInfo->pnl_skb, info)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: genl reply data fail!!!\n", __func__));
+				break;
+			}
+		}
+	}
+	return 0;
+}
+
 VOID csi_support_init(RTMP_ADAPTER *pAd)
 {
+	int ret = 0;
+
+	/*csi netlink init*/
+	pAd->rCSIInfo.csi_genl_family = &csi_genl_family;
+	pAd->rCSIInfo.csi_genl_ops = csi_genl_ops;
+	pAd->rCSIInfo.csi_genl_policy = csi_genl_policy;
+
+	ret = genl_register_family_with_ops(&csi_genl_family, csi_genl_ops);
+
+	if (ret) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("failed to register CSI genl family!!!\n"));
+	}
+
 	/* init CSI wait queue */
 	init_waitqueue_head(&pAd->rCSIInfo.waitq);
 	/* inti lock */
 	NdisAllocateSpinLock(pAd, &pAd->rCSIInfo.CSIBufferLock);
+	NdisAllocateSpinLock(pAd, &pAd->rCSIInfo.CSIStaListLock);
+	/*init csi sta list*/
+	DlListInit(&pAd->rCSIInfo.CSIStaList);
 	/* init proc fs*/
 	csi_proc_init(pAd);
 }
 
 VOID csi_support_deinit(RTMP_ADAPTER *pAd)
 {
+	PCSI_STA pCSISta = NULL, tmp = NULL;
+	struct CSI_INFO_T *prCSIInfo;
+
+	prCSIInfo = &pAd->rCSIInfo;
+	/*clear the list*/
+	NdisAcquireSpinLock(&prCSIInfo->CSIStaListLock);
+		DlListForEach(pCSISta, &prCSIInfo->CSIStaList, CSI_STA, List) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("Remove csi sta, "MACSTR"\n", MAC2STR(pCSISta->Addr)));
+			tmp = pCSISta;
+			pCSISta = DlListEntry(pCSISta->List.Prev, CSI_STA, List);
+			DlListDel(&(tmp->List));
+			os_free_mem(tmp);
+	}
+	NdisReleaseSpinLock(&prCSIInfo->CSIStaListLock);
+
 	/* deinti lock */
 	NdisFreeSpinLock(&pAd->rCSIInfo.CSIBufferLock);
-	/* init proc fs*/
+	NdisFreeSpinLock(&pAd->rCSIInfo.CSIStaListLock);
+	/* deinit proc fs*/
 	csi_proc_deinit(pAd);
+	/* deinit netlink*/
+    genl_unregister_family(pAd->rCSIInfo.csi_genl_family);
+
 }
 #endif
 

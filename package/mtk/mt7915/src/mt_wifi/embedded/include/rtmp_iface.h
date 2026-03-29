@@ -30,9 +30,6 @@
 #include "iface/rtmp_pci.h"
 #endif /* RTMP_PCI_SUPPORT */
 
-#ifdef RTMP_RBUS_SUPPORT
-#include "iface/rtmp_rbs.h"
-#endif /* RTMP_RBUS_SUPPORT */
 
 
 

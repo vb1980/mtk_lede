@@ -149,26 +149,20 @@ VOID ConWpsApCliMonitorTimeout(
 	IN PVOID SystemSpecific3)
 {
 	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)FunctionContext;
-	PRTMP_ADAPTER pOpposAd, pActionAd;
-	UINT actionBandIdx = 0;
+	PRTMP_ADAPTER pActionAd;
 #ifdef MULTI_INF_SUPPORT
+	PRTMP_ADAPTER pOpposAd;
+	UINT actionBandIdx = 0;
 	UINT nowBandIdx = multi_inf_get_idx(pAd);
 	UINT opsBandIdx = !nowBandIdx;
-#else
-	UINT nowBandIdx = 0;
 #endif /* MULTI_INF_SUPPORT */
 	UCHAR index = BSS0;
 
-	pOpposAd = NULL;
 #ifdef MULTI_INF_SUPPORT
 	pOpposAd = (PRTMP_ADAPTER)adapt_list[opsBandIdx];
-	nowBandIdx = multi_inf_get_idx(pAd);
-#else
-	pOpposAd = NULL;
 #endif /* MULTI_INF_SUPPORT */
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_OFF, ("%s: Interface %s\n", __func__, pAd->net_dev->name));
 #ifdef MULTI_INF_SUPPORT
-
 	if (pOpposAd) {
 		if (pOpposAd->ApCfg.ConWpsApCliStatus == TRUE) {
 			/* 2G/5G Band WPS Ready */
@@ -183,7 +177,9 @@ VOID ConWpsApCliMonitorTimeout(
 	} else
 #endif /* MULTI_INF_SUPPORT */
 	{
+#ifdef MULTI_INF_SUPPORT
 		actionBandIdx = nowBandIdx;
+#endif
 
 		/* Cancel the other band if onGoing */
 		if (pAd->ApCfg.ConWpsApCliMode == CON_WPS_APCLI_BAND_2G)
@@ -206,8 +202,10 @@ VOID ConWpsApCliMonitorTimeout(
 	for (index = 0; index < MAX_APCLI_NUM; index++)
 		pAd->StaCfg[index].wdev.WscControl.conWscStatus = CON_WPS_STATUS_DISABLED;
 
+#ifdef MULTI_INF_SUPPORT
 	if (pOpposAd)
 		pOpposAd->ApCfg.ConWpsApCliStatus = FALSE;
+#endif
 
 	pAd->ApCfg.ConWpsApCliStatus = FALSE;
 }
@@ -251,7 +249,7 @@ INT WscGenerateUUID(
 {
 	WSC_UUID_T uuid_t;
 	unsigned long long uuid_time;
-	int i;
+	int i, ret;
 	UINT16 clkSeq;
 	char uuidTmpStr[UUID_LEN_STR + 2];
 #ifdef MULTI_INF_SUPPORT
@@ -277,10 +275,6 @@ INT WscGenerateUUID(
 
 #endif /* CON_WPS_AP_SAME_UUID */
 #endif /* MULTI_INF_SUPPORT */
-#ifdef RTMP_RBUS_SUPPORT
-	/* for fixed UUID -  YYHuang 07/10/09 */
-#define FIXED_UUID
-#endif /* RTMP_RBUS_SUPPORT */
 
 	/* Get the current time. */
 	if (bUseCurrentTime) {
@@ -293,14 +287,6 @@ INT WscGenerateUUID(
 
 	uuid_time *= 10000000;
 	uuid_time += 0x01b21dd213814000LL;
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef FIXED_UUID
-
-	if (IS_RBUS_INF(pAd))
-		uuid_time  = 0x2880288028802880LL;
-
-#endif
-#endif /* RTMP_RBUS_SUPPORT */
 	uuid_t.timeLow = (UINT32)uuid_time & 0xFFFFFFFF;
 	uuid_t.timeMid = (UINT16)((uuid_time >> 32) & 0xFFFF);
 	uuid_t.timeHi_Version = (UINT16)((uuid_time >> 48) & 0x0FFF);
@@ -308,14 +294,6 @@ INT WscGenerateUUID(
 	NdisZeroMemory(uuid_t.node, 6);
 	/* Get the clock sequence. */
 	clkSeq = (UINT16)(0x0601/*jiffies*/ & 0xFFFF);		/* Again, we fix this to make JumpStart happy! */
-#ifdef RTMP_RBUS_SUPPORT
-#ifdef FIXED_UUID
-
-	if (IS_RBUS_INF(pAd))
-		clkSeq = (UINT16)0x2880;
-
-#endif
-#endif /* RTMP_RBUS_SUPPORT */
 	uuid_t.clockSeqLow = clkSeq & 0xFF;
 	uuid_t.clockSeqHi_Var = (clkSeq & 0x3F00) >> 8;
 	uuid_t.clockSeqHi_Var |= 0x80;
@@ -351,9 +329,11 @@ INT WscGenerateUUID(
 #endif /* CONFIG_STA_SUPPORT */
 	/* Create the UUID ASCII string. */
 	memset(uuidTmpStr, 0, sizeof(uuidTmpStr));
-	snprintf(uuidTmpStr, sizeof(uuidTmpStr), "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+	ret = snprintf(uuidTmpStr, sizeof(uuidTmpStr), "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 			 (unsigned int)uuid_t.timeLow, uuid_t.timeMid, uuid_t.timeHi_Version, uuid_t.clockSeqHi_Var, uuid_t.clockSeqLow,
 			 uuid_t.node[0], uuid_t.node[1], uuid_t.node[2], uuid_t.node[3], uuid_t.node[4], uuid_t.node[5]);
+	if (os_snprintf_error(sizeof(uuidTmpStr), ret))
+		MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "uuidTmpStr snprintf error!\n");
 
 	if (strlen(uuidTmpStr) > UUID_LEN_STR)
 		MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("ERROR:UUID String size too large!\n"));
@@ -660,8 +640,12 @@ VOID WscUPnPMsgTimeOutAction(
 		pWscNodeInfo->bUPnPMsgTimerRunning = FALSE;
 		pWscControl->WscState = WSC_STATE_OFF;
 		pWscControl->WscStatus = STATUS_WSC_FAIL;
-		//RTMPSendWirelessEvent(pAd, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-        RTMPSendWirelessEvent(pAd, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+		RTMPSendWirelessEvent(pAd, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+		wapp_send_wsc_status_fail_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 	}
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("<----- WscUPnPMsgTimeOutAction\n"));
@@ -796,8 +780,8 @@ VOID WscEAPOLStartAction(
 		(pWpsCtrl->WscState <= WSC_STATE_WAIT_REQ_ID)) {
 		/* Receive the first EapolStart packet of this wps station. */
 		pEntry->Receive_EapolStart_EapRspId |= WSC_ENTRY_GET_EAPOL_START;
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEAPOLStartAction - receive EAPOL-Start from %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEAPOLStartAction - receive EAPOL-Start from "MACSTR"\n",
+				 MAC2STR(pEntry->Addr)));
 		/* EapolStart packet is sent by station means this station wants to do wps process with AP. */
 		pWpsCtrl->EapMsgRunning = TRUE;
 		/* Update EntryAddr again */
@@ -806,10 +790,13 @@ VOID WscEAPOLStartAction(
 		if (pEntry->bWscCapable == FALSE)
 			pEntry->bWscCapable = TRUE;
 
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEAPOLStartAction(ra%d) - send EAP-Req(Id) to %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 pEntry->func_tb_idx, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEAPOLStartAction(ra%d) - send EAP-Req(Id) to "MACSTR"\n",
+				 pEntry->func_tb_idx, MAC2STR(pEntry->Addr)));
 		/* Send EAP-Request/Id to station */
 		WscSendEapReqId(pAd, pEntry, CurOpMode);
+		pWpsCtrl->WscStatus = STATUS_WSC_EAP_REQ_ID_SENT;
+		pWpsCtrl->WscState = WSC_STATE_WAIT_RESP_ID;
+
 #ifdef CONFIG_MAP_SUPPORT
 		if (IS_MAP_TURNKEY_ENABLE(pAd))
 			wapp_send_wsc_eapol_start_notification(pAd, wdev);
@@ -957,7 +944,7 @@ VOID WscEAPAction(
 #endif /* CONFIG_AP_SUPPORT */
 	PWSC_CTRL pWscControl = NULL;
 	PWSC_UPNP_NODE_INFO pWscUPnPNodeInfo = NULL;
-	UCHAR CurOpMode = 0xFF;
+	UCHAR CurOpMode;
 	struct wifi_dev *wdev = NULL;
 	struct wifi_dev_ops *ops = NULL;
 #ifdef CONFIG_STA_SUPPORT
@@ -974,8 +961,8 @@ VOID WscEAPAction(
 	MsgType = WscRxMsgType(pAdapter, Elem);
 	bUPnPMsg = Elem->MsgType == WSC_EAPOL_UPNP_MSG ? TRUE : FALSE;
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
-			 ("WscEAPAction: Addr: %02x:%02x:%02x:%02x:%02x:%02x, MsgType: 0x%02X, bUPnPMsg: %s\n",
-			  PRINT_MAC(MacAddr), MsgType, bUPnPMsg ? "TRUE" : "FALSE"));
+			 ("WscEAPAction: Addr: "MACSTR", MsgType: 0x%02X, bUPnPMsg: %s\n",
+			  MAC2STR(MacAddr), MsgType, bUPnPMsg ? "TRUE" : "FALSE"));
 	wdev = Elem->wdev;
 	ops = wdev->wdev_ops;
 	pWscControl = &wdev->WscControl;
@@ -1057,16 +1044,19 @@ VOID WscEAPAction(
 			pWscControl->WscActionMode = WSC_ENROLLEE;
 			pWscControl->WscUseUPnP = bUPnPMsg ? 1 : 0;
 			MsgType = WSC_MSG_EAP_RSP_ID;
-			WscEapEnrolleeAction(pAdapter, Elem, WSC_MSG_EAP_RSP_ID, pEntry, pWscControl);
+			WscEapEnrolleeAction(pAdapter, Elem, MsgType, pEntry, pWscControl);
 		}
 	} else if (MsgType == WSC_MSG_EAP_ENR_RSP_ID) {
 		/* Receive EAP-Response/Id from wps enrollee station, so the role of AP is Registrar or Proxy. */
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEAPAction: Rx Identity\n"));
+		MTWF_DBG(pAdapter, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Receive EAP-Response/Id from wps enrollee station, the AP is Proxy \n");
 		pWscControl->WscActionMode = WSC_REGISTRAR;
 
 		if (bUPnPMsg) {
 			/* Receive enrollee identity from UPnP */
 		} else {
+			MTWF_DBG(pAdapter, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "pWscControl->WscConfMode=(%d)\n", pWscControl->WscConfMode);
+			MTWF_DBG(pAdapter, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(pWscControl->WscConfMode & WSC_PROXY_REGISTRAR)=(%d)\n", pWscControl->WscConfMode&WSC_PROXY_REGISTRAR);
 #ifdef CONFIG_AP_SUPPORT
 
 			/* Receive enrollee identity from EAP */
@@ -1138,8 +1128,8 @@ VOID WscEAPAction(
 #endif /* CONFIG_AP_SUPPORT */
 				if ((pWscControl->WscConfMode & WSC_PROXY_REGISTRAR) != 0) {
 					/* Notify UPnP daemon before send Eap-Req(wsc-start) */
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s: pEntry->Addr=%02x:%02x:%02x:%02x:%02x:%02x\n",
-							 __func__, PRINT_MAC(pEntry->Addr)));
+					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s: pEntry->Addr="MACSTR"\n",
+							 __func__, MAC2STR(pEntry->Addr)));
 #ifdef CONFIG_AP_SUPPORT
 
 					if (CurOpMode == AP_MODE) {
@@ -1235,10 +1225,12 @@ VOID WscEAPAction(
 
 #endif /* CONFIG_STA_SUPPORT */
 #endif /* WIDI_SUPPORT */
-			pWscControl->WscState = WSC_STATE_OFF;
 
 			/*Inform Disassoc that EAPHandshake is completed*/
-			RTMP_OS_COMPLETE(&pWscControl->WscEAPHandshakeCompleted);
+			if (pWscControl->WscState == WSC_STATE_WAIT_EAPFAIL)
+				RTMP_OS_COMPLETE(&pWscControl->WscEAPHandshakeCompleted);
+
+			pWscControl->WscState = WSC_STATE_WAIT_DISCONN;
 
 #ifdef CONFIG_AP_SUPPORT
 #ifdef APCLI_SUPPORT
@@ -1278,7 +1270,6 @@ VOID WscEAPAction(
 				P2pSendWirelessEvent(pAdapter, RT_P2P_WPS_COMPLETED, NULL, NULL);
 #endif /* RT_P2P_SPECIFIC_WIRELESS_EVENT */
 #endif /* P2P_SUPPORT */
-
 				/* Bring apcli interface down first */
 				if (pEntry && IS_ENTRY_PEER_AP(pEntry) && pAdapter->StaCfg[if_idx].ApcliInfStat.Enable == TRUE
 #ifdef CON_WPS
@@ -1288,8 +1279,7 @@ VOID WscEAPAction(
 #ifdef P2P_SUPPORT
 					UCHAR P2pIdx = P2pGroupTabSearch(pAdapter, pEntry->Addr);
 #endif /* P2P_SUPPORT */
-					pAdapter->StaCfg[if_idx].ApcliInfStat.Enable = FALSE;
-					ApCliIfDown(pAdapter);
+
 #ifdef P2P_SUPPORT
 
 					if ((P2pIdx != P2P_NOT_FOUND)
@@ -1300,10 +1290,6 @@ VOID WscEAPAction(
 					}
 
 #endif /* P2P_SUPPORT */
-#ifdef CONFIG_MAP_SUPPORT
-					if (!IS_MAP_TURNKEY_ENABLE(pAdapter))
-#endif /* CONFIG_MAP_SUPPORT */
-					pAdapter->StaCfg[if_idx].ApcliInfStat.Enable = TRUE;
 				}
 			}
 
@@ -1363,8 +1349,12 @@ VOID WscEAPAction(
 			/* Ignore. D-Link DIR-628 AP sometimes would send EAP_Fail to station after Link UP first then send EAP_Req/Identity. */
 		} else {
 			pWscControl->WscStatus = STATUS_WSC_FAIL;
-			//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-            RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+			RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+			wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 #ifdef IWSC_SUPPORT
 
 			if ((pAdapter->OpMode == OPMODE_STA) &&
@@ -1628,9 +1618,10 @@ VOID WscEAPAction(
 													 Elem->TimeStamp.u.LowPart, Elem->TimeStamp.u.HighPart,
 													 &pAdapter->CurrentAddress[0], CurOpMode);
 					os_free_mem(pWscData);
-
+#ifndef AX8400_COMPATIBLE
 					if (bUPnPStatus == FALSE)
 						WscUPnPErrHandle(pAdapter, pWscControl, Elem->TimeStamp.u.LowPart);
+#endif
 				}
 
 				if (pWscUPnPNodeInfo->bUPnPMsgTimerRunning == TRUE) {
@@ -1639,8 +1630,12 @@ VOID WscEAPAction(
 				}
 
 				pWscUPnPNodeInfo->bUPnPInProgress = FALSE;
-				//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-                RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+				RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+				wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 			}
 		}
 
@@ -1663,8 +1658,12 @@ VOID WscEAPAction(
 
 				if (pWscControl->WscState < WSC_STATE_WAIT_M8) {
 					pWscControl->WscStatus = STATUS_WSC_FAIL;
-					//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-                    RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+					RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+					wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 					bReSetWscIE = TRUE;
 				}
 			}
@@ -1686,8 +1685,12 @@ VOID WscEAPAction(
 				bReSetWscIE = TRUE;
 				pWscControl->WscStatus = STATUS_WSC_CONFIGURED;
 				pWscControl->WscRejectSamePinFromEnrollee = FALSE;
-				//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-                RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+				RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+				wapp_send_wsc_status_configured_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 #ifdef P2P_SUPPORT
 
 				/*RTMPCancelTimer(&pAdapter->P2pCfg.P2pWscTimer, &Cancelled);*/
@@ -1735,8 +1738,8 @@ VOID WscEAPAction(
 								 ("    AuthType = %d.    EncrType = %d.\n",
 								  pWscControl->WscProfile.Profile[0].AuthType, pWscControl->WscProfile.Profile[0].EncrType));
 						MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
-								 ("    MAC = %02x:%02x:%02x:%02x:%02x:%02x.\n",
-								  PRINT_MAC(pWscControl->WscProfile.Profile[0].MacAddr)));
+								 ("    MAC = "MACSTR".\n",
+								  MAC2STR(pWscControl->WscProfile.Profile[0].MacAddr)));
 						MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
 								 ("    KeyLen = %d.    KeyIdx = %d.\n",
 								  pWscControl->WscProfile.Profile[0].KeyLength,
@@ -1828,6 +1831,11 @@ VOID WscEAPAction(
 		pWscControl->RegData.SelfInfo.ConfigError = WSC_ERROR_NO_ERROR;
 		WscSendNACK(pAdapter, pEntry, pWscControl);
 		RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, BSS0, 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+		wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 		goto out;
 	}
 
@@ -1932,9 +1940,6 @@ VOID WscEapEnrolleeAction(
 	PSTA_ADMIN_CONFIG pStaCfg = NULL;
 
 #endif /* CONFIG_STA_SUPPORT */
-#ifdef WSC_LED_SUPPORT
-    UCHAR WPSLEDStatus;
-#endif /* WSC_LED_SUPPORT */
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
 			 ("WscEapEnrolleeAction Enter!\n"));
 	bUPnPMsg = Elem->MsgType == WSC_EAPOL_UPNP_MSG ? TRUE : FALSE;
@@ -2042,18 +2047,6 @@ VOID WscEapEnrolleeAction(
 		if (MsgType == WSC_MSG_EAP_RSP_ID)
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
 					 ("WscEapEnrolleeAction : Rx Identity(ReComputePke=%d)\n", pWscControl->RegData.ReComputePke));
-#ifdef WSC_LED_SUPPORT
-        if (!pWscControl->bSetupLock){
-            WPSLEDStatus = LED_WPS_IN_PROCESS;
-        }
-        else {
-            WPSLEDStatus = LED_WPS_SETUP_LOCKED;
-        }
-
-        if (LED_MODE(pAdapter) != WPS_LED_MODE_13) {
-            RTMPSetLED(pAdapter, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-        }
-#endif /* WSC_LED_SUPPORT */
 
 		if (MsgType == WSC_MSG_EAP_REQ_START)
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
@@ -2479,8 +2472,12 @@ Fail:
 			break;
 		}
 
-			//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x0F), 0);
-            RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x0F), (pWscControl->EntryIfIdx & 0xF0));
+			RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x0F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+			wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 
 		if (bUPnPMsg) {
 			if (pWscUPnPInfo->bUPnPMsgTimerRunning == TRUE) {
@@ -2600,8 +2597,12 @@ Done:
 			if (!(CurOpMode == AP_MODE && pEntry && IS_ENTRY_PEER_AP(pEntry)))
 				pWscControl->WscConfStatus = WSC_SCSTATE_CONFIGURED;
 			pWscControl->WscMode = 1;
-			//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x0F), 0);
-            RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x0F), (pWscControl->EntryIfIdx & 0xF0));
+			RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x0F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+			wapp_send_wsc_status_configured_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 #ifdef WIDI_SUPPORT
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("WscEapEnrolleeAction : WPS Successful; ifIdx = %d\n", pWscControl->EntryIfIdx));
 			WidiUpdateStateToDaemon(pAdapter, MIN_NET_DEVICE_FOR_MBSSID, WIDI_MSG_TYPE_ASSOC_STATUS, pEntry->Addr, NULL, 0, WIDI_P2P_WPS_SUCCESS);
@@ -2655,8 +2656,8 @@ Done:
 							  pWscControl->WscProfile.Profile[0].AuthType,
 							  pWscControl->WscProfile.Profile[0].EncrType));
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
-							 ("    MAC = %02x:%02x:%02x:%02x:%02x:%02x.\n",
-							  PRINT_MAC(pWscControl->WscProfile.Profile[0].MacAddr)));
+							 ("    MAC = "MACSTR".\n",
+							  MAC2STR(pWscControl->WscProfile.Profile[0].MacAddr)));
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
 							 ("    KeyLen = %d.    KeyIdx = %d.\n",
 							  pWscControl->WscProfile.Profile[0].KeyLength, pWscControl->WscProfile.Profile[0].KeyIndex));
@@ -3255,7 +3256,7 @@ VOID WscEapRegistrarAction(
 			if (CurOpMode == AP_MODE) {
 				pWscControl->WscStatus = STATUS_WSC_EAP_RAP_RSP_DONE_SENT;
 				/* Send EAP-Fail */
-				WscSendEapFail(pAdapter, pWscControl, FALSE);
+				WscSendEapFail(pAdapter, pWscControl, TRUE);
 				pWscControl->WscStatus = STATUS_WSC_CONFIGURED;
 #ifdef P2P_SUPPORT
 
@@ -3308,8 +3309,12 @@ VOID WscEapRegistrarAction(
 
 #endif /* CONFIG_STA_SUPPORT */
 			pWscControl->WscState = WSC_STATE_CONFIGURED;
-			//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-            RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+			RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_SUCCESS, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+			wapp_send_wsc_status_configured_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 #ifdef P2P_SUPPORT
 
 			/*RTMPCancelTimer(&pAdapter->P2pCfg.P2pWscTimer, &Cancelled);*/
@@ -3363,8 +3368,8 @@ VOID WscEapRegistrarAction(
 							  pWscControl->WscProfile.Profile[0].AuthType,
 							  pWscControl->WscProfile.Profile[0].EncrType));
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
-							 ("    MAC = %02x:%02x:%02x:%02x:%02x:%02x.\n",
-							  PRINT_MAC(pWscControl->WscProfile.Profile[0].MacAddr)));
+							 ("    MAC = "MACSTR".\n",
+							  MAC2STR(pWscControl->WscProfile.Profile[0].MacAddr)));
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
 							 ("    KeyLen = %d.    KeyIdx = %d.\n",
 							  pWscControl->WscProfile.Profile[0].KeyLength,
@@ -3488,8 +3493,12 @@ Fail:
 			break;
 		}
 
-			//RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
-            RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), (pWscControl->EntryIfIdx & 0xF0));
+			RTMPSendWirelessEvent(pAdapter, IW_WSC_STATUS_FAIL, NULL, (pWscControl->EntryIfIdx & 0x1F), 0);
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+			wapp_send_wsc_status_fail_notif(pAdapter, pWscControl->wdev);
+#endif
+#endif
 
 		if (bUPnPMsg) {
 			if (pWscUPnPInfo->bUPnPMsgTimerRunning == TRUE) {
@@ -3759,6 +3768,9 @@ VOID WscTimeOutProcess(
 {
 	INT WscMode;
 	UCHAR CurOpMode = 0xFF;
+#ifdef CONFIG_STA_SUPPORT
+	UCHAR if_idx = (pWscControl->EntryIfIdx & 0x0F);
+#endif /* CONFIG_STA_SUPPORT */
 #ifdef CONFIG_AP_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
 	CurOpMode = AP_MODE;
@@ -3778,6 +3790,18 @@ VOID WscTimeOutProcess(
 		pWscControl->WscState = WSC_STATE_CONFIGURED;
 	else if (nWscState == WSC_STATE_WAIT_RESP_ID)
 		pWscControl->WscState = WSC_STATE_OFF;
+	else if (nWscState == WSC_STATE_WAIT_DISCONN) {
+		pWscControl->WscState = WSC_STATE_OFF;
+		pWscControl->EapolTimerRunning = FALSE;
+#ifdef CONFIG_STA_SUPPORT
+		if (pEntry && IS_ENTRY_PEER_AP(pEntry) &&
+				pAd->StaCfg[if_idx].ApcliInfStat.Enable == TRUE) {
+			RTEnqueueInternalCmd(pAd, CMDTHREAD_APCLI_IF_DOWN,
+					(VOID *)&if_idx, sizeof(UCHAR));
+		}
+#endif /* CONFIG_STA_SUPPORT */
+		return;
+	}
 	else if (nWscState == WSC_STATE_RX_M2D) {
 		pWscControl->WscState = WSC_STATE_FAIL;
 #ifdef CONFIG_AP_SUPPORT
@@ -4012,7 +4036,9 @@ VOID WscEAPOLTimeOutAction(
 #ifdef CONFIG_AP_SUPPORT
 
 	if (CurOpMode == AP_MODE) {
-		if (pEntry && IS_ENTRY_CLIENT(pEntry) && (pWscControl->WscState <= WSC_STATE_CONFIGURED) && (pWscControl->WscActionMode != WSC_PROXY)) {
+		if (pEntry && IS_ENTRY_CLIENT(pEntry) && (pWscControl->WscState <= WSC_STATE_CONFIGURED ||
+			pWscControl->WscState == WSC_STATE_WAIT_RESP_ID) &&
+			(pWscControl->WscActionMode != WSC_PROXY)) {
 			/* A timer in the AP should cause to be disconnected after 5 seconds if a */
 			/* valid EAP-Rsp/Identity indicating WPS is not received. */
 			/* << from WPS EAPoL and RSN handling.doc >> */
@@ -4486,6 +4512,13 @@ VOID WscEAPOLTimeOutAction(
 
 		break;
 
+	case WSC_STATE_WAIT_DISCONN:
+
+		/* Enrollee needs to wait for Deauth from Registrar */
+		WscTimeOutProcess(pWscControl->pAd, pEntry, WSC_STATE_WAIT_DISCONN, pWscControl);
+
+		break;
+
 	default:
 		break;
 	}
@@ -4521,10 +4554,15 @@ VOID Wsc2MinsTimeOutAction(
 	if (pWscControl != NULL) {
 		wdev = (struct wifi_dev *)pWscControl->wdev;
 		ASSERT(wdev);
+		if (wdev == NULL) {
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("wdev is NULL!\n"));
+			return;
+		}
+
 		pAd =  (PRTMP_ADAPTER)pWscControl->pAd;
 
 		if (pAd == NULL) {
-			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("pAd is NULL!\n"));
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("pAd is NULL!\n"));
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("<----- Wsc2MinsTimeOutAction\n"));
 			return;
 		}
@@ -4671,7 +4709,7 @@ VOID Wsc2MinsTimeOutAction(
 						BCN_UPDATE_IF_STATE_CHG);
 					AsicEnableIbssSync(
 						pAd,
-						pAd->CommonCfg.BeaconPeriod,
+						pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)],
 						HW_BSSID_0,
 						OPMODE_ADHOC);
 				}
@@ -4743,15 +4781,7 @@ VOID Wsc2MinsTimeOutAction(
 				} else {
 					/* do nothing. */
 				}
-			} 
-            else if (LED_MODE(pAd) == WPS_LED_MODE_13){
-                if (!pWscControl->bSetupLock)
-                {
-                    WPSLEDStatus = LED_WPS_ERROR;
-                    RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-                }
-            }
-			else {
+			} else {
 				/* do nothing. */
 			}
 
@@ -4805,19 +4835,19 @@ UCHAR WscRxMsgType(
 			return  WSC_MSG_EAP_REG_RSP_ID;
 		else if (memcmp(enrIdentity, pElem->Msg, strlen(enrIdentity)) == 0)
 			return  WSC_MSG_EAP_ENR_RSP_ID;
-	} else if (pElem->MsgLen && NdisEqualMemory(id_data, pElem->Msg, pElem->MsgLen)) {
+	} else if (pElem->MsgLen && NdisEqualMemory(id_data, pElem->Msg, strlen(id_data))) {
 		/* Eap-Req/Identity(hello) */
 		return  WSC_MSG_EAP_REQ_ID;
-	} else if (pElem->MsgLen && NdisEqualMemory(fail_data, pElem->Msg, pElem->MsgLen)) {
+	} else if (pElem->MsgLen && NdisEqualMemory(fail_data, pElem->Msg, strlen(fail_data))) {
 		/* Eap-Fail */
 		return  WSC_MSG_EAP_FAIL;
-	} else if (pElem->MsgLen && NdisEqualMemory(wsc_start, pElem->Msg, pElem->MsgLen)) {
+	} else if (pElem->MsgLen && NdisEqualMemory(wsc_start, pElem->Msg, strlen(wsc_start))) {
 		/* Eap-Req(Wsc_Start) */
 		return WSC_MSG_EAP_REQ_START;
 	}
 
 #ifdef WSC_V2_SUPPORT
-	else if (pElem->MsgLen && NdisEqualMemory(wsc_frag_ack, pElem->Msg, pElem->MsgLen)) {
+	else if (pElem->MsgLen && NdisEqualMemory(wsc_frag_ack, pElem->Msg, strlen(wsc_frag_ack))) {
 		/* WSC FRAG ACK */
 		return WSC_MSG_EAP_FRAG_ACK;
 	}
@@ -4839,7 +4869,10 @@ UCHAR WscRxMsgType(
 			NdisMoveMemory(&WscType, pData, 2);
 			NdisMoveMemory(&WscLen,  pData + 2, 2);
 			WscLen = ntohs(WscLen);
-
+			if (Length < WscLen + 4) {
+				MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+				break;
+			}
 			if (ntohs(WscType) == WSC_ID_MSG_TYPE)
 				return *(pData + 4);	/* Found the message type */
 
@@ -4898,6 +4931,9 @@ VOID WscInitRegistrarPair(RTMP_ADAPTER *pAd, WSC_CTRL *pWscControl, UCHAR apidx)
 {
 	UCHAR CurOpMode = 0xff;
 	struct wifi_dev *wdev = NULL;
+#ifdef CONFIG_AP_SUPPORT
+	INT ret;
+#endif
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("-----> WscInitRegistrarPair\n"));
 #ifdef CONFIG_AP_SUPPORT
@@ -4953,8 +4989,11 @@ VOID WscInitRegistrarPair(RTMP_ADAPTER *pAd, WSC_CTRL *pWscControl, UCHAR apidx)
 		if (!RTMP_TEST_FLAG(pWscControl, 0x04)) {
 			NdisZeroMemory(&pWscControl->RegData.SelfInfo.DeviceName[0],
 						   sizeof(pWscControl->RegData.SelfInfo.DeviceName));
-			snprintf(&pWscControl->RegData.SelfInfo.DeviceName[0],
+			ret = snprintf(&pWscControl->RegData.SelfInfo.DeviceName[0],
 					 sizeof(pWscControl->RegData.SelfInfo.DeviceName), "%s_%d", AP_WSC_DEVICE_NAME, apidx);
+			if (os_snprintf_error(sizeof(pWscControl->RegData.SelfInfo.DeviceName), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "DeviceName snprintf error!\n");
+
 		}
 	}
 
@@ -5243,6 +5282,13 @@ VOID WscSendEapReqId(
 		os_free_mem(pOutBuffer);
 
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("<----- WscSendEapReqId\n"));
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "=============[EAP Req Info]=============================\n");
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "EapFrame.Code   = (%u)\n", EapFrame.Code);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "EapFrame.Id   = (%u)\n", EapFrame.Id);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "EapFrame.Length   = (%hu)\n", EapFrame.Length);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "EapFrame.Type   = (%u)\n", EapFrame.Type);
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, " =============[EAP Req Info]=============================\n\n");
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Sent EAP Response completed!!\n");
 }
 
 /*
@@ -5293,9 +5339,9 @@ VOID WscSendEapolStart(
 
 	if (pEntry == NULL) {
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
-				 ("%s: cannot find this entry(%02x:%02x:%02x:%02x:%02x:%02x)\n",
+				 ("%s: cannot find this entry("MACSTR")\n",
 				  __func__,
-				  PRINT_MAC(pBssid)));
+				  MAC2STR(pBssid)));
 		return;
 	}
 
@@ -6520,22 +6566,11 @@ VOID WscSendEapFail(
 #endif /* CONFIG_AP_SUPPORT */
 	MAC_TABLE_ENTRY *pEntry = NULL;
 	UCHAR CurOpMode = 0xFF;
-#ifdef WSC_LED_SUPPORT
-    UCHAR WPSLEDStatus = 21;
-#endif /* WSC_LED_SUPPORT */
 
 	NdisZeroMemory(Header802_3, sizeof(UCHAR) * 14);
 	/* 1. Send EAP-Rsp Id */
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
 			 ("-----> WscSendEapFail\n"));
-#ifdef WSC_LED_SUPPORT
-    if (pWscControl->WscStatus == STATUS_WSC_CONFIGURED)
-    {
-        /* The protocol is finished. */
-        WPSLEDStatus = LED_WPS_SUCCESS;
-    }
-    RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-#endif /* WSC_LED_SUPPORT */
 #ifdef CONFIG_AP_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
 	CurOpMode = AP_MODE;
@@ -6725,6 +6760,10 @@ VOID WscSelectedRegistrar(
 		NdisMoveMemory(&WscType, pData, 2);
 		NdisMoveMemory(&WscLen,  pData + 2, 2);
 		WscLen = ntohs(WscLen);
+		if (Length < WscLen + 4) {
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+			break;
+		}
 		pData  += 4;
 		Length -= 4;
 
@@ -7842,13 +7881,10 @@ VOID WscStop(
 		RTMPCancelTimer(&pWscControl->WscSkipTurnOffLEDTimer, &Cancelled);
 	}
 
-	if (LED_MODE(pAd) != WPS_LED_MODE_13)
-	{
-		/* Reset the WPS walk time. */
-		pWscControl->bWPSWalkTimeExpiration = FALSE;
-		WPSLEDStatus = LED_WPS_TURN_LED_OFF;
-		RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-	}
+	/* Reset the WPS walk time. */
+	pWscControl->bWPSWalkTimeExpiration = FALSE;
+	WPSLEDStatus = LED_WPS_TURN_LED_OFF;
+	RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
 #ifdef CONFIG_MAP_SUPPORT
 	if (IS_MAP_TURNKEY_ENABLE(pAd) && (bFromApCli == TRUE) && pWscControl->WscProfileRetryTimerRunning) {
 		pWscControl->WscProfileRetryTimerRunning = FALSE;
@@ -8533,6 +8569,7 @@ VOID	WscWriteSsidToDatFile(
 {
 #ifdef CONFIG_AP_SUPPORT
 	UCHAR	apidx;
+	INT ret;
 #endif /* CONFIG_AP_SUPPORT */
 	INT offset = 0;
 
@@ -8575,7 +8612,9 @@ VOID	WscWriteSsidToDatFile(
 		RTMP_STRING item_str[10] = {0};
 
 		for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
-			snprintf(item_str, sizeof(item_str), "SSID%d", (apidx + 1));
+			ret = snprintf(item_str, sizeof(item_str), "SSID%d", (apidx + 1));
+			if (os_snprintf_error(sizeof(item_str), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "item_str snprintf error!\n");
 
 			if (rtstrstr(pTempStr, item_str)) {
 				NdisZeroMemory(pTempStr, 1024);
@@ -8601,6 +8640,7 @@ VOID WscWriteWpaPskToDatFile(
 {
 #ifdef CONFIG_AP_SUPPORT
 	UCHAR apidx;
+	INT ret;
 #endif /* CONFIG_AP_SUPPORT */
 	PWSC_CTRL pWscControl;
 	INT offset = 0;
@@ -8643,7 +8683,9 @@ VOID WscWriteWpaPskToDatFile(
 		RTMP_STRING item_str[10] = {0};
 
 		for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
-			snprintf(item_str, sizeof(item_str), "WPAPSK%d", (apidx + 1));
+			ret = snprintf(item_str, sizeof(item_str), "WPAPSK%d", (apidx + 1));
+			if (os_snprintf_error(sizeof(item_str), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "item_str snprintf error!\n");
 
 			if (rtstrstr(pTempStr, item_str)) {
 				pWscControl = &pAd->ApCfg.MBSSID[apidx].wdev.WscControl;
@@ -8695,6 +8737,10 @@ static BOOLEAN WscCheckNonce(
 		memcpy((UINT8 *)&TLV_Recv, pData, 4);
 		WscType = be2cpu16(TLV_Recv.Type);
 		WscLen  = be2cpu16(TLV_Recv.Length);
+		if (Length < WscLen + 4) {
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+			break;
+		}
 		pData  += 4;
 		Length -= 4;
 
@@ -8729,6 +8775,7 @@ VOID WscGetRegDataPIN(
 	IN  PWSC_CTRL pWscControl)
 {
 	UCHAR tempPIN[9] = {0};
+	INT ret;
 
 	if ((pWscControl->WscMode == WSC_PBC_MODE) ||
 		(pWscControl->WscMode == WSC_SMPBC_MODE))
@@ -8739,18 +8786,24 @@ VOID WscGetRegDataPIN(
 	memset(pWscControl->RegData.PIN, 0, 8);
 
 	if (pWscControl->WscPinCode == 0) {
-		snprintf((RTMP_STRING *) tempPIN, sizeof(tempPIN), "00000000");
+		ret = snprintf((RTMP_STRING *) tempPIN, sizeof(tempPIN), "00000000");
+		if (os_snprintf_error(sizeof(tempPIN), ret))
+			MTWF_DBG(pAdapter, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "tempPIN snprintf error!\n");
 		memcpy(pWscControl->RegData.PIN, tempPIN, 8);
 		pWscControl->RegData.PinCodeLen = 8;
 	} else {
 		if (pWscControl->WscPinCodeLen == 4) {
 			UCHAR	temp4PIN[5] = {0};
 
-			snprintf((RTMP_STRING *) temp4PIN, sizeof(temp4PIN), "%04u", pWscControl->WscPinCode);
+			ret = snprintf((RTMP_STRING *) temp4PIN, sizeof(temp4PIN), "%04u", pWscControl->WscPinCode);
+			if (os_snprintf_error(sizeof(temp4PIN), ret))
+				MTWF_DBG(pAdapter, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "temp4PIN snprintf error!\n");
 			memcpy(pWscControl->RegData.PIN, temp4PIN, 4);
 			pWscControl->RegData.PinCodeLen = 4;
 		} else {
-			snprintf((RTMP_STRING *) tempPIN, sizeof(tempPIN), "%08u", pWscControl->WscPinCode);
+			ret = snprintf((RTMP_STRING *) tempPIN, sizeof(tempPIN), "%08u", pWscControl->WscPinCode);
+			if (os_snprintf_error(sizeof(tempPIN), ret))
+				MTWF_DBG(pAdapter, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "tempPIN snprintf error!\n");
 			memcpy(pWscControl->RegData.PIN, tempPIN, 8);
 			pWscControl->RegData.PinCodeLen = 8;
 		}
@@ -8813,6 +8866,10 @@ static VOID WscGetConfigErrFromNack(
 		memcpy((UINT8 *)&TLV_Recv, pData, 4);
 		WscType = be2cpu16(TLV_Recv.Type);
 		WscLen  = be2cpu16(TLV_Recv.Length);
+		if (Length < WscLen + 4) {
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("unexpected WSC IE Length(%u)\n", WscLen));
+			break;
+		}
 		pData  += 4;
 		Length -= 4;
 
@@ -9001,6 +9058,11 @@ VOID  WscPushPBCAction(
 	/* 2. Set 2 min timout routine */
 	RTMPSetTimer(&pWscControl->Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 	pWscControl->Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+	wapp_send_wsc_status_start_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 	pWscControl->bWscTrigger = TRUE;	/* start work */
 	/* 3. Call WscScan subroutine */
 	WscScanExec(pAd, pWscControl);
@@ -9087,6 +9149,11 @@ VOID WscPINAction(
 	/* 2. Set 2 min timout routine */
 	RTMPSetTimer(&pWscControl->Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 	pWscControl->Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+	wapp_send_wsc_status_start_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 	pWscControl->bWscTrigger = TRUE;	/* start work */
 	/* 3. Call WscScan subroutine */
 	WscScanExec(pAd, pWscControl);
@@ -9140,9 +9207,7 @@ VOID WscScanExec(
 #ifdef WSC_LED_SUPPORT
 	/* The protocol is connecting to a partner. */
 	WPSLEDStatus = LED_WPS_IN_PROCESS;
-	if (LED_MODE(pAd) != WPS_LED_MODE_13) {
-		RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-	}
+	RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
 #endif /* WSC_LED_SUPPORT */
 #ifdef APCLI_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(pAd) {
@@ -9234,12 +9299,9 @@ BOOLEAN	WscPBCExec(
 		if (pWscControl->WscPBCBssCount == 0) {
 			pWscControl->WscStatus = STATUS_WSC_PBC_NO_AP;
 #ifdef WSC_LED_SUPPORT
-			if (LED_MODE(pAd) != WPS_LED_MODE_13)
-			{
-				/* Failed to find any partner. */
-				WPSLEDStatus = LED_WPS_ERROR;
-				RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-			}
+			/* Failed to find any partner. */
+			WPSLEDStatus = LED_WPS_ERROR;
+			RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
 #ifdef CONFIG_WIFI_LED_SUPPORT
 
 			if (LED_MODE(pAd) == WPS_LED_MODE_SHARE)
@@ -9312,16 +9374,11 @@ BOOLEAN	WscPBCExec(
 		sta_cfg->MlmeAux.CurrReqIsFromNdis = FALSE;
 
 	if (!cntl_idle(wdev)) {
-		RTMP_MLME_RESET_STATE_MACHINE(pAd, wdev);
+		RTEnqueueInternalCmd(pAd, CMDTHREAD_MLME_RESET_STATE_MACHINE, pWscControl, sizeof(WSC_CTRL));
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_OFF, ("!!! WscPBCExec --> MLME busy, reset MLME state machine !!!\n"));
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
-#ifndef APCLI_SUPPORT
-	/* For ApCli this would be done in CMDTHREAD_APCLI_PBC_AP_FOUND handle */
-	pWscControl->WscState = WSC_STATE_START;
-	pWscControl->WscStatus = STATUS_WSC_START_ASSOC;
-#endif
 #ifdef WSC_LED_SUPPORT
 	/* The protocol is connecting to a partner. */
 	WPSLEDStatus = LED_WPS_IN_PROCESS;
@@ -9613,6 +9670,9 @@ BOOLEAN WscBssWpsIESearchForPBC(
 
 #endif
 
+	if (Len == 0 || Len > MAX_VIE_LEN)
+		return ret;
+
 	while ((Len > 0) && (bFound == FALSE)) {
 		pEid = (PBEACON_EID_STRUCT) pData;
 
@@ -9641,10 +9701,18 @@ BOOLEAN WscBssWpsIESearchForPBC(
 		pData += 6;
 		Len   -= 6;
 
+		if (Len == 0 || Len > MAX_VIE_LEN)
+			return ret;
 		/* 4. Start to look the PBC type within WSC VarIE */
 		while (Len > 0) {
 			/* Check for WSC IEs */
 			pWscIE = (PWSC_IE) pData;
+
+			if (Len < (be2cpu16(pWscIE->Length) + 4)) {
+				MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
+					"unexpected WSC IE Length(%u)\n", be2cpu16(pWscIE->Length));
+				break;
+			}
 
 			if (be2cpu16(pWscIE->Type) == WSC_ID_SEL_REGISTRAR) {
 				hex_dump("SelReg:", pData, 5);
@@ -9705,8 +9773,8 @@ BOOLEAN WscBssWpsIESearchForPBC(
 					/* Found matching PBC AP in current list, add it into table and add the count */
 					bFound = TRUE;
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("DPID=PBC Found -->\n"));
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  Bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 pInBss->Bssid[0], pInBss->Bssid[1], pInBss->Bssid[2], pInBss->Bssid[3], pInBss->Bssid[4], pInBss->Bssid[5]));
+					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  Bssid "MACSTR"\n",
+							 MAC2STR(pInBss->Bssid)));
 
 					if (pInBss->Channel > 14)
 						TmpInfo.Band = WSC_RFBAND_50GHZ;
@@ -9852,6 +9920,9 @@ BOOLEAN WscBssWpsIESearchForPIN(
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s\n", __func__));
 	NdisZeroMemory(&TmpInfo, sizeof(UUID_BSSID_CH_INFO));
 
+	if (Len == 0 || Len > MAX_VIE_LEN)
+		return ret;
+
 	while ((Len > 0) && (bFound == FALSE)) {
 		pEid = (PBEACON_EID_STRUCT) pData;
 
@@ -9884,10 +9955,18 @@ BOOLEAN WscBssWpsIESearchForPIN(
 		if (pWscControl->ScanCountToincludeWPSPin1 > 3)
 			bSelWpsPIN1 = TRUE;
 
+		if (Len == 0 || Len > MAX_VIE_LEN)
+			return ret;
 		/* 4. Start to look the PIN type within WSC VarIE */
 		while (Len > 0) {
 			/* Check for WSC IEs */
 			pWscIE = (PWSC_IE) pData;
+
+			if (Len < (be2cpu16(pWscIE->Length) + 4)) {
+				MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
+					"unexpected WSC IE Length(%u)\n", be2cpu16(pWscIE->Length));
+				break;
+			}
 
 			if (be2cpu16(pWscIE->Type) == WSC_ID_SEL_REGISTRAR) {
 				hex_dump("SelReg:", pData, 5);
@@ -9947,8 +10026,8 @@ BOOLEAN WscBssWpsIESearchForPIN(
 					/* Found matching PIN AP in current list, add it into table and add the count */
 					bFound = TRUE;
 					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("DPID=PIN Found -->\n"));
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  Bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 pInBss->Bssid[0], pInBss->Bssid[1], pInBss->Bssid[2], pInBss->Bssid[3], pInBss->Bssid[4], pInBss->Bssid[5]));
+					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  Bssid "MACSTR"\n",
+							 MAC2STR(pInBss->Bssid)));
 
 					if (pInBss->Channel > 14)
 						TmpInfo.Band = WSC_RFBAND_50GHZ;
@@ -10088,7 +10167,7 @@ VOID WscPBCBssTableSort(
 	IN RTMP_ADAPTER *pAd,
 	IN WSC_CTRL *pWscControl)
 {
-	INT i;
+	UINT i;
 	BSS_ENTRY *pInBss;
 	UUID_BSSID_CH_INFO *ApUuidBssid = NULL;
 	BOOLEAN rv = FALSE;
@@ -10100,6 +10179,11 @@ VOID WscPBCBssTableSort(
 	STA_ADMIN_CONFIG *sta_cfg = GetStaCfgByWdev(pAd, wdev);
 
 	ASSERT(sta_cfg);
+	if (sta_cfg == NULL) {
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, ("sta_cfg is null !!!\n"));
+		return;
+	}
+
 #endif
 	wdevBand = HcGetBandByWdev(wdev);
 	/* allocate memory */
@@ -10122,10 +10206,10 @@ VOID WscPBCBssTableSort(
 
 #ifdef CONFIG_STA_SUPPORT
 #ifdef CONFIG_MAP_SUPPORT
-	if (wdevBand != map_rc_get_band_idx_by_chan(pAd, pInBss->Channel))
+		if (wdevBand != map_rc_get_band_idx_by_chan(pAd, pInBss->Channel))
 			continue;
 #else
-	if (wdevBand != HcGetBandByChannel(pAd, pInBss->Channel))
+		if (wdevBand != HcGetBandByChannelRange(pAd, pInBss->Channel))
 			continue;
 
 #endif
@@ -10168,7 +10252,7 @@ VOID WscPBCBssTableSort(
 			sta_cfg->MlmeAux.Channel = ApUuidBssid[0].Channel;
 			COPY_MAC_ADDR(sta_cfg->CfgApCliBssid, pWscControl->WscBssid);
 		}
-		printk("will connect %s (%02X:%02X:%02X:%02X:%02X:%02X) on %d\n", pWscControl->WscSsid.Ssid, PRINT_MAC(pWscControl->WscBssid), ApUuidBssid[0].Channel);
+		printk("will connect %s ("MACSTR") on %d\n", pWscControl->WscSsid.Ssid, MAC2STR(pWscControl->WscBssid), ApUuidBssid[0].Channel);
 
 #endif /* APCLI_SUPPORT */
 	}
@@ -10210,7 +10294,7 @@ VOID WscPINBssTableSort(
 	IN RTMP_ADAPTER *pAd,
 	IN WSC_CTRL *pWscControl)
 {
-	INT i;
+	UINT i;
 	BSS_ENTRY *pInBss;
 	UUID_BSSID_CH_INFO *ApUuidBssid = NULL;
 	BOOLEAN rv = FALSE;
@@ -10248,10 +10332,10 @@ VOID WscPINBssTableSort(
 		if (RTMPCompareMemory(pWscControl->WscBssid, pInBss->Bssid, 6))
 			continue;
 
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  wsc Bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 pWscControl->WscBssid[0], pWscControl->WscBssid[1], pWscControl->WscBssid[2], pWscControl->WscBssid[3], pWscControl->WscBssid[4], pWscControl->WscBssid[5]));
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("# pIn Bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 pInBss->Bssid[0], pInBss->Bssid[1], pInBss->Bssid[2], pInBss->Bssid[3], pInBss->Bssid[4], pInBss->Bssid[5]));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("#  wsc Bssid "MACSTR"\n",
+				 MAC2STR(pWscControl->WscBssid)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("# pIn Bssid "MACSTR"\n",
+				 MAC2STR(pInBss->Bssid)));
 
 		/* 1. Check VarIE length */
 		if (pInBss->VarIELen == 0)
@@ -10315,6 +10399,7 @@ VOID WscGenRandomKey(
 	UCHAR idx = 0;
 	UCHAR keylen = 0;
 	UCHAR retry = 0;
+	INT ret;
 
 	NdisZeroMemory(pKey, 64);
 
@@ -10327,7 +10412,9 @@ VOID WscGenRandomKey(
 		for (idx = 0; idx < 32; idx++) {
 			NdisZeroMemory(&tmpStrB[0], sizeof(tmpStrB));
 			tempRandomByte = RandomByte(pAd);
-			snprintf((RTMP_STRING *) &tmpStrB[0], 3, "%02x", tempRandomByte);
+			ret = snprintf((RTMP_STRING *) &tmpStrB[0], sizeof(tmpStrB), "%02x", tempRandomByte);
+			if (os_snprintf_error(sizeof(tmpStrB), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "tmpStrB snprintf error!\n");
 			NdisMoveMemory(pKey + (idx * 2), &tmpStrB[0], 2);
 		}
 
@@ -10372,6 +10459,7 @@ VOID WscCreateProfileFromCfg(
 	UCHAR WepKeyId = 0;
 	PWSC_CREDENTIAL pCredential = NULL;
 	UCHAR CurOpMode = AP_MODE;
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd) {
 		if (pWscControl->EntryIfIdx == BSS0)
@@ -10543,9 +10631,13 @@ VOID WscCreateProfileFromCfg(
 			if (pSecConfig && pSecConfig->WepKey[WepKeyId].KeyLen) {
 				INT i;
 
-				for (i = 0; i < pSecConfig->WepKey[WepKeyId].KeyLen; i++)
-					snprintf((RTMP_STRING *) pCredential->Key + strlen((RTMP_STRING *)pCredential->Key),
-						64 - strlen((RTMP_STRING *)pCredential->Key), "%02x", pSecConfig->WepKey[WepKeyId].Key[i]);
+				for (i = 0; i < pSecConfig->WepKey[WepKeyId].KeyLen; i++) {
+					tmp_buf_left = 64 - strlen((RTMP_STRING *)pCredential->Key);
+					ret = snprintf((RTMP_STRING *) pCredential->Key + strlen((RTMP_STRING *)pCredential->Key),
+						tmp_buf_left, "%02x", pSecConfig->WepKey[WepKeyId].Key[i]);
+					if (os_snprintf_error(tmp_buf_left, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pCredential->Key snprintf error!\n");
+				}
 
 				pCredential->KeyLength = pSecConfig->WepKey[WepKeyId].KeyLen * 2;
 			}
@@ -10823,8 +10915,8 @@ VOID WpsSmProcess(
 			apidx = pEntry->func_tb_idx;
 		else {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
-					 ("%s:: cannot find this entry(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-					  __func__, PRINT_MAC(pHeader->Addr2)));
+					 ("%s:: cannot find this entry("MACSTR")\n",
+					  __func__, MAC2STR(pHeader->Addr2)));
 			return;
 		}
 	}
@@ -11093,6 +11185,11 @@ INT WscGetConfWithoutTrigger(
 	/* 2mins time-out timer */
 	RTMPSetTimer(&pWscControl->Wsc2MinsTimer, WSC_TWO_MINS_TIME_OUT);
 	pWscControl->Wsc2MinsTimerRunning = TRUE;
+#ifdef WAPP_SUPPORT
+#ifndef AX8400_COMPATIBLE
+	wapp_send_wsc_status_start_notif(pAd, pWscControl->wdev);
+#endif
+#endif
 	pWscControl->WscStatus = STATUS_WSC_LINK_UP;
 
 	if (bFromUPnP)
@@ -11174,7 +11271,7 @@ VOID WscCheckWpsIeFromWpsAP(
 	OUT PUSHORT pDPIDFromAP)
 {
 	PUCHAR pData;
-	SHORT Len = 0;
+	INT Len = 0;
 	PWSC_IE pWscIE;
 	USHORT DevicePasswordID;
 
@@ -11184,7 +11281,9 @@ VOID WscCheckWpsIeFromWpsAP(
 #endif /* IWSC_SUPPORT */
 	   ) {
 		pData = (PUCHAR) pEid->Octet + 4;
-		Len = (SHORT)(pEid->Len - 4);
+		Len = pEid->Len - 4;
+		if (Len <= 0 || Len > MAX_LEN_OF_WSC_IE)
+			return;
 
 		while (Len > 0) {
 			WSC_IE	WscIE;
@@ -11192,6 +11291,12 @@ VOID WscCheckWpsIeFromWpsAP(
 			NdisMoveMemory(&WscIE, pData, sizeof(WSC_IE));
 			/* Check for WSC IEs */
 			pWscIE = &WscIE;
+
+			if (Len < (be2cpu16(pWscIE->Length) + 4)) {
+				MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
+					"unexpected WSC IE Length(%u)\n", be2cpu16(pWscIE->Length));
+				break;
+			}
 
 			/* Check for device password ID, PIN = 0x0000, PBC = 0x0004 */
 			if (pDPIDFromAP && be2cpu16(pWscIE->Type) == WSC_ID_DEVICE_PWD_ID) {
@@ -11211,6 +11316,7 @@ VOID WscCheckWpsIeFromWpsAP(
 
 #ifdef CONFIG_STA_SUPPORT
 #endif /* CONFIG_STA_SUPPORT */
+
 			/* Set the offset and look for PBC information */
 			/* Since Type and Length are both short type, we need to offset 4, not 2 */
 			pData += (be2cpu16(pWscIE->Length) + 4);
@@ -11316,7 +11422,7 @@ ULONG WscSearchWpsApBySSID(
 	IN INT WscMode,
 	IN VOID *wdev_obj)
 {
-	UCHAR i;
+	UINT i;
 	USHORT DesiredDPID;
 	BSS_ENTRY *pBss;
 	PWSC_CTRL pWscControl;
@@ -11463,8 +11569,8 @@ VOID WscPBC_DPID_FromSTA(
 		NdisMoveMemory(pWscStaPbcProbeInfo->StaMacAddr[current_band][Index], pMacAddr, MAC_ADDR_LEN);
 	}
 
-	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s(): STA_MAC = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, PRINT_MAC(pMacAddr)));
+	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s(): STA_MAC = "MACSTR"\n",
+			 __func__, MAC2STR(pMacAddr)));
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s(): WscPBCStaProbeCount[%d] = %d\n",
 			 __func__, current_band, pWscStaPbcProbeInfo->WscPBCStaProbeCount[current_band]));
 }
@@ -11528,17 +11634,36 @@ static VOID WscWriteAuthToDAT(
 	IN  UCHAR CurOpMode,
 	IN  RTMP_STRING *pTempStr)
 {
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	INT index;
+	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+
+	if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+		BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+		index = 0;
+	}
+#ifdef DBDC_MODE
+	else {
+		BssidNumIdx = pAd->ApCfg.BssidNum;
+		index = pAd->ApCfg.BssidNumPerBand[0];
+	}
+#endif
 
 	if (CurOpMode == AP_MODE) {
-		INT index;
-
-		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
+		for (; index < BssidNumIdx; index++) {
 			if (pAd->ApCfg.MBSSID[index].SsidLen) {
-				if (index == 0)
-					snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", GetAuthModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.AKMMap));
+				tmp_buf_left = 512 - strlen(pTempStr);
+				if (index == 0 || index == pAd->ApCfg.BssidNumPerBand[0])
+					ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s",
+										GetAuthModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.AKMMap));
 				else
-					snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%s", GetAuthModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.AKMMap));
+					ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%s",
+										GetAuthModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.AKMMap));
+
+				if (os_snprintf_error(tmp_buf_left, ret))
+					MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			}
 		}
 	}
@@ -11548,8 +11673,10 @@ static VOID WscWriteAuthToDAT(
 
 	if (CurOpMode == STA_MODE) {
 		USHORT auth_flag = WscGetAuthType(pAd->StaCfg[0].wdev.SecConfig.AKMMap);
-
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", WscGetAuthTypeStr(auth_flag));
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", WscGetAuthTypeStr(auth_flag));
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
@@ -11560,18 +11687,34 @@ static VOID WscWriteEncrToDAT(
 	IN  UCHAR CurOpMode,
 	IN  RTMP_STRING *pTempStr)
 {
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	INT index;
+	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+
+	if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+		BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+		index = 0;
+	}
+#ifdef DBDC_MODE
+	else {
+		BssidNumIdx = pAd->ApCfg.BssidNum;
+		index = pAd->ApCfg.BssidNumPerBand[0];
+	}
+#endif
 
 	if (CurOpMode == AP_MODE) {
-		INT index;
-
-		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
-			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s",
+		for (; index < BssidNumIdx; index++) {
+			tmp_buf_left = 512 - strlen(pTempStr);
+			if (index == 0 || index == pAd->ApCfg.BssidNumPerBand[0])
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s",
 						GetEncryModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseCipher));
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%s",
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%s",
 						GetEncryModeStr(pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseCipher));
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		}
 	}
 
@@ -11580,8 +11723,10 @@ static VOID WscWriteEncrToDAT(
 
 	if (CurOpMode == STA_MODE) {
 		USHORT encrypt_flag = WscGetEncryType(pAd->StaCfg[0].wdev.SecConfig.PairwiseCipher);
-
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", WscGetEncryTypeStr(encrypt_flag));
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", WscGetEncryTypeStr(encrypt_flag));
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
@@ -11593,18 +11738,34 @@ static VOID WscWriteWscConfModeToDAT(
 	IN  RTMP_STRING *pTempStr)
 {
 	WSC_CTRL *wsc_ctrl;
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	INT index;
+	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+
+	if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+		BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+		index = 0;
+	}
+#ifdef DBDC_MODE
+	else {
+		BssidNumIdx = pAd->ApCfg.BssidNum;
+		index = pAd->ApCfg.BssidNumPerBand[0];
+	}
+#endif
 
 	if (CurOpMode == AP_MODE) {
-		INT index;
-
-		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
+		for (; index < BssidNumIdx; index++) {
 			wsc_ctrl = &pAd->ApCfg.MBSSID[index].wdev.WscControl;
-
-			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", wsc_ctrl->WscConfMode);
+			tmp_buf_left = 512 - strlen(pTempStr);
+			if (index == 0 || index == pAd->ApCfg.BssidNumPerBand[0])
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", wsc_ctrl->WscConfMode);
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", wsc_ctrl->WscConfMode);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d", wsc_ctrl->WscConfMode);
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
+
 		}
 	}
 
@@ -11613,7 +11774,10 @@ static VOID WscWriteWscConfModeToDAT(
 
 	if (CurOpMode == STA_MODE) {
 		wsc_ctrl = &pAd->StaCfg[0].wdev.WscControl;
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", wsc_ctrl->WscConfMode);
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", wsc_ctrl->WscConfMode);
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
@@ -11625,18 +11789,33 @@ static VOID WscWriteWscConfStatusToDAT(
 	IN  RTMP_STRING *pTempStr)
 {
 	WSC_CTRL *wsc_ctrl;
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	INT index;
+	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+
+	if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+		BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+		index = 0;
+	}
+#ifdef DBDC_MODE
+	else {
+		BssidNumIdx = pAd->ApCfg.BssidNum;
+		index = pAd->ApCfg.BssidNumPerBand[0];
+	}
+#endif
 
 	if (CurOpMode == AP_MODE) {
-		INT index;
-
-		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
+		for (; index < pAd->ApCfg.BssidNum; index++) {
 			wsc_ctrl = &pAd->ApCfg.MBSSID[index].wdev.WscControl;
-
-			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", wsc_ctrl->WscConfStatus);
+			tmp_buf_left = 512 - strlen(pTempStr);
+			if (index == 0 || index == pAd->ApCfg.BssidNumPerBand[0])
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", wsc_ctrl->WscConfStatus);
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", wsc_ctrl->WscConfStatus);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d", wsc_ctrl->WscConfStatus);
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		}
 	}
 
@@ -11645,7 +11824,10 @@ static VOID WscWriteWscConfStatusToDAT(
 
 	if (CurOpMode == STA_MODE) {
 		wsc_ctrl = &pAd->StaCfg[0].wdev.WscControl;
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", wsc_ctrl->WscConfStatus);
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", wsc_ctrl->WscConfStatus);
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
@@ -11656,32 +11838,57 @@ static VOID WscWriteDefaultKeyIdToDAT(
 	IN  UCHAR CurOpMode,
 	IN  RTMP_STRING *pTempStr)
 {
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	INT index;
+	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+
+	if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+		BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+		index = 0;
+	}
+#ifdef DBDC_MODE
+	else {
+		BssidNumIdx = pAd->ApCfg.BssidNum;
+		index = pAd->ApCfg.BssidNumPerBand[0];
+	}
+#endif
 
 	if (CurOpMode == AP_MODE) {
-		INT index;
-
-		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
-			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseKeyId + 1);
+		for (; index < BssidNumIdx; index++) {
+			tmp_buf_left = 512 - strlen(pTempStr);
+			if (index == 0 || index == pAd->ApCfg.BssidNumPerBand[0])
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d",
+							pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseKeyId + 1);
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseKeyId + 1);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d",
+							pAd->ApCfg.MBSSID[index].wdev.SecConfig.PairwiseKeyId + 1);
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		}
 	}
 
 #endif /* CONFIG_AP_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
 
-	if (CurOpMode == STA_MODE)
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
-
+	if (CurOpMode == STA_MODE) {
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
+	}
 #endif /* CONFIG_STA_SUPPORT */
 }
 
 #define WSC_PRINT_WEP_KEY(__idx, __key_len, __key, __out_buf) \
-	{ \
-		for (__idx = 0; __idx < __key_len; (__idx)++) \
-			snprintf(__out_buf + strlen(__out_buf), 512 - strlen(__out_buf), "%02x", __key[__idx]); \
+	{ 	INT ret, tmp_buf_left; \
+		for (__idx = 0; __idx < __key_len; (__idx)++) { \
+			tmp_buf_left = 512 - strlen(__out_buf); \
+			ret = snprintf(__out_buf + strlen(__out_buf), tmp_buf_left, "%02x", __key[__idx]); \
+			if (os_snprintf_error(tmp_buf_left, ret)) \
+				MTWF_DBG(NULL, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n"); \
+		} \
 	}
 
 static BOOLEAN WscWriteWEPKeyToDAT(
@@ -11693,7 +11900,9 @@ static BOOLEAN WscWriteWEPKeyToDAT(
 {
 	WSC_CREDENTIAL *pCredentail;
 	INT tempStrLen = 0;
+	INT ret, tmp_buf_left;
 #ifdef CONFIG_AP_SUPPORT
+	int BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
 
 	if (CurOpMode == AP_MODE) {
 		UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
@@ -11728,15 +11937,32 @@ static BOOLEAN WscWriteWEPKeyToDAT(
 				pTempStr = temp_ptr;
 				NdisZeroMemory(pTempStr, 512);
 				NdisMoveMemory(pTempStr, WepKeyFormatName, strlen(WepKeyFormatName));
+				if (apidx < pAd->ApCfg.BssidNumPerBand[0]) {
+					BssidNumIdx = pAd->ApCfg.BssidNumPerBand[0];
+					idx = 0;
+				}
+#ifdef DBDC_MODE
+				else {
+					BssidNumIdx = pAd->ApCfg.BssidNum;
+					idx = pAd->ApCfg.BssidNumPerBand[0];
+				}
+#endif
 
-				for (idx = 0; idx < pAd->ApCfg.BssidNum; idx++) {
+				for (; idx < BssidNumIdx; idx++) {
+					tmp_buf_left = 512 - strlen(pTempStr);
 					if (idx == apidx)
-						snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", 0);
+						ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", 0);
 					else
-						snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", KeyType[idx]);
+						ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", KeyType[idx]);
+					if (os_snprintf_error(tmp_buf_left, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 
-					if (apidx < (pAd->ApCfg.BssidNum - 1))
-						snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", ";");
+					if (apidx < (pAd->ApCfg.BssidNum - 1)) {
+						tmp_buf_left = 512 - strlen(pTempStr);
+						ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", ";");
+						if (os_snprintf_error(tmp_buf_left, ret))
+							MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
+					}
 				}
 			}
 		} else if ((strncmp(pTempStr, WepKeyName, strlen(WepKeyName)) == 0)) {
@@ -11768,7 +11994,9 @@ static BOOLEAN WscWriteWEPKeyToDAT(
 		if (rtstrstr(pTempStr, (RTMP_STRING *) WepKeyFormatName)) {
 			if (IS_CIPHER_WEP_Entry(&pAd->StaCfg[0].wdev)) {
 				NdisZeroMemory(pTempStr, 512);
-				snprintf(pTempStr, 512, "%s0", WepKeyFormatName); /* Hex */
+				ret = snprintf(pTempStr, 512, "%s0", WepKeyFormatName); /* Hex */
+				if (os_snprintf_error(512, ret))
+					MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			}
 		} else if (rtstrstr(pTempStr, (RTMP_STRING *) WepKeyName)) {
 			UCHAR profile_idx = pAd->StaCfg[0].wdev.WscControl.WscProfile.ApplyProfileIdx;
@@ -11808,6 +12036,7 @@ VOID WscWriteConfToDatFile(RTMP_ADAPTER *pAd, UCHAR CurOpMode)
 	char *offset = 0;
 	RTMP_STRING *pTempStr = NULL;
 	UINT StrLen = 1024;
+	INT ret;
 #ifdef CONFIG_AP_SUPPORT
 	UCHAR apidx = (pAd->WriteWscCfgToDatFile & 0x0F);
 #endif /* CONFIG_AP_SUPPORT */
@@ -11827,27 +12056,36 @@ VOID WscWriteConfToDatFile(RTMP_ADAPTER *pAd, UCHAR CurOpMode)
 
 		fileName = get_dev_l2profile(pAd);
 
-		snprintf((RTMP_STRING *) WepKeyName, sizeof(WepKeyName), "Key%dStr%d=", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1, apidx + 1);
-		snprintf((RTMP_STRING *) WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
+		ret = snprintf((RTMP_STRING *) WepKeyName, sizeof(WepKeyName), "Key%dStr%d=",
+						pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1, apidx + 1);
+		if (os_snprintf_error(sizeof(WepKeyName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyName snprintf error!\n");
+		ret = snprintf((RTMP_STRING *) WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=",
+						pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
+		if (os_snprintf_error(sizeof(WepKeyFormatName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyFormatName snprintf error!\n");
 	}
 
 #endif /* CONFIG_AP_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
 
 	if (CurOpMode == STA_MODE) {
-#ifdef RTMP_RBUS_SUPPORT
-
-		if (pAd->infType == RTMP_DEV_INF_RBUS)
-			fileName = STA_PROFILE_PATH_RBUS;
-		else
-#endif /* RTMP_RBUS_SUPPORT */
 			fileName = get_dev_profile(pAd); /* STA_PROFILE_PATH; */
 
-		snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr=", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
-		snprintf(WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
+		ret = snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr=", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
+		if (os_snprintf_error(sizeof(WepKeyName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyName snprintf error!\n");
+		ret = snprintf(WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=", pAd->StaCfg[0].wdev.SecConfig.PairwiseKeyId + 1);
+		if (os_snprintf_error(sizeof(WepKeyFormatName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyFormatName snprintf error!\n");
 	}
 
 #endif /* CONFIG_STA_SUPPORT */
+	if (fileName == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, "File Name is null !\n");
+		return;
+	}
+
 	RtmpOSFSInfoChange(&osFSInfo, TRUE);
 	file_r = RtmpOSFileOpen(fileName, O_RDONLY, 0);
 
@@ -11935,19 +12173,25 @@ VOID WscWriteConfToDatFile(RTMP_ADAPTER *pAd, UCHAR CurOpMode)
 					NdisZeroMemory(pTempStr, StrLen);
 
 					if (pAd->StaCfg[0].BssType == BSS_ADHOC)
-						snprintf(pTempStr, 512, "NetworkType=Adhoc");
+						ret = snprintf(pTempStr, 512, "NetworkType=Adhoc");
 					else
-						snprintf(pTempStr, 512, "NetworkType=Infra");
+						ret = snprintf(pTempStr, 512, "NetworkType=Infra");
+					if (os_snprintf_error(512, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 				}
 
 #endif /* CONFIG_STA_SUPPORT */
 				else if (strncmp(pTempStr, "AuthMode=", strlen("AuthMode=")) == 0) {
 					NdisZeroMemory(pTempStr, StrLen);
-					snprintf(pTempStr, StrLen, "AuthMode=");
+					ret = snprintf(pTempStr, StrLen, "AuthMode=");
+					if (os_snprintf_error(StrLen, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 					WscWriteAuthToDAT(pAd, CurOpMode, pTempStr);
 				} else if (strncmp(pTempStr, "EncrypType=", strlen("EncrypType=")) == 0) {
 					NdisZeroMemory(pTempStr, StrLen);
-					snprintf(pTempStr, StrLen, "EncrypType=");
+					ret = snprintf(pTempStr, StrLen, "EncrypType=");
+					if (os_snprintf_error(StrLen, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 					WscWriteEncrToDAT(pAd, CurOpMode, pTempStr);
 				} else if ((strncmp(pTempStr, "WPAPSK=", strlen("WPAPSK=")) == 0) ||
 						   (strncmp(pTempStr, "WPAPSK1=", strlen("WPAPSK1=")) == 0) ||
@@ -11961,20 +12205,25 @@ VOID WscWriteConfToDatFile(RTMP_ADAPTER *pAd, UCHAR CurOpMode)
 
 					WscWriteWpaPskToDatFile(pAd, pTempStr, bNewFormat);
 				} else if (strncmp(pTempStr, "WscConfMode=", strlen("WscConfMode=")) == 0) {
-					snprintf(pTempStr, StrLen, "WscConfMode=");
+					ret = snprintf(pTempStr, StrLen, "WscConfMode=");
+					if (os_snprintf_error(StrLen, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 					WscWriteWscConfModeToDAT(pAd, CurOpMode, pTempStr);
 				} else if (strncmp(pTempStr, "WscConfStatus=", strlen("WscConfStatus=")) == 0) {
-					snprintf(pTempStr, StrLen, "WscConfStatus=");
+					ret = snprintf(pTempStr, StrLen, "WscConfStatus=");
+					if (os_snprintf_error(StrLen, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 					WscWriteWscConfStatusToDAT(pAd, CurOpMode, pTempStr);
 				} else if (strncmp(pTempStr, "DefaultKeyID=", strlen("DefaultKeyID=")) == 0) {
 					NdisZeroMemory(pTempStr, StrLen);
-					snprintf(pTempStr, StrLen, "DefaultKeyID=");
+					ret = snprintf(pTempStr, StrLen, "DefaultKeyID=");
+					if (os_snprintf_error(StrLen, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 					WscWriteDefaultKeyIdToDAT(pAd, CurOpMode, pTempStr);
 				} else {
 					if (WscWriteWEPKeyToDAT(pAd, CurOpMode, WepKeyFormatName, WepKeyName, pTempStr) == FALSE)
 						goto WriteErr;
 				}
-
 				RtmpOSFileWrite(file_w, pTempStr, strlen(pTempStr));
 				RtmpOSFileWrite(file_w, "\n", 1);
 			} else
@@ -12011,13 +12260,15 @@ static VOID WscWriteWepKeyToAR9File(
 	INT index;
 	INT apidx;
 	INT offset;
-	INT tempStrLen;
+	INT tempStrLen, ret, tmp_buf_left;
 	WSC_CREDENTIAL *pCredentail = NULL;
 	RTMP_STRING WepKeyName[MAX_WEPKEYNAME_LEN] = {0};
 	RTMP_STRING WepKeyFormatName[MAX_WEPKEYTYPE_LEN] = {0};
 
 	for (index = 1; index <= 4; index++) {
-		snprintf(WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=", index);
+		ret = snprintf(WepKeyFormatName, sizeof(WepKeyFormatName), "Key%dType=", index);
+		if (os_snprintf_error(sizeof(WepKeyFormatName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyFormatName snprintf error!\n");
 		{
 			NdisZeroMemory(pTempStr, 512);
 			offset = 0;
@@ -12026,24 +12277,35 @@ static VOID WscWriteWepKeyToAR9File(
 			for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
 				if (IS_CIPHER_WEP(pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev.SecConfig.PairwiseCipher)) {
 					pCredentail = &pAd->ApCfg.MBSSID[apidx].wdev.WscControl.WscProfile.Profile[0];
-
+					tmp_buf_left = 512 - strlen(pTempStr);
 					if ((pCredentail->KeyLength == 5) ||
 						(pCredentail->KeyLength == 13))
-						snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", 1); /* ASCII */
+						ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", 1); /* ASCII */
 					else
-						snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", 0); /* Hex */
+						ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", 0); /* Hex */
+					if (os_snprintf_error(tmp_buf_left, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 				}
 
-				if (apidx < (pAd->ApCfg.BssidNum - 1))
-					snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", ";");
+				if (apidx < (pAd->ApCfg.BssidNum - 1)) {
+					tmp_buf_left = 512 - strlen(pTempStr);
+					ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", ";");
+					if (os_snprintf_error(tmp_buf_left, ret))
+						MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
+				}
 			}
 
-			snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", "\n");
+			tmp_buf_left = 512 - strlen(pTempStr);
+			ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", "\n");
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			offset = strlen(pTempStr);
 			NdisMoveMemory(pDatStr + (*datoffset), pTempStr, offset);
 			(*datoffset) += offset;
 		}
-		snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr=", index);
+		ret = snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr=", index);
+		if (os_snprintf_error(sizeof(WepKeyName), ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyName snprintf error!\n");
 		/*if (rtstrstr(pTempStr, WepKeyName)) */
 		{
 			NdisZeroMemory(pTempStr, 512);
@@ -12065,14 +12327,19 @@ static VOID WscWriteWepKeyToAR9File(
 				tempStrLen += 1;
 			}
 
-			snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", "\n");
+			tmp_buf_left = 512 - strlen(pTempStr);
+			ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", "\n");
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			offset = strlen(pTempStr);
 			NdisMoveMemory(pDatStr + (*datoffset), pTempStr, offset);
 			(*datoffset) += offset;
 		}
 
 		for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
-			snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr%d=", index, (apidx + 1));
+			ret = snprintf(WepKeyName, sizeof(WepKeyName), "Key%dStr%d=", index, (apidx + 1));
+			if (os_snprintf_error(sizeof(WepKeyName), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WepKeyName snprintf error!\n");
 
 			if (IS_CIPHER_WEP(pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseCipher)) {
 				NdisZeroMemory(pTempStr, 512);
@@ -12081,9 +12348,10 @@ static VOID WscWriteWepKeyToAR9File(
 				pCredentail = &pAd->ApCfg.MBSSID[apidx].wdev.WscControl.WscProfile.Profile[0];
 				NdisMoveMemory(pTempStr + tempStrLen, pCredentail->Key, pCredentail->KeyLength);
 				NdisMoveMemory(pTempStr + tempStrLen + pCredentail->KeyLength, "\n", 1);
+				tempStrLen = tempStrLen + pCredentail->KeyLength + 1;
 			}
 
-			offset = tempStrLen + pCredentail->KeyLength + 1;
+			offset = tempStrLen;
 			NdisMoveMemory(pDatStr + (*datoffset), pTempStr, offset);
 			(*datoffset) += offset;
 		}
@@ -12098,7 +12366,7 @@ void WscWriteConfToAR9File(
 	RTMP_OS_FD file_w;
 	RTMP_OS_FS_INFO osFSInfo;
 	INT offset = 0;
-	INT datoffset = 0;
+	INT datoffset = 0, ret, tmp_buf_left;
 	RTMP_STRING *pTempStr = 0;
 	RTMP_STRING *pDatStr = 0;
 #ifdef CONFIG_AP_SUPPORT
@@ -12116,11 +12384,6 @@ void WscWriteConfToAR9File(
 #endif /* CONFIG_AP_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
 	if (CurOpMode == STA_MODE) {
-#ifdef RTMP_RBUS_SUPPORT
-		if (pAd->infType == RTMP_DEV_INF_RBUS)
-			fileName = STA_PROFILE_PATH_RBUS;
-		else
-#endif /* RTMP_RBUS_SUPPORT */
 			fileName = get_dev_profile(pAd);/* STA_PROFILE_PATH; */
 	}
 #endif /* CONFIG_STA_SUPPORT */
@@ -12155,7 +12418,9 @@ void WscWriteConfToAR9File(
 		NdisZeroMemory(item_str, 10);
 
 		for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
-			snprintf(item_str, sizeof(item_str), "SSID%d", (apidx + 1));
+			ret = snprintf(item_str, sizeof(item_str), "SSID%d", (apidx + 1));
+			if (os_snprintf_error(sizeof(item_str), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "item_str snprintf error!\n");
 			{
 				NdisMoveMemory(pTempStr, item_str, strlen(item_str));
 				offset = strlen(pTempStr);
@@ -12173,14 +12438,18 @@ void WscWriteConfToAR9File(
 		datoffset += offset;
 		offset = 0;
 		NdisZeroMemory(pTempStr, 512);
-		snprintf(pTempStr, 512, "AuthMode=");
+		ret = snprintf(pTempStr, 512, "AuthMode=");
+		if (os_snprintf_error(512, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		WscWriteAuthToDAT(pAd, CurOpMode, pTempStr);
 		offset = strlen(pTempStr);
 		NdisMoveMemory(pDatStr + datoffset, pTempStr, offset);
 		datoffset += offset;
 		offset = 0;
 		NdisZeroMemory(pTempStr, 512);
-		snprintf(pTempStr, 512, "EncrypType=");
+		ret = snprintf(pTempStr, 512, "EncrypType=");
+		if (os_snprintf_error(512, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		WscWriteEncrToDAT(pAd, CurOpMode, pTempStr);
 		offset = strlen(pTempStr);
 		NdisMoveMemory(pDatStr + datoffset, pTempStr, offset);
@@ -12190,7 +12459,9 @@ void WscWriteConfToAR9File(
 		NdisZeroMemory(item_str, 10);
 
 		for (apidx = 0; apidx < pAd->ApCfg.BssidNum; apidx++) {
-			snprintf(item_str, sizeof(item_str), "WPAPSK%d", (apidx + 1));
+			ret = snprintf(item_str, sizeof(item_str), "WPAPSK%d", (apidx + 1));
+			if (os_snprintf_error(sizeof(item_str), ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "item_str snprintf error!\n");
 			/*if (rtstrstr(pTempStr, item_str)) */
 			{
 				pWscControl = &pAd->ApCfg.MBSSID[apidx].wdev.WscControl;
@@ -12210,56 +12481,78 @@ void WscWriteConfToAR9File(
 		datoffset += offset;
 		offset = 0;
 		NdisZeroMemory(pTempStr, 512);
-		snprintf(pTempStr, 512, "WscConfMode=");
+		ret = snprintf(pTempStr, 512, "WscConfMode=");
+		if (os_snprintf_error(512, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 #ifdef CONFIG_AP_SUPPORT
 
 		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
 			pWscControl = &pAd->ApCfg.MBSSID[index].wdev.WscControl;
-
+			tmp_buf_left = 512 - strlen(pTempStr);
 			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", pWscControl->WscConfMode);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", pWscControl->WscConfMode);
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", pWscControl->WscConfMode);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d", pWscControl->WscConfMode);
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		}
 
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", "\n");
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", "\n");
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		offset = strlen(pTempStr);
 		NdisMoveMemory(pDatStr + datoffset, pTempStr, offset);
 		datoffset += offset;
 #endif /* CONFIG_AP_SUPPORT */
 		offset = 0;
 		NdisZeroMemory(pTempStr, 512);
-		snprintf(pTempStr, 512, "WscConfStatus=");
+		ret = snprintf(pTempStr, 512, "WscConfStatus=");
+		if (os_snprintf_error(512, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 #ifdef CONFIG_AP_SUPPORT
 
 		for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
 			pWscControl = &pAd->ApCfg.MBSSID[index].wdev.WscControl;
-
+			tmp_buf_left = 512 - strlen(pTempStr);
 			if (index == 0)
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", pWscControl->WscConfStatus);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", pWscControl->WscConfStatus);
 			else
-				snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", pWscControl->WscConfStatus);
+				ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d", pWscControl->WscConfStatus);
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		}
 
-		snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", "\n");
+		tmp_buf_left = 512 - strlen(pTempStr);
+		ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", "\n");
+		if (os_snprintf_error(tmp_buf_left, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 		offset = strlen(pTempStr);
 		NdisMoveMemory(pDatStr + datoffset, pTempStr, offset);
 		datoffset += offset;
 #endif /* CONFIG_AP_SUPPORT */
 		offset = 0;
 		NdisZeroMemory(pTempStr, 512);
-		snprintf(pTempStr, 512, "DefaultKeyID=");
+		ret = snprintf(pTempStr, 512, "DefaultKeyID=");
+		if (os_snprintf_error(512, ret))
+			MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 #ifdef CONFIG_AP_SUPPORT
 
 		if (CurOpMode == AP_MODE) {
 			for (index = 0; index < pAd->ApCfg.BssidNum; index++) {
+				tmp_buf_left = 512 - strlen(pTempStr);
 				if (index == 0)
-					snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%d", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
+					ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%d", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
 				else
-					snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), ";%d", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
+					ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, ";%d", pAd->ApCfg.MBSSID[apidx].wdev.SecConfig.PairwiseKeyId + 1);
+				if (os_snprintf_error(tmp_buf_left, ret))
+					MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			}
 
-			snprintf(pTempStr + strlen(pTempStr), 512 - strlen(pTempStr), "%s", "\n");
+			tmp_buf_left = 512 - strlen(pTempStr);
+			ret = snprintf(pTempStr + strlen(pTempStr), tmp_buf_left, "%s", "\n");
+			if (os_snprintf_error(tmp_buf_left, ret))
+				MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "pTempStr snprintf error!\n");
 			offset = strlen(pTempStr);
 			NdisMoveMemory(pDatStr + datoffset, pTempStr, offset);
 			datoffset += offset;
@@ -12349,7 +12642,6 @@ static INT wsc_write_dat_file_thread(
 
 #endif /* CONFIG_STA_SUPPORT */
 			WscWriteConfToDatFile(pAd, CurOpMode);
-            RTMPSendWirelessEvent(pAd, IW_WSC_NEW_AP_SETTING, NULL, pAd->WriteWscCfgToDatFile, 0);
 			pAd->WriteWscCfgToDatFile = 0xFF;
 		}
 	}
@@ -12699,8 +12991,7 @@ BOOLEAN WscSupportWPSLEDMode(
 		(LED_MODE(pAd) == WPS_LED_MODE_8) ||
 		(LED_MODE(pAd) == WPS_LED_MODE_9) ||
 		(LED_MODE(pAd) == WPS_LED_MODE_11) ||
-		(LED_MODE(pAd) == WPS_LED_MODE_12) ||
-		(LED_MODE(pAd) == WPS_LED_MODE_13)
+		(LED_MODE(pAd) == WPS_LED_MODE_12)
 #ifdef CONFIG_WIFI_LED_SUPPORT
 		|| (LED_MODE(pAd) == WPS_LED_MODE_SHARE)
 #endif /* CONFIG_WIFI_LED_SUPPORT */
@@ -12731,36 +13022,6 @@ BOOLEAN WscSupportWPSLEDMode10(
 	MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s: Not support WPS LED mode (The WPS LED mode = %d).\n",
 			 __func__, led_mode));
 	return FALSE; /* Not support WPS LED mode 10. */
-}
-
-BOOLEAN ApHasSecuritySetting(
-    IN PRTMP_ADAPTER pAdapter)
-{
-    int i = 0;
-    struct _SECURITY_CONFIG *pSecConfig;
-    BOOLEAN bAPHasSecuritySetting = FALSE;
-
-    for (i = 0; i < WDEV_NUM_MAX ;i ++)
-    {
-        if (NULL != pAdapter->wdev_list[i])
-        {
-            pSecConfig = &pAdapter->wdev_list[i]->SecConfig;
-
-            if (NULL != pSecConfig && NULL != pAdapter->wdev_list[i]->if_dev)
-            {
-                if (!strcmp(pAdapter->wdev_list[i]->if_dev->name, "ra0") || !strcmp(pAdapter->wdev_list[i]->if_dev->name, "rax0"))
-                {
-                    if (0x1 != GET_PAIRWISE_CIPHER(pSecConfig) && pAdapter->wdev_list[i]->if_up_down_state)
-                    {
-                        bAPHasSecuritySetting = TRUE;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    return bAPHasSecuritySetting;
 }
 
 /* */
@@ -12883,40 +13144,7 @@ VOID WscLEDTimer(
 
 		if (WPSLEDStatus)
 			RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-	}
-	else if (LED_MODE(pAd) == WPS_LED_MODE_13){
-		switch (pWscControl->WscLEDMode)
-		{
-			case LED_WPS_SUCCESS:
-			case LED_WPS_ERROR:
-				if (ApHasSecuritySetting(pAd)) { 
-					WPSLEDStatus = LED_NORMAL_CONNECTION_WITH_SECURITY;
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s:  => LED_NORMAL_CONNECTION_WITH_SECURITY\n", __func__));
-				} else { 
-					WPSLEDStatus = LED_NORMAL_CONNECTION_WITHOUT_SECURITY;
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s:  => LED_NORMAL_CONNECTION_WITHOUT_SECURITY\n", __func__));
-				}
-				break;
-
-			case LED_WPS_SESSION_OVERLAP_DETECTED:
-				WPSLEDStatus = LED_WPS_TURN_LED_OFF;
-				break;
-			case LED_WPS_TURN_LED_OFF:
-				if (pWscControl->WscLastWarningLEDMode == LED_WPS_SESSION_OVERLAP_DETECTED)
-				{
-					WPSLEDStatus = LED_WPS_SESSION_OVERLAP_DETECTED;
-				}
-				break;
-
-			default:
-			/* do nothing. */
-			break;
-		}
-
-		if (WPSLEDStatus)
-			RTMPSetLED(pAd, WPSLEDStatus, HcGetBandByWdev(pWscControl->wdev));
-	}
-	else {
+	} else {
 		/* do nothing. */
 	}
 }
@@ -13059,12 +13287,21 @@ VOID WscCheckPeerDPID(
 
 #endif /* CONFIG_AP_SUPPORT */
 
+	if (Len <= 0 || Len > MAX_LEN_OF_WSC_IE)
+		return;
+
 	while (Len > 0) {
 		WSC_IE	WscIE;
 
 		NdisMoveMemory(&WscIE, pData, sizeof(WSC_IE));
 		/* Check for WSC IEs*/
 		pWscIE = &WscIE;
+
+		if (Len < (be2cpu16(pWscIE->Length) + 4)) {
+			MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR,
+				"unexpected WSC IE Length(%u)\n", be2cpu16(pWscIE->Length));
+			break;
+		}
 
 		/* Check for device password ID, PBC = 0x0004*/
 		if (be2cpu16(pWscIE->Type) == WSC_ID_DEVICE_PWD_ID) {
@@ -13127,8 +13364,8 @@ VOID WscCheckPeerDPID(
 
 					MlmeEnqueue(pAd, IWSC_STATE_MACHINE, IWSC_MT2_PEER_PROBE_REQ, sizeof(USHORT), &PeerConfigMethod, 0);
 					RTMP_MLME_HANDLER(pAd);
-					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s(): Add this peer: %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 __func__, PRINT_MAC(Fr->Hdr.Addr2)));
+					MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("%s(): Add this peer: "MACSTR"\n",
+							 __func__, MAC2STR(Fr->Hdr.Addr2)));
 				}
 
 				RTMP_SEM_UNLOCK(&pWscCtrl->WscConfiguredPeerListSemLock);
@@ -13138,6 +13375,7 @@ VOID WscCheckPeerDPID(
 		}
 
 #endif /* IWSC_SUPPORT */
+
 		/* Set the offset and look for PBC information*/
 		/* Since Type and Length are both short type, we need to offset 4, not 2*/
 		pData += (be2cpu16(pWscIE->Length) + 4);
@@ -13226,13 +13464,8 @@ INT WscApShowPeerList(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 			while (pPeerEntry != NULL) {
 				MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_OFF,
-						 ("MAC:%02x:%02x:%02x:%02x:%02x:%02x\tReveive Time:%lu\n",
-						  pPeerEntry->mac_addr[0],
-						  pPeerEntry->mac_addr[1],
-						  pPeerEntry->mac_addr[2],
-						  pPeerEntry->mac_addr[3],
-						  pPeerEntry->mac_addr[4],
-						  pPeerEntry->mac_addr[5],
+						 ("MAC:"MACSTR"\tReveive Time:%lu\n",
+						  MAC2STR(pPeerEntry->mac_addr),
 						  pPeerEntry->receive_time));
 				pListEntry = pListEntry->pNext;
 				pPeerEntry = (PWSC_PEER_ENTRY)pListEntry;
@@ -13355,13 +13588,8 @@ INT WscStaShowPeerList(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		pPeerEntry = (PWSC_PEER_ENTRY)pListEntry;
 
 		while (pPeerEntry != NULL) {
-			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("MAC:%02x:%02x:%02x:%02x:%02x:%02x\tReveive Time:%lu\n",
-					 pPeerEntry->mac_addr[0],
-					 pPeerEntry->mac_addr[1],
-					 pPeerEntry->mac_addr[2],
-					 pPeerEntry->mac_addr[3],
-					 pPeerEntry->mac_addr[4],
-					 pPeerEntry->mac_addr[5],
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE, ("MAC:"MACSTR"\tReveive Time:%lu\n",
+					 MAC2STR(pPeerEntry->mac_addr),
 					 pPeerEntry->receive_time));
 			pListEntry = pListEntry->pNext;
 			pPeerEntry = (PWSC_PEER_ENTRY)pListEntry;
@@ -13414,7 +13642,7 @@ VOID WscDelListEntryByMAC(
 
 	if (pListEntry) {
 		MTWF_LOG(DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_TRACE,
-				 ("WscDelListEntryByMAC : pMacAddr = %02X:%02X:%02X:%02X:%02X:%02X\n", PRINT_MAC(pMacAddr)));
+				 ("WscDelListEntryByMAC : pMacAddr = "MACSTR"\n", MAC2STR(pMacAddr)));
 		delEntryList(pWscEnList, pListEntry);
 		os_free_mem(pListEntry);
 	}
@@ -13456,6 +13684,9 @@ BOOLEAN WscGetDataFromPeerByTag(
 
 	Len = IeDataLen;
 
+	if (Len <= 0 || Len > 512)
+		return FALSE;
+
 	while (Len > 0) {
 		WSC_IE	WscIE;
 
@@ -13463,9 +13694,14 @@ BOOLEAN WscGetDataFromPeerByTag(
 		/* Check for WSC IEs */
 		pWscIE = &WscIE;
 
+		if (Len < (be2cpu16(pWscIE->Length) + 4)) {
+			MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_WPS, DBG_LVL_ERROR, "unexpected WSC IE Length(%u)\n", be2cpu16(pWscIE->Length));
+			break;
+		}
+
 		if (be2cpu16(pWscIE->Type) == WscTag) {
 			DataLen = be2cpu16(pWscIE->Length);
-			if (DataLen >= 0 && DataLen <=  (1 << (sizeof(USHORT) * 8)) - 1) {
+			if (DataLen <=  (1 << (sizeof(USHORT) * 8)) - 1) {
 				if (pWscBufLen)
 					*pWscBufLen = DataLen;
 				NdisMoveMemory(pWscBuf, pData + 4, DataLen);

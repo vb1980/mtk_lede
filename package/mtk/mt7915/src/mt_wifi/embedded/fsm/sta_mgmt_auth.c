@@ -310,6 +310,7 @@ VOID sta_peer_deauth_action(
 	struct wifi_dev *wdev = Elem->wdev;
 	USHORT ifIndex = wdev->func_idx;
 	UINT link_down_type = 0;
+	BOOLEAN Cancelled;
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s\n", __func__));
 
@@ -328,6 +329,15 @@ VOID sta_peer_deauth_action(
 								DISASSOC_WAIT_EAP_SUCCESS))
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:: Time out!!!\n", __func__));
 		}
+
+		if (wsc_ctrl->WscState == WSC_STATE_WAIT_DISCONN) {
+			wsc_ctrl->WscState = WSC_STATE_OFF;
+			if (wsc_ctrl->EapolTimerRunning == TRUE) {
+				RTMPCancelTimer(&wsc_ctrl->EapolTimer, &Cancelled);
+				wsc_ctrl->EapolTimerRunning = FALSE;
+				wsc_ctrl->EapMsgRunning = FALSE;
+			}
+		}
 	}
 
 	if (IS_APCLI_RPT_IFINDEX_INVALID(pAd, wdev, ifIndex))
@@ -339,7 +349,7 @@ VOID sta_peer_deauth_action(
 		   if (INFRA_ON(pStaCfg)
 			&& MAC_ADDR_EQUAL(pStaCfg->Bssid, Addr2)) {
 			/* struct wifi_dev *wdev = &pStaCfg->wdev; */
-			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					 ("AUTH_RSP - receive DE-AUTH from our AP (Reason=%d)\n",
 					  Reason));
 
@@ -445,8 +455,8 @@ VOID sta_peer_deauth_action(
 				MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
 
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("AUTH_RSP - receive DE-AUTH from %02x:%02x:%02x:%02x:%02x:%02x\n",
-					  PRINT_MAC(Addr2)));
+					 ("AUTH_RSP - receive DE-AUTH from "MACSTR"\n",
+					  MAC2STR(Addr2)));
 		}
 
 #endif /* ADHOC_WPA2PSK_SUPPORT */
@@ -609,7 +619,6 @@ VOID sta_peer_auth_rsp_at_seq2_action(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 										   CyperChlgText, c_len) == FALSE) {
 						MlmeFreeMemory(pOutBuffer);
 						auth_fsm_state_transition(wdev, AUTH_FSM_IDLE, __func__);
-						Status2 = MLME_FAIL_NO_RESOURCE;
 						cntl_auth_assoc_conf(Elem->wdev, CNTL_MLME_AUTH_CONF, Status);
 						goto LabelOK;
 					}
@@ -802,6 +811,16 @@ VOID sta_sae_auth_req_action(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 					__func__, sec_cfg->sae_cap.sae_pk_en));
 			pStaCfg->MlmeAux.sae_conn_type = SAE_CONNECTION_TYPE_H2E;
 		}
+	}
+	if (pStaCfg->MlmeAux.sae_conn_type == SAE_CONNECTION_TYPE_H2E && sec_cfg->sae_cap.sae_pk_only_en == 1) {
+		USHORT Status;
+
+		Status = MLME_UNSPECIFY_FAIL;
+		auth_fsm_state_transition(wdev, AUTH_FSM_IDLE, __func__);
+		cntl_auth_assoc_conf(wdev, CNTL_MLME_AUTH_CONF, Status);
+			MTWF_DBG(pAd, DBG_CAT_SEC, CATSEC_SAE, DBG_LVL_TRACE,
+				"SAE PK Only case\n");
+		return;
 	}
 
 	if (sae_auth_init(pAd, &pAd->SaeCfg, wdev->if_addr, AuthReq->Addr,

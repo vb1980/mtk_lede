@@ -151,7 +151,7 @@ done:
 
 static UCHAR BuildChannelListFor5G(RTMP_ADAPTER *pAd, CHANNEL_CTRL *pChCtrl, USHORT PhyMode)
 {
-	UCHAR ChIdx, ChIdx2, num = 0;
+	UCHAR ChIdx, ChIdx2, num = 0, Radarnum = 0;
 	PCH_DESC pChDesc = NULL;
 	BOOLEAN bRegionFound = FALSE;
 	PUCHAR pChannelList;
@@ -194,6 +194,14 @@ static UCHAR BuildChannelListFor5G(RTMP_ADAPTER *pAd, CHANNEL_CTRL *pChCtrl, USH
 #ifdef CONFIG_AP_SUPPORT
 		UCHAR q = 0;
 #endif
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+		UCHAR B4RadarCh[21] = {52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165};
+
+		if (pAd->CommonCfg.DfsParameter.band4DfsEnable)
+			Radarnum = 21;
+		else
+#endif
+			Radarnum = 16;
 		os_alloc_mem(NULL, (UCHAR **)&pChannelList, num * sizeof(UCHAR));
 
 		if (!pChannelList) {
@@ -297,10 +305,15 @@ static UCHAR BuildChannelListFor5G(RTMP_ADAPTER *pAd, CHANNEL_CTRL *pChCtrl, USH
 				pChCtrl->ChList[ChIdx].Flags = pChannelListFlag[ChIdx];
 			}
 
-			for (ChIdx2 = 0; ChIdx2 < 16; ChIdx2++) {
-				if (pChannelList[ChIdx] == RadarCh[ChIdx2]) {
-				pChCtrl->ChList[ChIdx].DfsReq = TRUE;
-				}
+			for (ChIdx2 = 0; ChIdx2 < Radarnum; ChIdx2++) {
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+				if (pAd->CommonCfg.DfsParameter.band4DfsEnable) {
+					if (pChannelList[ChIdx] == B4RadarCh[ChIdx2])
+						pChCtrl->ChList[ChIdx].DfsReq = TRUE;
+				} else
+#endif
+					if (pChannelList[ChIdx] == RadarCh[ChIdx2])
+						pChCtrl->ChList[ChIdx].DfsReq = TRUE;
 			}
 			if (!strncmp((RTMP_STRING *) pAd->CommonCfg.CountryCode, "CN", 2))
 				pChCtrl->ChList[ChIdx].MaxTxPwr = pAd->MaxTxPwr;/*for CN CountryCode*/
@@ -469,8 +482,9 @@ VOID BuildChannelList(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	/* Get channel ctrl address */
 	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 
+	MTWF_DBG(pAd, DBG_CAT_COEX, DBG_SUBCAT_ALL, DBG_LVL_NOTICE, "\n");
 #ifdef WIFI_MD_COEX_SUPPORT
-	if (!pAd->LteSafeChCtrl.bQueryLteDone) {
+	if (pAd->LteSafeChCtrl.bEnabled && !pAd->LteSafeChCtrl.bQueryLteDone) {
 		HW_QUERY_LTE_SAFE_CHANNEL(pAd);
 		pAd->LteSafeChCtrl.bQueryLteDone = TRUE;
 	}
@@ -514,6 +528,22 @@ VOID BuildChannelList(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 			hc_set_ChCtrlFlags_CAP(pChCtrl, CHANNEL_160M_CAP, ChIdx);
 
 #endif /* DOT11_VHT_AC */
+	}
+
+	if (wdev->channel != 0) {
+		for (ChIdx = 0; ChIdx < pChCtrl->ChListNum; ChIdx++) {
+			if (wdev->channel == pChCtrl->ChList[ChIdx].Channel)
+				break;
+		}
+		if (ChIdx == pChCtrl->ChListNum) {
+			wdev->channel = FirstChannel(pAd, wdev);
+#ifdef MT_DFS_SUPPORT
+			if (pAd->CommonCfg.DfsParameter.OutBandCh != 0)
+				pAd->CommonCfg.DfsParameter.OutBandCh = wdev->channel;
+#endif
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"channel out of range, use first ch=%d\n", wdev->channel);
+		}
 	}
 
 #endif /* DOT11_N_SUPPORT */
@@ -573,6 +603,46 @@ UCHAR FirstChannel(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	return pChCtrl->ChList[0].Channel;
 }
 
+/*
+	==========================================================================
+	Description:
+		This routine returns the first non-DFS channel number. This routine is called
+		during driver need to start a site survey of all supported channels.
+	Return:
+		ch - the first channel number valid in current country code setting.
+	Note:
+		return 0 if no non-DFS channel
+	==========================================================================
+ */
+UCHAR FirstNonDfsChannel(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
+{
+	UCHAR BandIdx = HcGetBandByWdev(wdev);
+	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
+	UCHAR ch = 0;
+	UCHAR i;
+	for (i = 0; i < pChCtrl->ChListNum; i++) {
+		if (pChCtrl->ChList[i].DfsReq != TRUE) {
+			ch = pChCtrl->ChList[i].Channel;
+			break;
+		}
+	}
+	return ch;
+}
+
+UCHAR FirstNonDfsbyBand(RTMP_ADAPTER *pAd, UCHAR band_idx)
+{
+	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, band_idx);
+	UCHAR ch = 0;
+	UCHAR i;
+	for (i = 0; i < pChCtrl->ChListNum; i++) {
+		if (pChCtrl->ChList[i].DfsReq != TRUE) {
+			ch = pChCtrl->ChList[i].Channel;
+			break;
+		}
+	}
+	return ch;
+}
+
 #ifdef WIFI_MD_COEX_SUPPORT
 UCHAR FirstSafeChannel(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 {
@@ -624,8 +694,8 @@ UCHAR NextChannel(
 
 	if (ScanCtrl->ScanType == SCAN_P2P_SEARCH) {
 		if (IS_P2P_LISTEN(pAd)) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_SCAN, DBG_LVL_ERROR,
-					 ("Error !! P2P Discovery state machine has change to Listen state during scanning !\n"));
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_SCAN, DBG_LVL_ERROR,
+					 "Error !! P2P Discovery state machine has change to Listen state during scanning !\n");
 			return next_channel;
 		}
 
@@ -666,6 +736,17 @@ UCHAR NextChannel(
 			} else
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
+#ifdef MT_DFS_SUPPORT
+			if (pChCtrl->ChList[i + 1].NonOccupancy > 0 || pChCtrl->ChList[i + 1].NOPSaveForClear > 0) {
+				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+					("Skip scanning channel %u due to remaining %u/%u sec NOP\n",
+					pChCtrl->ChList[i + 1].Channel,
+					pChCtrl->ChList[i + 1].NonOccupancy,
+					pChCtrl->ChList[i + 1].NOPSaveForClear));
+				channel = pChCtrl->ChList[i + 1].Channel;
+				continue;
+			} else
+#endif /* MT_DFS_SUPPORT */
 			{
 				/* Record this channel's idx in ChannelList array.*/
 				next_channel = pChCtrl->ChList[i + 1].Channel;
@@ -1103,7 +1184,7 @@ BOOLEAN AdjustBwToSyncAp(RTMP_ADAPTER *pAd, BCN_IE_LIST *ie_list, struct wifi_de
 			 * also changes Rx Mcs as well as NSS
 			 */
 			if ((pEntry) && HAS_VHT_CAPS_EXIST(cmm_ies->ie_exists)) {
-				UCHAR TxStreamIdx = 0;
+				UCHAR TxStreamIdx = 0, tmp = 0;
 
 				/* Currently we only support for 4 Tx Stream, so check only for 4 Rx Nss */
 				bSupportVHTMCS1SS = FALSE;
@@ -1114,7 +1195,14 @@ BOOLEAN AdjustBwToSyncAp(RTMP_ADAPTER *pAd, BCN_IE_LIST *ie_list, struct wifi_de
 				SET_VHT_CAPS_EXIST(pStaCfg->MlmeAux.ie_exists);
 				NdisMoveMemory(&pStaCfg->MlmeAux.vht_cap, &cmm_ies->vht_cap, SIZE_OF_VHT_CAP_IE);
 
-				for (TxStreamIdx = wlan_operate_get_tx_stream(wdev);
+				tmp = wlan_operate_get_tx_stream(wdev);
+				if (tmp > 4) {
+					MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"Invalid tx stream:%d.\n", tmp);
+					return FALSE;
+				}
+
+				for (TxStreamIdx = tmp;
 					TxStreamIdx > 0;
 					TxStreamIdx--) {
 					switch (TxStreamIdx) {
@@ -1216,6 +1304,7 @@ BOOLEAN AdjustBwToSyncAp(RTMP_ADAPTER *pAd, BCN_IE_LIST *ie_list, struct wifi_de
 			NdisMoveMemory(&pStaCfg->MlmeAux.op_mode, &pEntry->operating_mode, 1);
 			NdisZeroMemory(&rRaParam, sizeof(CMD_STAREC_AUTO_RATE_UPDATE_T));
 			rRaParam.u4Field = RA_PARAM_VHT_OPERATING_MODE;
+			pEntry->operating_mode.ch_width = current_operating_mode;
 			RAParamUpdate(pAd, pEntry, &rRaParam);
 			bAdjust = TRUE;
 			}
@@ -1396,8 +1485,9 @@ VOID Handle_BSS_Width_Trigger_Events(RTMP_ADAPTER *pAd, UCHAR Channel)
 	UCHAR i;
 #ifdef DOT11N_DRAFT3
 
-	if (pAd->CommonCfg.bBssCoexEnable == FALSE)
-		return;
+	if ((pAd->CommonCfg.bBssCoexEnable == FALSE) ||
+		(pAd->CommonCfg.bOverlapScanning == TRUE))
+	return;
 
 #endif /* DOT11N_DRAFT3 */
 

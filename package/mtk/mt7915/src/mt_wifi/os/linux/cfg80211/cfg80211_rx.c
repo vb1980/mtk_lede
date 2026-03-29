@@ -66,10 +66,20 @@ BOOLEAN CFG80211_CheckActionFrameType(
 			MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("CFG80211_PKT: %s ProbeRsp Frame %d\n", preStr, pAd->LatchRfRegs.Channel));
 
 			if (!mgmt->u.probe_resp.timestamp) {
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
+				struct timespec64 tv;
+				UINT64 ts;
+
+				ktime_get_real_ts64(&tv);
+				ts = (((UINT64) tv.tv_sec * 1000000000) + tv.tv_nsec);
+				do_div(ts, 1000);
+				mgmt->u.probe_resp.timestamp = ts;
+#else
 				struct timeval tv;
 
 				do_gettimeofday(&tv);
 				mgmt->u.probe_resp.timestamp = ((UINT64) tv.tv_sec * 1000000) + tv.tv_usec;
+#endif
 			}
 		}
 #ifdef HOSTAPD_11R_SUPPORT
@@ -440,8 +450,8 @@ VOID CFG80211_AssocReqHandler(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("NoAuth MAC - %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  PRINT_MAC(ie_list->Addr2)));
+				 ("NoAuth MAC - "MACSTR"\n",
+				  MAC2STR(ie_list->Addr2)));
 		goto LabelOK;
 	}
 
@@ -462,8 +472,8 @@ VOID CFG80211_AssocReqHandler(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 
 	if (wdev == NULL) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("Wrong Addr1 - %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  PRINT_MAC(ie_list->Addr1)));
+				 ("Wrong Addr1 - "MACSTR"\n",
+				  MAC2STR(ie_list->Addr1)));
 		goto LabelOK;
 	}
 
@@ -495,10 +505,10 @@ VOID CFG80211_AssocReqHandler(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 				NdisAcquireSpinLock(&table->WpsWhiteListLock);
 				AddWpsWhiteList(&table->WpsWhiteList, pEntry->Addr);
 				NdisReleaseSpinLock(&table->WpsWhiteListLock);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: WPS Assoc req: STA %02x:%02x:%02x:%02x:%02x:%02x wps whitelisted\n",
-				 table->Channel, PRINT_MAC(pEntry->Addr)));
-				BND_STRG_PRINTQAMSG(table, pEntry->Addr, ("ASSOC STA %02x:%02x:%02x:%02x:%02x:%02x channel %u  added in WPS Whitelist\n",
-				PRINT_MAC(pEntry->Addr), table->Channel));
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("channel %u: WPS Assoc req: STA "MACSTR" wps whitelisted\n",
+				 table->Channel, MAC2STR(pEntry->Addr)));
+				BND_STRG_PRINTQAMSG(table, pEntry->Addr, ("ASSOC STA "MACSTR" channel %u  added in WPS Whitelist\n",
+				MAC2STR(pEntry->Addr), table->Channel));
 			}
 
 			bs_whitelist_entry = FindBsListEntry(&table->WhiteList, pEntry->Addr);
@@ -508,8 +518,8 @@ VOID CFG80211_AssocReqHandler(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 			if ((pWscControl->bWscTrigger) && (!cli_entry) && (!ie_list->bWscCapable) && (!bs_whitelist_entry)) {
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\n%s():reject assoc:bWscTrigger:%d, cli_entry:%p,bWscCapable:%d, bs_whitelist_entry:%p\n",
 				 __func__, pWscControl->bWscTrigger, cli_entry, ie_list->bWscCapable, bs_whitelist_entry));
-				BND_STRG_PRINTQAMSG(table, pEntry->Addr, ("STA %02x:%02x:%02x:%02x:%02x:%02x Normal Assoc Rejected for BS unauthorized client\n",
-				PRINT_MAC(pEntry->Addr)));
+				BND_STRG_PRINTQAMSG(table, pEntry->Addr, ("STA "MACSTR" Normal Assoc Rejected for BS unauthorized client\n",
+				MAC2STR(pEntry->Addr)));
 				goto LabelOK;
 			}
 		}
@@ -656,8 +666,8 @@ VOID CFG80211_AssocReqHandler(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk)
 				if (!ApCheckAccessControlList(pAd, ie_list->Addr2, pEntry->func_tb_idx))
 					bACLReject = TRUE;
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("assoc - MBSS(%d), receive reassoc request from %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  pEntry->func_tb_idx, PRINT_MAC(ie_list->Addr2)));
+				 ("assoc - MBSS(%d), receive reassoc request from "MACSTR"\n",
+				  pEntry->func_tb_idx, MAC2STR(ie_list->Addr2)));
 		/* supported rates array may not be sorted. sort it and find the maximum rate */
 		for (i = 0; i < ie_list->rate.sup_rate_len; i++) {
 			if (MaxSupportedRate < (ie_list->rate.sup_rate[i] & 0x7f))
@@ -700,6 +710,13 @@ LabelOK:
 		CFG80211_ApStaDelSendEvent(pAd, pEntry->Addr, pEntry->wdev->if_dev);
 	}
 #endif /* RT_CFG80211_SUPPORT */
+
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+
 	if (ie_list != NULL) {
 		os_free_mem(ie_list);
 		if (pEntry)
@@ -721,6 +738,9 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 #ifdef RT_CFG80211_SUPPORT
     struct wifi_dev *pWdev = WdevSearchByBssid(pAd, pRxBlk->Addr1);
 #endif
+#ifndef APCLI_CFG80211_SUPPORT
+	struct wifi_dev *pWdevApcli = wdev_search_by_address(pAd, pRxBlk->Addr1);
+#endif
 #ifdef RT_CFG80211_P2P_CONCURRENT_DEVICE
 	PNET_DEV pNetDev = NULL;
 #endif /* RT_CFG80211_P2P_CONCURRENT_DEVICE */
@@ -730,8 +750,8 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 
     if (pWdev == NULL) {
 		MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_LOUD,
-			("%s return , can't find wdev for %02x:%02x:%02x:%02x:%02x:%02x\n"
-			, __FUNCTION__, PRINT_MAC(pHeader->Addr2)));
+			("%s return , can't find wdev for "MACSTR"\n"
+			, __FUNCTION__, MAC2STR(pHeader->Addr2)));
 		pNetDev = CFG80211_GetEventDevice(pAd);
 	} else {
 		pNetDev = pWdev->if_dev;
@@ -761,6 +781,27 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 #endif
 		((pHeader->FC.SubType == SUBTYPE_ACTION) &&
 		CFG80211_CheckActionFrameType(pAd, "RX", (PUCHAR)pRxBlk->pData, MPDUtotalByteCnt))) {
+#ifndef APCLI_CFG80211_SUPPORT
+		/*handle apcli related auth/action frames in driver*/
+		if (pWdevApcli && (pWdevApcli->wdev_type == WDEV_TYPE_STA)) {
+			MAC_TABLE_ENTRY *pEntry = NULL;
+
+			pEntry = MacTableLookup(pAd, pHeader->Addr2);
+
+			if (!pEntry) {
+				MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"%s:pEntry is NULL\n", __func__);
+				return FALSE;
+			}
+
+			if (pEntry && (pEntry->EntryType == ENTRY_AP)) {
+				MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							"%s:pEntry->type->type:%d return false\n",
+								__func__, pEntry->EntryType);
+				return FALSE;
+			}
+		}
+#endif
 		MAP_CHANNEL_ID_TO_KHZ(pAd->LatchRfRegs.Channel, freq);
 		freq /= 1000;
 #ifdef RT_CFG80211_P2P_CONCURRENT_DEVICE
@@ -769,8 +810,8 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 
 		if (pCfg80211_ctrl->Cfg80211VifDevSet.vifDevList.size > 0) {
 			if (pNetDev != NULL) {
-				MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VIF STA GO RtmpOsCFG80211RxMgmt OK!! TYPE = %d, freq = %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 pHeader->FC.SubType, freq, PRINT_MAC(pHeader->Addr2)));
+				MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VIF STA GO RtmpOsCFG80211RxMgmt OK!! TYPE = %d, freq = %d, "MACSTR"\n",
+						 pHeader->FC.SubType, freq, MAC2STR(pHeader->Addr2)));
 				CFG80211OS_RxMgmt(pNetDev, freq, (PUCHAR)pHeader, MPDUtotalByteCnt);
 
 				if (OpMode == OPMODE_AP)
@@ -796,8 +837,8 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 #endif
 
 				) {
-			MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("MAIN STA RtmpOsCFG80211RxMgmt OK!! TYPE = %d, freq = %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 pHeader->FC.SubType, freq, PRINT_MAC(pHeader->Addr2)));
+			MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("MAIN STA RtmpOsCFG80211RxMgmt OK!! TYPE = %d, freq = %d, "MACSTR"\n",
+					 pHeader->FC.SubType, freq, MAC2STR(pHeader->Addr2)));
 		if (pHeader->FC.SubType == SUBTYPE_PROBE_REQ) {
 #ifdef BAND_STEERING
 		PEER_PROBE_REQ_PARAM ProbeReqParam = { {0} };
@@ -920,8 +961,8 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 			pEntry = MacTableLookup(pAd, pHeader->Addr2);
 			if (pEntry && pWdev && IS_AKM_OWE(pWdev->SecConfig.AKMMap)) {
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("OWE Assoc for - %02x:%02x:%02x:%02x:%02x:%02x\n",
-						PRINT_MAC(pHeader->Addr2)));
+						("OWE Assoc for - "MACSTR"\n",
+						MAC2STR(pHeader->Addr2)));
 				CFG80211_AssocReqHandler(pAd, pRxBlk);
 				if (pEntry->ie_list && pEntry->ie_list->ecdh_ie.length) {
 					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -946,8 +987,8 @@ BOOLEAN CFG80211_HandleP2pMgmtFrame(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, UCHAR OpM
 
 		pEntry = MacTableLookup(pAd, pHeader->Addr2);
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("Reassoc for - %02x:%02x:%02x:%02x:%02x:%02x\n",
-				PRINT_MAC(pHeader->Addr2)));
+				("Reassoc for - "MACSTR"\n",
+				MAC2STR(pHeader->Addr2)));
 		if (pEntry && pWdev &&
 			(IS_AKM_OWE(pWdev->SecConfig.AKMMap)
 			|| IS_AKM_FT_WPA2PSK(pWdev->SecConfig.AKMMap) || IS_AKM_FT_WPA2(pWdev->SecConfig.AKMMap))) {

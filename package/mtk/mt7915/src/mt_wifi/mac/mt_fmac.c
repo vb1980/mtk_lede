@@ -786,8 +786,8 @@ VOID mtf_dump_rmac_info(RTMP_ADAPTER *pAd, UCHAR *rmac_info)
 		break;
 
 	case RMAC_RX_PKT_TYPE_RX_NORMAL:
-		/* TODO: Fix for preflight pass */
-		if (0)
+		/* Just for Debug, Enable it will hurt performance */
+		if (DebugLevel >= DBG_LVL_TRACE)
 			mtf_dump_rmac_info_normal(pAd, rmac_info);
 		break;
 
@@ -951,6 +951,8 @@ static VOID NICUpdateAmpduRawCounters(RTMP_ADAPTER *pAd, UCHAR BandIdx)
 #ifdef MT7915
 	if (IS_MT7915(pAd)) {
 		MT_PARTIAL_MIB_INFO_CNT_CTRL_T PartialMibInfoCtrl;
+		memset(&PartialMibInfoCtrl, 0, sizeof(MT_PARTIAL_MIB_INFO_CNT_CTRL_T));
+
 		Offset = 0x10000 * BandIdx;
 
 		if (pAd->mcli_ctl[BandIdx].debug_on & MCLI_DEBUG_RMAC_DROP) {
@@ -1431,7 +1433,12 @@ VOID mtf_write_tmac_info_fixed_rate(
 	/* BW [2:0]  */
 	/* Rate to be Fixed [29:16] */
 
-	if (!info->IsAutoRate) {
+	if (!info->IsAutoRate
+#ifdef MGMT_TXPWR_CTRL
+		/* ensure correct txd rate when set mgmt_frame_power in mt7915 */
+		|| (IS_MT7915(pAd) && info->Type == FC_TYPE_MGMT)
+#endif
+		) {
 		ldpc = transmit->field.ldpc;
 
 		if (ldpc)
@@ -1537,7 +1544,7 @@ VOID mtf_write_tmac_info_by_host(RTMP_ADAPTER *pAd, UCHAR *buf, TX_BLK *tx_blk)
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 	HTTRANSMIT_SETTING *transmit = tx_blk->pTransmit;
 	struct phy_params *phy_info = NULL;
-	UCHAR stbc = 0, bw = 0, tx_bw = BW_20, mcs = 0, nss = 1, sgi = 0, ltf_type = 0, phy_mode = 0, preamble = 1, ldpc = 0;
+	UCHAR stbc = 0, bw = 0, tx_bw = BW_20, mcs = 0, nss = 0, sgi = 0, ltf_type = 0, phy_mode = 0, preamble = 1, ldpc = 0;
 	UCHAR tx_ibf = 0, tx_ebf = 0;
 	STA_TR_ENTRY *tr_entry = NULL;
 
@@ -2259,6 +2266,148 @@ UINT32 mtf_get_packet_type(RTMP_ADAPTER *ad, VOID *rx_packet)
     bit[3]: indicates GROUP4 (DW6~DW9)
     bit[4]: indicates GROUP5 (DW18~DW35)
 */
+
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+UINT32 mtf_trans_rxd_into_radiotap(RTMP_ADAPTER *pAd, VOID *rx_packet, struct _RX_BLK *rx_blk)
+{
+	MONITOR_STRUCT *p_monitor_ctrl = &pAd->monitor_ctrl;
+	PUINT8 rmac_info;
+	UINT16 rxd_len = RMAC_INFO_BASE_SIZE;
+	struct rxd_grp_0 *rxd_grp0;
+	struct rxd_grp_1 *rxd_grp1 = NULL;
+	struct rxd_grp_2 *rxd_grp2 = NULL;
+	struct rxd_grp_3 *rxd_grp3 = NULL;
+	struct rxd_grp_4 *rxd_grp4 = NULL;
+	struct rxd_grp_5 *rxd_grp5 = NULL;
+	struct IEEE80211_RADIOTAP_INFO radiotap_info;
+
+	rmac_info = (UCHAR *)(GET_OS_PKT_DATAPTR(rx_packet));
+	rxd_grp0 = (struct rxd_grp_0 *)rmac_info;
+
+	SET_OS_PKT_LEN(rx_packet, (rxd_grp0->rxd_0 & RXD_RX_BYTE_COUNT_MASK));
+
+	if (rxd_grp0->rxd_1 & RXD_GROUP4_VLD) {
+		rxd_grp4 = (struct rxd_grp_4 *)(rmac_info + rxd_len);
+		rxd_len += RMAC_INFO_GRP_4_SIZE;
+	}
+
+	if (rxd_grp0->rxd_1 & RXD_GROUP1_VLD) {
+		rxd_grp1 = (struct rxd_grp_1 *)(rmac_info + rxd_len);
+		rxd_len += RMAC_INFO_GRP_1_SIZE;
+	}
+
+	if (rxd_grp0->rxd_1 & RXD_GROUP2_VLD) {
+		rxd_grp2 = (struct rxd_grp_2 *)(rmac_info + rxd_len);
+		rxd_len += RMAC_INFO_GRP_2_SIZE;
+	}
+
+	if (rxd_grp0->rxd_1 & RXD_GROUP3_VLD) {
+		rxd_grp3 = (struct rxd_grp_3 *)(rmac_info + rxd_len);
+		rxd_len += RMAC_INFO_GRP_3_SIZE;
+	}
+
+	if (rxd_grp0->rxd_1 & RXD_GROUP5_VLD) {
+		rxd_grp5 = (struct rxd_grp_5 *)(rmac_info + rxd_len);
+		rxd_len += RMAC_INFO_GRP_5_SIZE;
+	}
+
+	rx_blk->band = ((rxd_grp0->rxd_1 & RXD_BN) >> 28);
+
+	if (rxd_grp2 == NULL || rxd_grp3 == NULL || rxd_grp5 == NULL)
+		return NDIS_STATUS_FAILURE;
+
+
+	if (HAL_MAC_CONNAC2X_RX_STATUS_GET_RXV_SEQ_NO(rxd_grp0) != 0)
+		p_monitor_ctrl->u4AmpduRefNum += 1;
+
+	radiotap_info.u2VendorLen = rxd_len + (((rxd_grp0->rxd_2 & RXD_HO_MASK) >> RXD_HO_SHIFT) * 2);
+	radiotap_info.ucSubNamespace = 2; /* MTK wireshark CONNAC2 id */
+	radiotap_info.u4AmpduRefNum = p_monitor_ctrl->u4AmpduRefNum;
+	radiotap_info.u4Timestamp = rxd_grp2->rxd_14;
+	radiotap_info.ucFcsErr = HAL_MAC_CONNAC2X_RX_STATUS_IS_FCS_ERROR(rxd_grp0);
+	radiotap_info.ucFrag = HAL_MAC_CONNAC2X_RX_STATUS_IS_FRAG(rxd_grp0);
+	radiotap_info.u2ChFrequency = HAL_MAC_CONNAC2X_RX_STATUS_GET_CHNL_NUM(rxd_grp0);
+	radiotap_info.ucRxMode = HAL_MAC_CONNAC2X_RX_VT_GET_RX_MODE(rxd_grp5);
+	radiotap_info.ucFrMode = HAL_MAC_CONNAC2X_RX_VT_GET_FR_MODE(rxd_grp5);
+	radiotap_info.ucShortGI = HAL_MAC_CONNAC2X_RX_VT_GET_SHORT_GI(rxd_grp5);
+	radiotap_info.ucSTBC = HAL_MAC_CONNAC2X_RX_VT_GET_STBC(rxd_grp5);
+	radiotap_info.ucNess = HAL_MAC_CONNAC2X_RX_VT_GET_NESS(rxd_grp5);
+	radiotap_info.ucLDPC = HAL_MAC_CONNAC2X_RX_VT_GET_LDPC(rxd_grp3);
+	radiotap_info.ucMcs = HAL_MAC_CONNAC2X_RX_VT_GET_RX_RATE(rxd_grp3);
+	radiotap_info.ucRcpi0 = HAL_MAC_CONNAC2X_RX_VT_GET_RCPI0(rxd_grp5);
+	radiotap_info.ucTxopPsNotAllow = HAL_MAC_CONNAC2X_RX_VT_TXOP_PS_NOT_ALLOWED(rxd_grp5);
+	radiotap_info.ucLdpcExtraOfdmSym = HAL_MAC_CONNAC2X_RX_VT_LDPC_EXTRA_OFDM_SYM(rxd_grp5);
+	radiotap_info.ucVhtGroupId = HAL_MAC_CONNAC2X_RX_VT_GET_GROUP_ID(rxd_grp5);
+	radiotap_info.ucNsts = HAL_MAC_CONNAC2X_RX_VT_GET_NSTS(rxd_grp3) + 1;
+	radiotap_info.ucBeamFormed = HAL_MAC_CONNAC2X_RX_VT_GET_BEAMFORMED(rxd_grp3);
+	/* HE only */
+	if (radiotap_info.ucRxMode & MODE_HE_SU) {
+		radiotap_info.ucPeDisamb = HAL_MAC_CONNAC2X_RX_VT_GET_PE_DIS_AMB(rxd_grp5);
+		radiotap_info.ucNumUser = HAL_MAC_CONNAC2X_RX_VT_GET_NUM_USER(rxd_grp5);
+		radiotap_info.ucSigBRU0 = HAL_MAC_CONNAC2X_RX_VT_GET_SIGB_RU0(rxd_grp5);
+		radiotap_info.ucSigBRU1 = HAL_MAC_CONNAC2X_RX_VT_GET_SIGB_RU1(rxd_grp5);
+		radiotap_info.ucSigBRU2 = HAL_MAC_CONNAC2X_RX_VT_GET_SIGB_RU2(rxd_grp5);
+		radiotap_info.ucSigBRU3 = HAL_MAC_CONNAC2X_RX_VT_GET_SIGB_RU3(rxd_grp5);
+		radiotap_info.u2VhtPartialAid = HAL_MAC_CONNAC2X_RX_VT_GET_PART_AID(rxd_grp5);
+		radiotap_info.u2RuAllocation = ((HAL_MAC_CONNAC2X_RX_VT_GET_RU_ALLOC1(rxd_grp3) >> 1) |
+				(HAL_MAC_CONNAC2X_RX_VT_GET_RU_ALLOC2(rxd_grp3) << 3));
+		radiotap_info.u2BssClr = HAL_MAC_CONNAC2X_RX_VT_GET_BSS_COLOR(rxd_grp5);
+		radiotap_info.u2BeamChange = HAL_MAC_CONNAC2X_RX_VT_GET_BEAM_CHANGE(rxd_grp5);
+		radiotap_info.u2UlDl = HAL_MAC_CONNAC2X_RX_VT_GET_UL_DL(rxd_grp5);
+		radiotap_info.u2DataDcm = HAL_MAC_CONNAC2X_RX_VT_GET_DCM(rxd_grp5);
+		radiotap_info.u2SpatialReuse1 = HAL_MAC_CONNAC2X_RX_VT_GET_SPATIAL_REUSE1(rxd_grp5);
+		radiotap_info.u2SpatialReuse2 = HAL_MAC_CONNAC2X_RX_VT_GET_SPATIAL_REUSE2(rxd_grp5);
+		radiotap_info.u2SpatialReuse3 = HAL_MAC_CONNAC2X_RX_VT_GET_SPATIAL_REUSE3(rxd_grp5);
+		radiotap_info.u2SpatialReuse4 = HAL_MAC_CONNAC2X_RX_VT_GET_SPATIAL_REUSE4(rxd_grp5);
+		radiotap_info.u2Ltf = HAL_MAC_CONNAC2X_RX_VT_GET_LTF(rxd_grp5) + 1;
+		radiotap_info.u2Doppler = HAL_MAC_CONNAC2X_RX_VT_GET_DOPPLER(rxd_grp5);
+		radiotap_info.u2Txop = HAL_MAC_CONNAC2X_RX_VT_GET_TXOP(rxd_grp5);
+	}
+
+	radiotap_fill_field(rx_packet, &radiotap_info);
+
+
+
+	return NDIS_STATUS_SUCCESS;
+}
+#endif
+
+void mtf_get_snr(RTMP_ADAPTER *pAd, UINT16 wcid, UCHAR *pData)
+{
+	CHAR avgSnr = 0;
+	PMAC_TABLE_ENTRY pEntry;
+
+	if (!VALID_UCAST_ENTRY_WCID(pAd, wcid))
+		return;
+
+	pEntry = &pAd->MacTab.Content[wcid];
+
+	if (!(IS_VALID_ENTRY(pEntry)) || (pEntry->Sst != SST_ASSOC))
+		return;
+
+
+#ifdef MT7915
+	if (IS_MT7915(pAd)) {
+		struct rxd_grp_3 *rxd_grp3 = (struct rxd_grp_3 *)pData;
+
+		if (rxd_grp3 && (wcid < MAX_LEN_OF_MAC_TABLE))
+			avgSnr = ((rxd_grp3->rxd_17) & BITS(13, 18)) >> 13;
+	}
+#endif
+	/* real SNR is read value -16.
+		The real SNR may < 0, it's right, but customer may feel strange.
+		so if real SNR < 0, treate it as 0. */
+#if defined(MT7663) || defined(MT7915)
+	avgSnr = (avgSnr >= 16) ? (avgSnr - 16) : 0;
+#endif
+
+	/* moving average */
+	if (pEntry->RssiSample.AvgSnr[0])
+		pEntry->RssiSample.AvgSnr[0] = (((pEntry->RssiSample.AvgSnr[0] * 7) + avgSnr) >> 3);
+	else
+		pEntry->RssiSample.AvgSnr[0] = avgSnr;
+}
+
 INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_PACKET rx_pkt)
 {
 
@@ -2336,9 +2485,9 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 			RTMPEndianChange((UCHAR *)rxd_grp3, RMAC_INFO_GRP_3_SIZE);
 		if (rxd_grp5)
 			RTMPEndianChange((UCHAR *)rxd_grp5, RMAC_INFO_GRP_5_SIZE);
-		
+
 #endif /* RT_BIG_ENDIAN */
-	
+
 
 	rx_blk->MPDUtotalByteCnt = (rxd_grp0->rxd_0 & RXD_RX_BYTE_COUNT_MASK) - rmac_info_len;
 
@@ -2356,8 +2505,8 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 	rx_blk->sec_mode = ((rxd_grp0->rxd_1 & RXD_SEC_MODE_MASK) >> RXD_SEC_MODE_SHIFT);
 	rx_blk->key_idx = ((rxd_grp0->rxd_1 & RXD_KID_MASK) >> RXD_KID_SHIFT);
 
-#if defined(WIFI_DIAG) && defined(MT7915)
-	diag_get_snr(pAd, rx_blk->wcid, (UCHAR *)rxd_grp3);
+#if (defined(WIFI_DIAG) && defined(MT7915)) || defined(TR181_SUPPORT)
+	mtf_get_snr(pAd, rx_blk->wcid, (UCHAR *)rxd_grp3);
 #endif
 	if (rxd_grp0->rxd_3 & RXD_HTC)
 		RX_BLK_SET_FLAG(rx_blk, fRX_HTC);
@@ -2440,6 +2589,7 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 	}
 #endif
 
+	rx_blk->AMSDU_ADDR = NULL;
 	if (RX_BLK_TEST_FLAG(rx_blk, fRX_HDR_TRANS)) {
 		struct wifi_dev *wdev = NULL;
 
@@ -2456,7 +2606,7 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 #endif
 		rx_blk->FN = fn_sn & 0x000f;
 		rx_blk->SN = (fn_sn & 0xfff0) >> 4;
-	rx_blk->UserPriority = ((rxd_grp4->rxd_8 & RXD_QOS_CTL_MASK) >> RXD_QOS_CTL_SHIFT);
+		rx_blk->UserPriority = ((rxd_grp4->rxd_8 & RXD_TID_MASK) >> RXD_QOS_CTL_SHIFT);
 		wdev = wdev_search_by_wcid(pAd, rx_blk->wcid);
 
 		if (!wdev)
@@ -2470,10 +2620,12 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 			rx_blk->Addr2 = rx_blk->pData + 6;
 			rx_blk->Addr3 = wdev->bssid;
 		} else if ((((FRAME_CONTROL *)&temp_fc)->ToDs == 0) && (((FRAME_CONTROL *)&temp_fc)->FrDs == 1)) {
+			rx_blk->AMSDU_ADDR = wdev->if_addr;
 			rx_blk->Addr1 = rx_blk->pData;
 			rx_blk->Addr2 = wdev->bssid;
 			rx_blk->Addr3 = rx_blk->pData + 6;
 		} else if ((((FRAME_CONTROL *)&temp_fc)->ToDs == 1) && (((FRAME_CONTROL *)&temp_fc)->FrDs == 0)) {
+			rx_blk->AMSDU_ADDR = fc + 2;
 			rx_blk->Addr1 = wdev->bssid;
 			rx_blk->Addr2 = rx_blk->pData + 6;
 			rx_blk->Addr3 = rx_blk->pData;
@@ -2485,9 +2637,12 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 		}
 	} else {
 		rx_blk->FC = rx_blk->pData;
-		
-		temp_fc = *((UINT16 *)(rx_blk->FC));
-		fn_sn = *((UINT16 *)(rx_blk->FC + 22));
+
+		if (rx_blk->FC) {
+			temp_fc = *((UINT16 *)(rx_blk->FC));
+			fn_sn = *((UINT16 *)(rx_blk->FC + 22));
+		} else
+			return 0;
 #ifdef RT_BIG_ENDIAN
 		temp_fc = le2cpu16(temp_fc);
 		fn_sn = le2cpu16(fn_sn);
@@ -2615,16 +2770,16 @@ INT32 mtf_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, PNDIS_
 		mpdu_cnt = &rx_rate_rc->mpdu_cnt[dbw];
 		retry_cnt = &rx_rate_rc->retry_cnt[dbw];
 
-		if (rx_blk->FC) {
-			temp_fc = *((UINT16 *)(rx_blk->FC));
+
+		temp_fc = *((UINT16 *)(rx_blk->FC));
 #ifdef RT_BIG_ENDIAN
-			temp_fc = le2cpu16(temp_fc);
+		temp_fc = le2cpu16(temp_fc);
 #endif
-			if (((FRAME_CONTROL *)&temp_fc)->Retry) {
-				rx_rate_rc->total_retry_cnt++;
-				is_retry = TRUE;
-			}
+		if (((FRAME_CONTROL *)&temp_fc)->Retry) {
+			rx_rate_rc->total_retry_cnt++;
+			is_retry = TRUE;
 		}
+
 
 		switch (rx_mode) {
 		case MODE_CCK:
@@ -2758,6 +2913,8 @@ static VOID tx_free_v1_notify_handler(RTMP_ADAPTER *pAd, PKT_TOKEN_CB *cb,
 		que = token_tx_get_queue_by_token_id(cb, token_id);
 		que->total_back_cnt++;
 
+		if (token_id < que->pkt_tkid_start || token_id > que->pkt_tkid_end)
+			continue;
 #ifdef CONFIG_HOTSPOT_R2
 		/* already handled , do nothing */
 		if (que->pkt_token[token_id].Reprocessed) {
@@ -3059,7 +3216,7 @@ inline UINT32 mtf_txdone_handle(RTMP_ADAPTER *pAd, VOID *ptr, UINT8 resource_idx
 	PKT_TOKEN_CB *cb = hc_get_ct_cb(pAd->hdev_ctrl);
 	struct txdone_event *txdone = (struct txdone_event *)ptr;
 #ifdef RT_BIG_ENDIAN
-	txdone->txdone_1 =le2cpu32(txdone->txdone_1);	
+	txdone->txdone_1 = le2cpu32(txdone->txdone_1);
 #endif /* RT_BIG_ENDIAN */
 
 	UINT8 ver = ((txdone->txdone_1 & TXDONE_VER_MASK) >> TXDONE_VER_SHIFT);
@@ -3110,7 +3267,7 @@ static VOID EventTxFreeNotifyHandler(RTMP_ADAPTER *pAd, PKT_TOKEN_CB *cb,
 		/* shift position according to the version of tx done event */
 		dataPtr += LenPerToken;
 
-		if (token_id > que->pkt_tkid_max)
+		if (token_id < que->pkt_tkid_start || token_id > que->pkt_tkid_end)
 			continue;
 
 #ifdef CONFIG_HOTSPOT_R2
@@ -3184,28 +3341,28 @@ static UINT32 wed_txdone_handle(RTMP_ADAPTER *ad, VOID *ptr, UINT8 resource_idx)
 	UINT8 *tokenList;
 	UINT8 tokenCnt;
 	UINT16 rxByteCnt;
-	UINT8 report_type;
+	UINT8 pkt_type;
 	UINT8 version, len_per_token;
 
 	rxByteCnt = (dw0 & 0xffff);
 	tokenCnt = ((dw0 & (0x7f << 16)) >> 16) & 0x7f;
-	report_type = ((dw0 & (0x3f << 23)) >> 23) & 0x3f;
+	pkt_type = ((dw0 & TXDONE_PKT_TYPE_MASK_V0) >> TXDONE_PKT_TYPE_SHIFT_V0) & TXDONE_PKT_TYPE_MASK_VALUE_V0;
 	version = ((dw1 & (0x7 << 16)) >> 16) & 0x7;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-			 ("%s: DW0=0x%08x, rxByteCnt=%d,tokenCnt= %d, ReportType=%d\n",
-			  __func__, dw0, rxByteCnt, tokenCnt, report_type));
+	MTWF_DBG(ad, DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			 "DW0=0x%08x, rxByteCnt=%d,tokenCnt= %d, pkt_type=%d\n",
+			  dw0, rxByteCnt, tokenCnt, pkt_type);
 
 	if (tokenCnt > 0x7f) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Invalid tokenCnt(%d)!\n", tokenCnt));
+		MTWF_DBG(ad, DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_OFF, "Invalid tokenCnt(%d)!\n", tokenCnt);
 		return FALSE;
 	}
 
-	switch (report_type) {
-	case TX_FREE_NOTIFY:
+	switch (pkt_type) {
+	case RMAC_RX_PKT_TYPE_TXRX_NOTIFY:
 		len_per_token = (version == 0) ? 2 : 4;
 
 		if ((tokenCnt * len_per_token + 8) != rxByteCnt) {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("tokenCnt(%d) and rxByteCnt(%d) mismatch!\n", tokenCnt, rxByteCnt));
+			MTWF_DBG(ad, DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "tokenCnt(%d) and rxByteCnt(%d) mismatch!\n", tokenCnt, rxByteCnt);
 			hex_dump("TxFreeNotifyEventMisMatchFrame", ptr, rxByteCnt);
 			return FALSE;
 		}
@@ -3215,7 +3372,7 @@ static UINT32 wed_txdone_handle(RTMP_ADAPTER *ad, VOID *ptr, UINT8 resource_idx)
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Invalid type(%d)!\n", report_type));
+		MTWF_DBG(ad, DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid PTK_TYPE(%d) in TX_FREE_DONE_EVENT!\n", pkt_type);
 		break;
 	}
 
@@ -3551,17 +3708,17 @@ INT wtbl_update_pwr_offset(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 	/* update RATE Info to wtbl*/
 	WtblRateInfo.u2Tag = WTBL_RATE;
 	WtblRateInfo.u2Length = sizeof(CMD_WTBL_RATE_T);
-	if (wdev->channel > 14) {
-		ucRate = wdev->bPwrCtrlEn ? 0x4B:0;
-		WtblRateInfo.u2Rate1 = ucRate;
-		WtblRateInfo.u2Rate2 = ucRate;
-		WtblRateInfo.u2Rate3 = ucRate;
-		WtblRateInfo.u2Rate4 = ucRate;
-		WtblRateInfo.u2Rate5 = ucRate;
-		WtblRateInfo.u2Rate6 = ucRate;
-		WtblRateInfo.u2Rate7 = ucRate;
-		WtblRateInfo.u2Rate8 = ucRate;
-	}
+	/* set wtbl rate to OFDM_6M(5G) / CCK_1M(2.4G) */
+	ucRate = (wdev->channel > 14) ? 0x4B : 0x0;
+	WtblRateInfo.u2Rate1 = ucRate;
+	WtblRateInfo.u2Rate2 = ucRate;
+	WtblRateInfo.u2Rate3 = ucRate;
+	WtblRateInfo.u2Rate4 = ucRate;
+	WtblRateInfo.u2Rate5 = ucRate;
+	WtblRateInfo.u2Rate6 = ucRate;
+	WtblRateInfo.u2Rate7 = ucRate;
+	WtblRateInfo.u2Rate8 = ucRate;
+
 	CmdExtWtblUpdate(pAd, ucWlanIdx, SET_WTBL, &WtblRateInfo, sizeof(CMD_WTBL_RATE_T));
 
 	WtblSpeInfo.u2Tag = WTBL_SPE;

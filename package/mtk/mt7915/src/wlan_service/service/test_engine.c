@@ -1189,6 +1189,11 @@ static s_int32 mt_engine_stack_push(
 	s_int32 ret = -1;
 	struct test_tx_stack *stack = &configs->stack;
 
+	if (!tx_info) {
+		SERV_LOG(SERV_DBG_CAT_ENGN, SERV_DBG_LVL_ERROR,
+			("(%s)tx_info is null!\n", __func__));
+		return ret;
+	}
 	ret = mt_engine_stack_lookup(configs, virtual_wtbl);
 
 	if (ret > -1) {
@@ -1283,16 +1288,21 @@ static s_int32 mt_engine_store_tx_info(
 		goto err_out;
 	}
 
-	if (is_mt_engine_stack_full(configs) == FALSE) {
-		if (tx_info) {
-			net_ad_fill_phy_info(virtual_wtbl, tx_info);
+	if (tx_info == NULL) {
+		ret = -1;
 
-			if ((configs->tx_mode < TEST_MODE_HE_SU) &&
-				(tx_info->mcs & 0x7f) == 32)
-				net_ad_handle_mcs32(winfos,
-						    virtual_wtbl,
-						    tx_info->bw);
-		}
+		goto err_out;
+	}
+
+	if (is_mt_engine_stack_full(configs) == FALSE) {
+
+		net_ad_fill_phy_info(virtual_wtbl, tx_info);
+
+		if ((configs->tx_mode < TEST_MODE_HE_SU) &&
+			(tx_info->mcs & 0x7f) == 32)
+			net_ad_handle_mcs32(winfos,
+					    virtual_wtbl,
+					    tx_info->bw);
 
 		net_ad_apply_wtbl(winfos, virtual_device, virtual_wtbl);
 
@@ -1451,6 +1461,10 @@ static u_int8 mt_engine_get_sub_band(u_int32 ru_index)
 {
 	u_int8 sub_band_idx = 0;
 
+	/* skip central RU26 index 18 */
+	if (19 <= ru_index && ru_index <= 36)
+		ru_index = ru_index - 1;
+
 	if (ru_index == 68 || ru_index == 67)
 		sub_band_idx = 0;
 	else if (ru_index > 64)
@@ -1461,8 +1475,6 @@ static u_int8 mt_engine_get_sub_band(u_int32 ru_index)
 		sub_band_idx = ((ru_index % 53) >> 1);
 	else if (ru_index > 36)
 		sub_band_idx = ((ru_index % 37) >> 2);
-	else if (ru_index == 36)
-		sub_band_idx = 3;
 	else
 		sub_band_idx = (ru_index / 9);
 
@@ -1503,6 +1515,17 @@ static u_int32 mt_engine_add_allocation(
 				alloc_info->sub20[sub_band_idx+1] = 0x73;
 				alloc_info->sub20[sub_band_idx+2] = 0x73;
 				alloc_info->sub20[sub_band_idx+3] = 0x73;
+			} else if (allocation == 0xd8) {
+				/* D3.1, Table 28-24, 0xd0 is 996x2-tone
+				 * D3.1, Table 28-24, 0x73 is 996-empty-tone
+				 */
+				alloc_info->sub20[sub_band_idx+1] = 0x73;
+				alloc_info->sub20[sub_band_idx+2] = 0x73;
+				alloc_info->sub20[sub_band_idx+3] = 0x73;
+				alloc_info->sub20[sub_band_idx+4] = 0x73;
+				alloc_info->sub20[sub_band_idx+5] = 0x73;
+				alloc_info->sub20[sub_band_idx+6] = 0x73;
+				alloc_info->sub20[sub_band_idx+7] = 0x73;
 			}
 		}
 	}
@@ -1710,7 +1733,7 @@ static s_int32 mt_engine_calc_pe_disamb(
 	ru_info->l_len = engine_ceil((ru_info->tx_time_x5-20*5), (4*5))*3-3-2;
 
 	pe_symbol_x5 = test_he_t_pe_x5[t_pe];
-	pe_symbol_x5 += (4 * (((ru_info->tx_time_x5 - 20 * 5)%20) ? 1 : 0));
+	pe_symbol_x5 += (4 * ((10*engine_ceil((ru_info->tx_time_x5-20*5), (4*5)) - (((ru_info->tx_time_x5-20*5)*10)/(4*5)))/2));
 	if (pe_symbol_x5 >= test_he_t_sym_x5[gi])
 		ru_info->pe_disamb = 1;
 	else
@@ -1923,7 +1946,8 @@ s_int32 mt_engine_subscribe_tx(
 	struct test_operation *ops,
 	struct test_wlan_info *winfos,
 	void *virtual_device,
-	struct test_configuration *configs)
+	struct test_configuration *configs,
+	u_int8 ctrl_band_idx)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	struct test_tx_info tx_info;
@@ -1934,7 +1958,7 @@ s_int32 mt_engine_subscribe_tx(
 
 	/* Calculate duty_cycle related parameter first */
 	if (configs->duty_cycle > 0)
-		ret = mt_engine_calc_duty_cycle(configs);
+		mt_engine_calc_duty_cycle(configs);
 
 	tx_info.tx_mode = configs->tx_mode;
 	if (configs->per_pkt_bw >= TEST_BW_160C)
@@ -2098,7 +2122,7 @@ s_int32 mt_engine_subscribe_tx(
 
 		ret = ops->op_set_ampdu_ba_limit(winfos,
 						wmm_idx,
-						ampdu_count);
+						ampdu_count, ctrl_band_idx);
 		if (ret)
 			goto err_out;
 		else
@@ -2243,7 +2267,7 @@ s_int32 mt_engine_start(
 	}
 
 	/*** Step6: Init tx thread ***/
-	ret = net_ad_init_thread(winfos, configs, SERV_THREAD_TEST);
+	ret = net_ad_init_thread(winfos, configs);
 	if (ret)
 		goto err;
 
@@ -2466,7 +2490,7 @@ s_int32 mt_engine_stop(
 		goto err;
 
 	/*** Step10: Release tx thread ***/
-	ret = net_ad_release_thread(0);
+	ret = net_ad_release_thread(winfos);
 	/* msleep(2); */
 	if (ret)
 		goto err;
@@ -2640,12 +2664,11 @@ s_int32 mt_engine_start_tx(
 	if (ret)
 		goto err;
 
-	if (op_mode & OP_MODE_RXFRAME) {
-		ret = ops->op_set_tr_mac(
-				winfos, SERV_TEST_MAC_RX_RXV, FALSE, band_idx);
-		if (ret)
-			goto err;
-	}
+	/* FIXME: always disable RX_RXV that avoid to cause conti tx fail */
+	ret = ops->op_set_tr_mac(
+		winfos, SERV_TEST_MAC_RX_RXV, FALSE, band_idx);
+	if (ret)
+		goto err;
 
 	/* Convert DBW - 0: 20MHz, 1: 40MHz, 2: 80 MHz, 3: 80+80MHz for setting CR */
 	if (configs->per_pkt_bw <= TEST_BW_80)
@@ -2874,7 +2897,7 @@ s_int32 mt_engine_stop_tx(
 		if ((pkt_tx_time > 0) || (ipg > 0)) {
 			u_char omac_idx = 0, sta_seq = 0;
 			/* Flush SW queue */
-			ret = net_ad_clean_sta_q(winfos, SERV_WCID_ALL);
+			ret = net_ad_clean_sta_q(winfos, band_idx, SERV_WCID_ALL);
 			if (ret)
 				return ret;
 
@@ -2977,23 +3000,13 @@ s_int32 mt_engine_start_rx(
 	if (ret)
 		goto err;
 
-	ret = ops->op_set_phy_counter(winfos, 0, TEST_DBDC_BAND0);
+	ret = ops->op_set_phy_counter(winfos, 0, band_idx);
 	if (ret)
 		goto err;
 
-	ret = ops->op_set_phy_counter(winfos, 1, TEST_DBDC_BAND0);
+	ret = ops->op_set_phy_counter(winfos, 1, band_idx);
 	if (ret)
 		goto err;
-
-	if (IS_TEST_DBDC(winfos)) {
-		ret = ops->op_set_phy_counter(winfos, 0, TEST_DBDC_BAND1);
-		if (ret)
-			goto err;
-
-		ret = ops->op_set_phy_counter(winfos, 1, TEST_DBDC_BAND1);
-		if (ret)
-			goto err;
-	}
 
 	op_mode |= OP_MODE_RXFRAME;
 	configs->op_mode = op_mode;

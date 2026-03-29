@@ -29,6 +29,7 @@ static INT token_tx_queue_destroy(
 	INT idx;
 	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)(pktTokenCb->pAd);
 	struct token_tx_pkt_entry *entry = NULL;
+	UINT32 start_offset = 0;
 
 	if (que->token_inited == TRUE) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -38,10 +39,19 @@ static INT token_tx_queue_destroy(
 		que->token_inited = FALSE;
 		RTMP_SEM_UNLOCK(&que->enq_lock);
 
-		for (idx = 0; idx < que->pkt_tkid_cnt; idx++) {
+#ifdef WHNAT_SUPPORT
+		/* The area of pkt_token[0~8191] is for HNAT */
+		/* Set offset to zero if whnat is ON due to  */
+		/* the pkt_token[start] is for SW */
+		if (!pAd->CommonCfg.whnat_en)
+			start_offset = que->pkt_tkid_start;/* Backup Start offset */
+#else
+		start_offset = que->pkt_tkid_start;/* Backup Start offset */
+#endif
+		for (idx = que->pkt_tkid_start; idx <= que->pkt_tkid_end; idx++) {
 			if (!que->pkt_token)
 				break;
-			entry = &que->pkt_token[idx];
+			entry = &que->pkt_token[idx - start_offset];
 
 			if (entry && entry->pkt_buf) {
 				PCI_UNMAP_SINGLE(pAd, entry->pkt_phy_addr,
@@ -81,13 +91,15 @@ static INT token_tx_two_queues_init(
 	if (que->token_inited == FALSE) {
 
 		if (qidx == 0) {
-			que->pkt_tkid_max = cap->tkn_info.band0_token_cnt - 1;
+			que->pkt_tkid_end = cap->tkn_info.band0_token_cnt - 1;
+			que->pkt_tkid_start = 0;
 			que->pkt_tkid_cnt = cap->tkn_info.band0_token_cnt;
 			que->pkt_tkid_invalid = cap->tkn_info.token_tx_cnt;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): ct sw token(%d) number = %d\n",
 					__func__, qidx, que->pkt_tkid_cnt));
 		} else if (qidx == 1) {
-			que->pkt_tkid_max = (cap->tkn_info.token_tx_cnt - 1);
+			que->pkt_tkid_end = (cap->tkn_info.token_tx_cnt - 1);
+			que->pkt_tkid_start = cap->tkn_info.band0_token_cnt;
 			que->pkt_tkid_cnt = (cap->tkn_info.token_tx_cnt - cap->tkn_info.band0_token_cnt);
 			que->pkt_tkid_invalid = (cap->tkn_info.token_tx_cnt + 1);
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): ct sw token(%d) number = %d\n",
@@ -110,13 +122,15 @@ static INT token_tx_two_queues_init(
 		}
 		os_zero_mem(que->free_id, sizeof(UINT16) * que->pkt_tkid_aray);
 		/* allocate pkt_token */
-		os_alloc_mem(pAd, (UCHAR **)&que->pkt_token, sizeof(struct token_tx_pkt_entry) * que->pkt_tkid_cnt);
+		os_alloc_mem(pAd, (UCHAR **)&que->pkt_token,
+			sizeof(struct token_tx_pkt_entry) * cap->tkn_info.token_tx_cnt);
 		if (!que->pkt_token) {
 			que->token_inited = TRUE;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): token que pkt_token inited fail!\n",  __func__));
 			return NDIS_STATUS_RESOURCES;
 		}
-		os_zero_mem(que->pkt_token, sizeof(struct token_tx_pkt_entry) * que->pkt_tkid_cnt);
+		os_zero_mem(que->pkt_token,
+			sizeof(struct token_tx_pkt_entry) * cap->tkn_info.token_tx_cnt);
 
 		/*initial freeid*/
 		for (idx = 0; idx < que->pkt_tkid_cnt; idx++) {
@@ -175,20 +189,21 @@ static INT token_tx_queue_init(
 	}
 
 	if (que->token_inited == FALSE) {
-		que->pkt_tkid_max = (cap->tkn_info.token_tx_cnt - 1);
+		que->pkt_tkid_end = (cap->tkn_info.token_tx_cnt - 1);
+		que->pkt_tkid_start = 0;
 
 #ifdef WHNAT_SUPPORT
 		if (IS_ASIC_CAP(pAd, fASIC_CAP_WHNAT) && pAd->CommonCfg.whnat_en) {
-			que->pkt_tkid_max = (cap->tkn_info.token_tx_cnt -
-									cap->tkn_info.hw_tx_token_cnt - 1);
+			que->pkt_tkid_end = cap->tkn_info.token_tx_cnt - 1;
+			que->pkt_tkid_start = cap->tkn_info.hw_tx_token_cnt;
 		}
 #endif
 
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): ct sw token number = %d\n",
-				__func__, que->pkt_tkid_max));
+				__func__, que->pkt_tkid_end));
 
-		que->pkt_tkid_invalid = (que->pkt_tkid_max + 1);
-		que->pkt_tkid_cnt = (que->pkt_tkid_max + 1);
+		que->pkt_tkid_invalid = (cap->tkn_info.token_tx_cnt + 1);
+		que->pkt_tkid_cnt = (que->pkt_tkid_end - que->pkt_tkid_start + 1);
 		que->pkt_tkid_aray = (que->pkt_tkid_cnt + 1);
 
 		NdisAllocateSpinLock(pAd, &que->enq_lock);
@@ -205,17 +220,17 @@ static INT token_tx_queue_init(
 		}
 		os_zero_mem(que->free_id, sizeof(UINT16) * que->pkt_tkid_aray);
 		/* allocate pkt_token */
-		os_alloc_mem(pAd, (UCHAR **)&que->pkt_token, sizeof(struct token_tx_pkt_entry) * que->pkt_tkid_cnt);
+		os_alloc_mem(pAd, (UCHAR **)&que->pkt_token, sizeof(struct token_tx_pkt_entry) * cap->tkn_info.token_tx_cnt);
 		if (!que->pkt_token) {
 			que->token_inited = TRUE;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s(): token que pkt_token inited fail!\n",  __func__));
 			return NDIS_STATUS_RESOURCES;
 		}
-		os_zero_mem(que->pkt_token, sizeof(struct token_tx_pkt_entry) * que->pkt_tkid_cnt);
+		os_zero_mem(que->pkt_token, sizeof(struct token_tx_pkt_entry) * cap->tkn_info.token_tx_cnt);
 
 		/*initial freeid*/
 		for (idx = 0; idx < que->pkt_tkid_cnt; idx++)
-			que->free_id[idx] = idx;
+			que->free_id[idx] = idx + que->pkt_tkid_start;
 
 		que->free_id[que->pkt_tkid_cnt] = que->pkt_tkid_invalid;
 		atomic_set(&que->free_token_cnt, que->pkt_tkid_cnt);
@@ -260,6 +275,9 @@ PNDIS_PACKET token_tx_deq(
 	PNDIS_PACKET pkt_buf = NULL;
 	static BOOLEAN is_dump_wa = FALSE;
 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+	UCHAR band_idx = 0;
+	UCHAR *pSrcBufVA;
+	PHEADER_802_11 pHeader_802_11;
 
 	if (!que) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -271,7 +289,7 @@ PNDIS_PACKET token_tx_deq(
 
 	if (que->token_inited == TRUE) {
 		if (que) {
-			if (token <= que->pkt_tkid_max) {
+			if (token >= que->pkt_tkid_start && token <= que->pkt_tkid_end) {
 				struct token_tx_pkt_entry *entry = NULL;
 				STA_TR_ENTRY *tr_entry = NULL;
 				if (que->band_idx == 0)
@@ -287,7 +305,7 @@ PNDIS_PACKET token_tx_deq(
 							 __func__, token));
 					RTMP_SEM_UNLOCK(&que->deq_lock);
 					if (!is_dump_wa) {
-						MtCmdFwLog2Host(pAd, 1, 2);
+						MtCmdFwLog2Host(pAd, 1, 0);
 						is_dump_wa = TRUE;
 					}
 					return pkt_buf;
@@ -303,6 +321,26 @@ PNDIS_PACKET token_tx_deq(
 				atomic_inc(&que->free_token_cnt);
 				que->total_deq_cnt++;
 				tr_entry->token_cnt--;
+				band_idx = RTMP_GET_BAND_IDX(pkt_buf);
+				pSrcBufVA = RTMP_GET_PKT_SRC_VA(pkt_buf);
+
+				if (pSrcBufVA && (*type == TOKEN_TX_MGT)) {
+					pHeader_802_11 = (HEADER_802_11 *)(pSrcBufVA + cap->tx_hw_hdr_len);
+
+					if ((pHeader_802_11->FC.Type == FC_TYPE_MGMT) &&
+						(pHeader_802_11->FC.SubType == SUBTYPE_PROBE_RSP) &&
+						pAd->probe_rsp_cnt_per_b[band_idx])
+						pAd->probe_rsp_cnt_per_b[band_idx]--;
+				}
+
+#ifdef CONFIG_WLAN_SERVICE
+				if (ATE_ON(pAd)) {
+					UCHAR band_idx = RTMP_GET_BAND_IDX(pkt_buf);
+
+					if (atomic_read(&que->used_token_per_band[band_idx]))
+						atomic_dec(&que->used_token_per_band[band_idx]);
+				}
+#endif
 			} else {
 				MTWF_LOG(DBG_CAT_TOKEN, TOKEN_INFO, DBG_LVL_OFF, ("%s(): Invalid token ID(%d)\n", __func__, token));
 			}
@@ -328,6 +366,9 @@ UINT16 token_tx_enq(
 	UINT32 idx = 0, token = que->pkt_tkid_invalid;
 	struct token_tx_pkt_entry *entry = NULL;
 	STA_TR_ENTRY *tr_entry = &pAd->tr_ctl.tr_entry[wcid];
+	UCHAR band_idx = 0;
+	UCHAR *pSrcBufVA;
+	PHEADER_802_11 pHeader_802_11;
 
 	RTMP_SEM_LOCK(&que->enq_lock);
 
@@ -335,7 +376,7 @@ UINT16 token_tx_enq(
 		idx = que->id_head;
 		token = que->free_id[idx];
 
-		if (token <= que->pkt_tkid_max) {
+		if (token >= que->pkt_tkid_start && token <= que->pkt_tkid_end) {
 			if (que->band_idx == 0)
 				entry = &que->pkt_token[token];
 			else
@@ -357,6 +398,21 @@ UINT16 token_tx_enq(
 			que->total_enq_cnt++;
 
 			tr_entry->token_cnt++;
+
+			band_idx = RTMP_GET_BAND_IDX(pkt);
+			pSrcBufVA = RTMP_GET_PKT_SRC_VA(pkt);
+			if (pSrcBufVA && (type == TOKEN_TX_MGT)) {
+				pHeader_802_11 = (HEADER_802_11 *)(pSrcBufVA + cap->tx_hw_hdr_len);
+				if ((pHeader_802_11->FC.Type == FC_TYPE_MGMT) &&
+					(pHeader_802_11->FC.SubType == SUBTYPE_PROBE_RSP))
+					pAd->probe_rsp_cnt_per_b[band_idx]++;
+			}
+
+#ifdef CONFIG_WLAN_SERVICE
+			if (ATE_ON(pAd)) {
+				atomic_inc(&que->used_token_per_band[band_idx]);
+			}
+#endif
 		} else {
 			token = que->pkt_tkid_invalid;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -377,11 +433,19 @@ static INT token_tx_deinit(PKT_TOKEN_CB *cb)
 	INT ret = NDIS_STATUS_SUCCESS;
 	struct token_tx_pkt_queue *que = NULL;
 	UINT8 i;
+	RTMP_ADAPTER *ad = (RTMP_ADAPTER *)cb->pAd;
 
 	for (i = 0; i < cb->que_nums; i++) {
 		que = &cb->que[i];
 		ret = token_tx_queue_destroy(cb, que);
 	}
+	if (ad) {
+		ad->probe_rsp_cnt_per_b[DBDC_BAND0] = 0;
+#ifdef DBDC_MODE
+		ad->probe_rsp_cnt_per_b[DBDC_BAND1] = 0;
+#endif
+	}
+
 
 	return ret;
 }
@@ -423,6 +487,12 @@ static INT token_tx_init(PKT_TOKEN_CB *cb, RTMP_ADAPTER *ad)
 	if (cap->txd_flow_ctl)
 		MtCmdCr4Set(ad, WA_SET_OPTION_TXD_FLOW_CTRL,
 					1, 0);
+	if (ad) {
+		ad->probe_rsp_cnt_per_b[DBDC_BAND0] = 0;
+#ifdef DBDC_MODE
+		ad->probe_rsp_cnt_per_b[DBDC_BAND1] = 0;
+#endif
+	}
 
 	return ret;
 }
@@ -480,7 +550,7 @@ inline struct token_tx_pkt_queue *token_tx_get_queue_by_token_id(PKT_TOKEN_CB *c
 	if (cb->que_nums != 2) {
 		return que;
 	} else {
-		if (token_id <= que->pkt_tkid_max)
+		if (token_id >= que->pkt_tkid_start && token_id <= que->pkt_tkid_end)
 			return que;
 		else
 			return &cb->que[1];
@@ -519,7 +589,7 @@ inline VOID token_tx_set_lwmark(struct token_tx_pkt_queue *que, UINT32 value)
 
 inline UINT32 token_tx_get_lwmark(struct token_tx_pkt_queue *que)
 {
-	return que->high_water_mark;
+	return que->low_water_mark;
 }
 
 inline VOID token_tx_set_hwmark(struct token_tx_pkt_queue *que, UINT32 value)
@@ -593,7 +663,7 @@ static INT token_rx_deinit(PKT_TOKEN_CB *cb)
 	return ret;
 }
 
-UINT32 token_rx_dmad_init(struct token_rx_pkt_queue *que, PNDIS_PACKET pkt,
+UINT32 mt7915_token_rx_dmad_init(struct token_rx_pkt_queue *que, PNDIS_PACKET pkt,
 								ULONG alloc_size, PVOID alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa)
 {
 	UINT32 token_id;
@@ -607,9 +677,9 @@ UINT32 token_rx_dmad_init(struct token_rx_pkt_queue *que, PNDIS_PACKET pkt,
 
 	return token_id;
 }
-EXPORT_SYMBOL(token_rx_dmad_init);
+EXPORT_SYMBOL(mt7915_token_rx_dmad_init);
 
-INT token_rx_dmad_lookup(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET *pkt,
+INT mt7915_token_rx_dmad_lookup(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET *pkt,
 							PVOID *alloc_va, NDIS_PHYSICAL_ADDRESS *alloc_pa)
 {
 	INT32 ret = 0;
@@ -620,7 +690,29 @@ INT token_rx_dmad_lookup(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_
 
 	return ret;
 }
-EXPORT_SYMBOL(token_rx_dmad_lookup);
+EXPORT_SYMBOL(mt7915_token_rx_dmad_lookup);
+
+INT token_rx_dmad_lookup_pa(struct token_rx_pkt_queue *que, UINT32 *token_id, PNDIS_PACKET *pkt,
+							PVOID *alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa)
+{
+	INT32 ret = -1, token_loop = 0;
+
+	for (token_loop = 0 ; token_loop < que->pkt_tkid_cnt ; token_loop++) {
+		if (alloc_pa == que->pkt_token[token_loop].dma_buf.AllocPa) {
+			*token_id = token_loop;
+			*alloc_va = que->pkt_token[token_loop].dma_buf.AllocVa;
+			*pkt = que->pkt_token[token_loop].pkt_buf;
+
+			MTWF_DBG(NULL, DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					"%s(): tkn_rx_id: %d according to %04x\n",
+					__func__, *token_id, (UINT32)alloc_pa);
+
+			ret = 0;
+		}
+	}
+
+	return ret;
+}
 
 INT token_rx_dmad_update(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET pkt,
 								ULONG alloc_size, PVOID alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa)

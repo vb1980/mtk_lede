@@ -1556,7 +1556,7 @@ VOID dump_wtbl_1_info(RTMP_ADAPTER *pAd, struct wtbl_1_struc *tb)
 	addr[5] = wtbl_1_d0->field.addr_5 & 0xff;
 	hex_dump("WTBL Segment 1 Raw Data", (UCHAR *)tb, sizeof(struct wtbl_1_struc));
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("WTBL Segment 1 Fields:\n"));
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\tAddr: %02x:%02x:%02x:%02x:%02x:%02x\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]));
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\tAddr: "MACSTR"\n", MAC2STR(addr)));
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\tMUAR_Idx:%d\n", wtbl_1_d0->field.muar_idx));
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\trc_a1:%d/rc_a2:%d/kid:%d/rkv:%d/rv:%d/rc_id:%d/sw:%d\n",
 			 wtbl_1_d0->field.rc_a1, wtbl_1_d0->field.rc_a2, wtbl_1_d0->field.kid, wtbl_1_d0->field.rkv, wtbl_1_d0->field.rv, wtbl_1_d0->field.rc_id, wtbl_1_d0->field.sw));

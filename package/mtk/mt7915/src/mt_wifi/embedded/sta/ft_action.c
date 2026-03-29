@@ -262,8 +262,8 @@ VOID FT_OTD_PeerRspAtSeq2Action(
 	UCHAR BBPValue = 0;
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("FT_OTD_ACTION - PeerFtRspAtSeq2Action MlmeAux.Bssid = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  PRINT_MAC(pAd->MlmeAux.Bssid)));
+			 ("FT_OTD_ACTION - PeerFtRspAtSeq2Action MlmeAux.Bssid = "MACSTR"\n",
+			  MAC2STR(pAd->MlmeAux.Bssid)));
 
 	if (PeerFtRspSanity
 		(pAd, Elem->Msg, Elem->MsgLen, TargetAddr, &FtIe, &MdIe, &Status)) {

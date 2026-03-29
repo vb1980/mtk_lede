@@ -31,6 +31,7 @@
 #include "wapp/wapp_cmm_type.h"
 #endif
 
+#include "mgmt/mgmt_entrytb.h"
 
 /* new types for Media Specific Indications */
 /* Extension channel offset */
@@ -76,37 +77,11 @@ enum oid_bw {
 #define NDIS_802_11_LENGTH_RATES_EX     16
 
 #define OID_P2P_DEVICE_NAME_LEN	32
+#define MAX_LEN_OF_SSID                 32
+#define MAX_LEN_OF_WSC_IE				512
 /*#define MAX_NUM_OF_CHS					49 */ /* 14 channels @2.4G +  12@UNII + 4 @MMAC + 11 @HiperLAN2 + 7 @Japan + 1 as NULL terminationc */
 /*#define MAX_NUM_OF_CHS				54 */ /* 14 channels @2.4G +  12@UNII(lower/middle) + 16@HiperLAN2 + 11@UNII(upper) + 0 @Japan + 1 as NULL termination */
 #define MAX_NUMBER_OF_EVENT				10	/* entry # in EVENT table */
-
-#if defined(MT7603_FPGA) || defined(MT7628_FPGA) || defined(MT7636_FPGA) || defined(MT7637_FPGA)
-#define MAX_NUMBER_OF_MAC				4	/* if MAX_MBSSID_NUM is 8, this value can't be larger than 211 */
-#elif defined(MT7603) || defined(MT7628)
-#define MAX_NUMBER_OF_MAC				33
-#elif defined(MT7636)
-#define MAX_NUMBER_OF_MAC				14
-#elif defined(MT7637)
-#define MAX_NUMBER_OF_MAC				75 /*sync with 7615 fixed value*/
-#elif defined(MT76x2)
-#ifdef MAC_REPEATER_SUPPORT				/* ((MAX_EXT_MAC_ADDR_SIZE + 1) * MAC_APCLI_NUM) */
-#define MAX_NUMBER_OF_MAC               (116 - ((16 + 1) * 1))
-#else
-#define MAX_NUMBER_OF_MAC				 116
-#endif /* MAC_REPEATER_SUPPORT */
-#else
-/*
-    chip max wtbl idx = 128,
-    as AP role, need a group key entry. so max it will occupy 16 for 16 mbss.
-
-    max rept entry = 32,
-    rept need apcli link, 1 for unicast, 1 for broadcast key from rootap.
-
-    so 128 - 32 - 16 - 1 - 1  = 78.
-*/
-#define MAX_NUMBER_OF_MAC				75
-#endif /* defined(MT7603_FPGA) || defined(MT7628_FPGA) */
-
 #define MAX_NUMBER_OF_ACL				64
 #define MAX_LENGTH_OF_SUPPORT_RATES		12	/* 1, 2, 5.5, 11, 6, 9, 12, 18, 24, 36, 48, 54 */
 #define MAX_NUMBER_OF_DLS_ENTRY			4
@@ -197,12 +172,14 @@ enum oid_bw {
 #define OID_802_11_AMSDU							0x0531
 #define OID_802_11_AMPDU							0x0532
 #define OID_802_11_APCFG							0x0533
-#define OID_802_11_ASSOLIST							0x0534
 #define OID_802_11_CURRENT_CRED					0x0535
 #define OID_802_11_PASSPHRASES					0x0536
 #define OID_802_11_CHANNEL_WIDTH					0x0537
 #define OID_802_11_BEACON_PERIOD					0x0538
 #endif /* VENDOR_FEATURE6_SUPPORT */
+#if defined (VENDOR_FEATURE6_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
+#define OID_802_11_ASSOLIST							0x0534
+#endif
 
 /* For 802.1x daemin using */
 #ifdef DOT1X_SUPPORT
@@ -303,10 +280,52 @@ enum oid_bw {
 
 #define	OID_802_11_GET_SSID_BSSID								0x0689
 
+#ifdef ENHANCE_STAT_SUPPORT
+#define OID_802_11_ASSOC_STA_MAX_CAP_LIST				0x0690
+#define OID_SET_SITE_SURVEY                             0x0691
+#define OID_SET_AP_SCAN_CHANNEL                         0x0692
+#define OID_802_11_GET_CURRENT_CHANNEL_STATS                    0x0693
+#define OID_GET_SCAN_CHANNEL_STATS                    0x0694
+#define OID_802_11_STA_STATISTICS				0x0695
 
-#ifdef RTMP_RBUS_SUPPORT
-#define OID_802_11_QUERY_WirelessMode				0x0718
-#endif /* RTMP_RBUS_SUPPORT */
+#define OID_GET_SITE_SURVEY                             0x0696
+#define OID_802_11_STA_LIST				0x0697
+
+enum ENT_TYPE {
+	STA_ENTRY = 0x01,
+	A4_ENTRY = 0x02,
+	AP_ENTRY = 0x03,
+	REPT_ENTRY = 0x04,
+	OTHER_ENTRY = 0x05
+};
+typedef struct _STA_LIST{
+	UCHAR Addr[MAC_ADDR_LEN];
+	UCHAR EntType;
+	UCHAR Band;
+	UCHAR BW;
+	CHAR Rssi[4];
+	UCHAR nss;
+	UINT32 StaConnectTime;
+	UINT32 LastRxRate;
+	UINT32 LastTxRate;
+} STA_LIST, *PSTA_LIST;
+
+/* Max No. of Station can be added in list is 128. Adding All stations
+   exceeds the size of 4096 bytes*/
+#define MAX_STA_LIST_LEN 				128
+typedef struct  _STA_TABLE {
+	UCHAR	StaCnt;
+	CHAR	NoiseFloor[4];
+	STA_LIST STAList[MAX_STA_LIST_LEN];
+} STA_TABLE, *PSTA_TABLE;
+
+typedef struct _SCAN_CHANNEL_INFO {
+	UCHAR is_active;	/*1 for active scan, 0 for passive scan*/
+	UINT32 channel;
+	UINT32 timeout;
+} SCAN_CHANNEL_INFO, *PSCAN_CHANNEL_INFO;
+#endif /* ENHANCE_STAT_SUPPORT */
+
 
 
 #define RT_OID_802_11_QUERY_TDLS_PARAM			0x0676
@@ -314,7 +333,7 @@ enum oid_bw {
 
 #define OID_MTK_CHIP_ID							0x068A
 #define OID_MTK_DRVER_VERSION					0x068B
-
+#define OID_MAX_NUM_OF_STA				0x068C
 /* Ralink defined OIDs */
 /* Dennis Lee move to platform specific */
 
@@ -956,7 +975,7 @@ typedef struct _NDIS_802_11_CAPABILITY {
 #endif /* SNMP_SUPPORT */
 
 /* //dot11Phy(4) */
-#if (defined(SNMP_SUPPORT) || defined(WH_EZ_SETUP) || defined(VENDOR_FEATURE6_SUPPORT))
+#if (defined(SNMP_SUPPORT) || defined(WH_EZ_SETUP) || defined(VENDOR_FEATURE6_SUPPORT) || defined(TR181_SUPPORT))
 #define OID_802_11_CURRENTCHANNEL				0x0712
 #endif
 
@@ -1089,11 +1108,11 @@ typedef union _HE_TRANSMIT_SETTING {
 	struct {
 		UINT8 Nss;
 		UINT8 MODE;	/* Use definition MODE_xxx. */
-		USHORT Reserved:3;
+		USHORT Reserved:2;
 		USHORT iTxBF:1;
 		USHORT eTxBF:1;
 		USHORT STBC:1;
-		USHORT ShortGI:1;
+		USHORT ShortGI:2;
 		USHORT BW:2;	/* channel bandwidth 20MHz/40/80 MHz */
 		USHORT ldpc:1;
 		USHORT MCS:6;	/* MCS */
@@ -1103,11 +1122,11 @@ typedef union _HE_TRANSMIT_SETTING {
 		USHORT MCS:6;
 		USHORT ldpc:1;
 		USHORT BW:2;
-		USHORT ShortGI:1;
+		USHORT ShortGI:2;
 		USHORT STBC:1;
 		USHORT eTxBF:1;
 		USHORT iTxBF:1;
-		USHORT Reserved:3;
+		USHORT Reserved:2;
 		UINT8 MODE;
 		UINT8 Nss;
 	} field;
@@ -1182,6 +1201,13 @@ typedef struct GNU_PACKED operating_info {
 	UCHAR region;
 	UCHAR is4x4Mode;
 	UCHAR vht_cent_ch2;
+#ifdef ENHANCE_STAT_SUPPORT
+	UCHAR band;
+	UCHAR ssid[MAX_LEN_OF_SSID + 1];
+	UCHAR cent_ch1;
+	UCHAR oper_ht_bw;
+	UCHAR oper_vht_bw;
+#endif
 } OPERATING_INFO, *POPERATING_INFO;
 
 typedef struct GNU_PACKED _channel_info {
@@ -1342,6 +1368,7 @@ typedef struct _RT_802_11_MAC_ENTRY {
 	CHAR AvgRssi0;
 	CHAR AvgRssi1;
 	CHAR AvgRssi2;
+	CHAR AvgRssi3;
 	UINT32 ConnectedTime;
 	HTTRANSMIT_SETTING TxRate;
 	UINT32 LastRxRate;
@@ -1356,7 +1383,7 @@ typedef struct _RT_802_11_MAC_ENTRY {
 
 typedef struct _RT_802_11_MAC_TABLE {
 	ULONG Num;
-	RT_802_11_MAC_ENTRY Entry[MAX_NUMBER_OF_MAC];
+	RT_802_11_MAC_ENTRY Entry[MAX_LEN_OF_MAC_TABLE];
 } RT_802_11_MAC_TABLE, *PRT_802_11_MAC_TABLE;
 
 #ifdef DOT11_N_SUPPORT
@@ -1377,7 +1404,7 @@ struct {
 typedef
 struct {
 	ULONG Num;
-	RT_COUNTER_TXBF Entry[MAX_NUMBER_OF_MAC];
+	RT_COUNTER_TXBF Entry[MAX_LEN_OF_MAC_TABLE];
 } RT_802_11_TXBF_TABLE;
 #endif /* TXBF_SUPPORT */
 #endif /* DOT11_N_SUPPORT */
@@ -1550,6 +1577,22 @@ typedef struct _RT_802_11_TX_RATES_ {
 	UCHAR ExtRate[MAX_LENGTH_OF_SUPPORT_RATES];
 } RT_802_11_TX_RATES, *PRT_802_11_TX_RATES;
 
+#ifdef ENHANCE_STAT_SUPPORT
+typedef struct _RT_STA_MAX_CAP {
+	UCHAR Addr[MAC_ADDR_LEN];
+	UCHAR NSS;
+	UCHAR MODE;
+	UCHAR MCS;
+	UCHAR BW;
+	UCHAR ShortGI;
+} RT_STA_MAX_CAP;
+
+typedef struct  __RT_STA_MAX_CAP_TABLE {
+	int Num;
+	RT_STA_MAX_CAP       STACap[MAX_LEN_OF_MAC_TABLE];
+} RT_STA_MAX_CAP_TABLE;
+#endif /* ENHANCE_STAT_SUPPORT */
+
 /* Definition of extra information code */
 #define	GENERAL_LINK_UP			0x0	/* Link is Up */
 #define	GENERAL_LINK_DOWN		0x1	/* Link is Down */
@@ -1591,7 +1634,7 @@ typedef struct _RT_LLTD_ASSOICATION_ENTRY {
 
 typedef struct _RT_LLTD_ASSOICATION_TABLE {
 	unsigned int Num;
-	RT_LLTD_ASSOICATION_ENTRY Entry[MAX_NUMBER_OF_MAC];
+	RT_LLTD_ASSOICATION_ENTRY Entry[MAX_LEN_OF_MAC_TABLE];
 } RT_LLTD_ASSOICATION_TABLE, *PRT_LLTD_ASSOICATION_TABLE;
 #endif /* LLTD_SUPPORT */
 
@@ -2034,16 +2077,11 @@ struct qosmap_data {
 #define OID_OFFCHANNEL_INFO						0x0955
 #define OID_802_11_CURRENT_CHANNEL_INFO					0x0956
 #define OID_OPERATING_INFO						0x0957
+#define OID_OFF_SCAN_RESULT						0x0986
 #define OID_802_11_CHANNELINFO					0x0999
 #endif
 #define OID_802_11_OCE_MSG						0x0958
 #define OID_802_11_OCE_REDUCED_NEIGHBOR_REPORT  0x0969
-#ifdef OFFCHANNEL_SCAN_FEATURE
-#define OID_OFFCHANNEL_INFO				0x0955
-#define OID_802_11_CURRENT_CHANNEL_INFO 0x0956
-#define OID_OPERATING_INFO				0x0957
-#define OID_802_11_CHANNELINFO			0x0999
-#endif
 #ifdef DFS_VENDOR10_CUSTOM_FEATURE
 #define OID_GET_RXDATA_LAPSE_TIME		0x0958
 #endif
@@ -2079,14 +2117,46 @@ struct qosmap_data {
 #define OID_802_11_WIFISPECTRUM_GET_CAPTURE_BW		0x0973
 #define OID_802_11_WIFISPECTRUM_GET_CENTRAL_FREQ		0x0974
 #endif /* WIFI_SPECTRUM_SUPPORT */
+#if defined(CONFIG_6G_SUPPORT) && defined(BSSMGR_CROSS_MODULE_SUPPORT)
+#define OID_BSS_MGMT_GET_EVENT                                  0x0975
+#define OID_BSS_MGMT_SET_EVENT                                  0x0976
+#endif /* CONFIG_6G_SUPPORT && BSSMGR_CROSS_MODULE_SUPPORT */
+#define OID_802_11_BSS_MGMT_MSG					0x0977
 
 #ifdef MT_DFS_SUPPORT
 #define OID_DFS_ZERO_WAIT                       0x0985
+#ifdef DFS_ZEROWAIT_SUPPORT
+#define OID_DFS_CAC_REPORT						0x0986
+#define OID_DFS_CAC_START						0x0987
+#define OID_DFS_CHANNEL_SWITCH					0x0988
+#endif
 #endif
 
 #ifdef CONN_FAIL_EVENT
 #define OID_802_11_CONN_FAIL_MSG				(0x1000)
 #endif
+#ifdef ENHANCE_STAT_SUPPORT
+typedef struct _CURRENT_CHANNEL_STATS{
+ UINT64			SamplePeriod;
+ UINT64         ObssTime;
+ UINT64         ChannelApActivity;
+ UINT64         EdCcaBusyTime;
+ UINT64         ChannelBusyTime;
+} CURRENT_CHANNEL_STATS, *PCURRENT_CHANNEL_STATS;
+
+typedef struct _SCAN_CHANNEL_STATS{
+	UCHAR channel;
+	UCHAR dfs_req;
+	UINT32 chanbusytime;	/*Unit - us*/
+	UINT32 channoisetime;	/*Unit - us*/
+	INT32 Avg_NF;		/*Unit - dbm*/
+	UINT32 ScanDuration;	/*Unit - us*/
+} SCAN_CHANNEL_STATS, *PSCAN_CHANNEL_STATS;
+typedef struct  _SCAN_CHANNEL_STATS_INFO {
+	UCHAR Num;
+	SCAN_CHANNEL_STATS ChannelInfo[MAX_NUM_OF_CHANNELS];
+} SCAN_CHANNEL_STATS_INFO;
+#endif /* ENHANCE_STAT_SUPPORT */
 
 
 #define MAX_CANDIDATE_NUM 5
@@ -2281,7 +2351,7 @@ enum wnm_cmd_subid {
 
 struct GNU_PACKED wnm_command {
 	UINT8 command_id;
-	UINT8 command_len;
+	UINT32 command_len;
 	UINT8 command_body[0];
 };
 
@@ -2427,8 +2497,10 @@ enum vendor_ie_subcmd_oid {
 
 #define OID_GET_SCAN_RESULT		0x1210
 
-#define OID_SCAN_DONE_EVENT		0x1801
 #endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+#if defined (CUSTOMER_VENDOR_IE_SUPPORT) || defined (ENHANCE_STAT_SUPPORT)
+#define OID_SCAN_DONE_EVENT		0x1801
+#endif
 #ifdef AIR_MONITOR
 #define OID_GET_AIR_MONITOR_RESULT		0x1802
 #endif
@@ -2455,8 +2527,20 @@ enum vendor_ie_subcmd_oid {
 #define OID_GET_CAC_CAP									0x09A0
 #define OID_802_11_CAC_STOP								0x09A1
 #endif
-
 #endif
+
+#define OID_802_11_BCN_TX_CNT		0x09B2
+#define OID_GET_WIRELESS_BAND           0x09B4
+
+#ifdef MAP_WF6
+#define OID_WF6_CAPABILITY			0x09AA
+#endif
+
+
+#ifdef MAP_R4_SPT
+#define OID_GET_SPATIAL_REUSE               0x09B0
+#endif
+
 #ifdef ACS_CTCC_SUPPORT
 #define OID_802_11_GET_ACS_CHANNEL_SCORE                0x2014
 
@@ -2495,5 +2579,72 @@ struct GNU_PACKED vie_op_data_s
 #define OID_AP_DABS_RULE_SET 0x1805
 #define OID_AP_DABS_RULE_DEL 0x1806
 #endif
+
+#ifdef CONFIG_TXPWR_LIMIT_SUPPORT
+#define OID_GET_TX_PWR_LIMIT		0x1807
+#endif
+
+#ifdef TR181_SUPPORT
+#define OID_TR181_START							(0x1900)
+#define OID_TR181_END							(0x1A00)
+
+/* Device.WiFi.Radio.{i}. */
+#define OID_802_11_RADIO_START					(OID_TR181_START)
+#define OID_802_11_ACS_REFRESH_PERIOD			((OID_802_11_RADIO_START) + 1)
+#define OID_802_11_MAX_NUM_OF_SSID				((OID_802_11_RADIO_START) + 2)
+#define OID_802_11_BW							((OID_802_11_RADIO_START) + 3)
+#define OID_802_11_EXTENSION_CHANNEL			((OID_802_11_RADIO_START) + 4)
+#define OID_802_11_MCS							((OID_802_11_RADIO_START) + 5)
+#define OID_802_11_IEEE80211H					((OID_802_11_RADIO_START) + 6)
+#define OID_802_11_COUNTRYCODE					((OID_802_11_RADIO_START) + 7)
+#define OID_802_11_DTIMPERIOD					((OID_802_11_RADIO_START) + 8)
+#define OID_802_11_TXPREAMBLE					((OID_802_11_RADIO_START) + 9)
+#define OID_802_11_BASICRATE					((OID_802_11_RADIO_START) + 0xA)
+#define OID_802_11_SUPPRATE						((OID_802_11_RADIO_START) + 0xB)
+#define OID_802_11_RRM							((OID_802_11_RADIO_START) + 0xC)
+#define OID_802_11_RADIO_STATS					((OID_802_11_RADIO_START) + 0xD)
+#define OID_802_11_RADIO_CHANNEL_LAST_CHANGE	((OID_802_11_RADIO_START) + 0xE)
+
+/* Device.WiFi.NeighboringWiFiDiagnostic.Result.{i}. */
+#define OID_802_11_Wifi_DIAG_START				((OID_TR181_START) + 0x20)
+#define OID_802_11_WIFI_DIAG_RESULT				((OID_802_11_Wifi_DIAG_START) + 1)
+#define OID_802_11_WIFI_DIAG_RESULT_NUM			((OID_802_11_Wifi_DIAG_START) + 2)
+
+/* Device.WiFi.SSID.{i}. */
+#define OID_802_11_WIFI_SSID_START				((OID_TR181_START) + 0x30)
+#define OID_802_11_WIFI_SSID_STATS				((OID_802_11_WIFI_SSID_START) + 1)
+
+/* Device.WiFi.AccessPoint.{i}
+   Device.WiFi.EndPoint.{i}. */
+#define OID_802_11_AP_START						((OID_TR181_START) + 0x40)
+#define OID_802_11_AP							((OID_802_11_AP_START) + 1)
+#define OID_802_11_AP_ACLLIST					((OID_802_11_AP_START) + 2)
+
+/* Device.WiFi.AccessPoint.{i}.Security */
+#define OID_802_11_AP_SEC_START					((OID_TR181_START) + 0x50)
+#define OID_802_11_SEC_REKEYING_INTERVAL		((OID_802_11_AP_SEC_START) + 1)
+#define OID_802_11_SEC_MFP_CFG					((OID_802_11_AP_SEC_START) + 2)
+
+/* Device.WiFi.AccessPoint.{i}.WPS */
+#define OID_802_11_AP_WPS_START					((OID_TR181_START) + 0x70)
+#define OID_802_11_AP_WSCCONFMODE				((OID_802_11_AP_WPS_START) + 1)
+#define OID_802_11_AP_WSCMODE					((OID_802_11_AP_WPS_START) + 2)
+
+/* Device.WiFi.AccessPoint.{i}.AssociatedDevice.{i}. */
+#define OID_802_11_STA_START					((OID_TR181_START) + 0x80)
+#define OID_802_11_STA							((OID_802_11_STA_START) + 1)
+#define OID_802_11_STA_STATS					((OID_802_11_STA_START) + 2)
+#define OID_802_11_STA_RATES					((OID_802_11_STA_START) + 3)
+
+/* Device.WiFi.AccessPoint.{i}.AC.{i} */
+#define OID_802_11_AP_AC_START					((OID_TR181_START) + 0x90)
+#define OID_802_11_AP_AC						((OID_802_11_AP_AC_START) + 1)
+#define OID_802_11_AP_AC_STATS					((OID_802_11_AP_AC_START) + 2)
+
+/* Device.WiFi.AccessPoint.{i}.Accounting */
+#define OID_802_11_AP_ACCOUNTING_START			((OID_TR181_START) + 0xA0)
+#define OID_802_11_ACCOUNTING_SERVER			((OID_802_11_AP_ACCOUNTING_START) + 1)
+#define OID_802_11_ACCOUNTING_INTERIMINTERVAL	((OID_802_11_AP_ACCOUNTING_START) + 2)
+#endif /* TR181_SUPPORT */
 #endif /* _OID_H_ */
 

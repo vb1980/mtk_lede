@@ -152,6 +152,8 @@
 
 #define MAX_SIZE_OF_ALLOWED_GROUP 3
 
+#define MAX_SIZE_OF_ANTI_CLOGGING_PARAMETER 35     /* 32 + 3 BYTES Header */
+
 #define DOT11RSNASAESYNC 5
 
 #define SAE_SILENTLY_DISCARDED 65535
@@ -294,6 +296,7 @@ struct sae_capability {
 	UCHAR gen_pwe_method; /* 0: mixed, 1: hunting-and-pecking only, 2: hash-to-element only */
 	UCHAR pwd_id_only;
 	UCHAR sae_pk_en; /* 0:disable, 1:capable, 2:required */
+	UCHAR sae_pk_only_en; /* 0:disable, 1:enable*/
 };
 
 struct sae_pk_cfg {
@@ -372,6 +375,7 @@ struct __SAE_INSTANCE {
 	/************************************************/
 	UCHAR valid;
 	UCHAR removable;
+	UCHAR delete_fake_entries;
 	RALINK_TIMER_STRUCT sae_retry_timer;
 	/* Each instance of the protocol is identified by a tuple consisting of the local MAC address and the peer MAC address */
 	UCHAR own_mac[MAC_ADDR_LEN];

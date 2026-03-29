@@ -209,8 +209,8 @@ BOOLEAN is_valid_train_entry(
 
 	if (pMacEntry == NULL) {
 		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
-				 ("%s():Cannot found Sta(%02x:%02x:%02x:%02x:%02x:%02x) in MacTable\n",
-				  __func__, PRINT_MAC(pSAStaEntry->macAddr)));
+				 ("%s():Cannot found Sta("MACSTR") in MacTable\n",
+				  __func__, MAC2STR(pSAStaEntry->macAddr)));
 		return FALSE;
 	}
 
@@ -313,7 +313,7 @@ VOID sa_dump_stat_result(
 	if (pEntry->hwTxSucCnt)
 		HwPER = (pEntry->hwTxRtyCnt * 1000) / pEntry->hwTxSucCnt;
 
-	printk("%02x:%02x:%02x:%02x:%02x:%02x    ", PRINT_MAC(pEntry->Addr));
+	printk(""MACSTR"    ", MAC2STR(pEntry->Addr));
 	printk("%6d  %6d  %6d  %6d\t%d",
 		   pEntry->saTxCnt, pEntry->hwTxSucCnt,
 		   pEntry->hwTxRtyCnt, pEntry->saRxCnt, HwPER);
@@ -1037,8 +1037,8 @@ BOOLEAN sa_del_train_entry(
 
 	if (pMacAddr) {
 		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_TRACE,
-				 ("%s():Try to del mac(%02x:%02x:%02x:%02x:%02x:%02x), bForced=%d!\n",
-				  __func__, PRINT_MAC(pMacAddr), bForced));
+				 ("%s():Try to del mac("MACSTR"), bForced=%d!\n",
+				  __func__, MAC2STR(pMacAddr), bForced));
 	}
 
 	for (idx = 0; idx < SA_ENTRY_MAX_NUM; idx++) {
@@ -1112,8 +1112,8 @@ BOOLEAN sa_select_target_train_entry(
 
 		if (IS_ENTRY_CLIENT(pEntry) && (pEntry->Sst == SST_ASSOC)) {
 			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_TRACE,
-					 ("STA(%02x:%02x:%02x:%02x:%02x:%02x): RSSI=%d\n",
-					  PRINT_MAC(pEntry->Addr), pEntry->avgRssi[0]));
+					 ("STA("MACSTR"): RSSI=%d\n",
+					  MAC2STR(pEntry->Addr), pEntry->avgRssi[0]));
 
 			/* ignore the station which has no RSSI result yet */
 			if (pEntry->avgRssi[0] == 0)
@@ -1139,8 +1139,8 @@ BOOLEAN sa_select_target_train_entry(
 
 	if (pCandEntry) {
 		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
-				 ("After Selection, target TrainEntry is %02x:%02x:%02x:%02x:%02x:%02x(RSSI=%d)\n",
-				  PRINT_MAC(pCandEntry->Addr), pCandEntry->avgRssi[0]));
+				 ("After Selection, target TrainEntry is "MACSTR"(RSSI=%d)\n",
+				  MAC2STR(pCandEntry->Addr), pCandEntry->avgRssi[0]));
 		sa_init_train_entry(pAd, pSAParam, pTrainEntry, pTrainEntry->pTrainInfo, &pCandEntry->Addr[0]);
 		return TRUE;
 	} else {
@@ -2390,8 +2390,8 @@ INT RtmpSAChkAndGo(
 			pMacEntry->orgTxRateCol = pMacEntry->CurrTxRate;
 			sa_get_curAntPattern(pSAParam, pTrainEntry);
 			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
-					 ("\n\nGO!HAWK!GO!(%d-%02x:%02x:%02x:%02x:%02x:%02x, antPattern=0x%x-%d)\n",
-					  pMacEntry->wcid, PRINT_MAC(pMacEntry->Addr),
+					 ("\n\nGO!HAWK!GO!(%d-"MACSTR", antPattern=0x%x-%d)\n",
+					  pMacEntry->wcid, MAC2STR(pMacEntry->Addr),
 					  pTrainEntry->curAntPattern, pTrainEntry->patternOffset));
 			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
 					 ("\tTxMcs(BW:MCS=%s:%d),mcsStableCnt=%d,TP=%d ms,TStage=%d,TWeight=%d\n",
@@ -2411,14 +2411,14 @@ INT RtmpSAChkAndGo(
 
 				if (pTmpEntry) {
 					MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
-							 ("\tSTA(%02x:%02x:%02x:%02x:%02x:%02x):TxMcs(PhyMode:BW:MCS=%s:%d:%d), mcsStableCnt=%d\n",
-							  PRINT_MAC(pTmpEntry->Addr), phyMode[pTmpEntry->HTPhyMode.field.MODE],
+							 ("\tSTA("MACSTR"):TxMcs(PhyMode:BW:MCS=%s:%d:%d), mcsStableCnt=%d\n",
+							  MAC2STR(pTmpEntry->Addr), phyMode[pTmpEntry->HTPhyMode.field.MODE],
 							  pTmpEntry->HTPhyMode.field.BW, pTmpEntry->HTPhyMode.field.MCS,
 							  pTmpTrainEntry->mcsStableCnt));
 				} else {
 					MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF,
-							 ("\tSTA(%02x:%02x:%02x:%02x:%02x:%02x):No Associated MacEntry!\n",
-							  PRINT_MAC(pTmpEntry->Addr)));
+							 ("\tSTA("MACSTR"):No Associated MacEntry!\n",
+							  MAC2STR(pTmpEntry->Addr)));
 				}
 			}
 
@@ -2797,9 +2797,9 @@ int RtmpSAStart(RTMP_ADAPTER *pAd)
 			goto done;
 		}
 
-		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():Entry[%d]: pTrainLog=0x%lx,Addr=%02x:%02x:%02x:%02x:%02x:%02x\n",
+		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():Entry[%d]: pTrainLog=0x%lx,Addr="MACSTR"\n",
 				 __func__, i, (ULONG)pSAStaEntry->pTrainInfo,
-				 PRINT_MAC(pSAStaEntry->macAddr)));
+				 MAC2STR(pSAStaEntry->macAddr)));
 	}
 
 	sa_select_target_train_entry(pAd, pSAParam);
@@ -2829,8 +2829,8 @@ int RtmpSAStart(RTMP_ADAPTER *pAd)
 
 		if (is_valid_train_entry(pAd, pSAParam, pSAStaEntry)) {
 			ULONG nowTime;
-			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():Ready to do SA training for %02x:%02x:%02x:%02x:%02x:%02x!\n",
-					 __func__, PRINT_MAC(pSAStaEntry->macAddr)));
+			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():Ready to do SA training for "MACSTR"!\n",
+					 __func__, MAC2STR(pSAStaEntry->macAddr)));
 			pSAStaEntry->trainStage = SA_INIT_STAGE;
 			pSAStaEntry->trainWeight = ANT_WEIGHT_SCAN_ALL;
 			/* get current physically applied antenna pattern */
@@ -2849,8 +2849,8 @@ int RtmpSAStart(RTMP_ADAPTER *pAd)
 			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():set time_to_start=0x%lx\n", __func__, pSAStaEntry->time_to_start));
 			retVal = TRUE;
 		} else {
-			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():TrainEntry(%02x:%02x:%02x:%02x:%02x:%02x) is not valid\n",
-					 __func__, PRINT_MAC(pSAStaEntry->macAddr)));
+			MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():TrainEntry("MACSTR") is not valid\n",
+					 __func__, MAC2STR(pSAStaEntry->macAddr)));
 			/* retVal = FALSE; */
 			/* pAd->smartAntEnable = FALSE; */
 		}
@@ -3088,8 +3088,8 @@ INT Show_SA_CfgInfo_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("\t\t\tcurAntPattern=0x%x-%d\n",
 				 pStaEntry->curAntPattern, pStaEntry->patternOffset));
-		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("\t\t\tMacAddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PRINT_MAC(pStaEntry->macAddr)));
+		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("\t\t\tMacAddr="MACSTR"\n",
+				 MAC2STR(pStaEntry->macAddr)));
 		MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("\t\t\tMapped MacTableEntry=0x%x\n", (UINT32)pStaEntry->pMacEntry));
 
 		if (pStaEntry->pMacEntry) {
@@ -3656,8 +3656,8 @@ INT Set_SA_Station_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	if (rtstrtomac(arg, &macAddr[0], ':') == FALSE)
 		return FALSE;
 
-	MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():MacAddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, PRINT_MAC(macAddr)));
+	MTWF_LOG(DBG_CAT_HW, CATHW_SA, DBG_LVL_OFF, ("%s():MacAddr="MACSTR"\n",
+			 __func__, MAC2STR(macAddr)));
 	pSAStaEntry = sa_add_train_entry(pAd, &macAddr[0], TRUE);
 	return TRUE;
 }

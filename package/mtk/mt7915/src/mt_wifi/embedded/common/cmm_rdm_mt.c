@@ -11,8 +11,8 @@
  * or in part, shall be strictly prohibited.
  ***************************************************************************
 
-    Module Name:
-    cmm_rdm_mt.c//Jelly20140123
+	Module Name:
+	cmm_rdm_mt.c//Jelly20140123
 */
 
 #ifdef MT_DFS_SUPPORT
@@ -22,22 +22,22 @@
 #include "wlan_config/config_internal.h"
 
 /*******************************************************************************
-*                              C O N S T A N T S
+*							   C O N S T A N T S
 ********************************************************************************
 */
 
 /*******************************************************************************
-*                             D A T A   T Y P E S
+*							  D A T A	T Y P E S
 ********************************************************************************
 */
 
 /*******************************************************************************
-*                            P U B L I C   D A T A
+*							 P U B L I C   D A T A
 ********************************************************************************
 */
 
 /*******************************************************************************
-*                           P R I V A T E   D A T A
+*							P R I V A T E	D A T A
 ********************************************************************************
 */
 
@@ -45,7 +45,7 @@
 EXT_EVENT_RDD_REPORT_T g_radar_info[HW_RDD_NUM];
 
 /*******************************************************************************
-*                   F U N C T I O N   D E C L A R A T I O N S
+*					F U N C T I O N   D E C L A R A T I O N S
 ********************************************************************************
 */
 
@@ -57,24 +57,174 @@ _k_ARC_ZeroWait_DFS_collision_report_callback_fun_type radar_detected_callback_f
 _k_ARC_ZeroWait_DFS_CAC_Time_Meet_report_callback_fun_type DfsCacTimeOutCallBack;
 _k_ARC_ZeroWait_DFS_NOP_Timeout_report_callback_fun_type DfsNopTimeOutCallBack;
 
+#ifdef MT76XX_COMBO_DUAL_DRIVER_SUPPORT
+void mt7915_k_ZeroWait_DFS_Collision_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_collision_report_callback_fun_type callback_detect_collision_func)
+{
+	radar_detected_callback_func = callback_detect_collision_func;
+}
+
+void mt7915_k_ZeroWait_DFS_CAC_Time_Meet_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_CAC_Time_Meet_report_callback_fun_type callback_CAC_time_meet_func)
+{
+	DfsCacTimeOutCallBack = callback_CAC_time_meet_func;
+}
+
+void mt7915_k_ZeroWait_DFS_NOP_Timeout_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_NOP_Timeout_report_callback_fun_type callback_NOP_Timeout_func)
+{
+	DfsNopTimeOutCallBack = callback_NOP_Timeout_func;
+}
+
+EXPORT_SYMBOL(mt7915_k_ZeroWait_DFS_Collision_Report_Callback_Function_Registeration);
+EXPORT_SYMBOL(mt7915_k_ZeroWait_DFS_CAC_Time_Meet_Report_Callback_Function_Registeration);
+EXPORT_SYMBOL(mt7915_k_ZeroWait_DFS_NOP_Timeout_Report_Callback_Function_Registeration);
+#else /* MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
 void k_ZeroWait_DFS_Collision_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_collision_report_callback_fun_type callback_detect_collision_func)
 {
-    radar_detected_callback_func = callback_detect_collision_func;
+	radar_detected_callback_func = callback_detect_collision_func;
 }
 
 void k_ZeroWait_DFS_CAC_Time_Meet_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_CAC_Time_Meet_report_callback_fun_type callback_CAC_time_meet_func)
 {
-    DfsCacTimeOutCallBack = callback_CAC_time_meet_func;
+	DfsCacTimeOutCallBack = callback_CAC_time_meet_func;
 }
 
 void k_ZeroWait_DFS_NOP_Timeout_Report_Callback_Function_Registeration(_k_ARC_ZeroWait_DFS_NOP_Timeout_report_callback_fun_type callback_NOP_Timeout_func)
 {
-    DfsNopTimeOutCallBack = callback_NOP_Timeout_func;
+	DfsNopTimeOutCallBack = callback_NOP_Timeout_func;
 }
 
 EXPORT_SYMBOL(k_ZeroWait_DFS_Collision_Report_Callback_Function_Registeration);
 EXPORT_SYMBOL(k_ZeroWait_DFS_CAC_Time_Meet_Report_Callback_Function_Registeration);
 EXPORT_SYMBOL(k_ZeroWait_DFS_NOP_Timeout_Report_Callback_Function_Registeration);
+#endif /* !MT76XX_COMBO_DUAL_DRIVER_SUPPORT */
+
+inline void do_cac_op(
+	PCHANNEL_TX_POWER ch_info,
+	ENUM_CAC_OP op,
+	UCHAR *status)
+{
+	if (op == CAC_DONE_UPDATE)
+		ch_info->Flags |= CHANNEL_CAC_DONE;
+	else if ((op == CAC_DONE_CHECK) && !(ch_info->Flags & CHANNEL_CAC_DONE))
+		*status = FALSE;
+}
+
+BOOLEAN dfs_cac_op(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	ENUM_CAC_OP op,
+	UCHAR CacChannel
+)
+{
+	BOOLEAN status = TRUE;
+	UCHAR band_idx, ch_idx = 0;
+	UCHAR bw_cap, bw, ext_ch;
+	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
+	CHANNEL_CTRL *pChCtrl = NULL;
+	struct DOT11_H *pDot11h = NULL;
+
+	if (!wdev) {
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "Null wdev!!!\n");
+		return FALSE;
+	}
+
+	pDot11h = wdev->pDot11_H;
+	band_idx = HcGetBandByWdev(wdev);
+	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, band_idx);
+
+	if (op == CAC_DONE_UPDATE) {
+		if (pDot11h && (pDot11h->RDMode == RD_SWITCHING_MODE)) {
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR,
+				"RDD channel switch going on, don't update CAC done\n");
+			return FALSE;
+		} else if ((CacChannel != pDfsParam->cac_channel) &&
+		(pDfsParam->bDedicatedZeroWaitDefault == FALSE)) {
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR,
+				"CAC channel[%d] different from current channel[%d]\n",
+				pDfsParam->cac_channel, CacChannel);
+			pDfsParam->cac_channel = 0;
+			return FALSE;
+		}
+	}
+
+	/* calculate bw */
+	if (pDfsParam->bDedicatedZeroWaitDefault)
+		dfs_get_outband_bw(pAd, wdev, &bw);
+	else {
+		bw = wlan_config_get_ht_bw(wdev); /* config ht bw */
+		ht_ext_cha_adjust(pAd, CacChannel, &bw, &ext_ch, wdev); /* update bw based on channel op */
+		if (bw > BW_20) {
+			bw = wlan_config_get_vht_bw(wdev);
+			if (bw == VHT_BW_80)
+				bw = BW_80;
+			else if (bw == VHT_BW_160)
+				bw = BW_160;
+			else if (bw == VHT_BW_8080)
+				bw = BW_8080;
+			else
+				bw = BW_40;
+			bw_cap = get_channel_bw_cap(wdev, CacChannel);
+			if (bw > bw_cap)
+				bw = bw_cap;
+		}
+	}
+
+	switch (bw) {
+	case BW_20:
+		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if (CacChannel == pChCtrl->ChList[ch_idx].Channel)
+				do_cac_op(&pChCtrl->ChList[ch_idx], op, &status);
+		}
+		break;
+
+	case BW_40:
+		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if ((CacChannel == pChCtrl->ChList[ch_idx].Channel)
+				|| ((CacChannel >> 2 & 1) && (pChCtrl->ChList[ch_idx].Channel - CacChannel == 4))
+				|| (!(CacChannel >> 2 & 1) && (CacChannel - pChCtrl->ChList[ch_idx].Channel == 4)))
+				do_cac_op(&pChCtrl->ChList[ch_idx], op, &status);
+		}
+		break;
+
+	case BW_80:
+		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if (vht_cent_ch_freq(pChCtrl->ChList[ch_idx].Channel, VHT_BW_80, CMD_CH_BAND_5G) ==
+				vht_cent_ch_freq(CacChannel, VHT_BW_80, CMD_CH_BAND_5G))
+				do_cac_op(&pChCtrl->ChList[ch_idx], op, &status);
+		}
+		break;
+
+	case BW_160:
+		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if (pChCtrl->ChList[ch_idx].DfsReq &&
+				(vht_cent_ch_freq(pChCtrl->ChList[ch_idx].Channel, VHT_BW_160, CMD_CH_BAND_5G) ==
+				vht_cent_ch_freq(CacChannel, VHT_BW_160, CMD_CH_BAND_5G)))
+				do_cac_op(&pChCtrl->ChList[ch_idx], op, &status);
+		}
+		break;
+
+	case BW_8080:
+		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if (pChCtrl->ChList[ch_idx].DfsReq &&
+			   ((vht_cent_ch_freq(pChCtrl->ChList[ch_idx].Channel, VHT_BW_8080, CMD_CH_BAND_5G) ==
+				 vht_cent_ch_freq(pDfsParam->band_ch[DBDC_BAND0], VHT_BW_8080, CMD_CH_BAND_5G)) ||
+				(vht_cent_ch_freq(pChCtrl->ChList[ch_idx].Channel, VHT_BW_8080, CMD_CH_BAND_5G) ==
+				 vht_cent_ch_freq(pDfsParam->band_ch[DBDC_BAND1], VHT_BW_8080, CMD_CH_BAND_5G)))) {
+				do_cac_op(&pChCtrl->ChList[ch_idx], op, &status);
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	pDfsParam->cac_channel = 0;
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"(caller:%pS) CAC op:%d ch=%d bw=%d status:%d\n", OS_TRACE, op, CacChannel, bw, status);
+
+	return status;
+
+}
 
 static VOID ZeroWaitDfsEnable(
 	PRTMP_ADAPTER pAd,
@@ -93,8 +243,8 @@ static VOID ZeroWaitDfsEnable(
 }
 
 static VOID ZeroWaitDfsInitAvalChListUpdate(
-    PRTMP_ADAPTER pAd,
-    union dfs_zero_wait_msg *msg
+	PRTMP_ADAPTER pAd,
+	union dfs_zero_wait_msg *msg
 )
 {
 	UCHAR Bw80TotalChNum;
@@ -193,6 +343,48 @@ static VOID ZeroWaitDfsMonitorChUpdate(
 
 }
 
+#ifdef DFS_ZEROWAIT_SUPPORT
+static VOID ZeroWaitDfsStartCAC(
+	PRTMP_ADAPTER pAd,
+	union dfs_zero_wait_msg *msg
+)
+{
+	UCHAR SynNum;
+	UCHAR Channel;
+	UCHAR Bw;
+	BOOLEAN doCAC;
+
+	SynNum = msg->set_monitored_ch_msg.SyncNum;
+	Channel = msg->set_monitored_ch_msg.Channel;
+	Bw = msg->set_monitored_ch_msg.Bw;
+	doCAC = msg->set_monitored_ch_msg.doCAC;
+
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_OFF, "\x1b[1;33m[RDM] SynNum: %d, Channel: %d, Bw: %d \x1b[m \n",
+		SynNum, Channel, Bw);
+
+#ifdef BACKGROUND_SCAN_SUPPORT
+
+	switch (SynNum) {
+	case RDD_BAND0:
+#if (RDD_2_SUPPORTED == 1)
+	case RDD_BAND1:
+#endif /* RDD_2_SUPPORTED */
+		DfsDedicatedInBandSetChannel(pAd, Channel, Bw, doCAC, SynNum);
+		break;
+
+	case RDD_DEDICATED_RX:
+		DfsDedicatedOutBandSetChannel(pAd, Channel, Bw, SynNum);
+		break;
+
+	default:
+		break;
+	}
+
+#endif
+
+}
+#endif
+
 static VOID ZeroWaitDfsSetNopToChList(
 	PRTMP_ADAPTER pAd,
 	union dfs_zero_wait_msg *msg
@@ -290,7 +482,9 @@ INT ZeroWaitDfsCmdHandler(
 
 	if (!wrq)
 		return NDIS_STATUS_FAILURE;
-
+	os_zero_mem(&msg, sizeof(msg));
+	if (wrq->u.data.length != sizeof(msg))
+		return -EINVAL;
 	if (copy_from_user(&msg, wrq->u.data.pointer, wrq->u.data.length)) {
 		status = -EFAULT;
 	} else {
@@ -300,9 +494,135 @@ INT ZeroWaitDfsCmdHandler(
 	return status;
 }
 
+#ifdef DFS_ZEROWAIT_SUPPORT
+INT ZeroWaitDfsCacStartHandler(
+	PRTMP_ADAPTER pAd,
+	RTMP_IOCTL_INPUT_STRUCT * wrq
+)
+{
+	INT status = NDIS_STATUS_SUCCESS;
+	union dfs_zero_wait_msg msg;
+
+	if (!wrq)
+		return NDIS_STATUS_FAILURE;
+	os_zero_mem(&msg, sizeof(msg));
+	if (copy_from_user(&msg, wrq->u.data.pointer, wrq->u.data.length)) {
+		status = -EFAULT;
+	} else {
+		if (!pAd->ApCfg.bDfsZeroWaitDedicatedCac) {
+			pAd->ApCfg.bDfsZeroWaitDedicatedCac = 1;
+			ZeroWaitDfsStartCAC(pAd, &msg);
+		} else {
+			printk("CAC already running, drop request\n");
+			status = NDIS_STATUS_FAILURE;
+		}
+	}
+
+	return status;
+}
+
+INT ZeroWaitDfsChannelSwitch(
+	PRTMP_ADAPTER pAd,
+	RTMP_IOCTL_INPUT_STRUCT * wrq
+)
+{
+	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	UCHAR if_idx = pObj->ioctl_if;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, if_idx, pObj->ioctl_if_type);
+	INT32 success = FALSE;	/*FALSE = 0*/
+	UINT32 i;
+	INT ret = 0;
+#ifdef TR181_SUPPORT
+	UCHAR old_channel;
+	struct hdev_obj *hdev;
+#endif
+	UCHAR Channel = 0;
+	UCHAR cac_req;
+	CHAN_SWITCH_CAC msg;
+
+	if (wdev == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"wdev == NULL! if_type %d, if_idx = %d\n",
+				 pObj->ioctl_if_type,
+				 if_idx);
+		return FALSE;
+	}
+
+	if (!wrq)
+		return NDIS_STATUS_FAILURE;
+
+	os_zero_mem(&msg, sizeof(msg));
+	if (copy_from_user(&msg, wrq->u.data.pointer, wrq->u.data.length)) {
+		return FALSE;
+	}
+
+	for (i = 0; i < MAX_BEACON_NUM; i++) {
+		pAd->ApCfg.MBSSID[i].wdev.cac_not_required = FALSE;
+	}
+	Channel = msg.Channel;
+	cac_req = msg.cac_req;
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Channel: %d, Cac Req: %d\n", Channel, cac_req);
+
+#ifdef MT_DFS_SUPPORT
+	if (cac_req == 0 && pAd->CommonCfg.DfsParameter.bDfsEnable) {
+		for (i = 0; i < MAX_BEACON_NUM; i++) {
+			if (pAd->ApCfg.MBSSID[i].wdev.channel == wdev->channel)
+				pAd->ApCfg.MBSSID[i].wdev.cac_not_required = TRUE;
+		}
+	}
+#endif
+
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "\n");
+
+#if defined(MT_DFS_SUPPORT) && defined(BACKGROUND_SCAN_SUPPORT)
+	DfsDedicatedExamineSetNewCh(pAd, wdev, Channel);
+	DedicatedZeroWaitStop(pAd, TRUE);
+#endif
+
+	/*To do set channel, need TakeChannelOpCharge first*/
+	if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_SET_CHN, TRUE)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "TakeChannelOpCharge fail for SET channel!!\n");
+		return FALSE;
+	}
+	pAd->ApCfg.iwpriv_event_flag = TRUE;
+	pAd->ApCfg.bChSwitchNoCac = 1;
+	success = rtmp_set_channel(pAd, wdev, Channel);
+
+	if (pAd->ApCfg.set_ch_async_flag == TRUE) {
+		ret = RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(&pAd->ApCfg.set_ch_aync_done, ((50*100*OS_HZ)/1000));/*Wait 5s.*/
+		if (ret)
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "wait channel setting success.\n");
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wait channel setting timeout.\n");
+			pAd->ApCfg.set_ch_async_flag = FALSE;
+		}
+	}
+	pAd->ApCfg.iwpriv_event_flag = FALSE;
+
+#ifdef TR181_SUPPORT
+	old_channel = wdev->channel;
+	hdev = (struct hdev_obj *)wdev->pHObj;
+	if (success && (old_channel != Channel)) {
+		hdev->rdev->pRadioCtrl->ManualChannelChangeCount++;
+		hdev->rdev->pRadioCtrl->TotalChannelChangeCount++;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "success = %d Manual:%d Total:%d\n",
+						success, hdev->rdev->pRadioCtrl->ManualChannelChangeCount,
+						hdev->rdev->pRadioCtrl->TotalChannelChangeCount);
+	}
+#endif
+
+	/*if channel setting is DONE, release ChannelOpCharge here*/
+	ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_SET_CHN);
+
+	return success;
+
+}
+#endif
+
 static VOID ZeroWaitDfsQueryNopOfChList(
-    PRTMP_ADAPTER pAd,
-    union dfs_zero_wait_msg *msg
+	PRTMP_ADAPTER pAd,
+	union dfs_zero_wait_msg *msg
 )
 {
 	UCHAR ch_idx = 0, band_idx;
@@ -380,16 +700,16 @@ VOID ZeroWaitDfsQueryAvalChListNonDbdc(PRTMP_ADAPTER pAd, UCHAR *Bw80ChNum, UCHA
 	*Bw80ChNum = ch_idx;
 }
 static VOID ZeroWaitDfsQueryAvalChList(
-    PRTMP_ADAPTER pAd,
-    union dfs_zero_wait_msg *msg
+	PRTMP_ADAPTER pAd,
+	union dfs_zero_wait_msg *msg
 )
 {
 	UINT_8 bw_idx, ch_idx, idx;
 	UCHAR band_idx;
 
-	UCHAR Bw80TotalChNum;
-	UCHAR Bw40TotalChNum;
-	UCHAR Bw20TotalChNum;
+	UCHAR Bw80TotalChNum = 0;
+	UCHAR Bw40TotalChNum = 0;
+	UCHAR Bw20TotalChNum = 0;
 	DFS_REPORT_AVALABLE_CH_LIST Bw80AvailableChList[DFS_AVAILABLE_LIST_CH_NUM];
 	DFS_REPORT_AVALABLE_CH_LIST Bw40AvailableChList[DFS_AVAILABLE_LIST_CH_NUM];
 	DFS_REPORT_AVALABLE_CH_LIST Bw20AvailableChList[DFS_AVAILABLE_LIST_CH_NUM];
@@ -577,43 +897,89 @@ UCHAR DfsGetNonDfsDefaultCh(
 	UCHAR channel;
 
 	if (band_idx == DBDC_BAND0) {
-		if (pDfsParam->band_ch[DBDC_BAND1] != 149)
+		if ((pDfsParam->band_ch[DBDC_BAND1] != 149) && (pDfsParam->band_ch[DBDC_BAND0] >= 100))
 			channel = 149;
 		else
 			channel = 36;
 	} else if (band_idx == DBDC_BAND1) {
-		if (pDfsParam->band_ch[DBDC_BAND0] != 36)
+		if ((pDfsParam->band_ch[DBDC_BAND0] != 36) && (pDfsParam->band_ch[DBDC_BAND1] <= 64))
 			channel = 36;
 		else
 			channel = 149;
+	} else {
+		channel = 36;
 	}
 
 	return channel;
 }
 
 #if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
+INT zero_wait_dfs_update_inband_nondfsch(
+	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
+	INOUT PUCHAR ch
+)
+{
+	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
+	P_ENUM_DFS_INB_CH_SWITCH_STAT_T ch_stat = &pAd->CommonCfg.DfsParameter.inband_ch_stat;
+#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+	if (pAd->CommonCfg.DfsParameter.band4DfsEnable) {
+		if (FirstNonDfsChannel(pAd, wdev) != 0)
+			*ch = FirstNonDfsChannel(pAd, wdev);
+	} else
+#endif
+	if (wlan_operate_get_vht_bw(wdev) == VHT_BW_8080) {
+		if (pDfsParam->DFSChHitBand == DBDC_BAND0) {
+			if ((pDfsParam->band_ch[DBDC_BAND1] != 149) && (pDfsParam->band_ch[DBDC_BAND0] >= 100))
+				*ch = 149;
+			else
+				*ch = 36;
+		} else if (pDfsParam->DFSChHitBand == DBDC_BAND1) {
+			if ((pDfsParam->band_ch[DBDC_BAND0] != 36) && (pDfsParam->band_ch[DBDC_BAND1] <= 64))
+				*ch = 36;
+			else
+				*ch = 149;
+		}
+	} else
+#endif
+		*ch = FirstNonDfsChannel(pAd, wdev);
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		("%s(): DFS ch %d is selected, use non-DFS ch %d, ch_stat %d\n",
+		__func__,
+		pAd->CommonCfg.DfsParameter.OutBandCh,
+		*ch,
+		*ch_stat));
+	return TRUE;
+}
+
 INT zero_wait_dfs_update_ch(
 	IN PRTMP_ADAPTER pAd,
 	IN struct wifi_dev *wdev,
-	IN PUCHAR ch
+	IN UCHAR OriChannel,
+	INOUT PUCHAR ch
 )
 {
 	PUCHAR ch_outband = &pAd->CommonCfg.DfsParameter.OutBandCh;
 	PUCHAR phy_bw_outband = &pAd->CommonCfg.DfsParameter.OutBandBw;
 	P_ENUM_DFS_INB_CH_SWITCH_STAT_T ch_stat = &pAd->CommonCfg.DfsParameter.inband_ch_stat;
 	UINT8 band_idx = HcGetBandByWdev(wdev);
+	BSS_STRUCT *pMbss = NULL;
+	UCHAR idx;
 #ifdef MAP_R2
 	int i = 0;
 #endif
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-	UINT8 tempCh;
-
+	BOOLEAN orichannel_is_nondfs;
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
+
+#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
 	if (*ch_stat == DFS_INB_CH_INIT)
 		pDfsParam->DFSChHitBand = DFS_BAND_NONE;
 #endif
+
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		("%s(): outband ch %d, ch_stat %d\n", __func__, *ch_outband, *ch_stat));
+		("%s(): ch %d, outband ch %d, ch_stat %d, pDfsParam->band_ch[0]=%d, pDfsParam->band_ch[1]=%d\n",
+		__func__, *ch, *ch_outband, *ch_stat, pDfsParam->band_ch[DBDC_BAND0], pDfsParam->band_ch[DBDC_BAND1]));
 
 	if (pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitDefault == 0) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -623,6 +989,7 @@ INT zero_wait_dfs_update_ch(
 
 	if (!WMODE_CAP_5G(wdev->PhyMode))
 		return FALSE;
+
 #ifdef MAP_R2
 	if (IS_MAP_TURNKEY_ENABLE(pAd)) {
 		for (i = 0; i < MAX_BEACON_NUM; i++) {
@@ -632,17 +999,9 @@ INT zero_wait_dfs_update_ch(
 		}
 	}
 #endif
-
+	orichannel_is_nondfs = !RadarChannelCheck(pAd, OriChannel);
 #if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-	if (RadarChannelCheck(pAd, pDfsParam->band_ch[DBDC_BAND0])) {
-		pDfsParam->DFSChHitBand = DBDC_BAND0;
-		if ((pAd->CommonCfg.dbdc_mode) && (band_idx == DBDC_BAND1)) {
-			pDfsParam->DFSChHitBand = DBDC_BAND1;
-		}
-	}
-	else if (RadarChannelCheck(pAd, pDfsParam->band_ch[DBDC_BAND1])) {
-		pDfsParam->DFSChHitBand = DBDC_BAND1;
-	}
+	pDfsParam->DFSChHitBand = band_idx;
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				("%s(): DFSChHitBand %d\n",
 				__func__,
@@ -651,79 +1010,44 @@ INT zero_wait_dfs_update_ch(
 
 	switch (*ch_stat) {
 	case DFS_INB_CH_INIT:
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-		if (pDfsParam->DFSChHitBand != DFS_BAND_NONE)
-#else
-		if (RadarChannelCheck(pAd, *ch))
+	case DFS_OUTB_CH_CAC:
+		/* If DFS ch X is selected, CAC of DFS ch X will be checked by dedicated RX */
+		/* Update new channel as outband Channel */
+		pAd->CommonCfg.DfsParameter.OutBandCh = *ch;
+		dfs_get_outband_bw(pAd, wdev, phy_bw_outband);
+		/* Stop RDD */
+		mtRddControl(pAd, RDD_STOP, band_idx, 0, 0);
+
+		/* Need to update non-DFS ch Y as new ch if Original channel is unsafe channel or bootup from channel 0*/
+		if (OriChannel == 0
+#ifdef WIFI_MD_COEX_SUPPORT
+			|| (IsChannelSafe(pAd, OriChannel) == FALSE)
 #endif
-		{
-			/* If DFS ch X is selected, CAC of DFS ch X will be checked by dedicated RX */
-			/* Update new channel new channel as outband Channel */
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-			if (pAd->CommonCfg.dbdc_mode)
-				pAd->CommonCfg.DfsParameter.OutBandCh = *ch;
-			else
-				pAd->CommonCfg.DfsParameter.OutBandCh = pDfsParam->band_ch[pDfsParam->DFSChHitBand];
-#else
-			pAd->CommonCfg.DfsParameter.OutBandCh = *ch;
-#endif
-			dfs_get_outband_bw(pAd, wdev, phy_bw_outband);
+			)
+			zero_wait_dfs_update_inband_nondfsch(pAd, wdev, ch);
 
-			/* Stop RDD */
-			mtRddControl(pAd, RDD_STOP, band_idx, 0, 0);
-
-			/* update non-DFS ch Y as new ch */
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-			if (pDfsParam->DFSChHitBand == DBDC_BAND0)
-			{
-				if (pDfsParam->band_ch[DBDC_BAND1] != 149)
-					*ch = 149;
-				else
-					*ch = 36;
-			}
-			else if (pDfsParam->DFSChHitBand == DBDC_BAND1)
-			{
-				if (pDfsParam->band_ch[DBDC_BAND0] != 36)
-					tempCh = 36;
-				else
-					tempCh = 149;
-
-				if (pAd->CommonCfg.dbdc_mode) {
-					if (pDfsParam->band_ch[DBDC_BAND0] != 149)
-						*ch = 149;
-					else
-						*ch = 36;
-				} else {
-					pDfsParam->band_ch[DBDC_BAND1] = tempCh;
-					wdev->vht_sec_80_channel = tempCh;
-					wlan_config_set_cen_ch_2(wdev, DfsPrimToCent(tempCh, BW_80));
-					wlan_operate_set_cen_ch_2(wdev, DfsPrimToCent(tempCh, BW_80));
-				}
-			}
-#else
-			*ch = FirstChannel(pAd, wdev);
-#endif
-
+		/* No need to update non-DFS ch Y as new ch if original channel is a non-DFS channel*/
+		else if (orichannel_is_nondfs) {
+			*ch = OriChannel;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s(): DFS ch %d is selected, use non-DFS ch %d, ch_stat %d\n",
-				__func__,
-				pAd->CommonCfg.DfsParameter.OutBandCh,
-				*ch,
-				*ch_stat));
-		} else {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("%s(): non-DFS ch %d, ch_stat %d\n", __func__, *ch, *ch_stat));
-
-			/* 5th RX is set */
-			if (*ch_outband != 0) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					("%s(): 5th RX is set to ch%d\n", __func__, *ch_outband));
-				break;
+			("%s(): DFS ch %d is selected, Orignal is a non-DFS ch %d, Keep same! ch_stat %d\n",
+			__func__,
+			pAd->CommonCfg.DfsParameter.OutBandCh,
+			*ch,
+			*ch_stat));
+			for (idx = 0; idx < pAd->ApCfg.BssidNum; idx++) {
+				pMbss = &pAd->ApCfg.MBSSID[idx];
+				if (band_idx == HcGetBandByWdev(&(pMbss->wdev)))
+					pMbss->ZwChannelUpdateRequired = TRUE;
 			}
-
-			pAd->CommonCfg.DfsParameter.OutBandCh = 0;
-
-			return FALSE;
+		}
+		/* Need to update non-DFS ch Y as new ch if Original channel is a DFS channel*/
+		else
+			zero_wait_dfs_update_inband_nondfsch(pAd, wdev, ch);
+		/* 5th RX is set */
+		if (*ch_outband != 0) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s(): 5th RX is set to ch%d\n", __func__, *ch_outband));
 		}
 		break;
 	case DFS_INB_DFS_RADAR_OUTB_CAC_DONE:
@@ -772,18 +1096,20 @@ INT zero_wait_dfs_switch_ch(
 	switch (*ch_stat) {
 	case DFS_INB_CH_INIT:
 		*ch_stat = DFS_OUTB_CH_CAC;
+		/* fall through */
 	case DFS_INB_DFS_RADAR_OUTB_CAC_DONE:
 		if (*ch_outband != 0) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("%s(): OutBandCh %d, OutBandBw %d\n", __func__, *ch_outband, *phy_bw_outband));
 
 			if (*ch_stat == DFS_INB_DFS_RADAR_OUTB_CAC_DONE) {
-				wait_time = 1000; /* Wait for 1,000 ms */
+				wait_time = 2000; /* Wait for 2,000 ms */
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("%s(): Do not switch to DFS ch immediately\n", __func__));
 			}
 
-
+			/* Initialize timer for setting a DFS channel later*/
+			RTMPInitTimer(pAd, &pAd->BgndScanCtrl.DfsZeroWaitTimer, GET_TIMER_FUNCTION(dfs_zero_wait_ch_init_timeout), pAd, FALSE);
 			/* Set out-band channel after calibration is done */
 			RTMPSetTimer(set_ob_ch_timer, wait_time);
 		}
@@ -839,9 +1165,9 @@ static inline UCHAR CentToPrim(
 static BOOLEAN DfsCheckChAvailableByBw(
 	UCHAR Channel, UCHAR Bw, PCHANNEL_CTRL pChCtrl)
 {
-#define BW40_CHGRP_NUM  13
-#define BW80_CHGRP_NUM  7
-#define BW160_CHGRP_NUM 3
+#define BW40_CHGRP_NUM	15
+#define BW80_CHGRP_NUM	8
+#define BW160_CHGRP_NUM 4
 
 	UCHAR i = 0, j = 0, k = 0;
 	UCHAR *pBwChGroup = NULL;
@@ -851,7 +1177,8 @@ static BOOLEAN DfsCheckChAvailableByBw(
 	{100, 104}, {108, 112},
 	{116, 120}, {124, 128},
 	{132, 136}, {140, 144},
-	{149, 153}, {157, 161}, {0, 0}
+	{149, 153}, {157, 161},
+	{165, 169}, {173, 177}, {0, 0}
 	};
 
 	UCHAR BW80_CH_GROUP[BW80_CHGRP_NUM][4] = {
@@ -861,12 +1188,14 @@ static BOOLEAN DfsCheckChAvailableByBw(
 	{116, 120, 124, 128},
 	{132, 136, 140, 144},
 	{149, 153, 157, 161},
+	{165, 169, 173, 177},
 	{0, 0, 0, 0}
 	};
 
 	UCHAR BW160_CH_GROUP[BW160_CHGRP_NUM][8] = {
 	{36, 40, 44, 48, 52, 56, 60, 64},
 	{100, 104, 108, 112, 116, 120, 124, 128},
+	{149, 153, 157, 161, 165, 169, 173, 177},
 	{0, 0, 0, 0, 0, 0, 0, 0}
 	};
 
@@ -1073,6 +1402,9 @@ VOID DfsGetSysParameters(
 	prim_ch = wdev->channel;
 	bandIdx = HcGetBandByWdev(wdev);
 	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, bandIdx);
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"Get before pDfsParam->PrimCh(%d) band(%d) band_bw(%d), outbw(%d)\n",
+		pDfsParam->PrimCh, pDfsParam->PrimBand, pDfsParam->band_bw[bandIdx], pDfsParam->OutBandBw);
 
 #ifdef DOT11_VHT_AC
 	c2 = vht_cent2;
@@ -1094,12 +1426,31 @@ VOID DfsGetSysParameters(
 
 	if (phy_bw == BW_8080 || phy_bw == BW_160) {
 		pDfsParam->band_bw[RDD_BAND1] = phy_bw;
+
+		if (ByPassChannelByBw(wdev->channel, BW_160, pChCtrl)) {
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+				"Warning:This Channel can not match BW160\n");
+			phy_bw = BW_80;
+			if (ByPassChannelByBw(wdev->channel, BW_80, pChCtrl)) {
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+					"Warning:This Channel can not match BW80\n");
+				phy_bw = BW_40;
+				if (ByPassChannelByBw(wdev->channel, BW_40, pChCtrl)) {
+					MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+						"Warning:This Channel can not match BW40\n");
+					phy_bw = BW_20;
+				}
+			}
+		}
 	}
 
 	pDfsParam->band_bw[bandIdx] = phy_bw;
 	pDfsParam->Dot11_H[bandIdx].RDMode = pDot11h->RDMode;
 	pDfsParam->bIEEE80211H = pAd->CommonCfg.bIEEE80211H;
 	pDfsParam->bDfsEnable = pAd->CommonCfg.DfsParameter.bDfsEnable;
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"Get after pDfsParam->PrimCh(%d) band(%d) band_bw(%d), outbw(%d)\n",
+		pDfsParam->PrimCh, pDfsParam->PrimBand, pDfsParam->band_bw[bandIdx], pDfsParam->OutBandBw);
 }
 
 
@@ -1111,9 +1462,11 @@ VOID DfsParamInit(
 	PCHANNEL_CTRL pChCtrl = NULL;
 	PDFS_PULSE_THRESHOLD_PARAM pls_thrshld_param = NULL;
 	PDFS_RADAR_THRESHOLD_PARAM radar_thrshld_param = NULL;
+	BOOLEAN CERegCacEn_bk = pDfsParam->CERegCacEn; /* backup info for inf down up */
 
 	os_zero_mem(pDfsParam, sizeof(DFS_PARAM));
 
+	pDfsParam->CERegCacEn = CERegCacEn_bk;
 	pDfsParam->PrimBand = RDD_BAND0;
 	for (rdd_idx = 0; rdd_idx < HW_RDD_NUM; rdd_idx++) {
 		pDfsParam->DfsChBand[rdd_idx] = FALSE;
@@ -1145,6 +1498,7 @@ VOID DfsParamInit(
 	pDfsParam->targetCh = 0;
 	pDfsParam->targetBw = 0;
 	pDfsParam->targetCacValue = 0;
+	pDfsParam->DfsChSelPrefer = 0;
 
 	/* Threshold parameters*/
 	radar_thrshld_param = &pAd->CommonCfg.DfsParameter.radar_thrshld_param;
@@ -1459,6 +1813,8 @@ VOID DfsParamInit(
 	pDfsParam->ChSwMode = 1;
 #endif
 
+	pDfsParam->TriggerEventIntvl = 0;
+
 	DfsStateMachineInit(pAd, &pAd->CommonCfg.DfsParameter.DfsStatMachine, pAd->CommonCfg.DfsParameter.DfsStateFunc);
 }
 
@@ -1484,7 +1840,6 @@ INT Set_RadarDetectMode_Proc(
 	RTMP_ADAPTER * pAd,
 	RTMP_STRING *arg)
 {
-#if !defined(MT7615) && !defined(MT7622)
 	UCHAR value, ret;
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
@@ -1513,7 +1868,8 @@ INT Set_RadarDetectMode_Proc(
 		IF_DEV_CONFIG_OPMODE_ON_AP(pAd) {
 			dot11h = wdev->pDot11_H;
 			dot11h->RDMode = RD_SWITCHING_MODE;
-
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]\x1b[1;33m Change to RD_SWITCHING_MODE\x1b[m\n",
+										 __func__));
 			APStop(pAd, pMbss, AP_BSS_OPER_BY_RF);
 			APStartUp(pAd, pMbss, AP_BSS_OPER_BY_RF);
 		}
@@ -1542,7 +1898,6 @@ INT Set_RadarDetectMode_Proc(
 		pDfsParam->bNoSwitchCh = FALSE;
 		break;
 	}
-#endif /* !defined(MT7615) && !defined(MT7622) */
 
 	return TRUE;
 }
@@ -1654,15 +2009,116 @@ INT Set_RDDReport_Proc(
 	RTMP_STRING *arg)
 {
 	UCHAR value;
+	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	UCHAR if_idx = pObj->ioctl_if;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, if_idx, pObj->ioctl_if_type);
 	value = os_str_tol(arg, 0, 10);
+	if (wdev == NULL)
+		return FALSE;
+	if (value >= HW_RDD_NUM) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Invalid parameter, please input the correct band index!\n"));
+		return FALSE;
+	}
+	/*Return FALSE if banidx=1 in single band */
+	if (value == HW_RDD1 && pAd->CommonCfg.dbdc_mode == FALSE) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("[%s][RDM]:  The current band does not exist!!!\n", __func__));
+		return FALSE;
+	}
+
+	if (wdev->if_dev == NULL ||
+		(wdev->if_dev != NULL && !RTMP_OS_NETDEV_STATE_RUNNING(wdev->if_dev))) {
+		/* the interface is down*/
+		return false;
+	}
+
+	if (!pAd->CommonCfg.DfsParameter.bDfsEnable) {
+		MTWF_PRINT("[%s][RDM]: The Radar detection does not Enable!!!\n", __func__);
+		return FALSE;
+	}
+	if (value == HW_RDD0 || value == HW_RDD1) {
+		if (!RadarChannelCheck(pAd, wdev->channel)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("[%s]wdev is not working in radar channel \n", __func__));
+			return FALSE;
+		}
+	}
+#if (RDD_2_SUPPORTED == 1)
+	if (value == HW_RDD2) {
+		if (!RadarChannelCheck(pAd, pAd->CommonCfg.DfsParameter.OutBandCh)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s]Out-band is not working in radar channel \n", __func__));
+			return FALSE;
+		}
+	}
+#endif  /* RDD_2_SUPPORTED */
 	pAd->CommonCfg.DfsParameter.is_radar_emu = TRUE;
 
-#if defined(MT7615) || defined(MT7622)
-	WrapDfsRddReportHandle(pAd, value);
-#else
 	mtRddControl(pAd, RDD_RADAR_EMULATE, value, 0, 0);
-#endif
 	return TRUE;
+}
+
+/**
+* Trigger_RDD_Event - Trigger RDD related event.
+* @pAd: pointer of the RTMP_ADAPTER
+* @arg: event type (0: not send event, 1: radar detect; 2: CAC timeout; 3: CSA done.)
+*
+* This function is for feature debug
+*
+**/
+INT Trigger_RDD_Event(
+	RTMP_ADAPTER * pAd,
+	RTMP_STRING *arg)
+{
+	UINT32 interval;
+
+	if (arg == NULL || strlen(arg) == 0)
+		return FALSE;
+
+	interval = (UINT32) os_str_tol(arg, 0, 10);
+	pAd->CommonCfg.DfsParameter.TriggerEventIntvl = interval;
+	if (interval == 0) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Shut down RDD event trigger.\n"));
+	} else {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+				("Trigger RDD event per %d msecs.\n", interval));
+	}
+
+	return TRUE;
+}
+
+/**
+* MakeUpRDDEvent - Make up radar detected event.
+* @pAd: pointer of the RTMP_ADAPTER
+*
+* This function is for feature debug
+*
+**/
+VOID MakeUpRDDEvent(RTMP_ADAPTER *pAd)
+{
+	UINT i;
+	struct wifi_dev *wdev;
+	BOOLEAN found_dfs_chn = FALSE;
+
+	for (i = 0; i < WDEV_NUM_MAX; i++) {
+		wdev = pAd->wdev_list[i];
+		if (wdev != NULL) {
+			if (wdev->if_up_down_state == TRUE) {
+				if (RadarChannelCheck(pAd, wdev->channel)) {
+					found_dfs_chn = TRUE;
+					break;
+				}
+			}
+		}
+	}
+
+	if (found_dfs_chn) {
+		pAd->CommonCfg.DfsParameter.is_radar_emu = TRUE;
+		mtRddControl(pAd, RDD_RADAR_EMULATE, HcGetBandByWdev(wdev), 0, 0);
+	} else {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+			("[%s]No any wdev is not working in radar channel! \n", __func__));
+	}
 }
 
 INT Set_DfsChannelShow_Proc(
@@ -1760,6 +2216,8 @@ INT Show_DfsNonOccupancy_Proc(
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_OFF, ("band_idx: %d\n", band_idx));
 
 		for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+			if (!RadarChannelCheck(pAd, pChCtrl->ChList[ch_idx].Channel))
+				continue;
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("DfsChannelList[%d].Channel = %d, NonOccupancy = %d, NOPClrCnt = %d, NOPSetByBw = %d, NOPSaveForClear is %d, SupportBwBitMap is %d\n",
 			ch_idx,
@@ -1774,6 +2232,52 @@ INT Show_DfsNonOccupancy_Proc(
 	return TRUE;
 }
 
+INT Nop_List_Backup(
+	IN PRTMP_ADAPTER pAd)
+{
+	UINT_8 ch_idx, band_idx, count = 0;
+	PCHANNEL_CTRL pChCtrl = NULL;
+	NOP_LIST *pNopList = NULL;
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s]---->\n", __func__));
+	os_alloc_mem(pAd, (UCHAR **)&pNopList, sizeof(NOP_LIST));
+	if (pNopList) {
+		os_zero_mem(pNopList, sizeof(NOP_LIST));
+		for (band_idx = 0; band_idx < DBDC_BAND_NUM; band_idx++) {
+			pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, band_idx);
+			for (ch_idx = 0; (ch_idx < pChCtrl->ChListNum) && (count < DFS_AVAILABLE_LIST_CH_NUM); ch_idx++) {
+				if (pChCtrl->ChList[ch_idx].NonOccupancy != 0 || pChCtrl->ChList[ch_idx].NOPSaveForClear != 0) {
+					pNopList->DfsChList[count].Channel = pChCtrl->ChList[ch_idx].Channel;
+					pNopList->DfsChList[count].NonOccupancy = pChCtrl->ChList[ch_idx].NonOccupancy;
+					pNopList->DfsChList[count].NOPClrCnt = pChCtrl->ChList[ch_idx].NOPClrCnt;
+					pNopList->DfsChList[count].NOPSetByBw = pChCtrl->ChList[ch_idx].NOPSetByBw;
+					pNopList->DfsChList[count].NOPSaveForClear = pChCtrl->ChList[ch_idx].NOPSaveForClear;
+					pNopList->DfsChList[count].SupportBwBitMap = pChCtrl->ChList[ch_idx].SupportBwBitMap;
+					count++;
+				}
+			}
+		}
+	}
+
+	if (pAd->NopListBk) {
+		/* free earlier NOP list memory if any*/
+		os_free_mem(pAd->NopListBk);
+		pAd->NopListBk = NULL;
+	}
+
+	if (count == 0) {
+		if (pNopList)
+			os_free_mem(pNopList);
+	} else {
+		pNopList->ChListNum = count;
+		pAd->NopListBk = pNopList;
+	}
+
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s] NopList Channel:%d <----\n", __func__, count));
+
+	return 0;
+}
+
 INT show_dfs_ch_info_proc(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_STRING * arg)
@@ -1781,7 +2285,7 @@ INT show_dfs_ch_info_proc(
 	UINT_8 band_idx;
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	struct DOT11_H *pDot11h = NULL;
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_TRACE, ("[%s][RDM]: DFS channel info\n", __func__));
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[RDM]: DFS channel info, DfsChSelPrefer=%d\n", pDfsParam->DfsChSelPrefer));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("=========================================\n "));
 
 	for (band_idx = 0; band_idx < DBDC_BAND_NUM; band_idx++) {
@@ -1796,7 +2300,11 @@ INT show_dfs_ch_info_proc(
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("-----------------------------------------\n "));
 	}
 
-	if ((pDfsParam->bDedicatedZeroWaitSupport == TRUE) && (pDfsParam->bDedicatedZeroWaitDefault == TRUE)) {
+	if ((pDfsParam->bDedicatedZeroWaitSupport == TRUE) && ((pDfsParam->bDedicatedZeroWaitDefault == TRUE)
+#ifdef DFS_ZEROWAIT_SUPPORT
+		|| (pAd->ApCfg.bDfsZeroWaitDedicatedCac == TRUE)
+#endif
+	)) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_OFF, ("dedicated RX:\n"));
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_OFF,
 			("CH: %d,\tBW: %d,\tCAC cnt: %d,\tCAC: %d\n",
@@ -1810,7 +2318,6 @@ INT show_dfs_ch_info_proc(
 	return TRUE;
 }
 
-#if !(defined(MT7615) || defined(MT7622) || defined(MT7663))
 VOID dfs_dump_radar_sw_pls_info(
 	PRTMP_ADAPTER pAd,
 	P_EXT_EVENT_RDD_REPORT_T prRadarReport)
@@ -2175,7 +2682,6 @@ INT show_dfs_debug_proc(
 	}
 	return TRUE;
 }
-#endif
 
 INT Set_DfsNOP_Proc(
 	IN PRTMP_ADAPTER pAd,
@@ -2202,6 +2708,59 @@ INT Set_DfsNOP_Proc(
 }
 
 /* DFS Zero Wait */
+INT Set_DfsZeroWaitEnable_Proc(
+	RTMP_ADAPTER * pAd,
+	RTMP_STRING *arg)
+{
+	UCHAR Value;
+	Value = (UCHAR) os_str_tol(arg, 0, 10);
+	if (RDD_2_SUPPORTED == 1) {
+		switch (Value) {
+			case DFS_DEDICATED_ZERO_WAIT_DISABLED:
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitSupport = FALSE;
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitDefault = FALSE;
+				break;
+
+			case DFS_DEDICATED_ZERO_WAIT_ENABLED:
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitSupport = TRUE;
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitDefault = FALSE;
+				break;
+
+			case DFS_DEDICATED_ZERO_WAIT_DEFAULT_FLOW_ENABLED:
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitSupport = TRUE;
+				pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitDefault = TRUE;
+				break;
+
+			default:
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_ERROR, "Invalid parameter, Please enter 0 or 1 or 2!\n");
+				break;
+		}
+	} else
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_DFS, DBG_LVL_ERROR, "DedicatedZeroWait not support!\n");
+
+	MTWF_PRINT("The DFS paramater: bDedicatedZeroWaitSupport=%d, bDedicatedZeroWaitDefault=%d\n",
+		pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitSupport,
+		pAd->CommonCfg.DfsParameter.bDedicatedZeroWaitDefault);
+	return TRUE;
+}
+
+INT Set_DfsChSelPrefer_Proc(
+	RTMP_ADAPTER * pAd,
+	RTMP_STRING *arg)
+{
+	UCHAR Value;
+	Value = (UCHAR) os_str_tol(arg, 0, 10);
+
+	if (Value >= RadarDetectSelectNum)
+		MTWF_PRINT("Invalid parameter, Please enter 0 or 1 or 2!\n");
+	else {
+		MTWF_PRINT("DfsChSelPrefer = %d!\n", Value);
+		pAd->CommonCfg.DfsParameter.DfsChSelPrefer = Value;
+	}
+	return TRUE;
+}
+
+
 INT Set_DfsZeroWaitCacTime_Proc(
 	RTMP_ADAPTER * pAd,
 	RTMP_STRING *arg)
@@ -2219,7 +2778,7 @@ INT Set_DfsZeroWaitCacTime_Proc(
 
 INT Set_DedicatedBwCh_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-	INT	i;
+	INT i;
 	CHAR *value = 0;
 	UCHAR SynNum = 0, Channel = 0, Bw = 0, doCAC = 1;
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
@@ -2245,7 +2804,7 @@ INT Set_DedicatedBwCh_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		}
 	}
 
-    /* Disable zero-wait default flow */
+	/* Disable zero-wait default flow */
 	pDfsParam->bDedicatedZeroWaitDefault = FALSE;
 
 #ifdef BACKGROUND_SCAN_SUPPORT
@@ -2289,7 +2848,7 @@ INT Set_DfsZeroWaitDynamicCtrl_Proc(
 INT Set_DfsZeroWaitNOP_Proc(
 		RTMP_ADAPTER * pAd, RTMP_STRING *arg)
 {
-	INT	i;
+	INT i;
 	CHAR *value = 0;
 	UCHAR Channel = 0, Bw = 0;
 	USHORT NOPTime = 0;
@@ -2320,7 +2879,7 @@ INT Set_DfsZeroWaitNOP_Proc(
 INT Set_DfsTargetCh_Proc(
 		RTMP_ADAPTER * pAd, RTMP_STRING *arg)
 {
-		INT	i;
+		INT i;
 	CHAR *value = 0;
 	UCHAR Channel = 0, Bw = 0;
 	USHORT CacValue = 0;
@@ -2347,6 +2906,188 @@ INT Set_DfsTargetCh_Proc(
 
 	return TRUE;
 }
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+INT Set_ZWDfsCacStart_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	INT u1ArgNum, Status = TRUE;
+	CHAR *value = 0;
+	UCHAR SynNum = 0, Channel = 0, Bw = 0, doCAC = 1;
+	union dfs_zero_wait_msg msg;
+
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]\n", __func__));
+
+	if (arg) {
+		for (u1ArgNum = 0, value = rstrtok(arg, ":"); value; value = rstrtok(NULL, ":"), u1ArgNum++) {
+			switch (u1ArgNum) {
+			case 0: /* Set Syn Num*/
+				kstrtol(value, 10, (long *)&SynNum);
+				break;
+			case 1: /* Set InBand ControlChannel */
+				kstrtol(value, 10, (long *)&Channel);
+				break;
+			case 2: /* Set InBand Bw*/
+				kstrtol(value, 10, (long *)&Bw);
+				break;
+			case 3: /* Set doCAC*/
+				kstrtol(value, 10, (long *)&doCAC);
+				break;
+			default: {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set wrong parameters\n");
+					Status = FALSE;
+					break;
+				}
+			}
+		}
+
+		if (u1ArgNum != 4) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "Format Error! ArgNum = %d != 4\n", u1ArgNum);
+			Status = FALSE;
+			return Status;
+		}
+
+		os_zero_mem(&msg, sizeof(msg));
+
+		msg.set_monitored_ch_msg.SyncNum = SynNum;
+		msg.set_monitored_ch_msg.Channel = Channel;
+		msg.set_monitored_ch_msg.Bw = Bw;
+		msg.set_monitored_ch_msg.doCAC =  doCAC;
+
+		/* Check if CAC is already running*/
+		if (!pAd->ApCfg.bDfsZeroWaitDedicatedCac) {
+			pAd->ApCfg.bDfsZeroWaitDedicatedCac = 1;
+			ZeroWaitDfsStartCAC(pAd, &msg);
+		} else {
+			printk("CAC already running, drop request\n");
+		}
+	} else {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 "Arg is Null\n");
+		Status = FALSE;
+	}
+
+	if (Status == FALSE)
+		MTWF_PRINT(" iwpriv ra0 set DfsCacStart=[SynNum]:[Channel]:[Bw]:[doCAC]\n");
+
+	return TRUE;
+}
+
+INT ZWDfsChannelSwitch(RTMP_ADAPTER *pAd, UCHAR u1Channel, UCHAR u1CacReq)
+{
+	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	UCHAR if_idx = pObj->ioctl_if;
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, if_idx, pObj->ioctl_if_type);
+	INT32 success = FALSE;	/*FALSE = 0*/
+	UINT32 i;
+	INT ret = 0;
+#ifdef TR181_SUPPORT
+	UCHAR old_channel;
+	struct hdev_obj *hdev;
+#endif
+
+	if (wdev == NULL) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"wdev == NULL! if_type %d, if_idx = %d\n",
+				 pObj->ioctl_if_type,
+				 if_idx);
+		return FALSE;
+	}
+
+	for (i = 0; i < MAX_BEACON_NUM; i++) {
+		pAd->ApCfg.MBSSID[i].wdev.cac_not_required = FALSE;
+	}
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Channel: %d, Cac Req: %d\n", u1Channel, u1CacReq);
+
+#ifdef MT_DFS_SUPPORT
+	if (u1CacReq == 0 && pAd->CommonCfg.DfsParameter.bDfsEnable) {
+		for (i = 0; i < MAX_BEACON_NUM; i++) {
+			if (pAd->ApCfg.MBSSID[i].wdev.channel == wdev->channel)
+				pAd->ApCfg.MBSSID[i].wdev.cac_not_required = TRUE;
+		}
+	}
+#endif
+
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "\n");
+
+#if defined(MT_DFS_SUPPORT) && defined(BACKGROUND_SCAN_SUPPORT)
+	DfsDedicatedExamineSetNewCh(pAd, wdev, u1Channel);
+	DedicatedZeroWaitStop(pAd, TRUE);
+#endif
+
+	/*To do set channel, need TakeChannelOpCharge first*/
+	if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_SET_CHN, TRUE)) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "TakeChannelOpCharge fail for SET channel!!\n");
+		return FALSE;
+	}
+	pAd->ApCfg.iwpriv_event_flag = TRUE;
+	pAd->ApCfg.bChSwitchNoCac = 1;
+	success = rtmp_set_channel(pAd, wdev, u1Channel);
+
+	if (pAd->ApCfg.set_ch_async_flag == TRUE) {
+		ret = RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(&pAd->ApCfg.set_ch_aync_done, ((50*100*OS_HZ)/1000));/*Wait 5s.*/
+		if (ret)
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "wait channel setting success.\n");
+		else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "wait channel setting timeout.\n");
+			pAd->ApCfg.set_ch_async_flag = FALSE;
+		}
+	}
+	pAd->ApCfg.iwpriv_event_flag = FALSE;
+
+#ifdef TR181_SUPPORT
+	old_channel = wdev->channel;
+	hdev = (struct hdev_obj *)wdev->pHObj;
+	if (success && (old_channel != u1Channel)) {
+		hdev->rdev->pRadioCtrl->ManualChannelChangeCount++;
+		hdev->rdev->pRadioCtrl->TotalChannelChangeCount++;
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "success = %d Manual:%d Total:%d\n",
+						success, hdev->rdev->pRadioCtrl->ManualChannelChangeCount,
+						hdev->rdev->pRadioCtrl->TotalChannelChangeCount);
+	}
+#endif
+
+	/*if channel setting is DONE, release ChannelOpCharge here*/
+	ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_SET_CHN);
+
+	return success;
+
+}
+
+INT Set_ZWDfsChannelSwitch_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	INT Status = TRUE;
+	INT Channel = 0, CacReq = 0;
+	INT rv = 0;
+
+	if (arg) {
+		rv = sscanf(arg, "%d:%d", &Channel, &CacReq);
+
+		if (rv == 2) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Channel=%d, CacReq=%d\n", Channel, CacReq);
+
+			Status = ZWDfsChannelSwitch(pAd, (UCHAR)Channel, (UCHAR)CacReq);
+		} else {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"set wrong parameters\n");
+			Status = FALSE;
+		}
+	} else {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 "Arg is Null\n");
+		Status = FALSE;
+	}
+
+	if (Status == FALSE)
+		MTWF_PRINT(" iwpriv ra0 set ZWDfsChannelSwitch=[Channel]:[CacReq]\n");
+
+	return TRUE;
+}
+#endif
 
 VOID DfsSetCalibration(
 	IN PRTMP_ADAPTER pAd, UINT_32 DisableDfsCal)
@@ -2454,6 +3195,17 @@ VOID DfsCacEndUpdate(
 			UpdateBeaconHandler(pAd, wdev, BCN_UPDATE_ENABLE_TX);
 		}
 	}
+	EDCCAInit(pAd, band_idx);
+
+	/* update CAC done */
+	if (pAd->CommonCfg.DfsParameter.CERegCacEn) {
+		for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
+			wdev = &pAd->ApCfg.MBSSID[BssIdx].wdev;
+			if (band_idx == HcGetBandByWdev(wdev))
+				break;
+		}
+		dfs_cac_op(pAd, wdev, CAC_DONE_UPDATE, wdev->channel);
+	}
 }
 
 #if ((DFS_ZEROWAIT_DEFAULT_FLOW == 1) && defined(BACKGROUND_SCAN_SUPPORT))
@@ -2478,7 +3230,13 @@ VOID dfs_off_cac_end_update(
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s() OutBand is not available\n", __func__));
 		return;
 	}
-
+#ifdef WIFI_MD_COEX_SUPPORT
+	if (!IsChannelSafe(pAd, pDfsParam->OutBandCh)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\x1b[1;33m New Channel %d is unsafe channel, stay in current channel\x1b[m \n",
+			pDfsParam->OutBandCh));
+		return;
+	}
+#endif
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() zero-wait CAC end, ch_stat %d\n", __func__, *ch_stat));
 
 	switch (*ch_stat) {
@@ -2602,11 +3360,7 @@ NTSTATUS DfsChannelSwitchTimeoutAction(
 	DedicatedZeroWaitStop(pAd, FALSE);
 #endif
 
-#ifdef CONFIG_MAP_SUPPORT
-	if (IS_MAP_TURNKEY_ENABLE(pAd))
-		wdev->quick_ch_change = QUICK_CH_SWICH_DISABLE;
-#endif
-	rtmp_set_channel(pAd, wdev, NextCh);
+	perform_channel_change(pAd, wdev, NextCh);
 
 	if (pAd->CommonCfg.dbdc_mode) {
 		MtCmdSetDfsTxStart(pAd, bandIdx);
@@ -2620,6 +3374,11 @@ NTSTATUS DfsChannelSwitchTimeoutAction(
 #endif
 	}
 	DfsReportCollision(pAd);
+
+	/*if no need CSA, just release ChannelOpCharge here*/
+	if (pAd->ApCfg.set_ch_async_flag == FALSE)
+		ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_DFS);
+
 	return 0;
 }
 
@@ -2645,6 +3404,10 @@ NTSTATUS DfsSwitchChAfterRadarDetected(
 	pMbss = &pAd->ApCfg.MBSSID[BssIdx];
 	wdev = &pMbss->wdev;
 	rtmp_set_channel(pAd, wdev, NextCh);
+	/*if no need CSA, just release ChannelOpCharge here*/
+	if (pAd->ApCfg.set_ch_async_flag == FALSE)
+		ReleaseChannelOpCharge(pAd, wdev, CH_OP_OWNER_DFS);
+
 	return 0;
 }
 
@@ -2703,6 +3466,10 @@ VOID DfsCacNormalStart(
 
 	if (wdev == NULL)
 		return;
+
+	if (wdev->channel <= 14)
+		return;
+
 	pDot11h = wdev->pDot11_H;
 	if (pDot11h == NULL)
 		return;
@@ -2715,8 +3482,8 @@ VOID DfsCacNormalStart(
 	}
 
 	if ((pAd->CommonCfg.RDDurRegion == CE) &&
-	    DfsCacRestrictBand(pAd, pDfsParam->band_bw[band_idx], pDfsParam->band_ch[band_idx],
-			       pDfsParam->band_ch[(UINT_8)(DBDC_BAND1 - band_idx)])) {
+		DfsCacRestrictBand(pAd, pDfsParam->band_bw[band_idx], pDfsParam->band_ch[band_idx],
+				   pDfsParam->band_ch[(UINT_8)(DBDC_BAND1 - band_idx)])) {
 		/* Weather band channel */
 		if (pDfsParam->targetCh != 0)
 			pDot11h->cac_time = pDfsParam->targetCacValue;
@@ -2734,29 +3501,6 @@ VOID DfsCacNormalStart(
 				__func__, pDot11h->cac_time));
 		mtRddControl(pAd, CAC_START, band_idx, 0, 0);
 	} else if ((pDot11h->RDMode == RD_NORMAL_MODE) && (CompareMode == RD_NORMAL_MODE)) {
-#if defined(MT7615) || defined(MT7622)
-		if (!IS_CH_ABAND(wdev->channel)) {
-			UCHAR BssIdx;
-			BSS_STRUCT *pMbss = NULL;
-			struct wifi_dev *wdevEach = NULL;
-			struct DOT11_H *pDot11hEach = NULL;
-			for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
-				pMbss = &pAd->ApCfg.MBSSID[BssIdx];
-				wdevEach = &pMbss->wdev;
-				if (pMbss == NULL || wdevEach == NULL)
-					continue;
-				if (wdevEach->pHObj == NULL)
-					continue;
-				pDot11hEach = wdevEach->pDot11_H;
-				if (pDot11hEach == NULL)
-					continue;
-				if (pDot11hEach->RDMode == RD_SILENCE_MODE) {
-					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM] 2G channel with 5G silence channel exist\n", __func__));
-					return;
-				}
-			}
-		}
-#endif
 		if (RadarChannelCheck(pAd, wdev->channel))
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s][RDM] Normal start. Enable MAC TX\n", __func__));
 
@@ -2786,12 +3530,13 @@ BOOLEAN DfsCacRestrictBand(/* Weather band channel: 5600 MHz - 5650 MHz */
 }
 
 VOID DfsBuildChannelList(
-    IN PRTMP_ADAPTER pAd, IN struct wifi_dev *wdev)
+	IN PRTMP_ADAPTER pAd, IN struct wifi_dev *wdev)
 {
-	UINT_8 i;
+	UINT_8 i, j;
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	UCHAR band_idx = 0;
 	CHANNEL_CTRL *pChCtrl = NULL;
+	NOP_LIST *pNopList = NULL;
 
 	if (!wdev) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[%s][RDM]: wdev is NULL.\n", __func__));
@@ -2805,15 +3550,6 @@ VOID DfsBuildChannelList(
 	band_idx = HcGetBandByWdev(wdev);
 	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, band_idx);
 
-#if defined(MT7615) || defined(MT7622)
-	if (IS_MT7615(pAd) || IS_MT7622(pAd)) {
-		/* Non DFS channel, no need to update channel list */
-		if ((pAd->CommonCfg.dbdc_mode == TRUE) && !RadarChannelCheck(pAd, wdev->channel)) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): Non DFS channel\n", __func__));
-			return;
-		}
-	}
-#endif
 
 	if (pDfsParam->NeedSetNewChList[band_idx] == DFS_SET_NEWCH_ENABLED) {
 		for (i = 0; i < pChCtrl->ChListNum; i++) {
@@ -2829,6 +3565,27 @@ VOID DfsBuildChannelList(
 				pChCtrl->ChList[i].SupportBwBitMap |= 0x08;
 		}
 	}
+
+	if (pAd->NopListBk) {
+		pNopList = pAd->NopListBk;
+
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): sync NopList count:%d\n", __func__, pNopList->ChListNum));
+		for (j = 0; j < pNopList->ChListNum; j++) {
+			for (i = 0; i < pChCtrl->ChListNum; i++) {
+				if (pChCtrl->ChList[i].Channel == pNopList->DfsChList[j].Channel) {
+					pChCtrl->ChList[i].NonOccupancy = pNopList->DfsChList[j].NonOccupancy;
+					pChCtrl->ChList[i].NOPClrCnt = pNopList->DfsChList[j].NOPClrCnt;
+					pChCtrl->ChList[i].NOPSetByBw = pNopList->DfsChList[j].NOPSetByBw;
+					pChCtrl->ChList[i].NOPSaveForClear = pNopList->DfsChList[j].NOPSaveForClear;
+					pChCtrl->ChList[i].SupportBwBitMap = pNopList->DfsChList[j].SupportBwBitMap;
+				}
+			}
+		}
+		/* clear nop list as sync to channel list done*/
+		os_free_mem(pAd->NopListBk);
+		pAd->NopListBk = NULL;
+	}
+
 	DfsBuildChannelGroupByBw(pAd, wdev);
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s(): Done\n", __func__));
@@ -2902,7 +3659,7 @@ VOID DfsBuildChannelGroupByBw(
 }
 
 BOOLEAN DfsCheckBwGroupAllAvailable(
-    UCHAR CheckChIdx, UCHAR Bw, IN PRTMP_ADAPTER pAd, IN UCHAR band_idx)
+	UCHAR CheckChIdx, UCHAR Bw, IN PRTMP_ADAPTER pAd, IN UCHAR band_idx)
 {
 	UCHAR *pBwxxGroupIdx = NULL;
 	UCHAR i, j;
@@ -3014,8 +3771,13 @@ VOID DfsNonOccupancyCountDown(/*NonOccupancy --*/
 									continue;
 								} else if ((HcGetBandByWdev(pAd->wdev_list[j]) != HW_RDD0))
 									continue;
+#ifdef AX8400_COMPATIBLE
+								wapp_send_radar_detect_notif(pAd, pAd->wdev_list[j],
+										pChCtrl->ChList[ch_idx].Channel, wlan_operate_get_bw(pAd->wdev_list[j]), TRUE);
+#else
 								wapp_send_radar_detect_notif(pAd, pAd->wdev_list[j],
 										pChCtrl->ChList[ch_idx].Channel, TRUE);
+#endif
 								break;
 							}
 						}
@@ -3039,8 +3801,13 @@ VOID DfsNonOccupancyCountDown(/*NonOccupancy --*/
 									continue;
 								} else if ((HcGetBandByWdev(pAd->wdev_list[j]) != HW_RDD0))
 									continue;
+#ifdef AX8400_COMPATIBLE
+								wapp_send_radar_detect_notif(pAd, pAd->wdev_list[j],
+										pChCtrl->ChList[ch_idx].Channel, wlan_operate_get_bw(pAd->wdev_list[j]), TRUE);
+#else
 								wapp_send_radar_detect_notif(pAd, pAd->wdev_list[j],
 										pChCtrl->ChList[ch_idx].Channel, TRUE);
+#endif
 								break;
 							}
 						}
@@ -3155,6 +3922,7 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 			if ((target_ch == pChCtrl->ChList[ch_idx].Channel)) {
 				pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 				pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+				pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 			}
 		}
 		break;
@@ -3167,12 +3935,15 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 			if ((target_ch == pChCtrl->ChList[ch_idx].Channel)) {
 				pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 				pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+				pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 			} else if (((target_ch) >> 2 & 1) && ((pChCtrl->ChList[ch_idx].Channel - target_ch) == 4)) {
 				pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 				pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+				pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 			} else if (!((target_ch) >> 2 & 1) && ((target_ch - pChCtrl->ChList[ch_idx].Channel) == 4)) {
 				pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 				pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+				pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 			}
 			else
 				;
@@ -3188,6 +3959,7 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 				vht_cent_ch_freq(target_ch, VHT_BW_80, CMD_CH_BAND_5G)) {
 				pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 				pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+				pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 			}
 		}
 		break;
@@ -3199,6 +3971,7 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 					vht_cent_ch_freq(pDfsParam->band_ch[DBDC_BAND0], VHT_BW_8080, CMD_CH_BAND_5G)) {
 					pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 					pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+					pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 				}
 			}
 		} else if (pDfsParam->DfsChBand[HW_RDD1] && pDfsParam->RadarDetected[HW_RDD1]) {
@@ -3207,6 +3980,7 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 					vht_cent_ch_freq(pDfsParam->band_ch[DBDC_BAND1], VHT_BW_8080, CMD_CH_BAND_5G)) {
 					pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 					pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+					pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 				}
 			}
 		}
@@ -3219,6 +3993,7 @@ VOID DfsSetNonOccupancy(/* Set channel non-occupancy time */
 					vht_cent_ch_freq(pDfsParam->band_ch[DBDC_BAND0], VHT_BW_160, CMD_CH_BAND_5G)) {
 					pChCtrl->ChList[ch_idx].NonOccupancy = CHAN_NON_OCCUPANCY;
 					pChCtrl->ChList[ch_idx].NOPSetByBw = target_bw;
+					pChCtrl->ChList[ch_idx].Flags &= ~CHANNEL_CAC_DONE;
 				}
 			}
 		}
@@ -3238,7 +4013,7 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 	UCHAR NextCh = 0;
 	UCHAR NextBw = 0;
 	UCHAR KeepBw = 0;
-	UCHAR band_idx;
+	UCHAR band_idx, tmpBand;
 	UCHAR BssIdx;
 	UINT_32 SetChInfo = 0;
 	BSS_STRUCT *pMbss = NULL;
@@ -3255,78 +4030,89 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 #ifdef TR181_SUPPORT
 	struct hdev_ctrl *ctrl = (struct hdev_ctrl *)pAd->hdev_ctrl;
 #endif /*TR181_SUPPORT*/
+	BOOLEAN ret = 0;
 
 #ifdef CONFIG_MAP_SUPPORT
 #ifdef MAP_R2
 		UCHAR band;
-		UCHAR first_wdev = TRUE;
 		UCHAR Channel_for_radar = 0;
+#ifdef AX8400_COMPATIBLE
+	UCHAR bw_for_radar = 0;
 #endif
 #endif
+#endif
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+		"[RDM]:  Radar detected !!!!!!!!!!!!!!!!!\n");
 
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("[%s][RDM]:  Radar detected !!!!!!!!!!!!!!!!!\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN,
+		"[RDM]:  ucRddIdx: %d\n", ucRddIdx);
 
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		("[%s][RDM]:  ucRddIdx: %d\n", __func__, ucRddIdx));
-	if (pDfsParam->bNoSwitchCh) {
-		return;
-	}
-#if defined(MT7615) || defined(MT7622)
-	if (pDfsParam->Bw == BW_8080 || pDfsParam->Bw == BW_160)
-		band_idx = HW_RDD0;
-	else
-#endif
 		band_idx = dfs_rddidx_to_dbdc(pAd, ucRddIdx);
 
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[WrapDfsRddReportHandle]:  ucRddIdx: %d\n", ucRddIdx));
-
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1) //cid WCNCR00224666
-        if (pDfsParam->bDedicatedZeroWaitSupport == FALSE) {
-            pDfsParam->DFSChHitBand = ucRddIdx;
-        }
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE, "ucRddIdx mapping band_idx =%d\n", band_idx);
+	/*To handle Radar event, need TakeChannelOpCharge first*/
+#if (RDD_2_SUPPORTED == 1)
+	if (band_idx == RDD_DEDICATED_RX)
+		tmpBand = DBDC_BAND1; /* use band1 */
+	else
 #endif
-	
+		tmpBand = band_idx;
+
+	if (pDfsParam->bNoSwitchCh) {
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN, "Turn OFF detection mode!!\n");
+#if (RDD_2_SUPPORTED == 1)
+		if (band_idx != RDD_DEDICATED_RX)
+#endif
+		{
+			ret = RTEnqueueInternalCmd(pAd, CMDTHREAD_DROP_RADAR_EVENT, &tmpBand, sizeof(UCHAR));
+			if (ret != NDIS_STATUS_SUCCESS)
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]Enqueue DROP_RADAR_EVENT cmd fail[%d]\n", band_idx);
+		}
+		return;
+	}
+#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
+	if (pDfsParam->bDedicatedZeroWaitSupport == FALSE) {
+		pDfsParam->DFSChHitBand = ucRddIdx;
+	}
+#endif
+
 #if defined(OFFCHANNEL_SCAN_FEATURE) && defined(MAP_R2)
 	if (IS_MAP_ENABLE(pAd)) {
-		Rsp.Action = DFS_RADAR_HIT;
-		band = (pAd->CommonCfg.dbdc_mode) ? DBDC_BAND1 : DBDC_BAND0;
-		memcpy(Rsp.ifrn_name, pAd->ScanCtrl[band].if_name, IFNAMSIZ);
-		pAd->radar_hit = TRUE;
-		Rsp.data.operating_ch_info.cfg_ht_bw = wlan_config_get_ht_bw(&pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev);
-		Rsp.data.operating_ch_info.cfg_vht_bw = wlan_config_get_vht_bw(&pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev);
-		Rsp.data.operating_ch_info.RDDurRegion = pAd->CommonCfg.RDDurRegion;
-		Rsp.data.operating_ch_info.region = GetCountryRegionFromCountryCode(pAd->CommonCfg.CountryCode);
-		Rsp.data.operating_ch_info.is4x4Mode = 1;/* Can be used as an info from driver by default yes */
+		/* Band index: BAND0 / Band1 and Dedicated RX */
+#if defined(MT7915)
+		band_idx = dfs_rddidx_to_dbdc(pAd, ucRddIdx);
+#ifdef AX8400_COMPATIBLE
+		bw_for_radar = wlan_operate_get_bw(wdev);
+#endif
+#endif
+	}
+#endif
+#ifdef DFS_ZEROWAIT_SUPPORT
+	if (pAd->ApCfg.bDfsZeroWaitDedicatedCac) {
+		UCHAR CAC = FALSE;
+		UINT32 u4ifIndex = 0;
+		pAd->ApCfg.bDfsZeroWaitDedicatedCac = 0;
 
 		for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
 			pMbss = &pAd->ApCfg.MBSSID[BssIdx];
+			if (pMbss == NULL)
+				continue;
 			wdev = &pMbss->wdev;
 			if (wdev->pHObj == NULL)
 				continue;
 			if (HcGetBandByWdev(wdev) != band)
 				continue;
-			Rsp.ifIndex = RtmpOsGetNetIfIndex(wdev->if_dev);
+			u4ifIndex = RtmpOsGetNetIfIndex(wdev->if_dev);
 		}
-		if (band_idx == HW_RDD2)
-			Rsp.data.operating_ch_info.channel = pDfsParam->OutBandCh;
-		else
-			Rsp.data.operating_ch_info.channel = wdev->channel;
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[WrapDfsRddReportHandle]:  Channel: %d %d\n", Rsp.data.operating_ch_info.channel, pDfsParam->OutBandCh));
-		if (Rsp.data.operating_ch_info.channel > 14) {
-			RtmpOSWrielessEventSend(
-					pAd->net_dev,
-					RT_WLAN_EVENT_CUSTOM,
-					OID_OFFCHANNEL_INFO,
-					NULL,
-					(UCHAR *) &Rsp,
-					sizeof(OFFCHANNEL_SCAN_MSG));
-		}
-		/* Band index: BAND0 / Band1 and Dedicated RX */
-#if defined(MT7915)
-		band_idx = dfs_rddidx_to_dbdc(pAd, ucRddIdx);
-		Channel_for_radar = Rsp.data.operating_ch_info.channel;
-#endif
+
+		wapp_send_zwdfs_cac_report(pAd, u4ifIndex, CAC);
+		/*RtmpOSWrielessEventSend(
+			pAd->net_dev,
+			RT_WLAN_EVENT_CUSTOM,
+			OID_DFS_CAC_REPORT,
+			NULL,
+			(UCHAR *)&CAC,
+			sizeof(UCHAR));*/
 	}
 #endif
 
@@ -3348,8 +4134,63 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 		return;
 	}
 
-	if (!DfsRddReportHandle(pAd, pDfsParam, ucRddIdx, band_idx))
+	if (!TakeChannelOpChargeByBand(pAd, tmpBand, CH_OP_OWNER_DFS, FALSE)) {
+		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_WARN, "TakeChannelOpCharge fail for DFS!!\n");
+#if (RDD_2_SUPPORTED == 1)
+		if (band_idx != RDD_DEDICATED_RX)
+#endif
+		{
+			ret = RTEnqueueInternalCmd(pAd, CMDTHREAD_DROP_RADAR_EVENT, &tmpBand, sizeof(UCHAR));
+			if (ret != NDIS_STATUS_SUCCESS)
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]Enqueue DROP_RADAR_EVENT cmd fail[%d]\n", band_idx);
+		}
 		return;
+	}
+#if defined(OFFCHANNEL_SCAN_FEATURE) && defined(MAP_R2)
+	if (IS_MAP_ENABLE(pAd)) {
+		Rsp.Action = DFS_RADAR_HIT;
+		band = (pAd->CommonCfg.dbdc_mode) ? DBDC_BAND1 : DBDC_BAND0;
+		memcpy(Rsp.ifrn_name, pAd->ScanCtrl[band].if_name, IFNAMSIZ);
+		pAd->radar_hit = TRUE;
+		Rsp.data.operating_ch_info.cfg_ht_bw = wlan_config_get_ht_bw(&pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev);
+		Rsp.data.operating_ch_info.cfg_vht_bw = wlan_config_get_vht_bw(&pAd->ApCfg.MBSSID[MAIN_MBSSID].wdev);
+		Rsp.data.operating_ch_info.RDDurRegion = pAd->CommonCfg.RDDurRegion;
+		Rsp.data.operating_ch_info.region = GetCountryRegionFromCountryCode(pAd->CommonCfg.CountryCode);
+		Rsp.data.operating_ch_info.is4x4Mode = 1;/* Can be used as an info from driver by default yes */
+
+		for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
+			pMbss = &pAd->ApCfg.MBSSID[BssIdx];
+			wdev = &pMbss->wdev;
+			if (wdev->pHObj == NULL)
+				continue;
+			if (HcGetBandByWdev(wdev) != band)
+				continue;
+			Rsp.ifIndex = RtmpOsGetNetIfIndex(wdev->if_dev);
+		}
+#if (RDD_2_SUPPORTED == 1)
+		if (band_idx == HW_RDD2)
+			Rsp.data.operating_ch_info.channel = pDfsParam->OutBandCh;
+		else
+			Rsp.data.operating_ch_info.channel = wdev->channel;
+#else
+		Rsp.data.operating_ch_info.channel = wdev->channel;
+#endif
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[WrapDfsRddReportHandle]:  Channel: %d %d\n", Rsp.data.operating_ch_info.channel, pDfsParam->OutBandCh));
+		if (Rsp.data.operating_ch_info.channel > 14) {
+			RtmpOSWrielessEventSend(
+					pAd->net_dev,
+					RT_WLAN_EVENT_CUSTOM,
+					OID_OFFCHANNEL_INFO,
+					NULL,
+					(UCHAR *) &Rsp,
+					sizeof(OFFCHANNEL_SCAN_MSG));
+		}
+
+		Channel_for_radar = Rsp.data.operating_ch_info.channel;
+	}
+#endif
+	if (!DfsRddReportHandle(pAd, pDfsParam, ucRddIdx, band_idx))
+		goto end;
 	/* By pass these setting when dedicated DFS zero wait is enabled and radar is detected on out-band */
 	if ((pDfsParam->bDedicatedZeroWaitSupport == TRUE)
 	&& (pDfsParam->RadarDetected[RDD_DEDICATED_RX] == TRUE))
@@ -3357,7 +4198,7 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 	else {
 		if (!dot11h_param) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s():Dereferencing NULL pointer\n", __func__));
-			return;
+			goto end;
 		}
 		if (dot11h_param->RDMode == RD_SILENCE_MODE)
 			dot11h_param->RDCount = 0;
@@ -3394,16 +4235,21 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 				MlmeEnqueue(pAd, BGND_SCAN_STATE_MACHINE, BGND_OUTBAND_RADAR_FOUND, 0, NULL, 0);
 				RTMP_MLME_HANDLER(pAd);
 #endif
+			} else {
+				DedicatedZeroWaitStop(pAd, FALSE);
 			}
 
 			pDfsParam->RadarDetected[RDD_DEDICATED_RX] = FALSE;
 #ifdef DFS_CAC_R2
-			if (first_wdev && IS_MAP_TURNKEY_ENABLE(pAd)) {
+			if (IS_MAP_TURNKEY_ENABLE(pAd)) {
+#ifdef AX8400_COMPATIBLE
+				wapp_send_radar_detect_notif(pAd, wdev, Channel_for_radar, bw_for_radar, 0);
+#else
 				wapp_send_radar_detect_notif(pAd, wdev, Channel_for_radar, 0);
-				first_wdev = FALSE;
+#endif
 			}
 #endif
-			return;
+			goto end;
 		} else if ((pDfsParam->RadarDetected[ucRddIdx] == TRUE) && GET_BGND_STATE(pAd, BGND_RDD_DETEC)) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				("RDD%d detect. OutBand channel come back to InBand\n", ucRddIdx));
@@ -3422,6 +4268,10 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 
 	/* Keep BW info because the BW may be changed after selecting a new channel */
 	KeepBw = pDfsParam->band_bw[band_idx];
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"[before select]PrimCh: %d-%d, KeepBw:%0x, Band0Ch:%d, Band1Ch:%d\n",
+		pDfsParam->PrimCh, pDfsParam->PrimBand, KeepBw,
+		pDfsParam->band_ch[DBDC_BAND0], pDfsParam->band_ch[DBDC_BAND1]);
 #ifdef DFS_VENDOR10_CUSTOM_FEATURE
 	if (IS_SUPPORT_V10_DFS(pAd) && (pDfsParam->RadarDetected[ucRddIdx] == TRUE)) {
 		BwChannel = DfsV10SelectBestChannel(pAd, HcGetChannelByRf(pAd, RFIC_5GHZ), band_idx);
@@ -3431,7 +4281,7 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 				("[%s] BCN Update\n", __func__));
 
 			MlmeEnqueue(pAd, DFS_STATE_MACHINE, DFS_V10_ACS_CSA_UPDATE, sizeof(UCHAR), &band_idx, 0);
-			return;
+			goto end;
 		}
 
 		/* W56 Channel Exhausted : Ap Down for 30 Minutes */
@@ -3444,26 +4294,13 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 			pDfsParam->DfsChBand[1] = FALSE;
 			pDfsParam->RadarDetected[0] = FALSE;
 			pDfsParam->RadarDetected[1] = FALSE;
-			return;
+			goto end;
 		}
 			pDfsParam->PrimBand = RDD_BAND0;
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-			pDfsParam->band_ch[pDfsParam->DFSChHitBand] = BwChannel & 0xFF;
-			pDfsParam->band_bw[pDfsParam->DFSChHitBand] = BwChannel >> 8;
-			if (pAd->CommonCfg.dbdc_mode)
-				pDfsParam->PrimCh = pDfsParam->band_ch[pDfsParam->DFSChHitBand];
-			else
-				pDfsParam->PrimCh = pDfsParam->band_ch[RDD_BAND0];
-#else
 			pDfsParam->band_ch[RDD_BAND0] = pDfsParam->PrimCh = BwChannel & 0xFF;
 			pDfsParam->band_bw[RDD_BAND0] = BwChannel >> 8;
-#endif
 	} else {
-#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-	WrapDfsSelectChannel(pAd, pDfsParam->DFSChHitBand);
-#else
 	WrapDfsSelectChannel(pAd, band_idx);
-#endif
 	}
 #else
 #if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
@@ -3472,8 +4309,10 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 	WrapDfsSelectChannel(pAd, band_idx);
 #endif
 #endif
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]PrimCh: %d, Band0Ch:%d, Band1Ch:%d\n",
-			 __func__, pDfsParam->PrimCh, pDfsParam->band_ch[DBDC_BAND0], pDfsParam->band_ch[DBDC_BAND1]));
+	MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_NOTICE,
+		"[After select]PrimCh: %d-%d, Bw:%0x, Band0Ch:%d, Band1Ch:%d\n",
+		pDfsParam->PrimCh, pDfsParam->PrimBand, pDfsParam->band_bw[band_idx],
+		pDfsParam->band_ch[DBDC_BAND0], pDfsParam->band_ch[DBDC_BAND1]);
 
 	/* Normal DFS uniform Ch */
 	NextCh = pDfsParam->PrimCh;
@@ -3484,19 +4323,19 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 		SetChInfo = 0;
 		pMbss = &pAd->ApCfg.MBSSID[BssIdx];
 		wdev = &pMbss->wdev;
-#ifdef CONFIG_MAP_SUPPORT
-#ifdef DFS_CAC_R2
-		if (IS_MAP_TURNKEY_ENABLE(pAd))
-			wdev->quick_ch_change = QUICK_CH_SWICH_DISABLE;
-#endif
-#endif
+
 		if (wdev->pHObj == NULL)
 			continue;
+		/* Need choose RadioOn interface, before enq cmd to set channel */
+		if (IsHcRadioCurStatOffByWdev(wdev))
+			continue;
+
 		if (HcGetBandByWdev(wdev) != band_idx)
 			continue;
+
 		if (RadarBandId[band_idx] == TRUE)
 			continue;
-		else if (IsHcRadioCurStatOffByWdev(wdev) == FALSE) //cid WCNCR00224666
+		else
 			RadarBandId[band_idx] = TRUE;
 
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]Update wdev of BssIdx %d\n",
@@ -3508,21 +4347,21 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 		if (IS_MAP_ENABLE(pAd)) {
 			int j;
 			struct wifi_dev *sta_wdev = NULL;
-			wdev->map_radar_detect = 1;
+			wdev->map_radar_detect = 2;
 			wdev->map_radar_channel = wdev->channel;
 			for (j = 0; j < MAX_APCLI_NUM; j++) {
 				sta_wdev = &pAd->StaCfg[j].wdev;
-#ifdef CONFIG_MAP_SUPPORT
-#ifdef DFS_CAC_R2
-				if (IS_MAP_TURNKEY_ENABLE(pAd))
-					sta_wdev->quick_ch_change = QUICK_CH_SWICH_DISABLE;
+				if (wdev->quick_ch_change != QUICK_CH_SWICH_DISABLE) {
+#ifdef AX8400_COMPATIBLE
+					wapp_send_radar_detect_notif(pAd, wdev, wdev->map_radar_channel, wdev->map_radar_bw, 0);
+#else
+					wapp_send_radar_detect_notif(pAd, wdev, wdev->map_radar_channel, 0);
 #endif
-#endif
-				if (sta_wdev->channel == wdev->channel) {
+				}
+				if (sta_wdev->channel == wdev->channel)
 					pAd->StaCfg[j].ApcliInfStat.Enable = FALSE;
 				}
 			}
-		}
 #endif
 		/* Adjust Bw */
 #ifdef BACKGROUND_SCAN_SUPPORT
@@ -3538,12 +4377,15 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 				DfsAdjustBwSetting(wdev, pDfsParam->band_bw[band_idx], pDfsParam->OutBandBw);
 				NextBw = pDfsParam->OutBandBw;
 			}
-		} else
-#endif /* BACKGROUND_SCAN_SUPPORT */
+		}
+#if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
+		else
 		{
 			DfsAdjustBwSetting(wdev, KeepBw, pDfsParam->band_bw[band_idx]);
 			NextBw = pDfsParam->band_bw[band_idx];
 		}
+#endif
+#endif /* BACKGROUND_SCAN_SUPPORT */
 
 		if (dot11h_param->RDMode == RD_NORMAL_MODE) {
 			pDfsParam->DfsChBand[ucRddIdx] = FALSE;
@@ -3569,8 +4411,20 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 #else
 			SetChInfo |= (band_idx << 16);
 #endif
-			RTEnqueueInternalCmd(pAd, CMDTHRED_DFS_RADAR_DETECTED_SW_CH, &SetChInfo, sizeof(UINT_32));
-			RTMP_MLME_HANDLER(pAd);
+			ret = RTEnqueueInternalCmd(pAd, CMDTHRED_DFS_RADAR_DETECTED_SW_CH, &SetChInfo, sizeof(UINT_32));
+			/* Enqueue success, RD_NORMAL_MODE will do CSA, no need release ChOpCharge here */
+			if (ret == NDIS_STATUS_SUCCESS) {
+				RTMP_MLME_HANDLER(pAd);
+#ifdef TR181_SUPPORT
+				/*increase radio channel change count due to radar detection*/
+				/*todo: find rdev using api, instead of direct access*/
+				ctrl->rdev[band_idx].pRadioCtrl->DFSTriggeredChannelChangeCount++;
+				ctrl->rdev[band_idx].pRadioCtrl->TotalChannelChangeCount++;
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "[RDM]channel changed for Band[%d]\n", band_idx);
+#endif /*TR181_SUPPORT*/
+				return;
+			} else
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]Enqueue DFsSwitchCH cmd fail[%d]\n", band_idx);
 		} else if (dot11h_param->RDMode == RD_SILENCE_MODE) {
 			pDfsParam->DfsChBand[ucRddIdx] = FALSE;
 			pDfsParam->RadarDetected[ucRddIdx] = FALSE;
@@ -3590,17 +4444,36 @@ VOID WrapDfsRddReportHandle(/* handle the event of EXT_EVENT_ID_RDD_REPORT */
 			SetChInfo |= (band_idx << 16);
 #endif
 
-			RTEnqueueInternalCmd(pAd, CMDTHRED_DFS_CAC_TIMEOUT, &SetChInfo, sizeof(UINT_32));
-			RTMP_MLME_HANDLER(pAd);
+			ret = RTEnqueueInternalCmd(pAd, CMDTHRED_DFS_CAC_TIMEOUT, &SetChInfo, sizeof(UINT_32));
+			/* Enqueue success, RD_SILENCE_MODE will not do CSA, release in TimeOutHandler */
+			if (ret == NDIS_STATUS_SUCCESS) {
+				RTMP_MLME_HANDLER(pAd);
+#ifdef TR181_SUPPORT
+				/*increase radio channel change count due to radar detection*/
+				/*todo: find rdev using api, instead of direct access*/
+				ctrl->rdev[band_idx].pRadioCtrl->DFSTriggeredChannelChangeCount++;
+				ctrl->rdev[band_idx].pRadioCtrl->TotalChannelChangeCount++;
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "[RDM]channel changed for Band[%d]\n", band_idx);
+#endif /*TR181_SUPPORT*/
+				return;
+			} else
+				MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]Enqueue DFS CAC Timeout cmd fail[%d]\n", band_idx);
 		}
 	}
-#ifdef TR181_SUPPORT
-	/*increase radio channel change count due to radar detection*/
-	/*todo: find rdev using api, instead of direct access*/
-	ctrl->rdev[bandIdx].pRadioCtrl->DFSTriggeredChannelChangeCount++;
-	ctrl->rdev[bandIdx].pRadioCtrl->TotalChannelChangeCount++;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]channel changed for Band[%d]\n", __func__, bandIdx));
-#endif /*TR181_SUPPORT*/
+
+end:
+#if (RDD_2_SUPPORTED == 1)
+	if (band_idx != RDD_DEDICATED_RX)
+#endif
+	{
+		ret = RTEnqueueInternalCmd(pAd, CMDTHREAD_DROP_RADAR_EVENT, &tmpBand, sizeof(UCHAR));
+		if (ret != NDIS_STATUS_SUCCESS)
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]Enqueue DROP_RADAR_EVENT cmd fail[%d]\n", band_idx);
+	}
+	/*just release ChannelOpCharge before returning*/
+	ReleaseChannelOpChargeByBand(pAd, tmpBand, CH_OP_OWNER_DFS);
+
+	return;
 }
 #endif
 
@@ -3618,6 +4491,10 @@ BOOLEAN DfsRddReportHandle(/*handle the event of EXT_EVENT_ID_RDD_REPORT*/
 	switch (rddidx) {
 	case HW_RDD0:
 	case HW_RDD1:
+		if (bandidx > HW_RDD1) {
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR, "[RDM]: The band_index is %d, but the rdd index is %d!\n", bandidx, rddidx);
+			return FALSE;
+		}
 		/* Radar is detected by RDD0 or RDD1 */
 		if ((pDfsParam->RadarDetected[rddidx] == FALSE) &&
 			(pDfsParam->DfsChBand[rddidx]) &&
@@ -3723,9 +4600,7 @@ VOID DfsSelectChannel(/*Select new channel*/
 {
 	UCHAR tempCh = 0;
 	UCHAR idx;
-#if ((DFS_ZEROWAIT_SUPPORT_8080 == 1) && defined(BACKGROUND_SCAN_SUPPORT))
 	CHANNEL_CTRL *pChCtrl;
-#endif
 
 	for (idx = 0; idx < RDD_BAND_NUM; idx++) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -3753,19 +4628,19 @@ VOID DfsSelectChannel(/*Select new channel*/
 		if (IS_MT7615(pAd)) {
 			if (pDfsParam->band_ch[DBDC_BAND0] < pDfsParam->band_ch[DBDC_BAND1]) {
 				if (pDfsParam->RadarDetected[HW_RDD0] && pDfsParam->DfsChBand[HW_RDD0]) {
-					pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, FALSE, pDfsParam->band_ch[DBDC_BAND1], band_idx);
+					pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, pDfsParam->band_ch[DBDC_BAND1], band_idx);
 				}
 				if (pDfsParam->RadarDetected[HW_RDD1] && pDfsParam->DfsChBand[HW_RDD1]) {
-					pDfsParam->band_ch[DBDC_BAND1] = WrapDfsRandomSelectChannel(pAd, FALSE, pDfsParam->band_ch[DBDC_BAND0], band_idx);
+					pDfsParam->band_ch[DBDC_BAND1] = WrapDfsRandomSelectChannel(pAd, pDfsParam->band_ch[DBDC_BAND0], band_idx);
 				}
 			}
 		} else {
 			if (pDfsParam->RadarDetected[HW_RDD0] && pDfsParam->DfsChBand[HW_RDD0]) {
-				pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, FALSE, pDfsParam->band_ch[DBDC_BAND1], band_idx);
+				pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, pDfsParam->band_ch[DBDC_BAND1], band_idx);
 			}
 			if (pDfsParam->RadarDetected[HW_RDD1] && pDfsParam->DfsChBand[HW_RDD1]) {
 				/* if single band 80+80 (RDD0+RDD1) is used, channel list is only generated @band0 */
-				pDfsParam->band_ch[DBDC_BAND1] = WrapDfsRandomSelectChannel(pAd, FALSE, pDfsParam->band_ch[DBDC_BAND0], DBDC_BAND0);
+				pDfsParam->band_ch[DBDC_BAND1] = WrapDfsRandomSelectChannel(pAd, pDfsParam->band_ch[DBDC_BAND0], DBDC_BAND0);
 			}
 		}
 
@@ -3796,7 +4671,7 @@ VOID DfsSelectChannel(/*Select new channel*/
 	} else if (pDfsParam->band_bw[band_idx] == BW_160) {
 		if ((pDfsParam->RadarDetected[HW_RDD0] && pDfsParam->DfsChBand[HW_RDD0]) ||
 			(pDfsParam->RadarDetected[HW_RDD1] && pDfsParam->DfsChBand[HW_RDD1])) {
-			pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, FALSE, 0, DBDC_BAND0);
+			pDfsParam->band_ch[DBDC_BAND0] = WrapDfsRandomSelectChannel(pAd, 0, DBDC_BAND0);
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("[%s][RDM]: BW_160, Single band, selected is %d\n",
 				__func__,
@@ -3807,12 +4682,11 @@ VOID DfsSelectChannel(/*Select new channel*/
 #ifdef BACKGROUND_SCAN_SUPPORT
 			if ((pDfsParam->bDedicatedZeroWaitSupport == TRUE) &&
 				GET_BGND_STATE(pAd, BGND_RDD_DETEC)) {
-				tempCh = WrapDfsRandomSelectChannel(pAd, FALSE, 0, band_idx);
+				tempCh = WrapDfsRandomSelectChannel(pAd, 0, band_idx);
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					("[%s][RDM]: tempCh selected is %d\n",
 					__func__,
 					tempCh));
-
 				if (RadarChannelCheck(pAd, tempCh)) {
 #if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
 					P_ENUM_DFS_INB_CH_SWITCH_STAT_T ch_stat = &pAd->CommonCfg.DfsParameter.inband_ch_stat;
@@ -3835,9 +4709,13 @@ VOID DfsSelectChannel(/*Select new channel*/
 
 						/* If DFS channel is selected randomly by SynA, SynA will use the DFS channel of SynB*/
 #if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
-						pDfsParam->band_ch[band_idx] = DfsGetNonDfsDefaultCh(
-													   pDfsParam,
-													   band_idx);
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+					if (pAd->CommonCfg.DfsParameter.band4DfsEnable
+						&& (FirstNonDfsbyBand(pAd, band_idx) != 0))
+						pDfsParam->band_ch[band_idx] = FirstNonDfsbyBand(pAd, band_idx);
+					else
+#endif
+						pDfsParam->band_ch[band_idx] = DfsGetNonDfsDefaultCh(pDfsParam, band_idx);
 #else
 						pDfsParam->band_ch[band_idx] = pChCtrl->ChList[0].Channel;
 #endif
@@ -3893,7 +4771,7 @@ VOID DfsSelectChannel(/*Select new channel*/
 			}
 			else
 #endif
-				pDfsParam->band_ch[band_idx] = WrapDfsRandomSelectChannel(pAd, FALSE, pDfsParam->band_ch[(UINT_8)(DBDC_BAND1 - band_idx)], band_idx);
+				pDfsParam->band_ch[band_idx] = WrapDfsRandomSelectChannel(pAd, pDfsParam->band_ch[(UINT_8)(DBDC_BAND1 - band_idx)], band_idx);
 
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("[%s][RDM]: band index: %d, selected is %d\n",
@@ -3918,15 +4796,25 @@ VOID DfsSelectChannel(/*Select new channel*/
 }
 
 UCHAR WrapDfsRandomSelectChannel(/*Select new channel using random selection*/
-	IN PRTMP_ADAPTER pAd, BOOLEAN bSkipDfsCh, UCHAR avoidedCh, UCHAR band_idx)
+	IN PRTMP_ADAPTER pAd, UCHAR avoidedCh, UCHAR band_idx)
 {
-	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
-	UCHAR Channel;
+	PDFS_PARAM 	pDfsParam = &pAd->CommonCfg.DfsParameter;
+	UCHAR 		Channel;
+
 	if (pDfsParam->targetCh != 0) {
 		if ((pDfsParam->targetCh != pDfsParam->band_ch[band_idx])
 		|| (pDfsParam->targetBw != pDfsParam->band_bw[band_idx])) {
 			pDfsParam->band_bw[band_idx] = pDfsParam->targetBw;
 			Channel = pDfsParam->targetCh;
+
+#ifdef WIFI_MD_COEX_SUPPORT
+			if (!IsChannelSafe(pAd, Channel)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 ("Target Channel %d is in unsafe channel list!\n ", Channel));
+				Channel = DfsRandomSelectChannel(pAd, pDfsParam, avoidedCh, band_idx);
+			}
+#endif
+
 			return Channel;
 		} else {
 			pDfsParam->targetCh = 0;
@@ -3934,25 +4822,32 @@ UCHAR WrapDfsRandomSelectChannel(/*Select new channel using random selection*/
 			pDfsParam->targetCacValue = 0;
 		}
 	}
-
-    bSkipDfsCh = TRUE; //hongchen+, skip dfs channel
-	return DfsRandomSelectChannel(pAd, pDfsParam, bSkipDfsCh, avoidedCh, band_idx);
+	return DfsRandomSelectChannel(pAd, pDfsParam, avoidedCh, band_idx);
 }
+
 
 UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 	IN PRTMP_ADAPTER pAd,
 	IN PDFS_PARAM pDfsParam,
-	IN BOOLEAN bSkipDfsCh,
 	IN UCHAR avoidedCh,
 	IN UCHAR band_idx)
 {
 	UINT_8 i, cnt, ch;
 	UINT_8 TempChList[MAX_NUM_OF_CHANNELS] = {0};
 	PCHANNEL_CTRL pChCtrl = NULL;
+	USHORT PhyMode = 0;
+	UCHAR DfsChSelPrefer = pDfsParam->DfsChSelPrefer;
+
+	if (band_idx != CMD_CH_BAND_5G) {
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"Incorrect:band is null 5G! band_idx: %d.\n", band_idx);
+		return FALSE;
+	}
 
 	cnt = 0;
 
 	pChCtrl = DfsGetChCtrl(pAd, pDfsParam, pDfsParam->band_bw[band_idx], band_idx);
+	PhyMode = HcGetRadioPhyModeByBandIdx(pAd, band_idx);
 
 	if ((pChCtrl->ChListNum > MAX_NUM_OF_CHANNELS) || (pChCtrl->ChListNum <= 0)) {
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -3960,12 +4855,13 @@ UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 		return FALSE;
 	}
 
-	if (!(pDfsParam->bIEEE80211H)) {
+	if (!pDfsParam->bIEEE80211H) {
 #ifdef WIFI_MD_COEX_SUPPORT
 		for (i = 0; i < pChCtrl->ChListNum; i++) {
 			if (!IsChannelSafe(pAd, pChCtrl->ChList[i].Channel)) {
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("The channel %d is in unsafe channel list!! %s\n ", pChCtrl->ChList[i].Channel, __func__));
+					 ("[%s]The channel %d is in unsafe channel list,DfsChSelPrefer is %d !!\n ",
+					 __func__,  pChCtrl->ChList[i].Channel, DfsChSelPrefer));
 				continue;
 			}
 			TempChList[cnt++] = pChCtrl->ChList[i].Channel;
@@ -3973,9 +4869,9 @@ UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 		if (cnt)
 			ch = TempChList[(UINT_8)(RandomByte(pAd) % cnt)];
 		else {
-			ch =  pChCtrl->ChList[0].Channel;
+			ch =  0;
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("No available channel to use, return the first ch for use\n"));
+				 ("No available channel to use, return 0\n"));
 		}
 		/* Don't care IEEE80211 disable when bSkipDfsCh is FALSE */
 		return ch;
@@ -4003,9 +4899,14 @@ UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 		if (!IS_CH_ABAND(pChCtrl->ChList[i].Channel))
 			continue;
 
-		/* Skip DFS channel for DFS zero wait using case */
-		if (bSkipDfsCh) {
+		/* Skip DFS channel for DFS using case */
+		if (DfsChSelPrefer == RadarDetectSelectNonDFS) {
 			if (RadarChannelCheck(pAd, pChCtrl->ChList[i].Channel))
+				continue;
+		}
+		/* Skip non-DFS channel for DFS using case */
+		if (DfsChSelPrefer == RadarDetectSelectDFS) {
+			if (!RadarChannelCheck(pAd, pChCtrl->ChList[i].Channel))
 				continue;
 		}
 
@@ -4030,7 +4931,8 @@ UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 #ifdef WIFI_MD_COEX_SUPPORT
 		if (!IsChannelSafe(pAd, pChCtrl->ChList[i].Channel)) {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("The channel %d is in unsafe channel list!! %s\n ", pChCtrl->ChList[i].Channel, __func__));
+				("[%s]The channel %d is in unsafe channel list,DfsChSelPrefer is %d !!\n ",
+					 __func__,  pChCtrl->ChList[i].Channel, DfsChSelPrefer));
 			continue;
 		}
 #endif
@@ -4039,9 +4941,21 @@ UCHAR DfsRandomSelectChannel(/*Select new channel using random selection*/
 		TempChList[cnt++] = pChCtrl->ChList[i].Channel;
 	}
 
-	if (cnt)
+	if (cnt) {
 		ch = TempChList[(UINT_8)(RandomByte(pAd) % cnt)];
-	else {
+		return ch;
+	} else if (DfsChSelPrefer == RadarDetectSelectNonDFS) {
+		if (pDfsParam->RadarDetected[band_idx] && pDfsParam->DfsChBand[band_idx]) {
+			ch = FirstNonDfsbyBand(pAd, band_idx);
+			MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_DFS, DBG_LVL_ERROR,
+				 "All Non-DFS channels are not available!!!! , just return first non-DFS channel %d, %s\n ", ch, __func__);
+		} else {
+			ch = 0;
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 ("All Non-DFS channels are not available!! , return channel 0, %s\n ", __func__));
+		}
+		return ch;
+	} else {
 		USHORT MinTime = 0xFFFF;
 		UINT_16 BwChannel = 0;
 
@@ -4106,13 +5020,12 @@ UINT_8 DFS_V10_W56_VHT20_LIST[V10_W56_VHT20_SIZE] = {132, 136, 140};
 
 UINT_8 DfsV10FindNonNopChannel(
 	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
 	IN UCHAR		 chGrp,
 	IN UCHAR		 grpWidth)
 {
 	UCHAR ChIdx = 0;
 	UINT_8 channel = 0;
-	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
-	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 
 	if ((chGrp == W53 || chGrp == W56) && grpWidth && wdev) {
 		/*Skip Non occupancy channel*/
@@ -4321,8 +5234,8 @@ UCHAR DfsV10CheckChnlGrp(
 BOOLEAN DfsV10W56APDownStart(
 	IN PRTMP_ADAPTER pAd,
 	IN PAUTO_CH_CTRL pAutoChCtrl,
-	IN ULONG	     V10W56TrgrApDownTime,
-	IN UCHAR	     band_idx)
+	IN ULONG		 V10W56TrgrApDownTime,
+	IN UCHAR		 band_idx)
 {
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	UCHAR BandIdx = band_idx;
@@ -4717,6 +5630,10 @@ USHORT DfsBwChQueryByDefault(/*Query current available BW & Channel list or sele
 	BOOLEAN isSelectWetherBandCh = FALSE;
 	PCHANNEL_CTRL pChCtrl = NULL;
 
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		 ("%s: Bw(%d), level(%d), bDefaultSelect(%d), SkipNonDfsCh(%d), band_idx(%d)\n",
+		 __func__, Bw, level, bDefaultSelect, SkipNonDfsCh, band_idx));
+
 	pChCtrl = DfsGetChCtrl(pAd, pDfsParam, pDfsParam->band_bw[band_idx], band_idx);
 
 	if ((pChCtrl->ChListNum > MAX_NUM_OF_CHANNELS) || (pChCtrl->ChListNum <= 0)) {
@@ -4733,6 +5650,9 @@ USHORT DfsBwChQueryByDefault(/*Query current available BW & Channel list or sele
 	}
 
 	for (ch_idx = 0; ch_idx < pChCtrl->ChListNum; ch_idx++) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 ("%s: ch_idx(%d), Channel(%d), NonOccupancy(%d), NOPClrCnt(%d)\n",
+			 __func__, ch_idx, pChCtrl->ChList[ch_idx].Channel, pChCtrl->ChList[ch_idx].NonOccupancy, pChCtrl->ChList[ch_idx].NOPClrCnt));
 
 #ifdef CONFIG_AP_SUPPORT
 		if (AutoChannelSkipListCheck(pAd, pChCtrl->ChList[ch_idx].Channel) == TRUE)
@@ -4745,7 +5665,6 @@ USHORT DfsBwChQueryByDefault(/*Query current available BW & Channel list or sele
 
 		if (ByPassChannelByBw(pChCtrl->ChList[ch_idx].Channel, Bw, pChCtrl))
 			continue;
-
 		if ((pChCtrl->ChList[ch_idx].NonOccupancy == 0)
 		 && (pChCtrl->ChList[ch_idx].NOPClrCnt != 0)
 		 && (pChCtrl->ChList[ch_idx].NOPSetByBw == Bw)
@@ -4783,6 +5702,9 @@ USHORT DfsBwChQueryByDefault(/*Query current available BW & Channel list or sele
 		if (AvailableChCnt >= DFS_AVAILABLE_LIST_CH_NUM)
 			break;
 	}
+
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		 ("%s: AvailableChCnt(%d)\n", __func__, AvailableChCnt));
 
 	if (AvailableChCnt > 0) {
 
@@ -4914,6 +5836,11 @@ BOOLEAN DfsDedicatedCheckChBwValid(
 	if (pDfsParam->bDedicatedZeroWaitSupport == FALSE)
 		return TRUE;
 
+#ifdef DFS_ZEROWAIT_SUPPORT
+	if (pAd->ApCfg.bDfsZeroWaitDedicatedCac)
+		return TRUE;
+#endif
+
 	for (i = 0; i < DFS_AVAILABLE_LIST_BW_NUM; i++) {
 		for (j = 0; j < DFS_AVAILABLE_LIST_CH_NUM; j++)
 			pDfsParam->dfs_ch_grp[band_idx].AvailableBwChIdx[i][j] = 0xff;
@@ -5042,6 +5969,7 @@ VOID DfsRadarDetectStart(/*Start Radar Detection or not*/
 	UCHAR band_idx;
 	UCHAR rd_region = 0; /* Region of radar detection */
 	struct DOT11_H *pDot11h = NULL;
+	BOOLEAN cac_done = FALSE;
 
 	if (wdev == NULL)
 		return;
@@ -5056,10 +5984,15 @@ VOID DfsRadarDetectStart(/*Start Radar Detection or not*/
 	if (scan_in_run_state(pAd, NULL) || (pDot11h->RDMode == RD_SWITCHING_MODE))
 		return;
 
-	if (pDot11h->RDMode == RD_SILENCE_MODE) {
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[%s][RDM]:ZeroWaitState:%d\n",
-				 __func__,
-				 GET_MT_ZEROWAIT_DFS_STATE(pAd)));
+	if (pAd->CommonCfg.DfsParameter.CERegCacEn)
+		cac_done = dfs_cac_op(pAd, wdev, CAC_DONE_CHECK, wdev->channel);
+
+	if (pDot11h->RDMode == RD_SILENCE_MODE
+		|| cac_done == TRUE
+#ifdef MAP_R2
+		|| wdev->cac_not_required == TRUE
+#endif
+		) {
 
 		if (pDfsParam->RadarDetectState[band_idx] == FALSE) {
 			if (pAd->CommonCfg.dbdc_mode) {
@@ -5229,7 +6162,10 @@ VOID DfsDedicatedOutBandRDDRunning(
 
 		bw_ch = bw_ch_band[band_idx];
 		bw = bw_ch >> 8;
+		/*Break loop in single-band case after once cycle*/
+		break;
 	}
+
 
 	/* no in-band use ch same as out-band, keep use out-band */
 	if ((fg_in_band_use == FALSE) && (fg_radar_detect == FALSE))
@@ -5258,6 +6194,7 @@ VOID DfsDedicatedOutBandRDDRunning(
 VOID DfsDedicatedOutBandRDDStop(
 	IN PRTMP_ADAPTER pAd)
 {
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() start.\n", __func__));
 #if RDD_PROJECT_TYPE_2
 	mtRddControl(pAd, RDD_IRQ_OFF, RDD_DEDICATED_RX, 0, 0);
 #else
@@ -5361,11 +6298,12 @@ VOID DfsSetCacRemainingTime(
 VOID DfsOutBandCacCountUpdate(
 	IN PRTMP_ADAPTER pAd)
 {
-	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
-#ifdef DFS_CAC_R2
-	UCHAR band_idx;
 	UCHAR BssIdx;
 	struct wifi_dev *wdev = NULL;
+	UCHAR band_idx;
+	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
+#ifdef DFS_CAC_R2
+	band_idx = (pAd->CommonCfg.dbdc_mode) ? DBDC_BAND1 : DBDC_BAND0;
 	BSS_STRUCT *pMbss = NULL;
 #endif
 #ifdef BACKGROUND_SCAN_SUPPORT
@@ -5388,10 +6326,26 @@ VOID DfsOutBandCacCountUpdate(
 		return;
 	}
 
+	if (pDfsParam->inband_ch_stat == DFS_INB_CH_INIT) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			("%s() inband ch stat is DFS_INB_CH_INIT.\n", __func__));
+		return;
+	}
+
 	if (pDfsParam->DedicatedOutBandCacCount++ > pDfsParam->DedicatedOutBandCacTime) {
 		pDfsParam->bOutBandAvailable = TRUE;
 		pDfsParam->DedicatedOutBandCacCount = 0;
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s() OutBand(SynB) CAC complete and is available now.\n", __func__));
+		/* update CAC done */
+		if (pAd->CommonCfg.DfsParameter.CERegCacEn) {
+			for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
+				wdev = &pAd->ApCfg.MBSSID[BssIdx].wdev;
+				if (band_idx == HcGetBandByWdev(wdev))
+					break;
+			}
+			dfs_cac_op(pAd, wdev, CAC_DONE_UPDATE, pDfsParam->OutBandCh);
+		}
+
 #ifdef DFS_CAC_R2
 		if (IS_MAP_ENABLE(pAd) || IS_MAP_TURNKEY_ENABLE(pAd)) {
 			/*add for non radar detected case by dedicated radio
@@ -5408,15 +6362,45 @@ VOID DfsOutBandCacCountUpdate(
 			wapp_send_cac_stop(pAd, RtmpOsGetNetIfIndex(wdev->if_dev), pDfsParam->OutBandCh, TRUE);
 		}
 #endif
+#ifdef DFS_ZEROWAIT_SUPPORT
+		if (pAd->ApCfg.bDfsZeroWaitDedicatedCac) {
+			UCHAR CAC = TRUE;
+			UINT32 u4ifIndex = 0;
+			UCHAR band = (pAd->CommonCfg.dbdc_mode) ? DBDC_BAND1 : DBDC_BAND0;
+			pAd->ApCfg.bDfsZeroWaitDedicatedCac = 0;
+			for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
+				pMbss = &pAd->ApCfg.MBSSID[BssIdx];
+				if (pMbss == NULL)
+					continue;
+				wdev = &pMbss->wdev;
+				if (wdev->pHObj == NULL)
+					continue;
+				if (HcGetBandByWdev(wdev) != band)
+					continue;
+				u4ifIndex = RtmpOsGetNetIfIndex(wdev->if_dev);
+			}
+			wapp_send_zwdfs_cac_report(pAd, u4ifIndex, CAC);
+			/*RtmpOSWrielessEventSend(
+				pAd->net_dev,
+				RT_WLAN_EVENT_CUSTOM,
+				OID_DFS_CAC_REPORT,
+				NULL,
+				(UCHAR *)&CAC,
+				sizeof(UCHAR));*/
+		}
+#endif
 #if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
 		if (pDfsParam->bDedicatedZeroWaitDefault == TRUE) {
 			MlmeEnqueue(pAd, DFS_STATE_MACHINE, DFS_OFF_CAC_END, 0, NULL, 0);
 			RTMP_MLME_HANDLER(pAd);
+		} else {
+			DedicatedZeroWaitStop(pAd, FALSE);
 		}
 #else
 		if (DfsCacTimeOutCallBack) {
 			DfsCacTimeOutCallBack(RDD_BAND1, pDfsParam->OutBandBw, pDfsParam->OutBandCh);
 		}
+		DedicatedZeroWaitStop(pAd, FALSE);
 #endif
 	}
 }
@@ -5430,6 +6414,8 @@ VOID DfsDedicatedExamineSetNewCh(
 	UCHAR band_idx = HcGetBandByWdev(wdev);
 	UCHAR InputCentCh = DfsPrimToCent(Channel, pDfsParam->band_bw[band_idx]);
 
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() start.\n", __func__));
+
 	if (pDfsParam->bDedicatedZeroWaitSupport == FALSE)
 		return;
 
@@ -5439,41 +6425,52 @@ VOID DfsDedicatedExamineSetNewCh(
 		pDfsParam->bSetInBandCacReStart = TRUE;
 
 #if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
-	DfsDedicatedSetNewChStat(pAd, wdev);
+	DfsDedicatedSetNewChStat(pAd, wdev, Channel);
 #endif /* DFS_ZEROWAIT_DEFAULT_FLOW */
 
 }
 
 VOID DfsDedicatedSetNewChStat(
 	IN struct _RTMP_ADAPTER *pAd,
-	IN struct wifi_dev *wdev)
+	IN struct wifi_dev *wdev,
+	IN UCHAR Channel)
 {
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	P_ENUM_DFS_INB_CH_SWITCH_STAT_T ch_stat = &pAd->CommonCfg.DfsParameter.inband_ch_stat;
 
-	if (!WMODE_CAP_5G(wdev->PhyMode))
-		return;
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() start---->.\n", __func__));
 
-	if (pDfsParam->bDedicatedZeroWaitDefault == FALSE)
+	if (!WMODE_CAP_5G(wdev->PhyMode)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() Not ABand, End---->.\n", __func__));
 		return;
+	}
 
-	if (!RadarChannelCheck(pAd, wdev->channel))
+	if (pDfsParam->bDedicatedZeroWaitDefault == FALSE) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() ZW-DFS disabled, End---->.\n", __func__));
 		return;
-
+	}
+	if (!RadarChannelCheck(pAd, wdev->channel) && !RadarChannelCheck(pAd, Channel)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() Wdev channel %d and Current channel %d not Radar channel, End---->.\n",
+			__func__, wdev->channel, Channel));
+		return;
+	}
 	*ch_stat = DFS_INB_CH_INIT;
+	pDfsParam->OutBandCh = 0;
+	pDfsParam->DedicatedOutBandCacCount = 0;
+
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s() set to DFS channel - initialize stat\n", __func__));
 }
 
 
 /*----------------------------------------------------------------------------*/
 /*!
-* \brief     Configure (Enable/Disable) HW RDD and RDD wrapper module
+* \brief	 Configure (Enable/Disable) HW RDD and RDD wrapper module
 *
 * \param[in] ucRddCtrl
-*            ucRddIdex
+*			 ucRddIdex
 *
 *
-* \return    None
+* \return	 None
 */
 /*----------------------------------------------------------------------------*/
 
@@ -5484,7 +6481,7 @@ INT mtRddControl(
 	IN UCHAR ucRddRxSel,
 	IN UCHAR ucSetVal)
 {
-	INT ret = TRUE;
+	INT ret;
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[mtRddControl]RddCtrl=%d, RddIdx=%d, RddRxSel=%d\n", ucRddCtrl, ucRddIdex, ucRddRxSel));
 	ret = MtCmdRddCtrl(pAd, ucRddCtrl, ucRddIdex, ucRddRxSel, ucSetVal);
 	return ret;
@@ -5711,7 +6708,6 @@ VOID DfsDedicatedInBandSetChannel(
 
 		/*Adjust Bw*/
 		DfsAdjustBwSetting(wdev, pDfsParam->band_bw[band_idx], Bw);
-
 		if (dot11h_param->RDMode == RD_NORMAL_MODE) {
 			pDfsParam->DfsChBand[band_idx] = FALSE;
 			pDfsParam->RadarDetected[band_idx] = FALSE;
@@ -5721,7 +6717,7 @@ VOID DfsDedicatedInBandSetChannel(
 						 NextCh,
 						 Bw));
 
-			rtmp_set_channel(pAd, wdev, NextCh);
+			perform_channel_change(pAd, wdev, NextCh);
 		} else if (dot11h_param->RDMode == RD_SILENCE_MODE) {
 			pDfsParam->DfsChBand[band_idx] = FALSE;
 			pDfsParam->RadarDetected[band_idx] = FALSE;
@@ -5735,7 +6731,9 @@ VOID DfsDedicatedInBandSetChannel(
 
 			RTEnqueueInternalCmd(pAd, CMDTHRED_DFS_CAC_TIMEOUT, &SetChInfo, sizeof(UINT_32));
 			RTMP_MLME_HANDLER(pAd);
-		}
+		} else
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[%s][RDM]\x1b[1;33m Switching Mode!!Dedicated set channel failed.\x1b[m\n",
+				 __func__));
 	}
 }
 
@@ -6213,10 +7211,10 @@ VOID DfsZeroHandOffRecovery(IN PRTMP_ADAPTER pAd, struct wifi_dev *wdev)
 
 /*----------------------------------------------------------------------------*/
 /*!
-* @brief        Mapping RDD index to DBDC index
-* @param[in]    PRTMP_ADAPTER pAd
-* @param[in]    rddidx: RDD index
-* @return       bandIdx: DBDC index
+* @brief		Mapping RDD index to DBDC index
+* @param[in]	PRTMP_ADAPTER pAd
+* @param[in]	rddidx: RDD index
+* @return		bandIdx: DBDC index
 */
 /*----------------------------------------------------------------------------*/
 UCHAR dfs_rddidx_to_dbdc(IN PRTMP_ADAPTER pAd, IN UINT8 rddidx)
@@ -6267,6 +7265,28 @@ VOID DfsSetNewChInit(IN PRTMP_ADAPTER pAd)
 	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
 	for (band_idx = 0; band_idx < DBDC_BAND_NUM; band_idx++)
 		pDfsParam->NeedSetNewChList[band_idx] = DFS_SET_NEWCH_INIT;
+}
+
+
+NDIS_STATUS rdd_mbss_init(IN PRTMP_ADAPTER pAd, IN struct wifi_dev *wdev)
+{
+	UINT_8 dbdc_idx = BAND0;
+	UINT_8 ant_ctrl = 0;
+
+	if (wdev != NULL)
+		dbdc_idx = HcGetBandByWdev(wdev);
+	else
+		return NDIS_STATUS_FAILURE;
+
+	ant_ctrl = pAd->CommonCfg.RddAntSel[dbdc_idx];
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		 ("%s: RDD Antenna Selection via profile :%u\n",
+		  __func__, ant_ctrl));
+
+	mtRddControl(pAd, RDD_SET_WF_ANT, dbdc_idx, 0, ant_ctrl);
+
+	return NDIS_STATUS_SUCCESS;
 }
 
 #endif /*MT_DFS_SUPPORT*/

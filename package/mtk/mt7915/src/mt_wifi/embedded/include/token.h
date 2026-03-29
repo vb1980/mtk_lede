@@ -96,7 +96,8 @@ struct token_tx_pkt_queue {
 	NDIS_SPIN_LOCK deq_lock;
 	INT16 id_head; /* Index for first use-able token in free_id[] */
 	INT16 id_tail; /* Index for first free_id[] to store recycled token */
-	UINT32 pkt_tkid_max;
+	UINT32 pkt_tkid_end;
+	UINT32 pkt_tkid_start;
 	UINT32 pkt_tkid_invalid;
 	UINT32 pkt_tkid_cnt;
 	UINT32 pkt_tkid_aray;
@@ -110,6 +111,7 @@ struct token_tx_pkt_queue {
 	UINT32 total_enq_cnt;
 	UINT32 total_deq_cnt;
 	UINT32 total_back_cnt;
+	atomic_t used_token_per_band[2];
 	struct tx_free_notify_deep_stat deep_stat[TX_FREE_NOTIFY_DEEP_STAT_SIZE];
 };
 
@@ -190,10 +192,12 @@ VOID token_tx_set_lwmark(struct token_tx_pkt_queue *que, UINT32 value);
 VOID token_tx_set_hwmark(struct token_tx_pkt_queue *que, UINT32 value);
 VOID token_tx_record_free_notify(struct token_tx_pkt_queue *que, UINT32 token_cnt);
 INT token_tx_setting(struct _RTMP_ADAPTER *pAd, UINT8 q_idx, INT32 option, INT32 sub_option, INT32 value);
-UINT32 token_rx_dmad_init(struct token_rx_pkt_queue *que, PNDIS_PACKET pkt,
+UINT32 mt7915_token_rx_dmad_init(struct token_rx_pkt_queue *que, PNDIS_PACKET pkt,
 								ULONG alloc_size, PVOID alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa);
-INT token_rx_dmad_lookup(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET *pkt,
+INT mt7915_token_rx_dmad_lookup(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET *pkt,
 							PVOID *alloc_va, NDIS_PHYSICAL_ADDRESS *alloc_pa);
+INT token_rx_dmad_lookup_pa(struct token_rx_pkt_queue *que, UINT32 *token_id, PNDIS_PACKET *pkt,
+							PVOID *alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa);
 INT token_rx_dmad_update(struct token_rx_pkt_queue *que, UINT32 token_id, PNDIS_PACKET pkt,
 								ULONG alloc_size, PVOID alloc_va, NDIS_PHYSICAL_ADDRESS alloc_pa);
 INT token_deinit(PKT_TOKEN_CB **ppktTokenCb);

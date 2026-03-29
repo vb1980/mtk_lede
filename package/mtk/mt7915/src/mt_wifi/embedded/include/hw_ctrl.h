@@ -52,6 +52,7 @@ typedef NTSTATUS(*HwCmdCb)(struct _RTMP_ADAPTER *pAd, VOID * Args);
 #define ETSI_RXBLOCKER1R 1
 
 #define MAX_LEN_OF_HWCTRL_QUEUE            (MAX_LEN_OF_MAC_TABLE<<1)
+#define HWCTRL_QUE_SCH				16
 
 /*for command classify*/
 enum {
@@ -185,6 +186,18 @@ enum {
 #ifdef DABS_QOS
 	HWCMD_ID_SET_DEL_QOS				= 70,
 #endif
+	HWCMD_ID_GET_TOT_TX_STATISTIC		= 71,
+#ifdef PLE_MONITOR_SUPPORT
+	HWCMD_ID_FLUSH_PLE_AC_QUEUE			= 72,
+#endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	HWCMD_ID_HANDLE_NULL_ACK_EVENT		= 76,
+	HWCMD_ID_HANDLE_STA_NULL_ACK_TIMEOUT = 77,
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+#ifdef WIFI_MD_COEX_SUPPORT
+	HWCMD_ID_SET_IDC_STATE 		= 78,
+#endif
+	HWCMD_ID_PBC_CTRL_QOS			= 79,
 	HWCMD_ID_END,
 };
 
@@ -433,6 +446,15 @@ typedef struct _REMOVE_REPT_ENTRY_STRUC {
 	UCHAR CliIdx;
 } REMOVE_REPT_ENTRY_STRUC, *PREMOVE_REPT_ENTRY_STRUC;
 
+#ifdef PLE_MONITOR_SUPPORT
+typedef struct _FLUSH_PLE_AC_QUEUE_STRUC {
+	UINT16 Wcid;
+	UINT16 PktCnt;
+	BOOLEAN NeedChkPs;
+	UINT8 Reserve[3];
+} FLUSH_PLE_AC_QUEUE_STRUC, *PFLUSH_PLE_AC_QUEUE_STRUC;
+#endif
+
 typedef struct _ADD_REPT_ENTRY_STRUC {
 	struct wifi_dev *wdev;
 	UCHAR arAddr[MAC_ADDR_LEN];
@@ -475,6 +497,11 @@ VOID HwCtrlExit(struct _RTMP_ADAPTER *pAd);
 UINT32 HWCtrlOpsReg(struct _RTMP_ADAPTER *pAd);
 UINT32 hwctrl_queue_len(struct _RTMP_ADAPTER *pAd);
 BOOLEAN hwctrl_cmd_q_empty(struct _RTMP_ADAPTER *pAd);
+
+#ifdef MTK_FE_RESET_RECOVER
+unsigned int mtk_fe_reset_notifier_init(struct _RTMP_ADAPTER *pAd);
+void mtk_fe_reset_notifier_exit(struct _RTMP_ADAPTER *pAd);
+#endif
 
 NDIS_STATUS HwCtrlEnqueueCmd(
 	struct _RTMP_ADAPTER *pAd,
@@ -534,6 +561,10 @@ VOID RTMP_LED_GPIO_MAP(struct _RTMP_ADAPTER *pAd, UINT8 led_index, UINT16 map_in
 /*Common*/
 VOID RTMP_UPDATE_RAW_COUNTER(struct _RTMP_ADAPTER *pAd);
 VOID RTMP_UPDATE_MIB_COUNTER(struct _RTMP_ADAPTER *pAd);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+VOID HANDLE_NULL_ACK_EVENT(struct _RTMP_ADAPTER *pAd, UINT8 *data);
+VOID HANDLE_STA_NULL_ACK_TIMEOUT(struct _RTMP_ADAPTER *pAd, UCHAR BandIdx);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 VOID RTMP_PS_RETRIVE_START(struct _RTMP_ADAPTER *pAd, UINT16 Wcid);
 VOID RTMP_PS_RETRIVE_CLEAR(struct _RTMP_ADAPTER *pAd, UINT16 Wcid);
 VOID RTMP_HANDLE_PRETBTT_INT_EVENT(struct _RTMP_ADAPTER *pAd);
@@ -624,6 +655,7 @@ VOID HW_BEACON_UPDATE(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR Up
 
 #ifdef PKT_BUDGET_CTRL_SUPPORT
 VOID HW_SET_PBC_CTRL(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *entry, UCHAR type);
+VOID HW_SET_PBC_CTRL_QOS(struct _RTMP_ADAPTER *pAd, BOOLEAN qos_enable);
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
 
 VOID HW_SET_RTS_THLD(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR pkt_num, UINT32 length);
@@ -673,6 +705,18 @@ VOID MlmeDynamicTxRateSwitchingNew(
 #endif /* CONFIG_STA_SUPPORT */
 
 #ifdef ERR_RECOVERY
+#ifdef MTK_FE_RESET_RECOVER
+#define MTK_FE_START_RESET 0x2000
+#define MTK_FE_RESET_DONE 0x2001
+#define MTK_WIFI_RESET_DONE 0x2002
+#define MTK_WIFI_CHIP_ONLINE 0x2003
+#define MTK_WIFI_CHIP_OFFLINE 0x2004
+
+struct mtk_notifier_block {
+	struct notifier_block nb;
+	void *priv;
+};
+#endif
 typedef enum _ERR_RECOVERY_STAGE {
 	ERR_RECOV_STAGE_STOP_IDLE = 0,
 	ERR_RECOV_STAGE_STOP_PDMA0,
@@ -686,10 +730,23 @@ typedef enum _ERR_RECOVERY_STAGE {
 typedef struct _ERR_RECOVERY_CTRL_T {
 	ERR_RECOVERY_STAGE errRecovStage;
 	UINT32 status;
+	UINT32 hostSerStep;
+	UINT32 mcuToHostState;
+#ifdef WHNAT_SUPPORT
+	INT stop_rx_dma;
+#endif
+#ifdef MTK_FE_RESET_RECOVER
+	struct completion fe_reset_done;
+	atomic_t notify_fe;
+	struct mtk_notifier_block mtk_nb;
+#endif
 } ERR_RECOVERY_CTRL_T, *P_ERR_RECOVERY_CTRL_T;
 
 VOID RTMP_MAC_RECOVERY(struct _RTMP_ADAPTER *pAd, UINT32 Status);
 INT IsStopingPdma(struct _ERR_RECOVERY_CTRL_T *pErrRecoveryCtl);
+#ifdef WHNAT_SUPPORT
+INT IsStopingRxDma(struct _ERR_RECOVERY_CTRL_T *pErrRecoveryCtl);
+#endif
 ERR_RECOVERY_STAGE ErrRecoveryCurStage(ERR_RECOVERY_CTRL_T *pErrRecoveryCtl);
 BOOLEAN IsErrRecoveryInIdleStat(struct _RTMP_ADAPTER *pAd);
 VOID ser_sys_reset(RTMP_STRING *arg);
@@ -697,14 +754,19 @@ NTSTATUS HwRecoveryFromError(struct _RTMP_ADAPTER *pAd);
 void SerTimeLogDump(struct _RTMP_ADAPTER *pAd);
 #endif /* ERR_RECOVERY */
 
+#ifdef WF_RESET_SUPPORT
+INT32 wf_reset_init(struct _RTMP_ADAPTER *pAd);
+INT32 wf_reset_exit(struct _RTMP_ADAPTER *pAd);
+NTSTATUS wf_reset_func(struct _RTMP_ADAPTER *pAd);
+#endif /* WF_RESET_SUPPORT */
 
-VOID HW_WIFISYS_OPEN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_CLOSE(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_LINKUP(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_LINKDOWN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_PEER_LINKUP(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_PEER_LINKDOWN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
-VOID HW_WIFISYS_PEER_UPDATE(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_OPEN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_CLOSE(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_LINKUP(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_LINKDOWN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_PEER_LINKUP(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_PEER_LINKDOWN(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
+UINT32 HW_WIFISYS_PEER_UPDATE(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
 VOID HW_WIFISYS_RA_UPDATE(struct _RTMP_ADAPTER *ad, struct WIFI_SYS_CTRL *wsys);
 
 VOID HW_GET_TX_STATISTIC(struct _RTMP_ADAPTER *ad, UINT32 Field, UINT16 Wcid);
@@ -756,4 +818,7 @@ VOID HW_WIFI_COEX_APCCCI2FW(struct _RTMP_ADAPTER *pAd, VOID *apccci2fw_msg);
 VOID HW_CSI_CTRL(struct _RTMP_ADAPTER *pAd, void *prCSICtrl);
 #endif
 
+#ifdef PLE_MONITOR_SUPPORT
+VOID HW_FLUSH_PLE_AC_QUEUE(struct _RTMP_ADAPTER *pAd, UINT16 wcid, UINT16 pkt_num, BOOLEAN chk_ps, ...);
+#endif
 #endif

@@ -134,6 +134,8 @@ INT32 MT_ATEComposePkt(struct _RTMP_ADAPTER *pAd, UCHAR *buf, UINT32 band_idx, U
 #endif /* TXBF_SUPPORT && MT_MAC */
 INT32 SetATETtr(struct _RTMP_ADAPTER *pAd, RTMP_STRING *Arg);
 INT32 SetATEShow(struct _RTMP_ADAPTER *pAd, RTMP_STRING *Arg);
+INT32 ShowATERUInfo(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT32 ShowATETxDoneInfo(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT32 SetATEHelp(struct _RTMP_ADAPTER *pAd, RTMP_STRING *Arg);
 INT32 ATESampleRssi(struct _RTMP_ADAPTER *pAd, RXWI_STRUC *pRxWI);
 VOID  ATEPeriodicExec(PVOID SystemSpecific1, PVOID FunctionContext, PVOID SystemSpecific2, PVOID SystemSpecific3);

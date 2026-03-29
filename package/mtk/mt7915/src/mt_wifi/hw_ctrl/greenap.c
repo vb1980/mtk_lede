@@ -137,7 +137,7 @@ static BOOLEAN greenap_rule_1(
 	RTMP_ADAPTER *ad,
 	MAC_TABLE_ENTRY *entry)
 {
-	BOOLEAN enetr_greenap = TRUE;
+	BOOLEAN enetr_greenap;
 
 	if ((entry->MaxHTPhyMode.field.MODE == MODE_CCK) ||
 		(entry->MaxHTPhyMode.field.MODE == MODE_OFDM)) {
@@ -176,7 +176,7 @@ static BOOLEAN greenap_rule_2(
 	RTMP_ADAPTER *ad,
 	MAC_TABLE_ENTRY *entry)
 {
-	BOOLEAN enetr_greenap = TRUE;
+	BOOLEAN enetr_greenap;
 
 	if ((entry->MaxHTPhyMode.field.MODE == MODE_HTMIX) ||
 		(entry->MaxHTPhyMode.field.MODE == MODE_HTGREENFIELD)) {
@@ -219,7 +219,7 @@ static BOOLEAN greenap_rule_3(
 	RTMP_ADAPTER *ad,
 	MAC_TABLE_ENTRY *entry)
 {
-	BOOLEAN enetr_greenap = TRUE;
+	BOOLEAN enetr_greenap;
 
 #ifdef DOT11_VHT_AC
 	if (entry->MaxHTPhyMode.field.MODE == MODE_VHT) {
@@ -281,7 +281,7 @@ static BOOLEAN greenap_rule_4(
 	RTMP_ADAPTER *ad,
 	MAC_TABLE_ENTRY *entry)
 {
-	BOOLEAN enetr_greenap = TRUE;
+	BOOLEAN enetr_greenap;
 
 #ifdef DOT11_HE_AX
 	if (entry->MaxHTPhyMode.field.MODE == MODE_HE) {
@@ -832,7 +832,6 @@ VOID DisableAPMIMOPSv1(
 	IN PRTMP_ADAPTER		ad,
 	IN struct greenap_on_off_ctrl *greenap_on_off)
 {
-	ULONG	TxPinCfg = 0x00050F0A; /* Gary 2007/08/09 0x050A0A */
 	UCHAR ext_cha = 0;
 	UCHAR ht_bw = 0;
 	UINT8 TxPath = ad->Antenna.field.TxPath;
@@ -856,17 +855,6 @@ VOID DisableAPMIMOPSv1(
 		}
 	}
 #endif /* ANTENNA_CONTROL_SUPPORT */
-
-	if (wdev->channel > 14)
-		TxPinCfg = 0x00050F05;
-
-	/* Turn off unused PA or LNA when only 1T or 1R*/
-	if (TxPath == 1)
-		TxPinCfg &= 0xFFFFFFF3;
-
-	if (RxPath == 1)
-		TxPinCfg &= 0xFFFFF3FF;
-
 	HcSetGreenAPActiveByBand(ad, 0, FALSE);
 
 	if ((ht_bw == BW_40) && (wdev->channel != 14)) {
@@ -890,7 +878,7 @@ VOID DisableAPMIMOPSv1(
 		bbp_set_txdac(ad, 0);
 
 	/*Rx Stream*/
-	bbp_set_rxpath(ad, ad->Antenna.field.RxPath);
+	bbp_set_rxpath(ad, RxPath);
 	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("DisableAPMIMOPS, 305x/28xx reserve only one antenna\n"));
 }
 #endif /* GREENAP_SUPPORT */

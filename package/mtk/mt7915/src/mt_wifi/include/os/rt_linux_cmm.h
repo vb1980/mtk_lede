@@ -325,6 +325,9 @@ typedef struct completion RTMP_OS_COMPLETION;
 #define RTMP_OS_COMPLETE(__pCompletion)	\
 	complete(__pCompletion)
 
+#define RTMP_OS_COMPLETE_ALL(__pCompletion)	\
+	complete_all(__pCompletion)
+
 #define RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(__pCompletion, __Timeout)	\
 	wait_for_completion_timeout(__pCompletion, __Timeout)
 
@@ -443,7 +446,11 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 #ifdef MEMORY_OPTIMIZATION
 #define MGMT_RING_SIZE          64/*32*/
 #else
+#ifdef WIFI_EAP_FEATURE
+#define MGMT_RING_SIZE          512
+#else /* WIFI_EAP_FEATURE */
 #define MGMT_RING_SIZE          128
+#endif /* !WIFI_EAP_FEATURE */
 #endif
 #endif
 

@@ -668,6 +668,12 @@ VOID WPAMakeRSNIE(
 	IN struct _SECURITY_CONFIG *pSecConfig,
 	IN PMAC_TABLE_ENTRY pEntry);
 
+BOOLEAN wpa_check_rsn_cap(
+	IN struct _SECURITY_CONFIG *sec_cfg_self,
+	IN struct _SECURITY_CONFIG *sec_cfg_entry,
+	IN PUINT8 rsnie_ptr,
+	IN UINT rsnie_len);
+
 BOOLEAN wpa_rsne_sanity(
 	IN PUCHAR rsnie_ptr,
 	IN UCHAR rsnie_len,

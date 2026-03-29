@@ -89,6 +89,7 @@ struct vht_cfg {
 	UCHAR	vht_bw_sig; /* 0:n/a, 1:static, 2:dynamic */
 	UINT8	ext_nss_bw;
 	UINT8	max_mpdu_len; /*0:3895, 1:7991, 2:11454*/
+	UINT8   bfer_cap_mu;
 };
 
 struct mu_ac_param {
@@ -102,6 +103,44 @@ struct mu_ac_param {
 struct mu_edca_cfg {
 	struct mu_ac_param mu_ac_rec[ACI_AC_NUM];
 };
+
+#ifdef CONFIG_6G_SUPPORT
+#define UNSOLICIT_TX_INTERVAL 15
+
+enum unsolicit_txmode {
+	UNSOLICIT_TXMODE_NON_HT,
+	UNSOLICIT_TXMODE_NON_HT_DUP,
+	UNSOLICIT_TXMODE_HE_SU
+};
+
+enum unsolicit_txtype {
+	UNSOLICIT_TX_DISABLE,
+	UNSOLICIT_TX_PROBE_RSP,
+	UNSOLICIT_TX_FILS_DISC,
+	UNSOLICIT_TX_QOS_NULL
+};
+
+enum rnr_reporting_rule {
+	RNR_REPORTING_NONE,
+	RNR_REPORTING_MAIN_BSS,
+	RNR_REPORTING_ALL_BSS
+};
+
+struct ap_cfg_6g {
+	/* iob config */
+	UINT8 unsolicit_tx_by_cfg;	/* configured by profile or cmd */
+	UINT8 unsolicit_tx_type;
+	UINT8 unsolicit_tx_tu;
+	UINT8 unsolicit_tx_mode;
+	/* qos config*/
+	UINT8 qos_tx_tu;
+	UINT8 qos_tx_state;
+	/* oob config */
+	UINT8 rnr_in_probe_2g;
+	UINT8 rnr_in_probe_5g;
+	UINT8 rnr_in_probe_6g;
+};
+#endif /* CONFIG_6G_SUPPORT */
 
 struct he_cfg {
 	UINT8 bw;
@@ -123,6 +162,9 @@ struct he_cfg {
 	UINT8 non_tx_bss_idx;
 	UINT8 ofdma_dir;
 	struct mu_edca_cfg mu_edca_param_set;
+#ifdef CONFIG_6G_SUPPORT
+	struct ap_cfg_6g ap6g;
+#endif /* CONFIG_6G_SUPPORT */
 };
 
 
@@ -175,6 +217,16 @@ UINT8 wlan_config_get_mu_dl_ofdma(struct wifi_dev *wdev);
 UINT8 wlan_config_get_mu_ul_ofdma(struct wifi_dev *wdev);
 UINT8 wlan_config_get_mu_dl_mimo(struct wifi_dev *wdev);
 UINT8 wlan_config_get_mu_ul_mimo(struct wifi_dev *wdev);
+UCHAR wlan_config_get_he_gi(struct wifi_dev *wdev);
+#ifdef CONFIG_6G_SUPPORT
+UINT8 wlan_config_get_unsolicit_tx_tu(struct wifi_dev *wdev);
+UINT8 wlan_config_get_unsolicit_tx_mode(struct wifi_dev *wdev);
+UINT8 wlan_config_get_unsolicit_tx_type(struct wifi_dev *wdev);
+UINT8 wlan_config_get_unsolicit_tx_by_cfg(struct wifi_dev *wdev);
+UINT8 wlan_config_get_qos_tx_state(struct wifi_dev *wdev);
+UINT8 wlan_config_get_qos_tx_tu(struct wifi_dev *wdev);
+UINT8 wlan_config_get_rnr_in_probe_rsp(struct wifi_dev *wdev, UCHAR rf_mode);
+#endif /* CONFIG_6G_SUPPORT */
 #endif /* DOT11_HE_AX */
 UCHAR wlan_config_get_ch_band(struct wifi_dev *wdev);
 UCHAR wlan_config_get_ext_cha(struct wifi_dev *wdev);
@@ -195,6 +247,7 @@ UCHAR wlan_config_get_min_mpdu_start_space(struct wifi_dev *wdev);
 UCHAR wlan_config_get_mmps(struct wifi_dev *wdev);
 UINT8 wlan_config_get_vht_ext_nss_bw(struct wifi_dev *wdev);
 UINT8 wlan_config_get_vht_max_mpdu_len(struct wifi_dev *wdev);
+UINT8 wlan_config_get_vht_bfer_cap_mu(struct wifi_dev *wdev);
 /* get chip_caps */
 enum ASIC_CAP wlan_config_get_asic_caps(struct wifi_dev *wdev);
 enum PHY_CAP wlan_config_get_phy_caps(struct wifi_dev *wdev);
@@ -233,9 +286,11 @@ VOID wlan_config_set_vht_bw(struct wifi_dev *wdev, UCHAR vht_bw);
 VOID wlan_config_set_vht_bw_all(struct wpf_ctrl *ctrl, UCHAR vht_bw);
 VOID wlan_config_set_vht_ext_nss_bw(struct wifi_dev *wdev, UINT8 ext_nss_bw);
 VOID wlan_config_set_vht_max_mpdu_len(struct wifi_dev *wdev, UINT8 max_mpdu_len);
+VOID wlan_config_set_vht_bfer_cap_mu(struct wifi_dev *wdev, UINT8 enable);
 #endif /*DOT11_VHT_AC*/
 #ifdef DOT11_HE_AX
 VOID wlan_config_set_he_bw(struct wifi_dev *wdev, UINT8 he_bw);
+VOID wlan_config_set_he_gi(struct wifi_dev *wdev, UINT8 he_gi);
 VOID wlan_config_set_he_ldpc(struct wifi_dev *wdev, UINT8 he_ldpc);
 VOID wlan_config_set_he_vhtop_present(struct wifi_dev *wdev, UINT8 vhtop_en);
 VOID wlan_config_set_he_tx_nss(struct wifi_dev *wdev, UINT8 tx_nss);
@@ -253,6 +308,15 @@ VOID wlan_config_set_mu_dl_ofdma(struct wifi_dev *wdev, UINT8 enable);
 VOID wlan_config_set_mu_ul_ofdma(struct wifi_dev *wdev, UINT8 enable);
 VOID wlan_config_set_mu_dl_mimo(struct wifi_dev *wdev, UINT8 enable);
 VOID wlan_config_set_mu_ul_mimo(struct wifi_dev *wdev, UINT8 enable);
+#ifdef CONFIG_6G_SUPPORT
+VOID wlan_config_set_unsolicit_tx_type(struct wifi_dev *, UINT8);
+VOID wlan_config_set_unsolicit_tx_by_cfg(struct wifi_dev *wdev, UINT8);
+VOID wlan_config_set_unsolicit_tx_mode(struct wifi_dev *, UINT8);
+VOID wlan_config_set_unsolicit_tx_tu(struct wifi_dev *, UINT8);
+VOID wlan_config_set_qos_tx_state(struct wifi_dev *, UINT8);
+VOID wlan_config_set_qos_tx_tu(struct wifi_dev *, UINT8);
+VOID wlan_config_set_rnr_in_probe_rsp(struct wifi_dev *, UINT8, UINT8, UINT8);
+#endif /* CONFIG_6G_SUPPORT */
 #endif /* DOT11_HE_AX */
 VOID wlan_config_set_ht_ext_cha(struct wifi_dev *wdev, UCHAR ext_cha);
 VOID wlan_config_set_ht_ext_cha_all(struct wpf_ctrl *ctrl, UCHAR ext_cha);

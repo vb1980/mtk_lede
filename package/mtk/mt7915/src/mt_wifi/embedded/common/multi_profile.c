@@ -20,6 +20,7 @@
 
 #ifdef MULTI_PROFILE
 #include "rt_config.h"
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 
 /*Local definition*/
 #define FIRST_AP_EXT_PROFILE_PATH	"/etc/Wireless/RT2860/RT2860_5G.dat"
@@ -191,26 +192,34 @@ static UINT32 parent_dir_len(UCHAR *path)
 static UCHAR *multi_profile_fname_get(struct _RTMP_ADAPTER *pAd, UCHAR profile_id)
 {
 	UCHAR *src_path = NULL, *main_profile_path = NULL;
-	INT card_idx = 0;
+	INT card_idx = 0, ret = 0;
+	UCHAR src_path_tmp[L2PROFILE_PATH_LEN] = {0};
 #if defined(CONFIG_RT_FIRST_CARD) || defined(CONFIG_RT_SECOND_CARD) || defined(CONFIG_RT_THIRD_CARD)
 	card_idx = get_dev_config_idx(pAd);
 #endif /* CONFIG_RT_FIRST_CARD || CONFIG_RT_SECOND_CARD */
 
 	main_profile_path = get_dev_l2profile(pAd);
 
-	if (profile_id == MTB_MERGE_PROFILE) {
-		src_path = mtb[card_idx].merge;
+	if (main_profile_path) {
+		if (profile_id == MTB_MERGE_PROFILE) {
+			src_path = mtb[card_idx].merge;
 
-		if (strlen(src_path) == 0) {
-			strncat(src_path, main_profile_path, parent_dir_len(main_profile_path));
-			sprintf(src_path, "%sDBDC_card%d.dat", src_path, card_idx);
-		}
+			if (strlen(src_path) == 0) {
+				strncat(src_path, main_profile_path, parent_dir_len(main_profile_path));
+				os_move_mem(src_path_tmp, src_path, strlen(src_path) + 1);
+				ret = snprintf(src_path, L2PROFILE_PATH_LEN,
+					"%sDBDC_card%d.dat", src_path_tmp, card_idx);
 
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("Open file \"%s\" to store DBDC cfg! (%d)\n",
-			  src_path, parent_dir_len(main_profile_path)));
-	} else
-		src_path = (profile_id == MTB_EXT_PROFILE) ? mtb[card_idx].profile_ext : main_profile_path;
+				if (ret < 0 || ret >= L2PROFILE_PATH_LEN)
+					return NULL;
+			}
+
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 "Open file \"%s\" to store DBDC cfg! (%d)\n",
+				  src_path, parent_dir_len(main_profile_path));
+		} else
+			src_path = (profile_id == MTB_EXT_PROFILE) ? mtb[card_idx].profile_ext : main_profile_path;
+	}
 
 	return src_path;
 }
@@ -369,7 +378,6 @@ end:
 }
 
 #ifdef APCLI_SUPPORT
-#if 0
 /* without space trim */
 static INT multi_profile_merge_separate_space(
 	UCHAR *parm,
@@ -380,6 +388,7 @@ static INT multi_profile_merge_separate_space(
 	CHAR *tmpbuf;
 	CHAR *value;
 	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	if (!buf1 || !buf2)
 		return NDIS_STATUS_FAILURE;
@@ -397,12 +406,34 @@ static INT multi_profile_merge_separate_space(
 	os_zero_mem(tmpbuf, TEMP_STR_SIZE);
 	os_zero_mem(value, TEMP_STR_SIZE);
 
-	if (RTMPGetKeyParameter("ApCliSsid", tmpbuf, TEMP_STR_SIZE, buf1, FALSE) == TRUE)
-		snprintf(value, TEMP_STR_SIZE, "%s", tmpbuf);
-	else
-		snprintf(value, TEMP_STR_SIZE, "%s", "");
-	if (RTMPGetKeyParameter("ApCliSsid", tmpbuf, TEMP_STR_SIZE, buf2, FALSE) == TRUE)
-		snprintf(value, TEMP_STR_SIZE, "%s;%s", value, tmpbuf);
+	if (RTMPGetKeyParameter("ApCliSsid", tmpbuf, TEMP_STR_SIZE, buf1, FALSE) == TRUE) {
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "%s", tmpbuf);
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+	} else {
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "%s", "");
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+	}
+
+	if (RTMPGetKeyParameter("ApCliSsid", tmpbuf, TEMP_STR_SIZE, buf2, FALSE) == TRUE) {
+		CHAR tmp[TEMP_STR_SIZE] = {0};
+
+		os_move_mem(tmp, value, strlen(value) + 1);
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "%s;%s", tmp, tmpbuf);
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+	}
+
 	RTMPSetKeyParameter("ApCliSsid", value, TEMP_STR_SIZE, final, FALSE);
 
 end:
@@ -412,7 +443,6 @@ end:
 		os_free_mem(value);
 	return ret;
 }
-#endif
 
 /* initially there is no value in dat file for ApCliEnable, hence causing the issue
 	in DBDC case while parsing from merged dat file*/
@@ -499,7 +529,9 @@ static INT multi_profile_merge_perbss(
 	} *mpf[2];
 	UINT mpf_list_num = 2;
 	INT bCreateKey = FALSE;
+	UCHAR tmp[TEMP_STR_SIZE * 2] = {0};
 	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	os_alloc_mem_suspend(NULL, &value, TEMP_STR_SIZE * 2);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&mpf[0], sizeof(struct mpf_list));
@@ -559,13 +591,25 @@ static INT multi_profile_merge_perbss(
 					if ((merge_rule == MPF_APPEND_BSS0) && (i == 0))
 						strncpy(pf_def_value, ptok, sizeof(pf_def_value));
 
-					snprintf(value, TEMP_STR_SIZE * 2, "%s%s;", value, ptok);
+					os_move_mem(tmp, value, strlen(value) + 1);
+					ret_tmp = snprintf(value, TEMP_STR_SIZE * 2, "%s%s;", tmp, ptok);
+
+					if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE * 2) {
+						ret = NDIS_STATUS_FAILURE;
+						goto end;
+					}
 				}
 			}
 			/* append default value */
 			if (i < mpf[mpfidx]->bss_num) {
 				for (j = i; j < mpf[mpfidx]->bss_num; j++) {
-					snprintf(value, TEMP_STR_SIZE * 2, "%s%s;", value, pf_def_value);
+					os_move_mem(tmp, value, strlen(value) + 1);
+					ret_tmp = snprintf(value, TEMP_STR_SIZE * 2, "%s%s;", tmp, pf_def_value);
+
+					if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE * 2) {
+						ret = NDIS_STATUS_FAILURE;
+						goto end;
+					}
 				}
 			}
 		}
@@ -598,6 +642,7 @@ static INT multi_profile_merge_mac_address(
 	CHAR tok_str[25] = "";
 	UCHAR i = 0;
 	UCHAR j = 0;
+	INT ret;
 
 	/* set file parameter to portcfg*/
 	if (RTMPGetKeyParameter("MacAddress", tmpbuf, 25, buf2, TRUE)) {
@@ -606,7 +651,13 @@ static INT multi_profile_merge_mac_address(
 	}
 
 	for (i = 1; i <= mpf->pf2_num ; i++) {
-		snprintf(tok_str, sizeof(tok_str), "MacAddress%d", i);
+		ret = snprintf(tok_str, sizeof(tok_str), "MacAddress%d", i);
+
+		if (os_snprintf_error(sizeof(tok_str), ret)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "tok_str snprintf error!!!\n");
+			return NDIS_STATUS_FAILURE;
+		}
 
 		if (RTMPGetKeyParameter(tok_str, tmpbuf, 25, buf2, TRUE)) {
 			j = i + mpf->pf1_num;
@@ -642,8 +693,7 @@ static INT multi_profile_merge_increase(
 	UCHAR i = 0;
 	UCHAR j = 0;
 	UCHAR k = 0;
-	BOOLEAN bTrimSpace = TRUE;
-	CHAR *ptr = NULL;
+	INT ret;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf, MAX_PARAM_BUFFER_SIZE);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tok_str, TEMP_STR_SIZE);
@@ -656,25 +706,22 @@ static INT multi_profile_merge_increase(
 
 	os_zero_mem(tmpbuf, TEMP_STR_SIZE);
 	os_zero_mem(tok_str, TEMP_STR_SIZE);
-	ptr = rtstrstr(parm, "WPAPSK");
-	if (ptr)
-	{
-		bTrimSpace = FALSE;
-	}
-	ptr = rtstrstr(parm, "SSID");
-	if (ptr)
-	{
-		bTrimSpace = FALSE;
-	}
+
 	/* set file parameter to portcfg*/
 	for (i = 0; i < mpf->pf2_num; i++) {
 		k = start_idx + i;
-		snprintf(tok_str, TEMP_STR_SIZE, "%s%d", parm, k);
+		ret = snprintf(tok_str, TEMP_STR_SIZE, "%s%d", parm, k);
 
-		if (RTMPGetKeyParameter(tok_str, tmpbuf, MAX_PARAM_BUFFER_SIZE, buf2, bTrimSpace)) {
+		if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "tok_str snprintf error!!!\n");
+			goto end;
+		}
+
+		if (RTMPGetKeyParameter(tok_str, tmpbuf, MAX_PARAM_BUFFER_SIZE, buf2, TRUE)) {
 			j = k + mpf->pf1_num;
 			snprintf(tok_str, TEMP_STR_SIZE, "%s%d", parm, j);
-			RTMPSetKeyParameter(tok_str, tmpbuf, MAX_PARAM_BUFFER_SIZE, final, bTrimSpace);
+			RTMPSetKeyParameter(tok_str, tmpbuf, MAX_PARAM_BUFFER_SIZE, final, TRUE);
 		}
 	}
 
@@ -700,6 +747,7 @@ static INT multi_profile_merge_radius_key(
 	UCHAR i = 0;
 	UCHAR j = 0;
 	UCHAR k = 0;
+	INT ret;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf, TEMP_STR_SIZE);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf1, TEMP_STR_SIZE);
@@ -715,7 +763,14 @@ static INT multi_profile_merge_radius_key(
 	os_zero_mem(tmpbuf1, TEMP_STR_SIZE);
 	os_zero_mem(tok_str, TEMP_STR_SIZE);
 
-	snprintf(tok_str, TEMP_STR_SIZE, "%s%d", parm, start_idx);
+	ret = snprintf(tok_str, TEMP_STR_SIZE, "%s%d", parm, start_idx);
+
+	if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "tok_str snprintf error!!!\n");
+		goto end;
+	}
+
 	if (!RTMPGetKeyParameter(tok_str, tmpbuf1, TEMP_STR_SIZE, buf1, TRUE)) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("%s:RTMPGetKeyParameter %d fail!", __func__, __LINE__));
@@ -775,6 +830,7 @@ static INT multi_profile_merge_keytype(
 	UCHAR i = 0;
 	UCHAR j = 0;
 	UCHAR k = 0;
+	INT ret;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf, TEMP_STR_SIZE);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tok_str, TEMP_STR_SIZE);
@@ -789,7 +845,14 @@ static INT multi_profile_merge_keytype(
 	os_zero_mem(tok_str, TEMP_STR_SIZE);
 
 	for (k = 1; k <= 4; k++) {
-		snprintf(tok_str, TEMP_STR_SIZE, "Key%dType", k);
+		ret = snprintf(tok_str, TEMP_STR_SIZE, "Key%dType", k);
+
+		if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "tok_str snprintf error!!!\n");
+			goto end;
+		}
+
 		multi_profile_merge_separate(tok_str, buf1, buf2, final);
 	}
 
@@ -798,7 +861,13 @@ static INT multi_profile_merge_keytype(
 		j = i + mpf->pf1_num;
 
 		for (k = 1; k <= 4; k++) {
-			snprintf(tok_str, TEMP_STR_SIZE, "Key%dStr%d", k, i);
+			ret = snprintf(tok_str, TEMP_STR_SIZE, "Key%dStr%d", k, i);
+
+			if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+				MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "tok_str snprintf error!!!\n");
+				goto end;
+			}
 
 			if (RTMPGetKeyParameter(tok_str, tmpbuf, TEMP_STR_SIZE, buf2, TRUE)) {
 				snprintf(tok_str, TEMP_STR_SIZE, "Key%dStr%d", k, j);
@@ -856,6 +925,18 @@ static INT multi_profile_merge_security(
 	multi_profile_merge_perbss(mpf, "RADIUS_Key", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*RADIUS Key%d*/
 	multi_profile_merge_radius_key(mpf, 1, "RADIUS_Key", buf1, buf2, final);
+#ifdef RADIUS_ACCOUNTING_SUPPORT
+	/*Accounting Interim_Interval*/
+	multi_profile_merge_perbss(mpf, "acct_interim_interval", buf1, buf2, final, MPF_APPEND_BSS0);
+	/*Accounting RADIUS_Server*/
+	multi_profile_merge_perbss(mpf, "RADIUS_Acct_Server", buf1, buf2, final, MPF_APPEND_BSS0);
+	/*Accounting RADIUS_Port*/
+	multi_profile_merge_perbss(mpf, "RADIUS_Acct_Port", buf1, buf2, final, MPF_APPEND_BSS0);
+	/*Accounting RADIUS_Key*/
+	multi_profile_merge_perbss(mpf, "RADIUS_Acct_Key", buf1, buf2, final, MPF_APPEND_BSS0);
+	/*Accounting RADIUS_Acct_Key%d*/
+	multi_profile_merge_radius_key(mpf, 1, "RADIUS_Acct_Key", buf1, buf2, final);
+#endif
 	/*EAPifname*/
 	multi_profile_merge_perbss(mpf, "EAPifname", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*PreAuthifname*/
@@ -871,6 +952,7 @@ static INT multi_profile_merge_security(
 	/* BcnProt */
 	multi_profile_merge_perbss(mpf, "BcnProt", buf1, buf2, final, MPF_APPEND_BSS0);
 #endif
+#ifndef HOSTAPD_WPA3_SUPPORT
 #ifdef DOT11_SAE_SUPPORT
 	/*PWDID*/
 	multi_profile_merge_increase(mpf, 1, "PWDID", buf1, buf2, final);
@@ -893,8 +975,10 @@ static INT multi_profile_merge_security(
 	/*SAEPKGroup*/
 	multi_profile_merge_perbss(mpf, "SAEPKGroup", buf1, buf2, final, MPF_APPEND_BSS0);
 #endif
+#endif /*HOSTAPD_WPA3_SUPPORT*/
 	/* OCVSupport */
 	multi_profile_merge_perbss(mpf, "OCVSupport", buf1, buf2, final, MPF_APPEND_BSS0);
+	multi_profile_merge_perbss(mpf, "TransitionDisable", buf1, buf2, final, MPF_APPEND_BSS0);
 	return NDIS_STATUS_SUCCESS;
 }
 
@@ -919,6 +1003,7 @@ static INT multi_profile_merge_default_edca(
 	UCHAR idx;
 	CHAR tok_str[25] = "";
 	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&value, TEMP_STR_SIZE);
 
@@ -973,17 +1058,37 @@ static INT multi_profile_merge_default_edca(
 
 		multi_profile_replace(";", ",", acm);
 		/*merge*/
-		snprintf(value, TEMP_STR_SIZE, "1;%s;%s;%s;%s;%s", aifs, cwmin, cwmax, txop, acm);
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "1;%s;%s;%s;%s;%s", aifs, cwmin, cwmax, txop, acm);
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+
 		/*set*/
-		snprintf(tok_str, sizeof(tok_str), "APEdca%d", i);
+		ret_tmp = snprintf(tok_str, sizeof(tok_str), "APEdca%d", i);
+
+		if (ret_tmp < 0 || ret_tmp >= sizeof(tok_str)) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+
 		RTMPSetKeyParameter(tok_str, value, TEMP_STR_SIZE, final, TRUE);
 	}
 
 	os_zero_mem(value, TEMP_STR_SIZE);
 
 	for (i = 0; i < data->total_num; i++) {
+		CHAR tmp[TEMP_STR_SIZE] = {0};
+
 		idx = (i < data->pf1_num) ? 0 : 1;
-		snprintf(value, TEMP_STR_SIZE, "%s%d;", value, idx);
+		os_move_mem(tmp, value, strlen(value) + 1);
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "%s%d;", tmp, idx);
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
 	}
 
 	RTMPSetKeyParameter("EdcaIdx", value, TEMP_STR_SIZE, final, TRUE);
@@ -1011,6 +1116,9 @@ static INT multi_profile_merge_apedca(
 	UCHAR j;
 	UCHAR edca_own[4] = { 0, 0, 0, 0 };
 	CHAR tok_str[25] = "";
+	CHAR tmp[TEMP_STR_SIZE] = {0};
+	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf, TEMP_STR_SIZE);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf2, TEMP_STR_SIZE);
@@ -1046,7 +1154,14 @@ static INT multi_profile_merge_apedca(
 		edca_idx = simple_strtol(macptr, 0, 10);
 
 		if (edca_idx >= 4) {
-			snprintf(tmpbuf, TEMP_STR_SIZE, "%s;%d", tmpbuf, 0);
+			os_move_mem(tmp, tmpbuf, strlen(tmpbuf) + 1);
+			ret_tmp = snprintf(tmpbuf, TEMP_STR_SIZE, "%s;%d", tmp, 0);
+
+			if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+				ret = NDIS_STATUS_FAILURE;
+				goto end;
+			}
+
 			continue;
 		}
 
@@ -1058,7 +1173,14 @@ static INT multi_profile_merge_apedca(
 		if (j < 4)
 			edca_own[j] = (0x20 | edca_idx);
 
-		snprintf(tmpbuf, TEMP_STR_SIZE, "%s;%d", tmpbuf, j);
+		os_move_mem(tmp, tmpbuf, strlen(tmpbuf) + 1);
+		ret_tmp = snprintf(tmpbuf, TEMP_STR_SIZE, "%s;%d", tmp, j);
+
+		if (ret_tmp < 0 || ret_tmp >= TEMP_STR_SIZE) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+
 	}
 
 	RTMPSetKeyParameter("EdcaIdx", tmpbuf, TEMP_STR_SIZE, final, TRUE);
@@ -1073,7 +1195,12 @@ static INT multi_profile_merge_apedca(
 			continue;
 
 		j = (edca_own[i] & 0x3);
-		snprintf(tok_str, sizeof(tok_str), "APEdca%d", j);
+		ret_tmp = snprintf(tok_str, sizeof(tok_str), "APEdca%d", j);
+
+		if (ret_tmp < 0 || ret_tmp >= sizeof(tok_str)) {
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
 
 		if (RTMPGetKeyParameter(tok_str, tmpbuf, TEMP_STR_SIZE, macptr, TRUE)) {
 			snprintf(tok_str, sizeof(tok_str), "APEdca%d", i);
@@ -1086,7 +1213,7 @@ end:
 		os_free_mem(tmpbuf);
 	if (tmpbuf2)
 		os_free_mem(tmpbuf2);
-	return NDIS_STATUS_SUCCESS;
+	return ret;
 }
 
 /*
@@ -1108,6 +1235,7 @@ static INT multi_profile_merge_bssedca(
 	CHAR *value;
 	CHAR tok_str[25] = "";
 	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&value, TEMP_STR_SIZE);
 
@@ -1162,9 +1290,25 @@ static INT multi_profile_merge_bssedca(
 
 		multi_profile_replace(";", ",", acm);
 		/*merge*/
-		snprintf(value, TEMP_STR_SIZE, "%s;%s;%s;%s;%s", aifs, cwmin, cwmax, txop, acm);
+		ret_tmp = snprintf(value, TEMP_STR_SIZE, "%s;%s;%s;%s;%s", aifs, cwmin, cwmax, txop, acm);
+
+		if (os_snprintf_error(TEMP_STR_SIZE, ret_tmp)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "value snprintf error!!!\n");
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+
 		/*set*/
-		snprintf(tok_str, sizeof(tok_str), "BSSEdca%d", i);
+		ret_tmp = snprintf(tok_str, sizeof(tok_str), "BSSEdca%d", i);
+
+		if (os_snprintf_error(sizeof(tok_str), ret_tmp)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "tok_str snprintf error!!!\n");
+			ret = NDIS_STATUS_FAILURE;
+			goto end;
+		}
+
 		RTMPSetKeyParameter(tok_str, value, TEMP_STR_SIZE, final, TRUE);
 	}
 
@@ -1404,20 +1548,26 @@ static INT multi_profile_merge_mbss(
 	multi_profile_merge_separate("MAP_Turnkey", buf1, buf2, final);
 	multi_profile_merge_separate("MAP_Ext", buf1, buf2, final);
 #endif
+#ifdef WSC_AP_SUPPORT
+	/* merge wsc uuide */
+	multi_profile_merge_increase(data, 1, "WSC_UUID_E", buf1, buf2, final);
+	/* merge wsc uuidstr */
+	multi_profile_merge_increase(data, 1, "WSC_UUID_Str", buf1, buf2, final);
+#endif
 	/*merge WirelessMode*/
 	multi_profile_merge_perbss(data, "WirelessMode", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*merge Channel*/
 	multi_profile_merge_separate("Channel", buf1, buf2, final);
 	/*merge ChannelGrp*/
 	multi_profile_merge_chgrp(buf1, buf2, final);
-	/*merge EDCCA_Mode*/
-	multi_profile_merge_separate("EDCCA_Mode", buf1, buf2, final);
 	/*merge AutoChannelSelect*/
 	multi_profile_merge_separate("AutoChannelSelect", buf1, buf2, final);
 	/*merge AutoChannelSkipList*/
 	multi_profile_merge_separate("AutoChannelSkipList", buf1, buf2, final);
 	/*merge ACSCheckTime*/
 	multi_profile_merge_separate("ACSCheckTime", buf1, buf2, final);
+	/*merge ACSCheckTimeMin*/
+	multi_profile_merge_separate("ACSCheckMinTime", buf1, buf2, final);
 	/*merge security*/
 	multi_profile_merge_security(data, buf1, buf2, final);
 	/*merge WmmCapable*/
@@ -1466,10 +1616,14 @@ static INT multi_profile_merge_mbss(
 	multi_profile_merge_perbss(data, "VHT_LDPC", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*merge HeLdpc*/
 	multi_profile_merge_perbss(data, "HeLdpc", buf1, buf2, final, MPF_APPEND_BSS0);
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+	/*merge FgiFltf*/
+	multi_profile_merge_perbss(data, "FgiFltf", buf1, buf2, final, MPF_APPEND_BSS0);
+#endif
 	/*merge MbssMaxStaNum*/
 	multi_profile_merge_separate("MbssMaxStaNum", buf1, buf2, final);
 	/*merge UAPSDCapable*/
-	multi_profile_merge_separate("UAPSDCapable", buf1, buf2, final);
+	multi_profile_merge_perbss(data, "UAPSDCapable", buf1, buf2, final, MPF_APPEND_BSS0);
 	multi_profile_merge_separate("APSDCapable", buf1, buf2, final); /* backward compatible with old SDK */
 	/*merge APEdcaIdx*/
 	multi_profile_merge_apedca(data, buf1, buf2, final);
@@ -1540,6 +1694,19 @@ static INT multi_profile_merge_mbss(
 #ifdef WIFI_TWT_SUPPORT
 	multi_profile_merge_separate("TWTSupport", buf1, buf2, final);
 #endif
+#ifdef CONFIG_AP_SUPPORT
+	multi_profile_merge_separate("BSSColorValue", buf1, buf2, final);
+#endif
+
+#endif
+#ifdef MT_DFS_SUPPORT
+	/* merge Antenna Selection */
+	multi_profile_merge_separate("RddAntSel", buf1, buf2, final);
+#endif
+
+#ifdef MT7915
+	/* merge per-band STA limit */
+	multi_profile_merge_separate("BandMaxStaNum", buf1, buf2, final);
 #endif
 
 	return NDIS_STATUS_SUCCESS;
@@ -1591,9 +1758,11 @@ static INT multi_profile_merge_wsc(
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode, sizeof(WscConMode), "%s; ", WscConMode);
+				os_move_mem(tmp, WscConMode, strlen(WscConMode) + 1);
+				snprintf(WscConMode, sizeof(WscConMode), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1612,9 +1781,11 @@ static INT multi_profile_merge_wsc(
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode2)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", WscConMode2);
+				os_move_mem(tmp, WscConMode2, strlen(WscConMode2) + 1);
+				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1641,9 +1812,11 @@ label_wsc_v2_done:
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode, sizeof(WscConMode), "%s; ", WscConMode);
+				os_move_mem(tmp, WscConMode, strlen(WscConMode) + 1);
+				snprintf(WscConMode, sizeof(WscConMode), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1662,9 +1835,11 @@ label_wsc_v2_done:
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode2)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", WscConMode2);
+				os_move_mem(tmp, WscConMode2, strlen(WscConMode2) + 1);
+				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1673,7 +1848,7 @@ label_wsc_v2_done:
 
 		snprintf(value, TEMP_STR_SIZE, "%s;%s", WscConMode, WscConMode2);
 		if (RTMPSetKeyParameter("WscConfMode", value, TEMP_STR_SIZE, final, TRUE) != TRUE)
-			goto label_WscConfMode_done;
+			;
 label_WscConfMode_done:
 
 		/*merge WscConfStatus*/
@@ -1689,9 +1864,11 @@ label_WscConfMode_done:
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode, sizeof(WscConMode), "%s; ", WscConMode);
+				os_move_mem(tmp, WscConMode, strlen(WscConMode) + 1);
+				snprintf(WscConMode, sizeof(WscConMode), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1710,9 +1887,11 @@ label_WscConfMode_done:
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode2)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", WscConMode2);
+				os_move_mem(tmp, WscConMode2, strlen(WscConMode2) + 1);
+				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1721,7 +1900,7 @@ label_WscConfMode_done:
 
 		snprintf(value, TEMP_STR_SIZE, "%s;%s", WscConMode, WscConMode2);
 		if (RTMPSetKeyParameter("WscConfStatus", value, TEMP_STR_SIZE, final, TRUE) != TRUE)
-			goto label_WscConfStatus_done;
+			;
 label_WscConfStatus_done:
 
 		/*merge WscConfMethods*/
@@ -1737,9 +1916,11 @@ label_WscConfStatus_done:
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode, sizeof(WscConMode), "%s; ", WscConMode);
+				os_move_mem(tmp, WscConMode, strlen(WscConMode) + 1);
+				snprintf(WscConMode, sizeof(WscConMode), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1758,9 +1939,11 @@ label_WscConfStatus_done:
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscConMode2)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", WscConMode2);
+				os_move_mem(tmp, WscConMode2, strlen(WscConMode2) + 1);
+				snprintf(WscConMode2, sizeof(WscConMode2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1785,9 +1968,11 @@ label_WscConfMethods_done:
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(DeviceName)] = {0};
 
 			while (append_cnt) {
-				snprintf(DeviceName, sizeof(DeviceName), "%s; ", DeviceName);
+				os_move_mem(tmp, DeviceName, strlen(DeviceName) + 1);
+				snprintf(DeviceName, sizeof(DeviceName), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1806,9 +1991,11 @@ label_WscConfMethods_done:
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(DeviceName2)] = {0};
 
 			while (append_cnt) {
-				snprintf(DeviceName2, sizeof(DeviceName2), "%s; ", DeviceName2);
+				os_move_mem(tmp, DeviceName2, strlen(DeviceName2) + 1);
+				snprintf(DeviceName2, sizeof(DeviceName2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1818,7 +2005,7 @@ label_WscConfMethods_done:
 		snprintf(value, TEMP_STR_SIZE, "%s;%s", DeviceName, DeviceName2);
 
 		if (RTMPSetKeyParameter("WscDeviceName", value, TEMP_STR_SIZE, final, TRUE) != TRUE)
-			goto label_WscdeviceName_done;
+			;
 label_WscdeviceName_done:
 
 		if (RTMPGetKeyParameter("WscVendorPinCode", WscPin, sizeof(WscPin), buf1, TRUE) != TRUE)
@@ -1833,9 +2020,11 @@ label_WscdeviceName_done:
 		if (data->pf1_num > i) {/* need to append default value */
 			INT append_cnt = data->pf1_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscPin)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscPin, sizeof(WscPin), "%s; ", WscPin);
+				os_move_mem(tmp, WscPin, strlen(WscPin) + 1);
+				snprintf(WscPin, sizeof(WscPin), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1854,9 +2043,11 @@ label_WscdeviceName_done:
 		if (data->pf2_num > i) {/* need to append default value */
 			INT append_cnt = data->pf2_num - i;
 			INT loop_cnt = 0;
+			UCHAR tmp[sizeof(WscPin2)] = {0};
 
 			while (append_cnt) {
-				snprintf(WscPin2, sizeof(WscPin2), "%s; ", WscPin2);
+				os_move_mem(tmp, WscPin2, strlen(WscPin2) + 1);
+				snprintf(WscPin2, sizeof(WscPin2), "%s; ", tmp);
 				append_cnt--;
 				loop_cnt++;
 			}
@@ -1892,18 +2083,6 @@ static INT multi_profile_merge_apcli(
 	INT status = FALSE;
 	CHAR *tmpbuf;
 	CHAR *value;
-    struct mpf_data *data_test = NULL;
-
-    data_test = (struct mpf_data *)kmalloc(sizeof(struct mpf_data), GFP_ATOMIC);
-    if (data_test == NULL){
-        MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-            ("%s:Allocate memory failed!", __func__));
-        goto end;
-    }
-    memset(data_test, 0, sizeof(struct mpf_data));
-    data_test->pf1_num = 1;
-    data_test->pf2_num = 1;
-    data_test->total_num = 2;
 
 	os_alloc_mem_suspend(NULL, (UCHAR **)&tmpbuf, TEMP_STR_SIZE);
 	os_alloc_mem_suspend(NULL, (UCHAR **)&value, TEMP_STR_SIZE);
@@ -1935,8 +2114,7 @@ static INT multi_profile_merge_apcli(
 	/*merge ApCliSsid*/
 	/*multi_profile_merge_separate("ApCliSsid", buf1, buf2, final);*/
 	/*read SSID with space allowed*/
-	//multi_profile_merge_separate_space("ApCliSsid", buf1, buf2, final);
-    multi_profile_merge_increase(data_test, 1, "ApCliSsid", buf1, buf2, final);
+	multi_profile_merge_separate_space("ApCliSsid", buf1, buf2, final);
 
 	/*merge ApCliWirelessMode*/
 	multi_profile_merge_separate("ApCliWirelessMode", buf1, buf2, final);
@@ -1948,19 +2126,19 @@ static INT multi_profile_merge_apcli(
 	multi_profile_merge_separate("ApCliEncrypType", buf1, buf2, final);
 	{
 		/*merge apcli0 ApCliWPAPSK*/
-		status = RTMPGetKeyParameter("ApCliWPAPSK", tmpbuf, TEMP_STR_SIZE, buf1, FALSE);
+		status = RTMPGetKeyParameter("ApCliWPAPSK", tmpbuf, TEMP_STR_SIZE, buf1, TRUE);
 
 		if (status == TRUE) {
 			snprintf(value, TEMP_STR_SIZE, "%s", tmpbuf);
-			RTMPSetKeyParameter("ApCliWPAPSK", value, TEMP_STR_SIZE, final, FALSE);
+			RTMPSetKeyParameter("ApCliWPAPSK", value, TEMP_STR_SIZE, final, TRUE);
 		}
 
 		/*tansfer apcli1 ApCliWPAPSK to ApCliWPAPSK1*/
-		status = RTMPGetKeyParameter("ApCliWPAPSK", tmpbuf, TEMP_STR_SIZE, buf2, FALSE);
+		status = RTMPGetKeyParameter("ApCliWPAPSK", tmpbuf, TEMP_STR_SIZE, buf2, TRUE);
 
 		if (status == TRUE) {
 			snprintf(value, TEMP_STR_SIZE, "%s", tmpbuf);
-			RTMPSetKeyParameter("ApCliWPAPSK1", value, TEMP_STR_SIZE, final, FALSE);
+			RTMPSetKeyParameter("ApCliWPAPSK1", value, TEMP_STR_SIZE, final, TRUE);
 		}
 	}
 	/*merge ApCliDefaultKeyID*/
@@ -2046,6 +2224,10 @@ static INT multi_profile_merge_apcli(
 	/*merge ApCliSAEGroup*/
 	multi_profile_merge_separate("ApCliSAEGroup", buf1, buf2, final);
 #endif
+	/* merge ApCliOCVSupport */
+	multi_profile_merge_separate("ApCliOCVSupport", buf1, buf2, final);
+	/* merge ApCliTransDisableSupported */
+	multi_profile_merge_separate("ApCliTransDisableSupported", buf1, buf2, final);
 	/*merge ApCliTxMode*/
 	multi_profile_merge_separate("ApCliTxMode", buf1, buf2, final);
 	/*merge ApCliTxMcs*/
@@ -2081,9 +2263,6 @@ end:
 		os_free_mem(tmpbuf);
 	if (value)
 		os_free_mem(value);
-	if (data_test != NULL)
-	    os_free_mem(data_test);
-
 	return NDIS_STATUS_SUCCESS;
 }
 #endif /*APCLI_SUPPORT*/
@@ -2103,6 +2282,7 @@ static INT multi_profile_merge_bandsteering(
 	CHAR *value = NULL;
 	RTMP_STRING *macptr = NULL;
 	int i = 0;
+	INT ret;
 
 	if (!buf1 || !buf2)
 		return NDIS_STATUS_FAILURE;
@@ -2141,10 +2321,23 @@ static INT multi_profile_merge_bandsteering(
 		}
 	} else{
 		for (i = 0; i < data->pf1_num; i++) {
-			if (i == 0)
-				snprintf((value + strlen(value)), TEMP_STR_SIZE, "%s", "1");
-			else
-				snprintf((value + strlen(value)), TEMP_STR_SIZE, ";%s", "0");
+			if (i == 0) {
+				ret = snprintf((value + strlen(value)), TEMP_STR_SIZE, "%s", "1");
+
+				if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+					MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							 "value snprintf error!!!\n");
+					goto end;
+				}
+			} else {
+				ret = snprintf((value + strlen(value)), TEMP_STR_SIZE, ";%s", "0");
+
+				if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+					MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							 "value snprintf error!!!\n");
+					goto end;
+				}
+			}
 		}
 	}
 
@@ -2164,8 +2357,15 @@ static INT multi_profile_merge_bandsteering(
 		}
 	} else{
 		for (i = 0; i < data->pf2_num; i++) {
-			if (i == 0)
-				snprintf((value + strlen(value)), TEMP_STR_SIZE, ";%s", "1");
+			if (i == 0) {
+				ret = snprintf((value + strlen(value)), TEMP_STR_SIZE, ";%s", "1");
+
+				if (os_snprintf_error(TEMP_STR_SIZE, ret)) {
+					MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							 "value snprintf error!!!\n");
+					goto end;
+				}
+			}
 			else
 				snprintf((value + strlen(value)), TEMP_STR_SIZE, ";%s", "0");
 		}
@@ -2192,6 +2392,7 @@ static INT multi_profile_merge_bssidnum(struct mpf_data *data, CHAR *buf1, CHAR 
 	UCHAR num1 = 0;
 	UCHAR num2 = 0;
 	UCHAR total;
+	INT ret;
 
 	if (RTMPGetKeyParameter("BssidNum", tmpbuf, 25, buf1, TRUE))
 		num1 = (UCHAR) simple_strtol(tmpbuf, 0, 10);
@@ -2200,7 +2401,14 @@ static INT multi_profile_merge_bssidnum(struct mpf_data *data, CHAR *buf1, CHAR 
 		num2 = (UCHAR) simple_strtol(tmpbuf, 0, 10);
 
 	total = num1 + num2;
-	snprintf(tmpbuf, sizeof(tmpbuf), "%d", total);
+	ret = snprintf(tmpbuf, sizeof(tmpbuf), "%d", total);
+
+	if (os_snprintf_error(sizeof(tmpbuf), ret)) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "tmpbuf snprintf error!!!\n");
+		return NDIS_STATUS_FAILURE;
+	}
+
 	RTMPSetKeyParameter("BssidNum", tmpbuf, 25, final, TRUE);
 	/*assign bss number*/
 	data->pf1_num = num1;
@@ -2211,8 +2419,10 @@ static INT multi_profile_merge_bssidnum(struct mpf_data *data, CHAR *buf1, CHAR 
 
 static INT multi_profile_merge_edcca(CHAR *buf1, CHAR *buf2, CHAR *final)
 {
-	/*merge EDCCA*/
+	/*merge EDCCA related profile*/
 	multi_profile_merge_separate("EDCCAEnable", buf1, buf2, final);
+	multi_profile_merge_separate("EDCCAThreshold", buf1, buf2, final);
+	multi_profile_merge_separate("EDCCA_Mode", buf1, buf2, final);
 	return NDIS_STATUS_SUCCESS;
 }
 #endif /*CONFIG_AP_SUPPORT*/
@@ -2337,7 +2547,8 @@ static INT multi_profile_merge_bcn_dtim_period(
 	CHAR *final)
 {
 	/*BeaconPeriod*/
-	multi_profile_merge_perbss(data, "BeaconPeriod", buf1, buf2, final, MPF_APPEND_BSS0);
+	/*multi_profile_merge_perbss(data, "BeaconPeriod", buf1, buf2, final, MPF_APPEND_BSS0);*/
+	multi_profile_merge_separate("BeaconPeriod", buf1, buf2, final);
 
 	/*DtimPeriod*/
 	multi_profile_merge_perbss(data, "DtimPeriod", buf1, buf2, final, MPF_APPEND_BSS0);
@@ -2443,6 +2654,10 @@ static INT multi_profile_merge_5g_only(
 	if (RTMPGetKeyParameter("IEEE80211H", tmpbuf, len, buf_mu, TRUE) == TRUE)
 		RTMPSetKeyParameter("IEEE80211H", tmpbuf, len, final, TRUE);
 
+#ifdef GPIO_5GL_5GH_SWITCH
+	if (RTMPGetKeyParameter("GPIO5GL5GHSwitch", tmpbuf, len, buf_mu, TRUE) == TRUE)
+		RTMPSetKeyParameter("GPIO5GL5GHSwitch", tmpbuf, len, final, TRUE);
+#endif
 	/*DFS related params is 5G only, use profile 2*/
 #ifdef MT_DFS_SUPPORT
 
@@ -2457,6 +2672,12 @@ static INT multi_profile_merge_5g_only(
 	/* DfsFalseAlarmPrevent */
 	if (RTMPGetKeyParameter("DfsFalseAlarmPrevent", tmpbuf, len, buf2, TRUE) == TRUE)
 		RTMPSetKeyParameter("DfsFalseAlarmPrevent", tmpbuf, len, final, TRUE);
+
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+	/*Band4DfsEnable*/
+	if (RTMPGetKeyParameter("Band4DfsEnable", tmpbuf, len, buf_mu, TRUE) == TRUE)
+		RTMPSetKeyParameter("Band4DfsEnable", tmpbuf, len, final, TRUE);
+#endif
 
 	/* DfsZeroWait */
 	if (RTMPGetKeyParameter("DfsZeroWait", tmpbuf, len, buf2, TRUE) == TRUE)
@@ -2474,6 +2695,14 @@ static INT multi_profile_merge_5g_only(
 	if (RTMPGetKeyParameter("DfsZeroWaitDefault", tmpbuf, len, buf2, TRUE) == TRUE)
 		RTMPSetKeyParameter("DfsZeroWaitDefault", tmpbuf, len, final, TRUE);
 
+	/*DfsTargetCh*/
+	if (RTMPGetKeyParameter("DfsTargetCh", tmpbuf, len, buf2, TRUE) == TRUE)
+		RTMPSetKeyParameter("DfsTargetCh", tmpbuf, len, final, TRUE);
+
+	/*DfsPreferType*/
+	if (RTMPGetKeyParameter("DfsChSelPrefer", tmpbuf, len, buf2, TRUE) == TRUE)
+		RTMPSetKeyParameter("DfsChSelPrefer", tmpbuf, len, final, TRUE);
+
 #endif
 
 	/*RDRegion*/
@@ -2483,6 +2712,10 @@ static INT multi_profile_merge_5g_only(
 	/*VHT 1024QAM Support*/
 	if (RTMPGetKeyParameter("Vht1024QamSupport", tmpbuf, len, buf2, TRUE) == TRUE)
 		RTMPSetKeyParameter("Vht1024QamSupport", tmpbuf, len, final, TRUE);
+
+	/*CERegCacEn*/
+	if (RTMPGetKeyParameter("CERegCacEn", tmpbuf, len, buf2, TRUE) == TRUE)
+		RTMPSetKeyParameter("CERegCacEn", tmpbuf, len, final, TRUE);
 
 	return NDIS_STATUS_SUCCESS;
 }
@@ -2629,6 +2862,17 @@ static INT multi_profile_merge_global_setting_only(CHAR *buf1, CHAR *buf2, CHAR 
 	/*RED_Enable*/
 	if (RTMPGetKeyParameter("RED_Enable", tmpbuf, len, buf2, TRUE) == TRUE)
 		RTMPSetKeyParameter("RED_Enable", tmpbuf, len, final, TRUE);
+
+#ifdef MT7915
+	/* MaxStaNum */
+	if (RTMPGetKeyParameter("MaxStaNum", tmpbuf, len, buf2, TRUE) == TRUE)
+		RTMPSetKeyParameter("MaxStaNum", tmpbuf, len, final, TRUE);
+#endif
+
+	/*LimitProbeResp*/
+	if (RTMPGetKeyParameter("LimitProbeResp", tmpbuf, len, buf2, TRUE) == TRUE)
+		RTMPSetKeyParameter("LimitProbeResp", tmpbuf, len, final, TRUE);
+
 
 	return NDIS_STATUS_SUCCESS;
 }
@@ -2814,6 +3058,7 @@ INT	multi_profile_wds_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, I
 {
 	UCHAR *dev_name;
 	struct mpf_data *data;
+	INT ret;
 
 	if (!ad->multi_pf_ctrl)
 		return NDIS_STATUS_SUCCESS;
@@ -2828,32 +3073,50 @@ INT	multi_profile_wds_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, I
 	else
 		dev_name = get_dev_name_prefix(ad, INT_WDS);
 
-	snprintf(final_name, IFNAMSIZ, "%s", dev_name);
+	ret = snprintf(final_name, IFNAMSIZ, "%s", dev_name);
+
+	if (os_snprintf_error(IFNAMSIZ, ret)) {
+		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "final_name snprintf error!!!\n");
+		return NDIS_STATUS_FAILURE;
+	}
 
 	return NDIS_STATUS_SUCCESS;
 }
 
 static INT multi_profile_merge_wds(
+	struct _RTMP_ADAPTER *ad,
 	CHAR *buf1,
 	CHAR *buf2,
 	CHAR *final)
 {
-	multi_profile_merge_separate("WdsEnable", buf1, buf2, final);
-	multi_profile_merge_separate("WdsNum", buf1, buf2, final);
-	multi_profile_merge_separate("WdsPhyMode", buf1, buf2, final);
-	multi_profile_merge_separate("WdsList", buf1, buf2, final);
-	multi_profile_merge_separate("WdsEncrypType", buf1, buf2, final);
-	multi_profile_merge_separate("Wds0Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds1Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds2Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds3Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds4Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds5Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds6Key", buf1, buf2, final);
-	multi_profile_merge_separate("Wds7Key", buf1, buf2, final);
-#ifdef WDS_VLAN_SUPPORT
-	multi_profile_merge_separate("WDS_VLANID", buf1, buf2, final);
-#endif	/* WDS_VLAN_SUPPORT */
+	INT i;
+	CHAR *KeyPerBand[] = {"WdsEnable", "WdsNum"};
+	CHAR *KeyPerWds[] = {"WdsPhyMode", "WdsList", "WdsEncrypType", "WDS_VLANID", "Wds0Key", "Wds1Key", "Wds2Key", "Wds3Key", "Wds4Key", "Wds5Key", "Wds6Key", "Wds7Key"};
+
+	for (i = 0; i < sizeof(KeyPerBand)/sizeof(CHAR *); i++) {
+		multi_profile_merge_separate(KeyPerBand[i], buf1, buf2, final);
+	}
+
+	if (ad->WdsTab.wds_num[DBDC_BAND0]) {
+		for (i = 0; i < sizeof(KeyPerWds)/sizeof(CHAR *); i++) {
+			multi_profile_merge_separate(KeyPerWds[i], buf1, buf2, final);
+		}
+	} else {
+		for (i = 0; i < sizeof(KeyPerWds)/sizeof(CHAR *); i++) {
+			CHAR tmpbuf[256], value[256];
+
+			if (!buf2)
+				continue;
+
+			if (RTMPGetKeyParameter(KeyPerWds[i], tmpbuf, TEMP_STR_SIZE, buf2, TRUE) != TRUE) {
+				continue;
+			}
+			snprintf(value, TEMP_STR_SIZE, ";%s", tmpbuf);
+			RTMPSetKeyParameter(KeyPerWds[i], value, TEMP_STR_SIZE, final, TRUE);
+		}
+	}
+
 	return NDIS_STATUS_SUCCESS;
 }
 #endif
@@ -2870,13 +3133,13 @@ static INT multi_profile_merge_ft(
 	/*merge FtMdId*/
 	multi_profile_merge_increase(data, 1, "FtMdId", buf1, buf2, final);
 	/*merge FtSupport */
-	multi_profile_merge_separate("FtSupport", buf1, buf2, final);
+	multi_profile_merge_perbss(data, "FtSupport", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*merge FtOnly */
-	multi_profile_merge_separate("FtOnly", buf1, buf2, final);
+	multi_profile_merge_perbss(data, "FtOnly", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*merge FtRic */
-	multi_profile_merge_separate("FtRic", buf1, buf2, final);
+	multi_profile_merge_perbss(data, "FtRic", buf1, buf2, final, MPF_APPEND_BSS0);
 	/*merge FtOtd */
-	multi_profile_merge_separate("FtOtd", buf1, buf2, final);
+	multi_profile_merge_perbss(data, "FtOtd", buf1, buf2, final, MPF_APPEND_BSS0);
 	return NDIS_STATUS_SUCCESS;
 }
 #endif
@@ -2902,9 +3165,10 @@ INT multi_profile_merge_dscp_pri(
 	CHAR *final)
 {
 	INT8 i = 0;
-	CHAR *tok_str;
-	CHAR *tmpbuf;
+	CHAR *tok_str = NULL;
+	CHAR *tmpbuf = NULL;
 	INT ret = NDIS_STATUS_SUCCESS;
+	INT ret_tmp;
 
 	if (!buf1 || !buf2) {
 		ret = NDIS_STATUS_FAILURE;
@@ -2928,16 +3192,31 @@ INT multi_profile_merge_dscp_pri(
 	multi_profile_merge_separate("DscpPriMapEnable", buf1, buf2, final);
 
 	for (i = 0; i < data->pf2_num; i++) {
-		snprintf(tok_str, TEMP_STR_SIZE, "DscpPriMapBss%d", i);
+		ret_tmp = snprintf(tok_str, TEMP_STR_SIZE, "DscpPriMapBss%d", i);
+
+		if (os_snprintf_error(TEMP_STR_SIZE, ret_tmp)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "tok_str snprintf error!!!\n");
+			goto end;
+		}
+
 		if (RTMPGetKeyParameter(tok_str, tmpbuf, TEMP_STR_SIZE, buf2, TRUE)) {
 			snprintf(tok_str, TEMP_STR_SIZE, "DscpPriMapBss%d", (data->pf1_num + i));
 			RTMPSetKeyParameter(tok_str, tmpbuf, TEMP_STR_SIZE, final, TRUE);
 		} else {
-			snprintf(tok_str, TEMP_STR_SIZE, "DscpPriMapBss%d", (data->pf1_num + i));
+			ret_tmp = snprintf(tok_str, TEMP_STR_SIZE, "DscpPriMapBss%d", (data->pf1_num + i));
+
+			if (os_snprintf_error(TEMP_STR_SIZE, ret_tmp)) {
+				MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "tok_str snprintf error!!!\n");
+				goto end;
+			}
+
 			RTMPSetKeyParameter(tok_str, "", TEMP_STR_SIZE, final, TRUE);
 		}
 	}
 
+end:
 	if (tok_str)
 		os_free_mem(tok_str);
 	if (tmpbuf)
@@ -2993,6 +3272,30 @@ static INT multi_profile_merge_quick_channel_switch(
 	return NDIS_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_COLGIN_MT6890
+static INT multi_profile_merge_powerBackoff(
+	struct mpf_data *data,
+	CHAR *buf1,
+	CHAR *buf2,
+	CHAR *final)
+{
+	multi_profile_merge_separate("AmplifierPowerBackoff", buf1, buf2, final);
+	return NDIS_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef PKT_BUDGET_CTRL_SUPPORT
+static INT multi_profile_merge_pbc(
+	struct mpf_data *data,
+	CHAR *buf1,
+	CHAR *buf2,
+	CHAR *final)
+{
+	multi_profile_merge_separate("pbc_ubound", buf1, buf2, final);
+	multi_profile_merge_separate("pbc_qos", buf1, buf2, final);
+	return NDIS_STATUS_SUCCESS;
+}
+#endif
 
 /*
 * set second profile and merge it.
@@ -3136,7 +3439,7 @@ static INT multi_profile_merge(
 	if (profile_wds_reg(ad, DBDC_BAND1, buf2) != NDIS_STATUS_SUCCESS)
 		return retval;
 
-	if (multi_profile_merge_wds(buf1, buf2, final) != NDIS_STATUS_SUCCESS)
+	if (multi_profile_merge_wds(ad, buf1, buf2, final) != NDIS_STATUS_SUCCESS)
 		return retval;
 #endif	/* WDS_SUPPORT */
 
@@ -3180,6 +3483,14 @@ static INT multi_profile_merge(
 #endif /* ANTENNA_CONTROL_SUPPORT */
 	if (multi_profile_merge_quick_channel_switch(data, buf1, buf2, final) != NDIS_STATUS_SUCCESS)
 		return retval;
+#ifdef CONFIG_COLGIN_MT6890
+	if (multi_profile_merge_powerBackoff(data, buf1, buf2, final) != NDIS_STATUS_SUCCESS)
+		return retval;
+#endif
+#ifdef PKT_BUDGET_CTRL_SUPPORT
+	if (multi_profile_merge_pbc(data, buf1, buf2, final) != NDIS_STATUS_SUCCESS)
+		return retval;
+#endif
 
 	data->enable = TRUE;
 	/*adjust specific device name*/
@@ -3256,6 +3567,7 @@ INT	multi_profile_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, UCHAR
 {
 	UCHAR *dev_name;
 	struct mpf_data *data;
+	INT ret;
 
 	if (!ad->multi_pf_ctrl)
 		return NDIS_STATUS_SUCCESS;
@@ -3271,7 +3583,13 @@ INT	multi_profile_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, UCHAR
 		else
 			dev_name = get_dbdcdev_name_prefix(ad, INT_MBSSID);
 
-		snprintf(final_name, IFNAMSIZ, "%s", dev_name);
+		ret = snprintf(final_name, IFNAMSIZ, "%s", dev_name);
+
+		if (os_snprintf_error(IFNAMSIZ, ret)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "final_name snprintf error!!!\n");
+		}
+
 		*ifidx -= data->pf1_num;
 	}
 
@@ -3281,6 +3599,7 @@ INT	multi_profile_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, UCHAR
 INT	multi_profile_apcli_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name, INT *ifidx)
 {
 	struct mpf_data *data;
+	INT ret;
 
 	if (!ad->multi_pf_ctrl)
 		return NDIS_STATUS_SUCCESS;
@@ -3292,7 +3611,11 @@ INT	multi_profile_apcli_devname_req(struct _RTMP_ADAPTER *ad, UCHAR *final_name,
 
 	if (*ifidx == 1) {
 		/* apcli1 is 2.4G, name is apclix0*/
-		sprintf(final_name, "%s", get_dbdcdev_name_prefix(ad, INT_APCLI));
+		ret = sprintf(final_name, "%s", get_dbdcdev_name_prefix(ad, INT_APCLI));
+		if (os_snprintf_error(IFNAMSIZ, ret)) {
+			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "final_name snprintf error!!!\n");
+		}
 	}
 
 	return NDIS_STATUS_SUCCESS;

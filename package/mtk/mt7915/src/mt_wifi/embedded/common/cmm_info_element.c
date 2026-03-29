@@ -93,6 +93,12 @@ void build_ext_channel_switch_ie(
 		return;
 	pIE->ID = IE_EXT_CHANNEL_SWITCH_ANNOUNCEMENT;
 	pIE->Length = 4;
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	/*if radar not detected on old channel, allow frames*/
+	if ((pAd->Zero_Loss_Enable == 1) && (pDot11h->RDMode != RD_SILENCE_MODE))
+		pIE->ChannelSwitchMode = 0;/*frames allowed*/
+	else
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 	pIE->ChannelSwitchMode = 1;	/*no further frames */
 	pIE->NewRegClass = get_regulatory_class(pAd, Channel, PhyMode, wdev);
 	pIE->NewChannelNum = Channel;
@@ -406,6 +412,13 @@ static INT build_extra_probe_req_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UC
 #endif /* RT_CFG80211_SUPPORT */
 #endif /*CONFIG_STA_SUPPORT*/
 
+	if (ScanInfo->ExtraIeLen > MAX_MGMT_PKT_LEN) {
+		MTWF_DBG(pAd, DBG_CAT_MISC, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					 "%s:: extra ie length invalid: %d\n",
+					  __func__, ScanInfo->ExtraIeLen);
+		return 0;
+	}
+
 	if (ScanInfo->ExtraIeLen && ScanInfo->ExtraIe) {
 		MAKE_IE_TO_BUF(buf, ScanInfo->ExtraIe,
 					   ScanInfo->ExtraIeLen, len);
@@ -558,6 +571,7 @@ INT build_ap_extended_cap_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *bu
     }
 #endif /* DOT11_HE_AX */
 
+#ifndef HOSTAPD_WPA3_SUPPORT
 #ifdef DOT11_SAE_SUPPORT
 	{
 		struct _SECURITY_CONFIG *sec_cfg = &wdev->SecConfig;
@@ -578,6 +592,7 @@ INT build_ap_extended_cap_ie(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR *bu
 			extCapInfo.sae_pk_pwd_used_exclusively = 0;
 	}
 #endif
+#endif /*HOSTAPD_WPA3_SUPPORT*/
 
 #ifdef BCN_PROTECTION_SUPPORT
 	{
@@ -838,6 +853,7 @@ INT build_wmm_cap_ie(RTMP_ADAPTER *pAd, struct _build_ie_info *info)
 	case WDEV_TYPE_STA:
 	case WDEV_TYPE_ADHOC:
 	case WDEV_TYPE_MESH:
+	case WDEV_TYPE_REPEATER:
 		len += build_sta_wmm_cap_ie(pAd, info->wdev, (UCHAR *)(info->frame_buf + len));
 		break;
 #endif /* CONFIG_STA_SUPPORT */
@@ -891,10 +907,21 @@ ULONG build_support_rate_ie(struct wifi_dev *wdev, UCHAR *sup_rate, UCHAR sup_ra
 	if (PhyMode == WMODE_B)
 		real_sup_rate_len = 4;
 
+#ifdef RT_CFG80211_SUPPORT
+#ifndef APCLI_CFG80211_SUPPORT
+	if (wdev->wdev_type == WDEV_TYPE_STA) {
+#endif
+#endif /*RT_CFG80211_SUPPORT*/
 #ifdef DOT11_SAE_SUPPORT
 	if (wdev->SecConfig.sae_cap.gen_pwe_method == PWE_HASH_ONLY && real_sup_rate_len < 8)
 		bss_mem_selector_len++;
 #endif
+#ifdef RT_CFG80211_SUPPORT
+#ifndef APCLI_CFG80211_SUPPORT
+	}
+#endif
+#endif /*RT_CFG80211_SUPPORT*/
+
 	total_len = real_sup_rate_len + bss_mem_selector_len;
 
 	MakeOutgoingFrame(buf, &frame_len, 1, &SupRateIe,
@@ -919,10 +946,28 @@ ULONG build_support_ext_rate_ie(struct wifi_dev *wdev, UCHAR sup_rate_len,
 	if (PhyMode == WMODE_B)
 		return frame_len;
 
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	if (wdev->wdev_type == WDEV_TYPE_AP
+		&& wdev->SecConfig.SaePwe == SAE_PWE_HASH_TO_ELEMENT && sup_rate_len >= 8) {
+		bss_mem_selector_len++;
+	}
+#endif
+
+#ifdef RT_CFG80211_SUPPORT
+#ifndef APCLI_CFG80211_SUPPORT
+	if (wdev->wdev_type == WDEV_TYPE_STA) {
+#endif
+#endif /*RT_CFG80211_SUPPORT*/
 #ifdef DOT11_SAE_SUPPORT
 	if (sup_rate_len >= 8 && wdev->SecConfig.sae_cap.gen_pwe_method == PWE_HASH_ONLY)
 		bss_mem_selector_len++;
 #endif
+#ifdef RT_CFG80211_SUPPORT
+#ifndef APCLI_CFG80211_SUPPORT
+	}
+#endif
+#endif /*RT_CFG80211_SUPPORT*/
+
 	if (ext_sup_rate_len == 0 && bss_mem_selector_len == 0)
 		return frame_len;
 
@@ -989,3 +1034,60 @@ VOID parse_support_ext_rate_ie(struct legacy_rate *rate, EID_STRUCT *eid_ptr)
 			eid_ptr->Octet[i] != (BSS_MEMBERSHIP_SELECTOR_VALID | BSS_MEMBERSHIP_SELECTOR_HE_PHY))
 			rate->ext_rate[rate->ext_rate_len++] = eid_ptr->Octet[i];
 }
+
+#ifdef CONFIG_6G_SUPPORT
+/*
+pEid: pointer to RNR IE's ID
+*/
+UINT parse_reduced_neighbor_report_ie(PEID_STRUCT pEid)
+{
+	/*EID(1) + Len(1) + Neighbor AP Information Fields(Variable, one or more)*/
+	/*Neighbor AP Information Fields:*/
+	/*TBTT Information Header(2) + Operating Class(1) + Channel Number(1)
+	+ TBTT Information Set(variable)*/
+	/*TBTT Information Set: COUNT decided by TBTT Information Count field*/
+	/*Neighbor AP TBTT Offset(1) + BSSID (optional,0/6) + Short SSID (optional,0/4)*/
+	UCHAR rnr_len = 0, calculate_len = 0;
+	UCHAR *prnr =  NULL;
+	struct GNU_PACKED neighbor_ap_info * ptbtt_info_hdr = NULL;
+	UCHAR tbtt_info_cnt = 0;
+	UCHAR tbtt_info_len = 0;
+
+	if (pEid == NULL)
+		return FALSE;
+	rnr_len = pEid->Len;
+	if (rnr_len < 4)/*Header + OP + ChlNum*/
+		return FALSE;
+	prnr = (UCHAR *)&pEid->Octet[0];
+	while (rnr_len > 0) {
+		ptbtt_info_hdr = (struct GNU_PACKED neighbor_ap_info *)prnr;
+		calculate_len += 4;
+		tbtt_info_cnt =
+			(ptbtt_info_hdr->tbtt_info_hdr & DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT_MASK) >> DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT_SHIFT;
+		tbtt_info_len =
+			(ptbtt_info_hdr->tbtt_info_hdr & DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN_MASK) >> DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN_SHIFT;
+		tbtt_info_cnt &= 0xF;
+/*The TBTT Information Count subfield contains the number of TBTT Information fields*/
+/*included in the TBTT Information Set field of the Neighbor AP Information field,minus one.*/
+		if (tbtt_info_len == 1)
+			calculate_len += 1*(tbtt_info_cnt - 1);
+		else if (tbtt_info_len == 5)
+			calculate_len += 5*(tbtt_info_cnt - 1);
+		else if (tbtt_info_len == 7)
+			calculate_len += 7*(tbtt_info_cnt - 1);
+		else if (tbtt_info_len == 11)
+			calculate_len += 11*(tbtt_info_cnt - 1);
+		else {
+			MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"%s,Len valid\n", __func__);
+			break;
+		}
+		rnr_len -= calculate_len;
+		ptbtt_info_hdr += calculate_len;/*shift the pointer*/
+	}
+	if (rnr_len == 0)/*value of len field match the payload bytes count*/
+		return TRUE;
+	else
+		return FALSE;
+}
+#endif /* CONFIG_6G_SUPPORT */

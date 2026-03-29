@@ -48,6 +48,7 @@ DECLARE_TIMER_FUNCTION(RRM_QuietTimeout);
 BUILD_TIMER_FUNCTION(RRM_QuietOffsetTimeout);
 BUILD_TIMER_FUNCTION(RRM_QuietTimeout);
 
+#define BEACON_REPORT_MAX_OPTIONAL_SUB_IE_LEN 224
 
 static VOID RRM_QuietOffsetTimeout(
 	IN PVOID SystemSpecific1,
@@ -135,6 +136,11 @@ void RRM_ReadParametersFromFile(
 	}
 #endif /* CONFIG_AP_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
+#ifdef DBDC_MODE
+		if (pAd->CommonCfg.dbdc_mode)
+			pAd->MSTANum = MAX_MULTI_STA;
+#endif
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, "%s::pAd->MSTANum=%d\n", __func__, pAd->MSTANum);
 	if (RTMPGetKeyParameter("RRMEnable", tmpbuf, 255, buffer, TRUE)) {
 		for (loop = 0, macptr = rstrtok(tmpbuf, ";");
 			(macptr && loop < pAd->MSTANum);
@@ -145,7 +151,7 @@ void RRM_ReadParametersFromFile(
 			pAd->StaCfg[loop].wdev.RrmCfg.bDot11kRRMEnable =
 				(Enable > 0) ? TRUE : FALSE;
 			pAd->StaCfg[loop].wdev.RrmCfg.bDot11kRRMEnableSet = TRUE;
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s::(bDot11kRRMEnable[%d]=%d)\n",
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s::(STA-bDot11kRRMEnable[%d]=%d)\n",
 					__func__, loop,
 					pAd->StaCfg[loop].wdev.RrmCfg.bDot11kRRMEnable));
 		}
@@ -200,6 +206,14 @@ INT Set_BeaconReq_RandInt_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	return TRUE;
 }
 
+bool LBRI;
+INT Set_BeaconReq_LastBcnRptInd_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	LBRI = (UINT) simple_strtol(arg, 0, 10);
+
+	return TRUE;
+}
+
 INT Set_BeaconReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	INT Loop;
@@ -209,6 +223,7 @@ INT Set_BeaconReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT ArgIdx;
 	RTMP_STRING *thisChar;
 	RRM_MLME_BCN_REQ_INFO BcnReq;
+	struct wifi_dev *pWdev = &pAd->ApCfg.MBSSID[ifIndex].wdev;
 	UINT8 default_request_ie[MAX_NUM_OF_REQ_IE] = {
 							0,		/* SSID */
 							1, /* Support Rate*/
@@ -229,8 +244,17 @@ INT Set_BeaconReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 							54,		/* Mobility Domain. */
 							221
 						};	/* Vendor Specific. */
+
+	if (!IS_RRM_ENABLE(pWdev)) {
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+				"(%s) RRM is disabled\n", __func__);
+		return FALSE;
+	}
+
 	ArgIdx = 0;
 	NdisZeroMemory(&BcnReq, sizeof(RRM_MLME_BCN_REQ_INFO));
+	BcnReq.LastBcnRptInd = LBRI;
+	LBRI = 0; /* set default LBRI to 0 */
 	BcnReq.report_detail = 1; /*set default report detail to 1*/
 	/*set default request ie*/
 	BcnReq.request_ie_num = MAX_NUM_OF_REQ_IE;
@@ -264,8 +288,12 @@ INT Set_BeaconReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 				os_zero_mem(&aid_map, sizeof(entrytb_aid_search_t));
 
 				aid_map.aid_search = (UINT16) simple_strtol(thisChar, 0, 16);
-				if (entrytb_traversal(pAd, traversal_func_find_entry_by_aid, (void *)&aid_map) == TRUE)
-					wcid = aid_map.entry->wcid;
+				if (entrytb_traversal(pAd, traversal_func_find_entry_by_aid,
+					(void *)&aid_map) == TRUE) {
+					if (aid_map.entry != NULL) {
+						wcid = aid_map.entry->wcid;
+					}
+				}
 			}
 
 			if (!IS_WCID_VALID(pAd, wcid)) {
@@ -456,7 +484,7 @@ INT Set_LinkMeasureReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	UCHAR ifIndex = pObj->ioctl_if;
-	UINT Aid = 1;
+	UINT Aid = 0;
 
 	Aid = os_str_tol(arg, 0, 10);
 	RRM_EnqueueLinkMeasureReq(pAd, Aid, ifIndex);
@@ -563,9 +591,8 @@ INT Set_TxStreamMeasureReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		TransmitReq.bTriggerReport = 1;
 
 	pMacEntry = &pAd->MacTab.Content[Aid];
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, ("%s::Aid=%d, PeerMac=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, Aid,	pMacEntry->Addr[0], pMacEntry->Addr[1],
-			 pMacEntry->Addr[2], pMacEntry->Addr[3], pMacEntry->Addr[4], pMacEntry->Addr[5]));
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, ("%s::Aid=%d, PeerMac="MACSTR"\n",
+			 __func__, Aid,	MAC2STR(pMacEntry->Addr)));
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, ("Duration=%d, Tid=%d, Bin 0 Range=%d\n",
 			 TransmitReq.MeasureDuration, TransmitReq.Tid, TransmitReq.BinRange));
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, ("ArvCondition=%d, ConsecutiveCondition=%d, DelayCondition=%d\n",
@@ -581,7 +608,7 @@ INT Set_TxStreamMeasureReq_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 INT Set_RRM_Selftest_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 {
-	UINT Cmd = 1;
+	UINT Cmd = 0;
 	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
 	PMAC_TABLE_ENTRY pEntry = NULL;
 	UCHAR StaAddr[MAC_ADDR_LEN] = {0x00, 0x0c, 0x43, 0x00, 0x00, 0x00};
@@ -591,9 +618,13 @@ INT Set_RRM_Selftest_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	switch (Cmd) {
 	case 1: /* insert a STA for RRM Beacon Report request testing. */
 		pEntry = MacTableInsertEntry(pAd, StaAddr, &pAd->ApCfg.MBSSID[pObj->ioctl_if].wdev, ENTRY_CLIENT, OPMODE_AP, TRUE);
-		pEntry->Sst = SST_ASSOC;
-		pEntry->CapabilityInfo |= RRM_CAP_BIT;
-		pEntry->RrmEnCap.field.BeaconActiveMeasureCap = 1;
+		if (pEntry) {
+			pEntry->Sst = SST_ASSOC;
+			pEntry->CapabilityInfo |= RRM_CAP_BIT;
+			pEntry->RrmEnCap.field.BeaconActiveMeasureCap = 1;
+		} else
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+				"MacTable Insert Entry failed\n");
 		break;
 	}
 
@@ -744,6 +775,7 @@ VOID RRM_PeerNeighborReqAction(
 	PMEASURE_REQ_ENTRY pMeasure_Entry = NULL;
 	PNET_DEV NetDev = NULL;
 	UINT32 FrameLen = 0;
+	int ret = 0;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s::\n", __func__));
 
@@ -764,33 +796,41 @@ VOID RRM_PeerNeighborReqAction(
 
 		if (NetDev == NULL) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-				("no valid NetDev! BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				PRINT_MAC(pFr->Hdr.Addr3)));
+				("no valid NetDev! BSSID="MACSTR"\n",
+				MAC2STR(pFr->Hdr.Addr3)));
 			return;
 		}
 
 		/* skip Category and action code. */
 		pFramePtr += 2;
 		NdisMoveMemory(&NRReqToken, pFramePtr, 1);
-		pMeasure_Entry = MeasureReqInsert(pAd, NRReqToken);
-		RTMP_SEM_LOCK(&pAd->CommonCfg.MeasureReqTabLock);
-		pMeasure_Entry->skip_time_check = TRUE;
-		pMeasure_Entry->CurrentState = WAIT_NR_RSP;
-		pMeasure_Entry->Priv = pAd;
-		pMeasure_Entry->ControlIndex = APIndex;
-		memcpy(pMeasure_Entry->StaMac, pEntry->Addr, MAC_ADDR_LEN);
-		RTMPInitTimer(pAd, &pMeasure_Entry->WaitNRRspTimer,
-				GET_TIMER_FUNCTION(WaitNRRspTimeout), pMeasure_Entry, FALSE);
-		RTMP_SEM_UNLOCK(&pAd->CommonCfg.MeasureReqTabLock);
+		pMeasure_Entry = MeasureReqInsert(pAd, NRReqToken, NB_MEASURE_REQ);
+		if (pMeasure_Entry) {
+			RTMP_SEM_LOCK(&pAd->CommonCfg.MeasureReqTabLock);
+			pMeasure_Entry->skip_time_check = TRUE;
+			pMeasure_Entry->NrCurrentState = WAIT_NR_RSP;
+			pMeasure_Entry->Priv = pAd;
+			pMeasure_Entry->ControlIndex = APIndex;
+			memcpy(pMeasure_Entry->StaMac, pEntry->Addr, MAC_ADDR_LEN);
+			RTMPInitTimer(pAd, &pMeasure_Entry->WaitNRRspTimer,
+					GET_TIMER_FUNCTION(WaitNRRspTimeout), pMeasure_Entry, FALSE);
+			RTMP_SEM_UNLOCK(&pAd->CommonCfg.MeasureReqTabLock);
 
-		FrameLen = Elem->MsgLen - sizeof(HEADER_802_11) - 2;
-		wext_send_nr_req_event(NetDev, pFr->Hdr.Addr2, pFramePtr, FrameLen);
+			FrameLen = Elem->MsgLen - sizeof(HEADER_802_11) - 2;
+			wext_send_nr_req_event(NetDev, pFr->Hdr.Addr2, pFramePtr, FrameLen);
 
-		RTMPSetTimer(&pMeasure_Entry->WaitNRRspTimer, NR_RSP_TIMEOUT_VALUE);
+			RTMPSetTimer(&pMeasure_Entry->WaitNRRspTimer, NR_RSP_TIMEOUT_VALUE);
+		} else
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+				"Measure Req Insert failed\n");
 	} else {
 		if (RRM_PeerNeighborReqSanity(pAd, Elem->Msg, Elem->MsgLen, &DialogToken, &pSsid, &SsidLen)) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("DialogToken=%x\n", DialogToken));
-			snprintf(ssidbuf, sizeof(ssidbuf), "%s", pSsid);
+			ret = snprintf(ssidbuf, sizeof(ssidbuf), "%s", pSsid);
+			if (os_snprintf_error(sizeof(ssidbuf), ret)) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, "ssidbuf snprintf error!\n");
+				return;
+			}
 			ssidbuf[SsidLen] = '\0';
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, ("pSsid=%s\n", ssidbuf));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("SsidLen=%d\n", SsidLen));
@@ -812,7 +852,7 @@ VOID RRM_BeaconReportHandler(
 	USHORT LenVIE = 0;
 	NDIS_802_11_VARIABLE_IEs *pVIE = NULL;
 	UCHAR *VarIE = NULL;		/*Wframe-larger-than=1024 warning  removal*/
-	ULONG Idx = BSS_NOT_FOUND;
+	ULONG Idx = 0;
 	/*
 		if peer response mesurement pilot frame, pVIE->Length should be init.
 		Sofar we don't know the mesurement pilot frame format, so we use below flag to avoid call BssTableSetEntry() instead of init. pVIE->Length
@@ -861,11 +901,13 @@ VOID RRM_BeaconReportHandler(
 	BcnReqInfoField.word = pBcnRep->RepFrameInfo;
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s:: ReqClass=%d, Channel=%d\n",
 			 __func__, pBcnRep->RegulatoryClass, pBcnRep->ChNumber));
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("Bssid=%02x:%02x:%02x:%02x:%02x:%02x, FrameType=%s\n",
-			 PRINT_MAC(pBcnRep->Bssid), (BcnReqInfoField.field.ReportFrameType == 0) ? "beacon, probe resp" : "measurement pilot"));
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("Bssid="MACSTR", FrameType=%s\n",
+			 MAC2STR(pBcnRep->Bssid), (BcnReqInfoField.field.ReportFrameType == 0) ? "beacon, probe resp" : "measurement pilot"));
 	Rssi = pBcnRep->RCPI + pAd->BbpRssiToDbmDelta;
 	RemainLen -= sizeof(RRM_BEACON_REP_INFO);
 	ptr += sizeof(RRM_BEACON_REP_INFO);
+	MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, "%s:: ReqClass=%d, Channel=%d, RCPI=%d\n",
+			 __func__, pBcnRep->RegulatoryClass, pBcnRep->ChNumber, pBcnRep->RCPI);
 
 	/* check option sub element IE. */
 	while (RemainLen > 0) {
@@ -901,18 +943,22 @@ VOID RRM_BeaconReportHandler(
 			break;
 		}
 
+		/* check beacon report optional sub-ie len, the max value is 224, and if len is 0avoid infinite loop.*/
+		if ((pRrmSubFrame->Length > BEACON_REPORT_MAX_OPTIONAL_SUB_IE_LEN) || (pRrmSubFrame->Length == 0)) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+				"%s:: SubIe: ID=%x, but Len=%d is invalid\n",
+				__func__, pRrmSubFrame->SubId, pRrmSubFrame->Length);
+			break;
+		}
+
 		RemainLen -= (pRrmSubFrame->Length + 2);
 		ptr += (pRrmSubFrame->Length + 2);
-
-		/* avoid infinite loop. */
-		if (pRrmSubFrame->Length == 0)
-			break;
 	}
 
 	if (NdisEqualMemory(pBcnRep->Bssid, ie_list->Bssid, MAC_ADDR_LEN) == FALSE) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-				 ("%s():BcnReq->BSSID=%02x:%02x:%02x:%02x:%02x:%02x not equal ie_list->Bssid=%02x:%02x:%02x:%02x:%02x:%02x!\n",
-				  __func__, PRINT_MAC(pBcnRep->Bssid), PRINT_MAC(ie_list->Bssid)));
+				 ("%s():BcnReq->BSSID="MACSTR" not equal ie_list->Bssid="MACSTR"!\n",
+				  __func__, MAC2STR(pBcnRep->Bssid), MAC2STR(ie_list->Bssid)));
 
 		if (NdisEqualMemory(ie_list->Bssid, ZERO_MAC_ADDR, MAC_ADDR_LEN)) {
 			COPY_MAC_ADDR(&ie_list->Addr2[0], pBcnRep->Bssid);
@@ -947,15 +993,14 @@ VOID RRM_BeaconReportHandler(
 	}
 
 #endif /* AP_SCAN_SUPPORT */
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
-	if (ie_list != NULL) {
-	#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-		/* fix memory leak when trigger scan continuously*/
-		if (ie_list->CustomerVendorIE.pointer)
-			os_free_mem(ie_list->CustomerVendorIE.pointer);
-	#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
+	if (ie_list != NULL)
 		os_free_mem(ie_list);
-	}
 
 	if (VarIE != NULL)
 		os_free_mem(VarIE);
@@ -976,7 +1021,6 @@ VOID RRM_PeerMeasureRepAction(
 	PMAC_TABLE_ENTRY pEntry;
 	UINT8 DialogToken;
 	PMEASURE_REQ_ENTRY pDialogEntry = NULL;
-	BOOLEAN Cancelled;
 	PNET_DEV NetDev = NULL;
 #endif
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s::\n", __func__));
@@ -998,27 +1042,31 @@ VOID RRM_PeerMeasureRepAction(
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 				("DialogToken is non-zere, check DialogToken!\n"));
 
-		pDialogEntry = MeasureReqLookUp(pAd, DialogToken);
+		pDialogEntry = MeasureReqLookUp(pAd, DialogToken, BCN_MEASURE_REQ);
 		if (!pDialogEntry) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 				("DialogToken invalid(%d)!", DialogToken));
 			return;
 		}
-		RTMPCancelTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);
-		RTMPReleaseTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);
+		/*receive multiple beacon rep*/
+		pDialogEntry->RcvBcnRepCnt += 1;
+		/*RTMPCancelTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);*/
+		/*RTMPReleaseTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);*/
 	} else {
 		if (pFramePtr[2] != 0) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 				("DialogToken is zere, MeasurementToken is non-zero, check MeasurementToken!\n"));
 
-			pDialogEntry = MeasureReqLookUp(pAd, pFramePtr[2]);
+			pDialogEntry = MeasureReqLookUp(pAd, pFramePtr[2], BCN_MEASURE_REQ);
 			if (!pDialogEntry) {
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 					("MeasurementToken invalid(%d)!", pFramePtr[2]));
 				return;
 			}
-			RTMPCancelTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);
-			RTMPReleaseTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);
+			pDialogEntry->RcvBcnRepCnt += 1;
+			/*receive multiple beacon rep*/
+			/*RTMPCancelTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);*/
+			/*RTMPReleaseTimer(&pDialogEntry->WaitBCNRepTimer, &Cancelled);*/
 		} else {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 				("Both DialogToken and MeasurementToken are zero, drop this packet!\n"));
@@ -1043,8 +1091,14 @@ VOID RRM_PeerMeasureRepAction(
 			switch (eid_ptr->Eid) {
 			case IE_MEASUREMENT_REPORT: {
 				LONG BcnRepLen = (LONG)eid_ptr->Len - 3;
+				if (BcnRepLen < 0) {
+					MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+						("Beacon Report length incorrect. Abort parsing\n"));
+					goto len_error;
+				}
 				NdisMoveMemory(&ReportMode, eid_ptr->Octet + 1, 1);
 				NdisMoveMemory(&ReportType, eid_ptr->Octet + 2, 1);
+				NdisMoveMemory(pDialogEntry->StaMac, pEntry->Addr, MAC_ADDR_LEN);
 				pMeasureRep = (PVOID)(eid_ptr->Octet + 3);
 				if (BcnRepLen) {
 					if (ReportType == RRM_MEASURE_SUBTYPE_BEACON)
@@ -1064,8 +1118,8 @@ VOID RRM_PeerMeasureRepAction(
 								("the request to do the mesurement with type(%d) is too late", ReportType));
 						} else {
 							MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-								("STA has no beacon report(%02x:%02x:%02x:%02x:%02x:%02x) info to report",
-									PRINT_MAC(pFr->Hdr.Addr2)));
+								("STA has no beacon report("MACSTR") info to report",
+									MAC2STR(pFr->Hdr.Addr2)));
 						}
 						/* send Beacon Response to up-layer */
 						NetDev = pAd->ApCfg.MBSSID[pDialogEntry->ControlIndex].wdev.if_dev;
@@ -1088,7 +1142,9 @@ VOID RRM_PeerMeasureRepAction(
 		wapp_send_bcn_report_complete(pAd, pEntry);
 #endif
 	} while (FALSE);
-	MeasureReqDelete(pAd, pDialogEntry->DialogToken);
+len_error:
+	/*receive multiple beacon rep*/
+	/*MeasureReqDelete(pAd, pDialogEntry->DialogToken);*/
 #endif
 	return;
 }
@@ -1096,7 +1152,7 @@ VOID RRM_PeerMeasureRepAction(
 int rrm_MsgHandle(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *wrq)
 {
 	p_rrm_command_t p_rrm_command = NULL;
-	int status = NDIS_STATUS_FAILURE;
+	int status = NDIS_STATUS_SUCCESS;
 	os_alloc_mem(NULL, (UCHAR **)&p_rrm_command, wrq->u.data.length);
 
 	if (p_rrm_command == NULL) {
@@ -1232,8 +1288,8 @@ int rrm_send_beacon_req(RTMP_ADAPTER *pAd,
 	pMbss = &pAd->ApCfg.MBSSID[ifIndex];
 	if (pMbss->wdev.RrmCfg.bDot11kRRMEnable == FALSE) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() AP(%02x:%02x:%02x:%02x:%02x:%02x) not support rrm\n",
-			__func__, PRINT_MAC(pMbss->wdev.bssid)));
+			("%s() AP("MACSTR") not support rrm\n",
+			__func__, MAC2STR(pMbss->wdev.bssid)));
 		return NDIS_STATUS_FAILURE;
 	}
 
@@ -1262,7 +1318,7 @@ int rrm_send_beacon_req(RTMP_ADAPTER *pAd,
 		os_free_mem(pBuf);
 		return NDIS_STATUS_FAILURE;
 	}
-	pEntry = MeasureReqInsert(pAd, p_bcn_req_data->dialog_token);
+	pEntry = MeasureReqInsert(pAd, p_bcn_req_data->dialog_token, BCN_MEASURE_REQ);
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s, Fail to Insert MesureReq Token(%d)!\n",
@@ -1271,20 +1327,22 @@ int rrm_send_beacon_req(RTMP_ADAPTER *pAd,
 		return NDIS_STATUS_FAILURE;
 	}
 	pEntry->skip_time_check = TRUE;
-	pEntry->CurrentState = WAIT_BCN_REQ;
+	pEntry->BcnCurrentState = WAIT_BCN_REQ;
 	pEntry->Priv = pAd;
 	pEntry->ControlIndex = ifIndex;
+	COPY_MAC_ADDR(pEntry->StaMac, p_bcn_req_data->peer_address);
 
 	Event = (BCN_EVENT_DATA *)pBuf;
 	Event->ControlIndex = ifIndex;
 	Event->MeasureReqToken = p_bcn_req_data->dialog_token;
+	Event->measuretype = BCN_MEASURE_REQ;
 	RTMPMoveMemory(Event->stamac, p_bcn_req_data->peer_address, MAC_ADDR_LEN);
 	Event->DataLen = bcn_req_len;
 	NdisMoveMemory(Event->Data, p_bcn_req_data, bcn_req_len);
 
 	if (!MlmeEnqueue(pAd, BCN_STATE_MACHINE, BCN_REQ_RAW, EventLen, pBuf, 0)) {
 		NStatus = NDIS_STATUS_FAILURE;
-		MeasureReqDelete(pAd, p_bcn_req_data->dialog_token);
+		MeasureReqDelete(pAd, p_bcn_req_data->dialog_token, BCN_MEASURE_REQ);
 	}
 
 	/*free memory*/
@@ -1413,8 +1471,8 @@ int check_rrm_nrrsp_custom_params(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(p_nr_rsp_data->peer_address)));
+			("%s() STA("MACSTR") not associates with AP!\n",
+			__func__, MAC2STR(p_nr_rsp_data->peer_address)));
 		goto error;
 	}
 
@@ -1422,8 +1480,8 @@ int check_rrm_nrrsp_custom_params(
 	if (!memcmp(&Zero_RrmEnCap, &pEntry->RrmEnCap,
 			sizeof(RRM_EN_CAP_IE))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not support rrm\n",
-			__func__, PRINT_MAC(p_nr_rsp_data->peer_address)));
+			("%s() STA("MACSTR") not support rrm\n",
+			__func__, MAC2STR(p_nr_rsp_data->peer_address)));
 		goto error;
 	}
 
@@ -1465,13 +1523,13 @@ error:
 
 void compose_rrm_nrrsp_ie(RTMP_ADAPTER *pAd,
 	struct wifi_dev *wdev,
-	PUCHAR nr_rsp_ie, PUINT32 p_ie_len,
+	PUCHAR nr_rsp_ie, PULONG p_ie_len,
 	struct nr_info *p_candidate_info, UINT8 cnt)
 {
 	UINT i = 0;
 	struct nr_info *p_info = p_candidate_info;
 	BOOLEAN nr_flag = FALSE;
-	ULONG bss_index = BSS_NOT_FOUND;
+	ULONG bss_index = 0;
 	ULONG ie_len = *p_ie_len;
 	BSS_ENTRY *pBssEntry = NULL;
 	RRM_NEIGHBOR_REP_INFO NeighborRepInfo;
@@ -1582,7 +1640,7 @@ VOID send_nr_resp_toair(
 	RRM_EN_CAP_IE Zero_RrmEnCap;
 
 	/*check token*/
-	pEntry = MeasureReqLookUp(pAd, Event->MeasureReqToken);
+	pEntry = MeasureReqLookUp(pAd, Event->MeasureReqToken, NB_MEASURE_REQ);
 	if (pEntry == NULL &&
 		Event->MeasureReqToken != 0) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
@@ -1596,8 +1654,8 @@ VOID send_nr_resp_toair(
 		((pMacEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 		(pMacEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(Event->stamac)));
+			("%s() STA("MACSTR") not associates with AP!\n",
+			__func__, MAC2STR(Event->stamac)));
 		return;
 	}
 
@@ -1605,8 +1663,8 @@ VOID send_nr_resp_toair(
 	if (!memcmp((PUCHAR)&Zero_RrmEnCap, (PUCHAR)&pMacEntry->RrmEnCap,
 			sizeof(RRM_EN_CAP_IE))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not support rrm\n",
-			__func__, PRINT_MAC(Event->stamac)));
+			("%s() STA("MACSTR") not support rrm\n",
+			__func__, MAC2STR(Event->stamac)));
 		return;
 	}
 
@@ -1639,7 +1697,7 @@ VOID send_nr_resp_toair(
 		RTMPCancelTimer(&pEntry->WaitNRRspTimer, &Cancelled);
 		RTMPReleaseTimer(&pEntry->WaitNRRspTimer, &Cancelled);
 	}
-	MeasureReqDelete(pAd, Event->MeasureReqToken);
+	MeasureReqDelete(pAd, Event->MeasureReqToken, NB_MEASURE_REQ);
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);
 	os_free_mem(Buf);
 
@@ -1662,7 +1720,7 @@ VOID send_nr_rsp_param_toair(
 	p_nr_rsp_data = (p_rrm_nrrsp_info_custom_t)Event->Data;
 
 	/*check token*/
-	pEntry = MeasureReqLookUp(pAd, p_nr_rsp_data->dialogtoken);
+	pEntry = MeasureReqLookUp(pAd, p_nr_rsp_data->dialogtoken, NB_MEASURE_REQ);
 	if (pEntry == NULL && p_nr_rsp_data->dialogtoken != 0) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
 			("%s() invalid token(%d)\n", __func__, p_nr_rsp_data->dialogtoken));
@@ -1698,7 +1756,7 @@ VOID send_nr_rsp_param_toair(
 
 	/*compose the  Neighbor report ie*/
 	compose_rrm_nrrsp_ie(pAd, &pAd->ApCfg.MBSSID[Event->ControlIndex].wdev,
-		pOutBuffer, (PUINT32)&FrameLen,
+		pOutBuffer, &FrameLen,
 		p_nr_rsp_data->nrresp_info, p_nr_rsp_data->nrresp_info_count);
 
 	/*receive neighbor report response*/
@@ -1707,7 +1765,7 @@ VOID send_nr_rsp_param_toair(
 		RTMPCancelTimer(&pEntry->WaitNRRspTimer, &Cancelled);
 		RTMPReleaseTimer(&pEntry->WaitNRRspTimer, &Cancelled);
 	}
-	MeasureReqDelete(pAd, p_nr_rsp_data->dialogtoken);
+	MeasureReqDelete(pAd, p_nr_rsp_data->dialogtoken, NB_MEASURE_REQ);
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pOutBuffer, FrameLen);
 	os_free_mem(pOutBuffer);
 
@@ -1826,10 +1884,10 @@ VOID  NRRspTimeout(
 	BOOLEAN Cancelled;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_OFF,
-		("%s StaMac(%02x:%02x:%02x:%02x:%02x:%02x), MeasureReqToken=%d\n",
-		__func__, PRINT_MAC(Event->stamac), MeasureReqToken));
+		("%s StaMac("MACSTR"), MeasureReqToken=%d\n",
+		__func__, MAC2STR(Event->stamac), MeasureReqToken));
 
-	pEntry = MeasureReqLookUp(pAd, MeasureReqToken);
+	pEntry = MeasureReqLookUp(pAd, MeasureReqToken, NB_MEASURE_REQ);
 
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
@@ -1839,7 +1897,7 @@ VOID  NRRspTimeout(
 
 	RTMPReleaseTimer(&pEntry->WaitNRRspTimer, &Cancelled);
 	/*delete measure entry to avoid the full condition of measure table*/
-	MeasureReqDelete(pAd, MeasureReqToken);
+	MeasureReqDelete(pAd, MeasureReqToken, NB_MEASURE_REQ);
 
 }
 
@@ -1886,12 +1944,12 @@ enum NR_STATE NRPeerCurrentState(
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 			("%s, MeasureReqToken=%d!\n", __func__, MeasureReqToken));
 
-	 pEntry = MeasureReqLookUp(pAd, MeasureReqToken);
+	 pEntry = MeasureReqLookUp(pAd, MeasureReqToken, NB_MEASURE_REQ);
 
 	 if (pEntry != NULL) {
 		 MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-			("%s, CurrentState=%d!\n", __func__, pEntry->CurrentState));
-		return pEntry->CurrentState;
+			("%s, NrCurrentState=%d!\n", __func__, pEntry->NrCurrentState));
+		return pEntry->NrCurrentState;
 	 } else {
 		 MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s, invalid MeasureReqToken!\n", __func__));
@@ -1916,8 +1974,8 @@ int check_rrm_BcnReq_custom_params(
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(p_beacon_req->peer_address)));
+			("%s() STA("MACSTR") not associates with AP!\n",
+			__func__, MAC2STR(p_beacon_req->peer_address)));
 		goto error;
 	}
 
@@ -1925,8 +1983,8 @@ int check_rrm_BcnReq_custom_params(
 	if (!(pEntry->RrmEnCap.field.BeaconPassiveMeasureCap ||
 		pEntry->RrmEnCap.field.BeaconActiveMeasureCap)) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not support beacon report!\n",
-			__func__, PRINT_MAC(p_beacon_req->peer_address)));
+			("%s() STA("MACSTR") not support beacon report!\n",
+			__func__, MAC2STR(p_beacon_req->peer_address)));
 		goto error;
 	}
 
@@ -2003,8 +2061,8 @@ VOID set_rrm_BcnReq_optional_params(
 	if (!RTMPCompareMemory(p_beacon_req->bssid, ZERO_MAC_ADDR, MAC_ADDR_LEN)) {
 		RTMPMoveMemory(p_beacon_req->bssid, BROADCAST_ADDR, MAC_ADDR_LEN);
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-			("%s() set optional bssid = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			__func__, PRINT_MAC(p_beacon_req->bssid)));
+			("%s() set optional bssid = "MACSTR"\n",
+			__func__, MAC2STR(p_beacon_req->bssid)));
 	}
 	if (p_beacon_req->mode == 0) {
 		if (pEntry->RrmEnCap.field.BeaconActiveMeasureCap)
@@ -2071,9 +2129,9 @@ void compose_rrm_BcnReq_ie(RTMP_ADAPTER *pAd,
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 		("%s RegulatoryClass=%d ChNumber=%d RandomInterval=%d "
 		"MeasureDuration=%d MeasureMode=%d "
-		"Bssid(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__,
+		"Bssid("MACSTR")\n", __func__,
 		BcnReq.RegulatoryClass, BcnReq.ChNumber, BcnReq.RandomInterval,
-		BcnReq.MeasureDuration, BcnReq.MeasureMode, PRINT_MAC(BcnReq.Bssid)));
+		BcnReq.MeasureDuration, BcnReq.MeasureMode, MAC2STR(BcnReq.Bssid)));
 
 	/* insert SSID sub field */
 	RRM_InsertBcnReqSsidSubIE(pAd, (pOutBuffer+FrameLen),
@@ -2165,21 +2223,23 @@ static VOID BcnRepTimeout(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	PBCN_EVENT_DATA Event = (BCN_EVENT_DATA *)Elem->Msg;
 	UINT8 MeasureReqToken = Event->MeasureReqToken;
 	BOOLEAN Cancelled;
-
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-		("%s StaMac(%02x:%02x:%02x:%02x:%02x:%02x), MeasureReqToken=%d\n",
-		__func__, PRINT_MAC(Event->stamac), MeasureReqToken));
+		("%s StaMac("MACSTR"), MeasureReqToken=%d\n",
+		__func__, MAC2STR(Event->stamac), MeasureReqToken));
 
-	pEntry = MeasureReqLookUp(pAd, MeasureReqToken);
+	pEntry = MeasureReqLookUp(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s Bcnreq entry not founded\n", __func__));
 		return;
 	}
-
 	RTMPReleaseTimer(&pEntry->WaitBCNRepTimer, &Cancelled);
-	MeasureReqDelete(pAd, MeasureReqToken);
-
+	MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
+	if (pEntry->RcvBcnRepCnt != 0) {
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
+			"Receive Beacon Report Count=%d, not send to up-layer\n", pEntry->RcvBcnRepCnt);
+		return;
+	}
 	/* send Beacon Request timeout to up-layer */
 	NetDev = pAd->ApCfg.MBSSID[pEntry->ControlIndex].wdev.if_dev;
 	if (NetDev == NULL) {
@@ -2238,7 +2298,7 @@ static VOID SendBcnReqToAir_SetParam(
 	if (NStatus != NDIS_STATUS_SUCCESS) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s() check customer params failed\n", __func__));
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 		return;
 	}
 
@@ -2250,7 +2310,7 @@ static VOID SendBcnReqToAir_SetParam(
 	if (NStatus != NDIS_STATUS_SUCCESS) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			("%s, MEMORY ALLOC Failed!!\n", __func__));
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 		return;
 	}
 	ActHeaderInit(pAd, &ActHdr, Event->stamac,
@@ -2265,13 +2325,21 @@ static VOID SendBcnReqToAir_SetParam(
 
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pOutBuffer, FrameLen);
 
-	pMeasureReqEntry = MeasureReqLookUp(pAd, MeasureReqToken);
+	pMeasureReqEntry = MeasureReqLookUp(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	if (!pMeasureReqEntry) {
 		MlmeFreeMemory(pOutBuffer);
 		return;
 	}
-	pMeasureReqEntry->CurrentState = WAIT_BCN_REP;
-	Timeout = pBcnReq->timeout * 1000;
+	pMeasureReqEntry->BcnCurrentState = WAIT_BCN_REP;
+	if (pBcnReq->timeout == BCN_REP_TIMEOUT_VALUE)
+		Timeout = pBcnReq->timeout;
+	else {
+		Timeout = pBcnReq->timeout * 1000;
+#ifdef CONFIG_MAP_SUPPORT
+		if (IS_MAP_ENABLE(pAd))
+			Timeout = BCN_REP_TIMEOUT_VALUE_MAP;
+#endif
+	}
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 		("%s() Timeout=%lds!\n", __func__, Timeout/1000));
 	RTMPInitTimer(pAd, &pMeasureReqEntry->WaitBCNRepTimer,
@@ -2294,15 +2362,15 @@ static VOID SendBcnRepToAir(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	pEntry = MacTableLookup(pAd, Event->stamac);
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-				("%s() STA not associates with AP(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				 __func__, PRINT_MAC(Event->stamac)));
-		MeasureReqDelete(pAd, MeasureReqToken);
+				("%s() STA not associates with AP("MACSTR")\n",
+				 __func__, MAC2STR(Event->stamac)));
+		MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REP);
 		bcn_rep_cnt--;
 		return;
 	}
 
 	if (bcn_rep_cnt == 1)
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REP);
 
 	bcn_rep_cnt--;
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Event->Data, Event->DataLen);
@@ -2322,38 +2390,64 @@ static VOID SendBcnReqToAir_Raw(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 	UINT8 MeasureReqToken = Event->MeasureReqToken;
 	UINT8 IfIdx = Event->ControlIndex;
 	HEADER_802_11 ActHdr;
+	BOOLEAN Cancelled = FALSE;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE, ("%s()\n", __func__));
 
 	/* the the peer is connected or not */
 	pEntry = MacTableLookup(pAd, p_bcn_req_data_raw->peer_address);
+	pMeasureReqEntry = MeasureReqLookUp(pAd, MeasureReqToken, BCN_MEASURE_REQ);
 	if (!pEntry ||
 		!(IS_AKM_OPEN(pAd->ApCfg.MBSSID[IfIdx].wdev.SecConfig.AKMMap) ||
 			((pEntry->SecConfig.Handshake.WpaState == AS_PTKINITDONE) &&
 			(pEntry->SecConfig.Handshake.GTKState == REKEY_ESTABLISHED)))) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) not associates with AP!\n",
-			__func__, PRINT_MAC(p_bcn_req_data_raw->peer_address)));
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_WARN,
+			"STA("MACSTR") not associates with AP!\n",
+			MAC2STR(p_bcn_req_data_raw->peer_address));
+
+		if (pMeasureReqEntry) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
+				"release WaitBCNRepTimer Valid=%d\n",
+				pMeasureReqEntry->WaitBCNRepTimer.Valid);
+			RTMPCancelTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			RTMPReleaseTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
+		}
 		return;
 	}
 
 	/* check the peer supports 11k or not */
 	if (!(pEntry->RrmEnCap.field.BeaconPassiveMeasureCap ||
 		pEntry->RrmEnCap.field.BeaconActiveMeasureCap)) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-			("%s() STA(%02x:%02x:%02x:%02x:%02x:%02x) does not support beacon report!\n",
-			__func__, PRINT_MAC(p_bcn_req_data_raw->peer_address)));
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_WARN,
+			"STA("MACSTR") does not support beacon report!\n",
+			MAC2STR(p_bcn_req_data_raw->peer_address));
+
+		if (pMeasureReqEntry) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
+				"release WaitBCNRepTimer Valid=%d\n",
+				pMeasureReqEntry->WaitBCNRepTimer.Valid);
+			RTMPCancelTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			RTMPReleaseTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
+		}
 		return;
 	}
 
 	/*compose the Beacon Request frame*/
 	NStatus = MlmeAllocateMemory(pAd, (PVOID)&pbuf);
 	if (NStatus != NDIS_STATUS_SUCCESS) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-			("%s() allocate memory failed \n", __func__));
-		MeasureReqDelete(pAd, MeasureReqToken);
+		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_WARN,
+			"allocate memory failed \n");
+
+		if (pMeasureReqEntry) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
+				"release WaitBCNRepTimer Valid=%d\n",
+				pMeasureReqEntry->WaitBCNRepTimer.Valid);
+			RTMPCancelTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			RTMPReleaseTimer(&pMeasureReqEntry->WaitBCNRepTimer, &Cancelled);
+			MeasureReqDelete(pAd, MeasureReqToken, BCN_MEASURE_REQ);
+		}
 		return;
 	}
 
@@ -2373,12 +2467,11 @@ static VOID SendBcnReqToAir_Raw(IN PRTMP_ADAPTER pAd, IN MLME_QUEUE_ELEM * Elem)
 
 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), pbuf, FrameLen);
 
-	pMeasureReqEntry = MeasureReqLookUp(pAd, MeasureReqToken);
 	if (!pMeasureReqEntry) {
 		MlmeFreeMemory(pbuf);
 		return;
 	}
-	pMeasureReqEntry->CurrentState = WAIT_BCN_REP;
+	pMeasureReqEntry->BcnCurrentState = WAIT_BCN_REP;
 	Timeout =  BCN_REP_TIMEOUT_VALUE;
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
 			("%s() Timeout=%lds!\n", __func__, Timeout/1000));
@@ -2398,15 +2491,17 @@ enum BCN_STATE BCNPeerCurrentState(
 	PBCN_EVENT_DATA Event = (PBCN_EVENT_DATA)Elem->Msg;
 	PMEASURE_REQ_ENTRY pEntry = NULL;
 	UINT8 MeasureReqToken = Event->MeasureReqToken;
+	UINT8 MeasureType = Event->measuretype;
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-			("%s, MeasureReqToken=%d!\n", __func__, MeasureReqToken));
+			("%s, MeasureReqToken=%d! MeasureType %d!\n",
+			 __func__, MeasureReqToken, MeasureType));
 
-	pEntry = MeasureReqLookUp(pAd, MeasureReqToken);
+	pEntry = MeasureReqLookUp(pAd, MeasureReqToken, MeasureType);
 	if (pEntry != NULL) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_TRACE,
-			  ("%s, CurrentState=%d!\n", __func__, pEntry->CurrentState));
-		  return pEntry->CurrentState;
+			  ("%s, BcnCurrentState=%d!\n", __func__, pEntry->BcnCurrentState));
+		  return pEntry->BcnCurrentState;
 	} else {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
 			  ("%s, invalid MeasureReqToken!\n", __func__));
@@ -2458,7 +2553,7 @@ VOID RRM_PeerMeasureReqAction(
 		IN PRTMP_ADAPTER pAd,
 		IN MLME_QUEUE_ELEM *Elem)
 {
-#define MIN(_x, _y) ((_x) > (_y) ? (_x) : (_y))
+#define MTK_MIN(_x, _y) ((_x) > (_y) ? (_x) : (_y))
 	MEASURE_REQ_INFO MeasureReqInfo;
 	RRM_BEACON_REQ_INFO BcnReq;
 	PFRAME_802_11 pFr = (PFRAME_802_11)Elem->Msg;
@@ -2469,7 +2564,8 @@ VOID RRM_PeerMeasureReqAction(
 	CHAR ssidbuf[MAX_LEN_OF_SSID + 1];
 	BSS_TABLE *ScanTab = NULL;
 	MAC_TABLE_ENTRY *pEntry = NULL;
-	INT loop = 0;
+	UINT loop = 0;
+	int ret = 0;
 
 	if ((wdev == NULL) || wdev->wdev_type != WDEV_TYPE_STA)
 		return;
@@ -2477,8 +2573,8 @@ VOID RRM_PeerMeasureReqAction(
 	pEntry = MacTableLookup(pAd, wdev->bssid);
 	if (!pEntry) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
-				("STA is not connected with BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PRINT_MAC(wdev->bssid)));
+				("STA is not connected with BSSID="MACSTR"\n",
+				 MAC2STR(wdev->bssid)));
 		return;
 	}
 
@@ -2488,21 +2584,40 @@ VOID RRM_PeerMeasureReqAction(
 		ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 		if (!ScanTab)
 			return;
-		snprintf(ssidbuf, sizeof(ssidbuf), "%s", pSsid);
+		ret = snprintf(ssidbuf, sizeof(ssidbuf), "%s", pSsid);
+		if (os_snprintf_error(sizeof(ssidbuf), ret)) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR, "ssidbuf snprintf error!\n");
+			return;
+		}
 		ssidbuf[SsidLen] = '\0';
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_INFO, ("pSsid=%s\n", ssidbuf));
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_INFO, ("SsidLen=%d\n", SsidLen));
 
 		for (loop = 0; loop < ScanTab->BssNr; loop++) {
 			BSS_ENTRY *pBssEntry = &ScanTab->BssEntry[loop];
-			UINT8 BssMatch = FALSE;
-			if (SsidLen != 0) {
-				BssMatch = RTMPEqualMemory(pBssEntry->Ssid, pSsid,
-						MIN(SsidLen, pBssEntry->SsidLen));
-				if (BssMatch)
-					RRM_EnqueuePeerBeaconRep(pAd, pFr->Hdr.Addr2, pFr->Hdr.Addr1, DialogToken, MeasureReqInfo,
-							BcnReq, pBssEntry);
-				else
+			UINT8 BssMatch = FALSE, BssIDMatch = FALSE;
+			UINT8 isWildcardBssid = FALSE;
+			UCHAR WildCardBssid[MAC_ADDR_LEN] = {0xff,0xff,0xff,0xff,0xff,0xff};
+			/*If the BSSID field in the Measurement Request contains a*/
+			/*wildcard BSSID,all observed BSSs with the requested SSID*/
+			/*shall be reported in a separate Beacon report for each*/
+			/*BSSID. If the SSID subelement is not included in the Beacon*/
+			/*request, all observed BSSs shall be reported in a separate*/
+			/*Beacon report for each BSSID.*/
+			isWildcardBssid = RTMPEqualMemory(BcnReq.Bssid, WildCardBssid, MAC_ADDR_LEN);
+			if (isWildcardBssid == TRUE) {
+				if (SsidLen != 0) {
+					BssMatch = RTMPEqualMemory(pBssEntry->Ssid, pSsid,
+							MTK_MIN(SsidLen, pBssEntry->SsidLen));
+					if (BssMatch)
+						RRM_EnqueuePeerBeaconRep(pAd, pFr->Hdr.Addr2, pFr->Hdr.Addr1, DialogToken, MeasureReqInfo, 
+						BcnReq, pBssEntry);
+				} else 
+					RRM_EnqueuePeerBeaconRep(pAd, pFr->Hdr.Addr2, pFr->Hdr.Addr1, DialogToken, MeasureReqInfo, 
+						BcnReq, pBssEntry);
+			} else {
+				BssIDMatch = RTMPEqualMemory(pBssEntry->Bssid, BcnReq.Bssid, MAC_ADDR_LEN);
+				if (BssIDMatch)
 					RRM_EnqueuePeerBeaconRep(pAd, pFr->Hdr.Addr2, pFr->Hdr.Addr1, DialogToken, MeasureReqInfo,
 							BcnReq, NULL);
 			}

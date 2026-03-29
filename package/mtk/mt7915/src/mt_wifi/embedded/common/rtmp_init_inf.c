@@ -130,10 +130,29 @@ INT rtmp_cfg_init(RTMP_ADAPTER *pAd, RTMP_STRING *pHostName)
 				 __func__));
 	}
 
+#ifdef PKT_BUDGET_CTRL_SUPPORT
+#ifdef DBDC_MODE
+	if (pAd->CommonCfg.dbdc_mode) {
+		pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE_BAND0;
+		pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK_BAND0;
+		pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO_BAND0;
+		pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI_BAND0;
+		pAd->pbc_bound[DBDC_BAND0][PBC_AC_MGMT] = PBC_WMM_UP_DEFAULT_MGMT_BAND0;
+
+		pAd->pbc_bound[DBDC_BAND1][PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE;
+		pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK;
+		pAd->pbc_bound[DBDC_BAND1][PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO;
+		pAd->pbc_bound[DBDC_BAND1][PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI;
+		pAd->pbc_bound[DBDC_BAND1][PBC_AC_MGMT] = PBC_WMM_UP_DEFAULT_MGMT;
+	}
+#endif
+#endif
+
 	status = RTMPReadParametersHook(pAd);
 
 	if (status != NDIS_STATUS_SUCCESS) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("RTMPReadParametersHook failed, Status[=0x%08x]\n", status));
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("RTMPReadParametersHook failed, Status[=0x%08x]\n", status));
 		return FALSE;
 	}
 #ifdef OCE_SUPPORT
@@ -230,6 +249,9 @@ static INT rtmp_sys_init(RTMP_ADAPTER *pAd, RTMP_STRING *pHostName)
 	/* QM init */
 	status = qm_init(pAd);
 
+	if (status)
+		goto err2;
+
 	/* TM init */
 	status = tm_init(pAd);
 
@@ -317,7 +339,7 @@ int mt_service_init(struct _RTMP_ADAPTER *ad)
 	serv_test->test_winfo->chip_id = ad->ChipID;
 	serv_test->test_winfo->hdev_ctrl = ad->hdev_ctrl;
 	serv_test->test_winfo->dbdc_mode = ad->CommonCfg.dbdc_mode;
-	serv_test->test_winfo->pkt_tx_tkid_max = que->pkt_tkid_max;
+	serv_test->test_winfo->pkt_tx_tkid_max = que->pkt_tkid_cnt;
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 	serv_test->test_winfo->chip_cap.ra_offload = cap->fgRateAdaptFWOffload;
 #endif
@@ -357,7 +379,7 @@ int mt_service_init(struct _RTMP_ADAPTER *ad)
 	os_move_mem(&serv_test->test_winfo->chip_cap.mcs_nss,
 		&cap->mcs_nss, sizeof(struct serv_mcs_nss_caps));
 	if (cap->mcs_nss.max_nss > ad->Antenna.field.TxPath)
-		serv_test->test_winfo->chip_cap.mcs_nss.max_nss = 
+		serv_test->test_winfo->chip_cap.mcs_nss.max_nss =
 			ad->Antenna.field.TxPath;
 	os_move_mem(&serv_test->test_winfo->chip_cap.qos,
 		&cap->qos, sizeof(struct qos_caps));
@@ -398,6 +420,9 @@ int mt_service_close(struct _RTMP_ADAPTER *ad)
 	os_free_mem(serv_test->test_winfo);
 	os_free_mem(serv_test);
 
+	serv->serv_id = 0;
+	serv->serv_handle = NULL;
+
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		("%s: wlan service closes successfully!\n", __func__));
 
@@ -418,7 +443,13 @@ int mt_wifi_init(VOID *pAdSrc, RTMP_STRING *pDefaultMac, RTMP_STRING *pHostName)
 	UCHAR BandIdx;
 	CHANNEL_CTRL *pChCtrl;
 	CHANNEL_CTRL *pChCtrl_hwband1;
-
+#ifdef PLE_MONITOR_SUPPORT
+	UCHAR idx;
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+	UINT32	Time;
+	ULONG	TNow;
+#endif
 	if (!pAd)
 		return FALSE;
 	pObj = (POS_COOKIE)pAd->OS_Cookie;
@@ -442,6 +473,10 @@ int mt_wifi_init(VOID *pAdSrc, RTMP_STRING *pDefaultMac, RTMP_STRING *pHostName)
 	pChCtrl_hwband1 = hc_get_channel_ctrl(pAd->hdev_ctrl, 1);
 
 	cap = hc_get_chip_cap(pAd->hdev_ctrl);
+
+#ifdef CONFIG_FWOWN_SUPPORT
+	DriverOwn(pAd);
+#endif
 
 	asic_show_mac_info(pAd);
 
@@ -560,9 +595,20 @@ int mt_wifi_init(VOID *pAdSrc, RTMP_STRING *pDefaultMac, RTMP_STRING *pHostName)
 	csi_support_init(pAd);
 #endif
 
+#ifdef ENHANCE_STAT_SUPPORT
+	Time = jiffies_to_usecs(TNow);
+#endif
 	/* Trigger MIB counter update */
 	for (ucBandIdx = 0; ucBandIdx < DBDC_BAND_NUM; ucBandIdx++)
+#ifdef ENHANCE_STAT_SUPPORT
+	{
+		pAd->OneSecMibBucket.Enabled[ucBandIdx] =  TRUE;
+		/*Initialize previous Read time to current time for calculating Sampling time*/
+		pAd->ChannelStats.PrevReadTime[ucBandIdx] = Time;
+	}
+#else
 		pAd->OneSecMibBucket.Enabled[ucBandIdx] = TRUE;
+#endif /* ENHANCE_STAT_SUPPORT */
 
 	pAd->MsMibBucket.Enabled = TRUE;
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("<==== mt_wifi_init, Status=%x\n", Status));
@@ -588,8 +634,6 @@ int mt_wifi_init(VOID *pAdSrc, RTMP_STRING *pDefaultMac, RTMP_STRING *pHostName)
 #endif /* TXBF_SUPPORT */
 
 	HeraInitStbcPriority(pAd);
-
-
 #ifdef ACK_CTS_TIMEOUT_SUPPORT
 	if (TRUE != set_datcfg_ack_cts_timeout(pAd)) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -604,6 +648,12 @@ int mt_wifi_init(VOID *pAdSrc, RTMP_STRING *pDefaultMac, RTMP_STRING *pHostName)
 	if (pAd->CommonCfg.vht_1024_qam)
 		MtCmdSetVht1024QamSupport(pAd);
 
+
+#ifdef PLE_MONITOR_SUPPORT
+	for (idx = 0; idx < 8; idx++) {
+		pAd->MacTab.StationPsBitMap[idx] = 0;
+	}
+#endif
 
 	return TRUE;
 err3:
@@ -769,6 +819,11 @@ VOID RTMPDrvOpen(VOID *pAdSrc)
     }
 #endif /* CONFIG_AP_SUPPORT */
 #endif /* BAND_STEERING */
+
+#ifdef PKT_BUDGET_CTRL_SUPPORT
+	if (IS_MT7915(pAd) && pAd->pbc_qos_en)
+		HW_SET_PBC_CTRL_QOS(pAd, pAd->pbc_qos_en);
+#endif
 }
 
 
@@ -858,13 +913,13 @@ VOID RTMPDrvClose(VOID *pAdSrc, VOID *net_dev)
 		ap_probe_rsp_vendor_ie_list = &mbss->ap_probe_rsp_vendor_ie_list;
 		ie_count = DlListLen(ap_probe_rsp_vendor_ie_list);
 		if (ie_count) {
-			DlListForEachSafe(ap_probe_rsp_vendor_ie, ap_probe_rsp_vendor_ie_temp, ap_probe_rsp_vendor_ie_list, 
+			DlListForEachSafe(ap_probe_rsp_vendor_ie, ap_probe_rsp_vendor_ie_temp, ap_probe_rsp_vendor_ie_list,
 				CUSTOMER_PROBE_RSP_VENDOR_IE, List) {
 				if (ap_probe_rsp_vendor_ie) {
 					DlListDel(&ap_probe_rsp_vendor_ie->List);
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, 
-						("%s remove MAC[%02x:%02x:%02x:%02x:%02x:%02x]\n", 
-						__func__, PRINT_MAC(ap_probe_rsp_vendor_ie->stamac)));
+					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						("%s remove MAC["MACSTR"]\n",
+						__func__, MAC2STR(ap_probe_rsp_vendor_ie->stamac)));
 					if (ap_probe_rsp_vendor_ie->pointer){
 						os_free_mem(ap_probe_rsp_vendor_ie->pointer);
 					}
@@ -991,7 +1046,7 @@ VOID RTMPDrvClose(VOID *pAdSrc, VOID *net_dev)
 
 	hif_poll_txrx_empty(pAd->hdev_ctrl, ALL_DMA);
 
-	MeasureReqTabExit(pAd);
+
 	TpcReqTabExit(pAd);
 #ifdef LED_CONTROL_SUPPORT
 	RTMPExitLEDMode(pAd);
@@ -1090,6 +1145,7 @@ VOID RTMPDrvClose(VOID *pAdSrc, VOID *net_dev)
 	/* release all timers */
 	RtmpusecDelay(2000);
 	RTMP_AllTimerListRelease(pAd);
+	MeasureReqTabExit(pAd);
 	/* WCNCR00034259: moved from RTMP{Reset, free}TxRxRingMemory() */
 	NdisFreeSpinLock(&pAd->CmdQLock);
 #ifdef RTMP_TIMER_TASK_SUPPORT
@@ -1179,6 +1235,8 @@ VOID RTMPDrvClose(VOID *pAdSrc, VOID *net_dev)
 	OS_SPIN_UNLOCK_BH(&qos_param_table_lock);
 	NdisFreeSpinLock(&qos_param_table_lock);
 #endif
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s Nop_List_Backup call!!\n", __func__));
+	Nop_List_Backup(pAd);
 }
 
 PNET_DEV RtmpPhyNetDevMainCreate(VOID *pAdSrc)
@@ -1187,13 +1245,16 @@ PNET_DEV RtmpPhyNetDevMainCreate(VOID *pAdSrc)
 	PNET_DEV pDevNew;
 	UINT32 MC_RowID = 0, IoctlIF = 0;
 	char *dev_name;
-#if 1
+#if defined(MT_WIFI_MODULE) && defined(PROBE2LOAD_L1PROFILE)
 	if (load_dev_l1profile(pAd) == NDIS_STATUS_SUCCESS)
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("load l1profile succeed!\n"));
 	else
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("load l1profile failed!\n"));
 #endif
 	dev_name = get_dev_name_prefix(pAd, INT_MAIN);
+	if (!dev_name)
+		return NULL;
+
 	pDevNew = RtmpOSNetDevCreate((INT32)MC_RowID, (UINT32 *)&IoctlIF,
 					 INT_MAIN, 0, sizeof(struct mt_dev_priv), dev_name, FALSE);
 	return pDevNew;
@@ -1211,12 +1272,6 @@ static void WriteConfToDatFile(RTMP_ADAPTER *pAd)
 	LONG rv, fileLen = 0;
 
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("-----> WriteConfToDatFile\n"));
-#ifdef RTMP_RBUS_SUPPORT
-
-	if (pAd->infType == RTMP_DEV_INF_RBUS)
-		fileName = STA_PROFILE_PATH_RBUS;
-	else
-#endif /* RTMP_RBUS_SUPPORT */
 		fileName = STA_PROFILE_PATH;
 
 	RtmpOSFSInfoChange(&osFSInfo, TRUE);

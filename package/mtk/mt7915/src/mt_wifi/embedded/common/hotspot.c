@@ -78,6 +78,7 @@ void HotspotAPReload(PNET_DEV net_dev)
 VOID HSCtrlRemoveAllIE(PHOTSPOT_CTRL pHSCtrl)
 {
 	/* Remove all IE from daemon */
+	RTMP_SEM_LOCK(&pHSCtrl->IeLock);
 	if (pHSCtrl->P2PIELen && pHSCtrl->P2PIE) {
 		os_free_mem(pHSCtrl->P2PIE);
 		pHSCtrl->P2PIE = NULL;
@@ -101,23 +102,8 @@ VOID HSCtrlRemoveAllIE(PHOTSPOT_CTRL pHSCtrl)
 		pHSCtrl->RoamingConsortiumIE = NULL;
 		pHSCtrl->RoamingConsortiumIELen = 0;
 	}
+	RTMP_SEM_UNLOCK(&pHSCtrl->IeLock);
 }
-
-VOID GASCtrlRemoveAllIE(PGAS_CTRL pGasCtrl)
-{
-	if (pGasCtrl->InterWorkingIELen && pGasCtrl->InterWorkingIE) {
-		os_free_mem(pGasCtrl->InterWorkingIE);
-		pGasCtrl->InterWorkingIE = NULL;
-		pGasCtrl->InterWorkingIELen = 0;
-	}
-
-	if (pGasCtrl->AdvertisementProtoIELen && pGasCtrl->AdvertisementProtoIE) {
-		os_free_mem(pGasCtrl->AdvertisementProtoIE);
-		pGasCtrl->AdvertisementProtoIE = NULL;
-		pGasCtrl->AdvertisementProtoIELen = 0;
-	}
-}
-
 
 #ifdef CONFIG_AP_SUPPORT
 #ifdef CONFIG_HOTSPOT_R2
@@ -659,6 +645,7 @@ static VOID HSCtrlInit(
 	NdisZeroMemory(pHSCtrl, sizeof(*pHSCtrl));
 	pHSCtrl->HotSpotEnable = 0;
 	pHSCtrl->HSCtrlState = HSCTRL_IDLE;
+	NdisAllocateSpinLock(pAd, &pHSCtrl->IeLock);
 #endif /* CONFIG_STA_SUPPORT */
 #ifdef CONFIG_AP_SUPPORT
 
@@ -669,6 +656,7 @@ static VOID HSCtrlInit(
 		pHSCtrl->HSCtrlState = HSCTRL_IDLE;
 		/* for 7615 offload to CR4 */
 		pHSCtrl->HotspotBSSFlags = 0;
+		NdisAllocateSpinLock(pAd, &pHSCtrl->IeLock);
 	}
 
 	for (i = 0; i < MAX_QOS_MAP_TABLE_SIZE; i++) {
@@ -691,6 +679,7 @@ VOID HSCtrlExit(
 	pHSCtrl = &pAd->StaCfg[0].HotSpotCtrl;
 	/* Remove all IE */
 	HSCtrlRemoveAllIE(pHSCtrl);
+	NdisFreeSpinLock(&pHSCtrl->IeLock);
 #endif /* CONFIG_STA_SUPPORT */
 #ifdef CONFIG_AP_SUPPORT
 
@@ -698,7 +687,7 @@ VOID HSCtrlExit(
 		pHSCtrl = &pAd->ApCfg.MBSSID[APIndex].HotSpotCtrl;
 		/* Remove all IE */
 		HSCtrlRemoveAllIE(pHSCtrl);
-		GASCtrlRemoveAllIE(&pAd->ApCfg.MBSSID[APIndex].GASCtrl);
+		NdisFreeSpinLock(&pHSCtrl->IeLock);
 	}
 
 #endif /* CONFIG_AP_SUPPORT */

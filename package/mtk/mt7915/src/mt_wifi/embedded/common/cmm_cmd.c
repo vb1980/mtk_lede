@@ -258,8 +258,8 @@ VOID MBO_Send_Disassoc(PRTMP_ADAPTER pAd, UCHAR apidx, USHORT Reason)
 					}
 
 					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						("%s: Send DISASSOC frame (Reason=%d) to %02x:%02x:%02x:%02x:%02x:%02x\n",
-						__func__, Reason, PRINT_MAC(pMacEntry->Addr)));
+						("%s: Send DISASSOC frame (Reason=%d) to "MACSTR"\n",
+						__func__, Reason, MAC2STR(pMacEntry->Addr)));
 
 					/* 802.11 Header */
 					NdisZeroMemory(&DisassocHdr, sizeof(HEADER_802_11));
@@ -358,6 +358,22 @@ static NTSTATUS ApSoftReStart(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 }
 
 #ifdef APCLI_SUPPORT
+static NTSTATUS CmdMlmeRstStateMacHandler(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
+{
+	PWSC_CTRL pWscControl = (PWSC_CTRL)CMDQelmt->buffer;
+	struct wifi_dev *wdev = NULL;
+
+	if (pWscControl != NULL)
+		wdev = (struct wifi_dev *)pWscControl->wdev;
+
+	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "cmd> CMDTHREAD_MLME_RESET_STATE_MACHINE\n");
+
+	if (wdev != NULL)
+		RTMP_MLME_RESET_STATE_MACHINE(pAd, wdev);
+
+	return NDIS_STATUS_SUCCESS;
+}
+
 static NTSTATUS ApCliPbcApFoundHandler(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 {
 	PSTA_ADMIN_CONFIG pApCliTab = NULL;
@@ -403,9 +419,16 @@ static NTSTATUS CmdApCliIfDown(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 {
 	UCHAR apidx = 0;
 	BOOLEAN apcliEn;
+#ifdef CONFIG_MAP_SUPPORT
+	WSC_CTRL *wsc_ctrl = NULL;
+#endif /* CONFIG_MAP_SUPPORT */
 
 	NdisMoveMemory(&apidx, CMDQelmt->buffer, sizeof(UCHAR));
 	apcliEn = pAd->StaCfg[apidx].ApcliInfStat.Enable;
+#ifdef CONFIG_MAP_SUPPORT
+	wsc_ctrl = &pAd->StaCfg[apidx].wdev.WscControl;
+#endif /* CONFIG_MAP_SUPPORT */
+
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("cmd>  CMDTHREAD_APCLI_IF_DOWN! apidx=%u, apcliEn=%d\n", apidx, apcliEn));
 
 	/* bring apcli interface down first */
@@ -414,7 +437,12 @@ static NTSTATUS CmdApCliIfDown(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 		ApCliIfDown(pAd);
 	}
 
-	pAd->StaCfg[apidx].ApcliInfStat.Enable = apcliEn;
+#ifdef CONFIG_MAP_SUPPORT
+	if (wsc_ctrl && !IS_MAP_TURNKEY_ENABLE(pAd) &&
+			wsc_ctrl->WscState == WSC_STATE_OFF)
+#endif /* CONFIG_MAP_SUPPORT */
+		pAd->StaCfg[apidx].ApcliInfStat.Enable = apcliEn;
+
 	return NDIS_STATUS_SUCCESS;
 }
 
@@ -458,23 +486,27 @@ static NTSTATUS QkeriodicExecutHdlr(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 static NTSTATUS ChannelRescanHdlr(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 {
 	/*SUPPORT RTMP_CHIP ONLY, Single Band*/
-	UCHAR Channel = HcGetRadioChannel(pAd);
-	struct wifi_dev *wdev = get_default_wdev(pAd);
-	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrl(pAd);
+	UCHAR Channel;
+	struct wifi_dev *wdev;
+	AUTO_CH_CTRL *pAutoChCtrl;
 	UCHAR apidx;
 	BSS_STRUCT *pMbss;
+	UCHAR band_idx;
 
 	NdisMoveMemory(&apidx, CMDQelmt->buffer, sizeof(UCHAR));
 	pMbss = &pAd->ApCfg.MBSSID[apidx];
+	wdev = &pMbss->wdev;
 
 	if (wdev == NULL) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("cmd> get wdev fail!\n"));
 		return NDIS_STATUS_FAILURE;
 	}
+	band_idx = HcGetBandByWdev(wdev);
+	pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, band_idx);
 	Channel = APAutoSelectChannel(pAd, wdev, TRUE, pAutoChCtrl->pChannelInfo->IsABand);
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("cmd> Re-scan channel!\n"));
 #ifdef ACS_CTCC_SUPPORT
-	if (!pAd->ApCfg.auto_ch_score_flag)
+	if (!pAd->ApCfg.auto_ch_score_flag[band_idx])
 #endif
 	{
 	wdev->channel = Channel;
@@ -625,92 +657,6 @@ static NTSTATUS sta_deassoc_act_handle(struct _RTMP_ADAPTER *ad, struct _CmdQElm
 
 #endif /*CONFIG_STA_SUPPORT*/
 
-#if defined(MT7615) || defined(MT7622) || defined(MT7663)
-static NTSTATUS RXVWriteInFile(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
-{
-	RTMP_OS_FD_EXT srcf;
-	UINT i;
-	INT8 Ret;
-	UINT msg_len = 256;
-	RTMP_STRING tmpSrc[msg_len], chipname[100];
-	PRxVBQElmt prxvbqelmt = (PRxVBQElmt)CMDQelmt->buffer;
-
-	srcf = os_file_open(pAd->RxvFilePath, O_WRONLY|O_CREAT|O_APPEND, 0);
-	if (srcf.Status) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("Open file \"%s\" failed!\n", pAd->RxvFilePath));
-		return NDIS_STATUS_FAILURE;
-	}
-
-	if (IS_MT7615(pAd))
-		snprintf(chipname, sizeof(chipname), "%s", "Chip Name = 7615.\n");
-	else if (IS_MT7622(pAd))
-		snprintf(chipname, sizeof(chipname), "%s", "Chip Name = 7622.\n");
-	else if (IS_MT7663(pAd))
-		snprintf(chipname, sizeof(chipname), "%s", "Chip Name = 7663.\n");
-	else
-		snprintf(chipname, sizeof(chipname), "%s", "Chip Name = Not Support.\n");
-
-	if (pAd->ucFirstWrite) {
-		snprintf(tmpSrc, msg_len - strlen(tmpSrc), "%s",
-			"======================================\n");
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-		os_file_write(srcf, chipname, strlen(chipname));
-		snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-			"WCID(STA Index) = %d, We will record all WCID if WCID = 0.\n",
-			pAd->ucRxvWcid);
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-		snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-			"Band Index = %d\n", pAd->ucRxvBandIdx);
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-		snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-			"CSD-Debug Group1/Group2 = 0x%x/0x%x\n", pAd->ucRxvG1, pAd->ucRxvG2);
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-		snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc), "%s"
-			"======================================\n");
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-		pAd->ucFirstWrite = FALSE;
-	}
-
-	snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-		"[TimeStamp %u][STA %d][Rxv_SN %u][AggCnt %u]\n",
-		prxvbqelmt->timestamp,
-		prxvbqelmt->wcid,
-		prxvbqelmt->rxv_sn,
-		prxvbqelmt->aggcnt
-		);
-
-	os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-
-	snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-		"[FcsErrorBitmap[255-0] 0x%08x,0x%08x,0x%08x,0x%08x,0x%08x,0x%08x,0x%08x,0x%08x]\n",
-		prxvbqelmt->arFCScheckBitmap[7],
-		prxvbqelmt->arFCScheckBitmap[6],
-		prxvbqelmt->arFCScheckBitmap[5],
-		prxvbqelmt->arFCScheckBitmap[4],
-		prxvbqelmt->arFCScheckBitmap[3],
-		prxvbqelmt->arFCScheckBitmap[2],
-		prxvbqelmt->arFCScheckBitmap[1],
-		prxvbqelmt->arFCScheckBitmap[0]
-		);
-
-	os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-
-	os_file_write(srcf, "[RXV DUMP START]\n", strlen("[RXV DUMP START]\n"));
-	for (i = 0; i < 9; i++) {
-		snprintf(tmpSrc + strlen(tmpSrc), msg_len - strlen(tmpSrc),
-			"[RXVD%d] %08x\n", (i+1), prxvbqelmt->RXV_CYCLE[i]);
-		os_file_write(srcf, tmpSrc, strlen(tmpSrc));
-	}
-	os_file_write(srcf, "[RXV DUMP END]\n", strlen("[RXV DUMP END]\n"));
-	Ret = os_file_close(srcf);
-
-	if (Ret)
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("File Close Error ! Ret = %d\n", Ret));
-
-	return NDIS_STATUS_SUCCESS;
-}
-#endif /* #if defined(MT7615) || defined(MT7622) || defined(MT7663) */
 
 
 typedef NTSTATUS (*CMDHdlr)(RTMP_ADAPTER *pAd, IN PCmdQElmt CMDQelmt);
@@ -738,6 +684,7 @@ static MT_CMD_TABL_T CMDHdlrTable[] = {
 	{CMDTHREAD_APCLI_PBC_TIMEOUT, ApCliSetChannel},
 	{CMDTHREAD_APCLI_IF_DOWN, CmdApCliIfDown},
 	{CMDTHREAD_APCLI_PBC_AP_FOUND, ApCliPbcApFoundHandler},
+	{CMDTHREAD_MLME_RESET_STATE_MACHINE, CmdMlmeRstStateMacHandler},
 #ifdef WSC_AP_SUPPORT
 	{CMDTHREAD_WSC_APCLI_LINK_DOWN, CmdWscApCliLinkDown},
 #endif /* WSC_AP_SUPPORT */
@@ -792,9 +739,6 @@ static MT_CMD_TABL_T CMDHdlrTable[] = {
 	{CMDTHRED_STA_DEAUTH_ACT, sta_deauth_act_handle},
 	{CMDTHRED_STA_DEASSOC_ACT, sta_deassoc_act_handle},
 #endif /* CONFIG_STA_SUPPORT */
-#if defined(MT7615) || defined(MT7622) || defined(MT7663)
-	{CMDTHRED_RXV_WRITE_IN_FILE, RXVWriteInFile},
-#endif /* #if defined(MT7615) || defined(MT7622) || defined(MT7663) */
 #ifdef FW_LOG_DUMP
 	{CMDTHRED_FW_LOG_TO_FILE, fw_log_to_file},
 #endif
@@ -806,6 +750,11 @@ static MT_CMD_TABL_T CMDHdlrTable[] = {
 #endif /* RACTRL_LIMIT_MAX_PHY_RATE */
 #ifdef WIFI_MD_COEX_SUPPORT
 	{CMDTHREAD_LTE_SAFE_CHN_CHG, LteSafeChannelChangeProcess},
+#endif
+	{CMDTHREAD_DROP_RADAR_EVENT, DropRadarEventHandler},
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	{CMDTHREAD_LAST_BCN_TX_SWITCH_CHANNEL, LastBcnTxChannelSwitch},
+	{CMDTHREAD_DISABLE_ZERO_LOSS_STA_TRAFFIC, DisableZeroLossStaTraffic},
 #endif
 	{CMDTHREAD_END_CMD_ID, NULL}
 };
@@ -839,17 +788,23 @@ static inline CMDHdlr ValidCMD(IN PCmdQElmt CMDQelmt)
 VOID CMDHandler(RTMP_ADAPTER *pAd)
 {
 	PCmdQElmt		cmdqelmt;
-	NDIS_STATUS	NdisStatus = NDIS_STATUS_SUCCESS;
 	NTSTATUS		ntStatus;
 	CMDHdlr		Handler = NULL;
 	UINT32		process_cnt = 0;
 
 	while (pAd && pAd->CmdQ.size > 0) {
-		NdisStatus = NDIS_STATUS_SUCCESS;
+
+		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST) ||
+			RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS)) {
+			MTWF_DBG(pAd, DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "System halted, exit CMDHandler!(CmdQ.size = %d)\n",
+					  pAd->CmdQ.size);
+			break;
+		}
 
 		/* For worst case, avoid process CmdQ too long which cause RCU_sched stall */
 		process_cnt++;
-		if((!in_interrupt())&&(process_cnt >= (MAX_LEN_OF_CMD_QUEUE>>4))) {/*process_cnt-16*/
+		if ((!in_interrupt()) && (process_cnt >= CMD_QUEUE_SCH)) {/*process_cnt-16*/
 			process_cnt = 0;
 			OS_SCHEDULE();
 		}
@@ -862,12 +817,10 @@ VOID CMDHandler(RTMP_ADAPTER *pAd)
 			break;
 
 
-		if (!(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST) || RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS))) {
-			Handler = ValidCMD(cmdqelmt);
+		Handler = ValidCMD(cmdqelmt);
 
-			if (Handler)
-				ntStatus = Handler(pAd, cmdqelmt);
-		}
+		if (Handler)
+			ntStatus = Handler(pAd, cmdqelmt);
 
 #ifdef DBG_STARVATION
 		starv_dbg_put(&cmdqelmt->starv);

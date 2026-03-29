@@ -163,7 +163,9 @@ typedef enum _CMD_RTPRIV_IOCTL_AP {
 
 	/* Phy State commands */
 	CMD_RTPRIV_IOCTL_PHY_STATE,
-
+#ifdef CONFIG_COLGIN_MT6890
+	CMD_RTPRIV_IOCTL_LOW_POWER,
+#endif
 	/* can not exceed 0x5000 */
 } CMD_RTPRIV_IOCTL_AP;
 

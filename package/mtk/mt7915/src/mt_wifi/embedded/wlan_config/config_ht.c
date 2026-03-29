@@ -379,7 +379,6 @@ UINT32 wlan_config_get_frag_thld(struct wifi_dev *wdev)
 	else
 		return DEFAULT_FRAG_THLD;
 }
-EXPORT_SYMBOL(wlan_config_get_frag_thld);
 
 UINT32 wlan_config_get_rts_len_thld(struct wifi_dev *wdev)
 {

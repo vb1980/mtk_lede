@@ -118,11 +118,7 @@
 
 #define OFF_CH_SCAN_SUPPORT 1 /* Off channel scan command is only valid in CONNAC codebase */
 
-#if defined(MT7615) || defined(MT7622)
-#define MURA_DMCS_INTR_CNT_SUPPORT 0
-#else
 #define MURA_DMCS_INTR_CNT_SUPPORT 1
-#endif
 
 #define RX_DATA_BUFFER_SIZE     1530
 #define RX_BUFFER_SIZE_MIN      14
@@ -130,9 +126,11 @@
 #ifdef CSD_VERIFICATION
 #define RX_BUFFER_AGGRESIZE     4224
 #else
-#define RX_BUFFER_AGGRESIZE     1700	/*3904 //3968 //4096 //2048 //4096 */
+/*align with 8/16Bytes WFDMA bitwidth*/
+#define RX_BUFFER_AGGRESIZE     1712	/*3904 //3968 //4096 //2048 //4096 */
 #endif
-#define RX1_BUFFER_SIZE         1700
+/*align with 8/16Bytes WFDMA bitwidth*/
+#define RX1_BUFFER_SIZE         1712
 #define RX_BUFFER_NORMSIZE      3840	/*3904 //3968 //4096 //2048 //4096 */
 #define TX_BUFFER_NORMSIZE		RX_BUFFER_NORMSIZE
 #define MAX_FRAME_SIZE          2346	/* Maximum 802.11 frame size */
@@ -299,11 +297,12 @@ enum WIFI_MODE {
 
 #define WMODE_EQUAL(_x, _mode)	((_x) == (_mode))
 
-#define WMODE_5G_ONLY(_x)		(((_x) & (WMODE_B | WMODE_G | WMODE_GN | WMODE_AX_24G)) == 0)
-#define WMODE_2G_ONLY(_x)		(((_x) & (WMODE_A | WMODE_AN | WMODE_AC | WMODE_AX_5G)) == 0)
-#define WMODE_HT_ONLY(_x)		(((_x) & (~(WMODE_GN | WMODE_AN | WMODE_AC))) == 0)
+#define WMODE_6G_ONLY(_x)		(((_x) & (WMODE_A | WMODE_B | WMODE_G | WMODE_GN | WMODE_AN | WMODE_AC | WMODE_AX_24G | WMODE_AX_5G)) == 0)
+#define WMODE_5G_ONLY(_x)		(((_x) & (WMODE_B | WMODE_G | WMODE_GN | WMODE_AX_24G | WMODE_AX_6G)) == 0)
+#define WMODE_2G_ONLY(_x)		(((_x) & (WMODE_A | WMODE_AN | WMODE_AC | WMODE_AX_5G | WMODE_AX_6G)) == 0)
+#define WMODE_HT_ONLY(_x)		(((_x) & (~(WMODE_GN | WMODE_AN))) == 0)
 #define WMODE_VHT_ONLY(_x)		(((_x) & (~(WMODE_AC))) == 0)
-#define WMODE_AX_ONLY(_x)		(((_x) & (~(WMODE_AX_24G | WMODE_AX_24G | WMODE_AX_6G))) == 0)
+#define WMODE_AX_ONLY(_x)		(((_x) & (~(WMODE_AX_24G | WMODE_AX_5G | WMODE_AX_6G))) == 0)
 
 
 /*define for DBDC chip support check*/
@@ -656,8 +655,7 @@ enum WIFI_MODE {
 #endif /* APCLI_SUPPORT */
 
 /* add to handle wifi_sys operation race condition */
-#define WIFI_LINK_MAX_TIME		((30000 * OS_HZ)/1000) /* 3s, system ticks -- 100 ms*/
-#define WIFI_LINK_AGEOUT_TIME	((50000 * OS_HZ)/1000) /* 5s, system ticks -- 100 ms*/
+#define WIFI_LINK_MAX_TIME		(30 * OS_HZ) /* 30 secs */
 
 /*============================================================ */
 /* ASIC WCID Table definition. */
@@ -688,6 +686,10 @@ enum WIFI_MODE {
 
 
 #define MAX_NUM_OF_ACL_LIST				MAX_NUMBER_OF_ACL
+
+/* Just for 7915, wlan_idx = 1023 mean mismatch;
+*  For other Chip need consider. */
+#define WLAN_IDX_MISMATCH	0x3ff
 
 #define VALID_UCAST_ENTRY_WCID(_pAd, _wcid) ((_wcid) < HcGetMaxStaNum(_pAd))
 #define GET_MAX_UCAST_NUM(_pAd) HcGetMaxStaNum(_pAd)
@@ -912,7 +914,7 @@ enum nl_msg_id {
 #define IE_QOS_CAPABILITY               46	/* 802.11e d6 */
 #define IE_HT_CAP                       45	/* 802.11n d1. HT CAPABILITY. ELEMENT ID TBD */
 #define IE_AP_CHANNEL_REPORT			51	/* 802.11k d6 */
-#define IE_HT_CAP2                         52	/* 802.11n d1. HT CAPABILITY. ELEMENT ID TBD */
+#define IE_NEIGHBOR_REPORT              52
 #define IE_RSN                          48	/* 802.11i d3.0 */
 #define IE_WPA2                         48	/* WPA2 */
 #define IE_EXT_SUPP_RATES               50	/* 802.11g */
@@ -920,7 +922,7 @@ enum nl_msg_id {
 #define IE_SUPP_REG_CLASS               59	/* 802.11y. Supported regulatory classes. */
 #define IE_EXT_CHANNEL_SWITCH_ANNOUNCEMENT	60	/* 802.11n */
 #define IE_ADD_HT                         61	/* 802.11n d1. ADDITIONAL HT CAPABILITY. ELEMENT ID TBD */
-#define IE_ADD_HT2                        53	/* 802.11n d1. ADDITIONAL HT CAPABILITY. ELEMENT ID TBD */
+#define IE_RCPI                       53
 
 /* For 802.11n D3.03 */
 /*#define IE_NEW_EXT_CHA_OFFSET             62    // 802.11n d1. New extension channel offset elemet */
@@ -945,6 +947,7 @@ enum nl_msg_id {
 #define IE_EXT_CAPABILITY                127	/* 802.11n D3.03 */
 #define IE_LAST_BCN_REPORT_INDICATION_REQUEST	164 /*Last Beacon Report Indication Request*/
 #define IE_OPERATING_MODE_NOTIFY	199
+#define IE_RNR				201
 #define IE_FTM_PARM                     206		/* 802.11mc D4.0 */
 #define IE_TWT							216		/* 802.11ah/ax */
 #define IE_WPA                          221	/* WPA */
@@ -1108,7 +1111,6 @@ enum _CNTL_MLME_EVENT {
 	CNTL_MLME_DEAUTH_CONF,
 	CNTL_MLME_DISASSOC_CONF,
 	CNTL_MLME_SCAN,
-	CNTL_MLME_SCAN_CONF,
 	CNTL_MLME_SCAN_FOR_CONN,
 	CNTL_MLME_FAIL,
 	CNTL_MLME_RESET_TO_IDLE,
@@ -1703,6 +1705,7 @@ enum EVT_REPORT_STATUS {
 #endif /* DOT11_N_SUPPORT */
 #define GI_800		GAP_INTERVAL_800
 
+
 /* STBC */
 #define STBC_NONE	0
 #ifdef DOT11_N_SUPPORT
@@ -1815,6 +1818,8 @@ enum EVT_REPORT_STATUS {
 #define REGION_22_A_BAND                  22
 #define REGION_23_A_BAND                  23
 #define REGION_24_A_BAND                  24
+#define REGION_25_A_BAND                  25
+#define REGION_26_A_BAND                  26
 #define REGION_MAXIMUM_A_BAND             37
 
 #define REGION_0_A_BAND_6GHZ                0
@@ -2183,8 +2188,9 @@ typedef struct _WIFI_NODE_TYPE {
 #define IW_JOIN_IBSS_FLAG						0x0219
 #define IW_SHARED_WEP_FAIL						0x021A
 #define IW_WPS_END_EVENT_FLAG					0x021B
+#define IW_STA_CONNECTED_EVENT_FLAG				0x021C	/*Event to Notify Station is connected*/
 /* if add new system event flag, please upadte the IW_SYS_EVENT_FLAG_END */
-#define	IW_SYS_EVENT_FLAG_END					0x021B
+#define	IW_SYS_EVENT_FLAG_END					0x021C
 #define	IW_SYS_EVENT_TYPE_NUM					(IW_SYS_EVENT_FLAG_END - IW_SYS_EVENT_FLAG_START + 1)
 /* For system event - end */
 
@@ -2259,8 +2265,7 @@ typedef struct _WIFI_NODE_TYPE {
 #define IW_WSC_NEXT_CANDIDATE						0x0520
 #define	IW_WSC_T1_TIMER_TIMEOUT						0x0521
 #define	IW_WSC_T2_TIMER_TIMEOUT						0x0522
-#define	IW_WSC_NEW_AP_SETTING						0x0523
-#define	IW_WSC_EVENT_FLAG_END						0x0523
+#define	IW_WSC_EVENT_FLAG_END						0x0522
 #define	IW_WSC_EVENT_TYPE_NUM						(IW_WSC_EVENT_FLAG_END - IW_WSC_EVENT_FLAG_START + 1)
 /* For WSC wireless event - end */
 #endif /* WSC_INCLUDED */
@@ -2489,17 +2494,7 @@ enum {
 	RtmpOsSendWirelessEvent(__pAd, __Event_flag, __pAddr, _wdev_idx, __Rssi,		\
 							RtmpDrvSendWirelessEvent);
 #else
-#if 1
-void RTMPSendWirelessEvent_WSC(
-    IN VOID  *pAd,
-    IN USHORT Event_flag,
-    IN PUCHAR pAddr,
-    IN UCHAR  BssIdx,
-    IN CHAR   Rssi);
-#define RTMPSendWirelessEvent(__pAd, __Event_flag, __pAddr, __BssIdx, __Rssi) RTMPSendWirelessEvent_WSC(__pAd, __Event_flag, __pAddr, __BssIdx, __Rssi)
-#else
 #define RTMPSendWirelessEvent(__pAd, __Event_flag, __pAddr, __BssIdx, __Rssi)
-#endif
 #endif /* SYSTEM_LOG_SUPPORT */
 
 #define RTMP_OS_TASK_INIT(__pTask, __pTaskName, __pAd)		\

@@ -417,6 +417,11 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 #ifdef CONFIG_RCSA_SUPPORT
 	CSA_IE_INFO *CsaInfo = &ie_list->CsaInfo;
 #endif
+#ifdef MBO_SUPPORT
+#ifdef CONFIG_STA_SUPPORT
+	BOOLEAN bMboAPAssocDisallow = FALSE;
+#endif /* CONFIG_STA_SUPPORT */
+#endif /* MBO_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
 	PSTA_ADMIN_CONFIG pStaCfg = (wdev->wdev_type == WDEV_TYPE_STA) ? \
 								GetStaCfgByWdev(pAd, wdev) : NULL;
@@ -462,7 +467,15 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 		Ptr = (UINT8 *)Msg;
 		pFrame = NULL; /* init. */
 	}
+	/* If AP received self beacon Drop it !! */
+	if (pFrame && wdev->wdev_type == WDEV_TYPE_AP &&
+			pAd->OpMode == OPMODE_AP && SubType == SUBTYPE_BEACON &&
+			MAC_ADDR_EQUAL(wdev->bssid, pFrame->Hdr.Addr2)) {
+		if (pPeerWscIe)
+			os_free_mem(pPeerWscIe);
 
+		return FALSE;
+	}
 	/* get timestamp from payload and advance the pointer*/
 	NdisMoveMemory(&ie_list->TimeStamp, Ptr, TIMESTAMP_LEN);
 	ie_list->TimeStamp.u.LowPart = cpu2le32(ie_list->TimeStamp.u.LowPart);
@@ -690,6 +703,9 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 								  &ie_list->DtimCount, &ie_list->DtimPeriod, &ie_list->MessageToMe);
 					}
 				} /* snowpin for ap/sta -- */
+#ifdef TR181_SUPPORT
+				ie_list->NbrDtimPeriod = *((PCHAR)pEid + 3);
+#endif
 			}
 
 			break;
@@ -979,7 +995,8 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 						(pEid->Octet[1] == MBO_OCE_OUI_1) &&
 						(pEid->Octet[2] == MBO_OCE_OUI_2) &&
 						(pEid->Octet[3] == MBO_OCE_OUI_TYPE))
-					MboParseApMboIE(pAd, pFrame->Hdr.Addr2, pEid->Octet, pEid->Len);
+					bMboAPAssocDisallow =
+						MboParseApMboIE(pAd, pFrame->Hdr.Addr2, pEid->Octet, pEid->Len);
 			}
 #endif /* CONFIG_STA_SUPPORT */
 #endif /* MBO_SUPPORT */
@@ -1305,7 +1322,21 @@ SanityCheck:
 			MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_LOUD, ("%s() - missing field, Sanity=0x%02x, bWscCheck=%d\n", __func__, Sanity, bWscCheck));
 			return FALSE;
 		}
-	} else {
+	}
+#ifdef MBO_SUPPORT
+#ifdef CONFIG_STA_SUPPORT
+	/*
+	 * The presence of the MBO-OCE IE with the Association Disallowed attribute in any of the Beacon,
+	 * Probe Response or (Re)Association Response frames shall be interpreted as an indication that
+	 * the Wi-Fi Agile Multiband AP is currently not accepting associations.
+	 */
+	else if (bMboAPAssocDisallow == TRUE) {
+		MTWF_DBG(pAd, DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Assoc Disallow set by AP\n");
+		return FALSE;
+	}
+#endif /* CONFIG_STA_SUPPORT */
+#endif /* MBO_SUPPORT */
+	else {
 #ifdef IWSC_SUPPORT
 
 		if (pStaCfg &&
@@ -1479,27 +1510,29 @@ BOOLEAN MlmeScanReqSanity(
 
     ==========================================================================
  */
+
+/*      Description:
+	Please use SwitchChSanityCheckByWdev to replace SwitchChSanityCheck.
+
 UCHAR SwitchChSanityCheck(
-	IN PRTMP_ADAPTER pAd,
-	IN UCHAR oriCh,
-	IN UCHAR newCh)
-{
-	int i;
-	UCHAR BandIdx = HcGetBandByChannel(pAd, oriCh);
-	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
-
-	for (i = 0; i < pChCtrl->ChListNum; i++) {
-		if (newCh == pChCtrl->ChList[i].Channel)
-			return 1;
+		IN PRTMP_ADAPTER pAd,
+		IN UCHAR oriCh,
+		IN UCHAR newCh)
+	{
+		int i;
+		UCHAR BandIdx = HcGetBandByChannel(pAd, oriCh);
+		CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
+		for (i = 0; i < pChCtrl->ChListNum; i++) {
+			if (newCh == pChCtrl->ChList[i].Channel)
+				return 1;
+		}
+		return 0;
 	}
-
-	return 0;
-}
+*/
 
 UCHAR SwitchChSanityCheckByWdev(
 	IN PRTMP_ADAPTER pAd,
 	IN struct wifi_dev *wdev,
-	IN UCHAR oriCh,
 	IN UCHAR newCh)
 {
 	int i;
@@ -1519,7 +1552,7 @@ UCHAR ChannelSanity(
 	IN UCHAR channel)
 {
 	int i;
-	UCHAR BandIdx = HcGetBandByChannel(pAd, channel);
+	UCHAR BandIdx = HcGetBandByChannelRange(pAd, channel);
 	CHANNEL_CTRL *pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 
 	for (i = 0; i < pChCtrl->ChListNum; i++) {

@@ -4,6 +4,13 @@ else
 RT28xx_MODE = $(WIFI_MODE)
 endif
 
+#For DUAL_KO strip only
+ifeq ($(DUAL_KO),)
+DUAL_KO=NO
+else
+DUAL_KO=YES
+endif
+
 ifeq ($(TARGET),)
 TARGET = LINUX
 endif
@@ -326,7 +333,7 @@ BIN_CCACHE=$(shell which ccache)
 CROSS_COMPILE := $(BIN_CCACHE) $(CROSS_COMPILE)
 endif
 
-export RT28xx_DIR RT28xx_BIN_DIR RT28xx_OS_DIR RT28xx_EMBEDDED_DIR RT28xx_MODE LINUX_SRC CROSS_COMPILE CROSS_COMPILE_INCLUDE PLATFORM RELEASE CHIPSET MODULE RTMP_SRC_DIR LINUX_SRC_MODULE TARGET HAS_WOW_SUPPORT HAS_FPGA_MODE HAS_RX_CUT_THROUGH
+export RT28xx_DIR RT28xx_BIN_DIR RT28xx_OS_DIR RT28xx_EMBEDDED_DIR RT28xx_MODE LINUX_SRC CROSS_COMPILE CROSS_COMPILE_INCLUDE PLATFORM RELEASE CHIPSET MODULE RTMP_SRC_DIR LINUX_SRC_MODULE TARGET HAS_WOW_SUPPORT HAS_FPGA_MODE HAS_RX_CUT_THROUGH DUAL_KO
 
 # The targets that may be used.
 PHONY += all build_tools test UCOS THREADX LINUX release prerelease clean uninstall install libwapi sdk_build_tools
@@ -346,7 +353,7 @@ build_power_limit_tables:
 	$(RT28xx_DIR)/txpwr/data2h
 
 build_tools:
-	$(MAKE) -C tools
+	$(MAKE) -C tools DUAL_KO=$(DUAL_KO)
 	$(RT28xx_EMBEDDED_DIR)/tools/bin2h
 
 sdk_build_tools:
@@ -404,7 +411,7 @@ plug_in:
 
 release: build_tools build_power_limit_tables
 	$(MAKE) -C $(RT28xx_EMBEDDED_DIR)/striptool -f Makefile.release clean
-	$(MAKE) -C $(RT28xx_EMBEDDED_DIR)/striptool -f Makefile.release
+	$(MAKE) -C $(RT28xx_EMBEDDED_DIR)/striptool -f Makefile.release DUAL_KO=$(DUAL_KO)
 	striptool/striptool.out
 
 clean:

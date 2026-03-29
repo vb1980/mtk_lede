@@ -344,7 +344,7 @@ static INT32 chip_dump_mib_info(struct hdev_ctrl *ctrl, RTMP_STRING *arg)
 	UINT32 mac_val0 = 0, mac_val = 0, mac_val1 = 0, idx, band_idx = 0, band_offset = 0;
 	UINT32 msdr6 = 0, msdr7 = 0, msdr8 = 0, msdr9 = 0, msdr10 = 0, msdr16 = 0;
 	UINT32 msdr17 = 0, msdr18 = 0, msdr19 = 0, msdr20 = 0, msdr21 = 0;
-	UINT32 mbxsdr[BSS_NUM][4];
+	UINT32 mbxsdr[BSS_NUM][4] = {0};
 	UINT32 mbtcr[16] = {0}, mbtbcr[16] = {0}, mbrcr[16] = {0}, mbrbcr[16] = {0};
 	UINT32 btcr[BSS_NUM] = {0}, btbcr[BSS_NUM] = {0}, brcr[BSS_NUM] = {0};
 	UINT32 brbcr[BSS_NUM] = {0}, btdcr[BSS_NUM] = {0}, brdcr[BSS_NUM] = {0};
@@ -477,7 +477,7 @@ static INT32 chip_dump_mib_info(struct hdev_ctrl *ctrl, RTMP_STRING *arg)
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				("\tRx Total ByteCnt=0x%x\n", mac_val));
 
-		band_offset = WF_WTBLON_TOP_B1BTCRn_ADDR - WF_WTBLON_TOP_B0BTCRn_ADDR;
+		band_offset = (WF_WTBLON_TOP_B1BTCRn_ADDR - WF_WTBLON_TOP_B0BTCRn_ADDR) * band_idx;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("===Per-BSS Related Tx/Rx Counters===\n"));
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("BSS Idx   TxCnt/DataCnt  TxByteCnt  RxCnt/DataCnt  RxByteCnt\n"));
 
@@ -530,7 +530,7 @@ static INT32 chip_dump_mib_info(struct hdev_ctrl *ctrl, RTMP_STRING *arg)
 					(mac_val1 & BN0_WF_MIB_TOP_M0DR7_TX_DDLMT_RNG3_CNT_MASK),
 					(mac_val1 & BN0_WF_MIB_TOP_M0DR7_TX_DDLMT_RNG4_CNT_MASK) >> BN0_WF_MIB_TOP_M0DR7_TX_DDLMT_RNG4_CNT_SHFT));
 
-		band_offset = WF_WTBLON_TOP_B1BTCRn_ADDR - WF_WTBLON_TOP_B0BTCRn_ADDR;
+		band_offset = (WF_WTBLON_TOP_B1BTCRn_ADDR - WF_WTBLON_TOP_B0BTCRn_ADDR) * band_idx;
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("===Per-MBSS Related Tx/Rx Counters===\n"));
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MBSSIdx   TxCnt  TxByteCnt  RxCnt  RxByteCnt\n"));
 
@@ -813,6 +813,99 @@ static INT32 chip_show_pse_info(struct hdev_ctrl *ctrl, RTMP_STRING *arg)
 
 	return TRUE;
 }
+
+#ifdef CONFIG_COLGIN_MT6890
+#ifdef PSE_CHK
+#define MT7915_PSE_MAX_STOP_CNT (5)
+
+static void chip_chk_pse(RTMP_ADAPTER *pAd)
+{
+	UINT32 pse_stat = 0;
+	INT32 i;
+	/*only check hifq0, hifq1, hifq5, mdprx */
+	UINT8 chk_que_num[4] = {WF_PSE_TOP_QUEUE_EMPTY_HIF_0_EMPTY_SHFT,
+		WF_PSE_TOP_QUEUE_EMPTY_HIF_1_EMPTY_SHFT,
+		WF_PSE_TOP_QUEUE_EMPTY_HIF_5_EMPTY_SHFT,
+		WF_PSE_TOP_QUEUE_EMPTY_MDP_RX_QUEUE_EMPTY_SHFT};
+	UINT32 fl_que_ctrl[3] = {0};
+
+	if ((pAd->HwCtrl.ser_func_state != RTMP_TASK_STAT_RUNNING) ||
+		(IsErrRecoveryInIdleStat(pAd) == FALSE)) {
+		MTWF_LOG(DBG_CAT_HW, CATHW_SER, DBG_LVL_TRACE,
+				 ("SER func not ready or SER not done.\n"));
+		return;
+	}
+
+	HW_IO_READ32(pAd->hdev_ctrl, WF_PSE_TOP_QUEUE_EMPTY_ADDR, &pse_stat);
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\tQUEUE_EMPTY 0x%08x\n", pse_stat));
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\t\tHIF Q0/1/5 empty=%d/%d/%d\n",
+		((pse_stat & WF_PSE_TOP_QUEUE_EMPTY_HIF_0_EMPTY_MASK) >>
+		WF_PSE_TOP_QUEUE_EMPTY_HIF_0_EMPTY_SHFT),
+		((pse_stat & WF_PSE_TOP_QUEUE_EMPTY_HIF_1_EMPTY_MASK) >>
+		WF_PSE_TOP_QUEUE_EMPTY_HIF_1_EMPTY_SHFT),
+		((pse_stat & WF_PSE_TOP_QUEUE_EMPTY_HIF_5_EMPTY_MASK) >>
+		WF_PSE_TOP_QUEUE_EMPTY_HIF_5_EMPTY_SHFT)));
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\t\tMDP RX Q empty=%d\n",
+		((pse_stat & WF_PSE_TOP_QUEUE_EMPTY_MDP_RX_QUEUE_EMPTY_MASK) >>
+		WF_PSE_TOP_QUEUE_EMPTY_MDP_RX_QUEUE_EMPTY_SHFT)));
+
+	for (i = 0; i < 4; i++) {
+		if ((pse_stat & (0x1 << chk_que_num[i])))
+			RTMPZeroMemory(&pAd->pseinfo[i], sizeof(struct pse_chk_info));
+		else {
+			if (pse_queue_empty_info[chk_que_num[i]].QueueName != NULL) {
+				fl_que_ctrl[0] |= WF_PSE_TOP_FL_QUE_CTRL_0_EXECUTE_MASK;
+				fl_que_ctrl[0] |= (pse_queue_empty_info[chk_que_num[i]].Portid
+									<< WF_PSE_TOP_FL_QUE_CTRL_0_Q_BUF_PID_SHFT);
+				fl_que_ctrl[0] |= (pse_queue_empty_info[chk_que_num[i]].Queueid
+									<< WF_PSE_TOP_FL_QUE_CTRL_0_Q_BUF_QID_SHFT);
+			} else
+				continue;
+
+			fl_que_ctrl[0] |= (0x1 << 31);
+
+			HW_IO_WRITE32(pAd->hdev_ctrl, WF_PSE_TOP_FL_QUE_CTRL_0_ADDR, fl_que_ctrl[0]);
+			HW_IO_READ32(pAd->hdev_ctrl, WF_PSE_TOP_FL_QUE_CTRL_2_ADDR, &fl_que_ctrl[1]);
+			HW_IO_READ32(pAd->hdev_ctrl, WF_PSE_TOP_FL_QUE_CTRL_3_ADDR, &fl_que_ctrl[2]);
+
+			pAd->pseinfo[i].hfid = (fl_que_ctrl[1] & WF_PSE_TOP_FL_QUE_CTRL_2_QUEUE_HEAD_FID_MASK)
+									>> WF_PSE_TOP_FL_QUE_CTRL_2_QUEUE_HEAD_FID_SHFT;
+			pAd->pseinfo[i].tfid = (fl_que_ctrl[1] & WF_PSE_TOP_FL_QUE_CTRL_2_QUEUE_TAIL_FID_MASK)
+									>> WF_PSE_TOP_FL_QUE_CTRL_2_QUEUE_TAIL_FID_SHFT;
+			pAd->pseinfo[i].cnt = (fl_que_ctrl[2] & WF_PSE_TOP_FL_QUE_CTRL_3_QUEUE_PKT_NUM_MASK)
+									>> WF_PSE_TOP_FL_QUE_CTRL_3_QUEUE_PKT_NUM_SHFT;
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 ("%s: tail/head fid = 0x%03x/0x%03x, cnt = 0x%03x\n",
+						pse_queue_empty_info[chk_que_num[i]].QueueName,
+						pAd->pseinfo[i].tfid, pAd->pseinfo[i].hfid, pAd->pseinfo[i].cnt));
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 ("prev tail/head fid = 0x%03x/0x%03x, cnt = 0x%03x stopcnt=%d\n",
+						pAd->pseinfo[i].prevtfid, pAd->pseinfo[i].prevhfid,
+						pAd->pseinfo[i].prevcnt, pAd->pseinfo[i].stopcnt));
+			if ((pAd->pseinfo[i].cnt) &&
+			   (pAd->pseinfo[i].prevcnt == pAd->pseinfo[i].cnt) &&
+			   (pAd->pseinfo[i].prevtfid == pAd->pseinfo[i].tfid) &&
+			   (pAd->pseinfo[i].prevhfid == pAd->pseinfo[i].hfid)) {
+				pAd->pseinfo[i].stopcnt++;
+				if (pAd->pseinfo[i].stopcnt >= MT7915_PSE_MAX_STOP_CNT) {
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("pse stop trigger\n"));
+					CmdExtSER(pAd, SER_ACTION_RECOVER, SER_SET_L1_RECOVER, 0);
+					RTMPZeroMemory(&pAd->pseinfo, sizeof(pAd->pseinfo));
+					break;
+				}
+			} else {
+				if (pAd->pseinfo[i].stopcnt)
+					pAd->pseinfo[i].stopcnt = 0;
+				pAd->pseinfo[i].prevtfid = pAd->pseinfo[i].tfid;
+				pAd->pseinfo[i].prevhfid = pAd->pseinfo[i].hfid;
+				pAd->pseinfo[i].prevcnt = pAd->pseinfo[i].cnt;
+			}
+		}
+	}
+}
+#endif
+#endif
 
 static INT32 chip_show_protect_info(struct hdev_ctrl *ctrl, RTMP_STRING *arg)
 {
@@ -2186,10 +2279,16 @@ static VOID parse_fmac_lwtbl_DW0_1(RTMP_ADAPTER *pAd, UINT8 *lwtbl)
 	UINT_32 *addr = 0;
 	UINT_32 dw_value = 0;
 	UINT_16 i = 0;
+	UCHAR mac[MAC_ADDR_LEN] = {0};
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("\n\tAddr: %02x:%02x:%02x:%02x:%02x:%02x(D0[B0~15], D1[B0~31])\n",
-			  lwtbl[4], lwtbl[5], lwtbl[6], lwtbl[7], lwtbl[0], lwtbl[1]));
+	mac[0] = lwtbl[4];
+	mac[1] = lwtbl[5];
+	mac[2] = lwtbl[6];
+	mac[3] = lwtbl[7];
+	mac[4] = lwtbl[0];
+	mac[5] = lwtbl[1];
+
+	MTWF_PRINT("\n\tAddr:"MACSTR" (D1[B0~31], D0[B0~15])\n", MAC2STR(mac));
 
 	/* LMAC WTBL DW 0 */
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\nLWTBL DW 0/1\n\t"));
@@ -3529,8 +3628,8 @@ static VOID chip_dump_wtbl_mac(RTMP_ADAPTER *pAd, UINT16 wtbl_idx)
 	halWtblReadRaw(pAd, wtbl_idx, WTBL_TYPE_LMAC, 0, real_lwtbl_size, lwtbl);
 
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("WLAN_IDX: %d Mac Addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  wtbl_idx, lwtbl[4], lwtbl[5], lwtbl[6], lwtbl[7], lwtbl[0], lwtbl[1]));
+			 ("WLAN_IDX: %d Mac Addr: "MACSTR"\n",
+			  wtbl_idx, MAC2STR(lwtbl)));
 }
 
 
@@ -3928,7 +4027,7 @@ static struct {
 	/* PG1 DDW1 L */
 	{"EBF MU IDX",		BN0_WF_TMAC_TOP_DBGR12_ADDR,	BITS(24, 31),	24},
 	{"RU allocation",	BN0_WF_TMAC_TOP_DBGR12_ADDR,	BITS(16, 23),	16},
-	{"FEC Coding",		BN0_WF_TMAC_TOP_DBGR12_ADDR,	BIT(15),		15},
+	{"FEC Coding",		BN0_WF_TMAC_TOP_DBGR12_ADDR,	BIT(7),			7},
 	{"NSTS",			BN0_WF_TMAC_TOP_DBGR12_ADDR,	BITS(8, 10),	8},
 	{"ER-106T",			BN0_WF_TMAC_TOP_DBGR12_ADDR,	BIT(5),			5},
 	{"DCM",				BN0_WF_TMAC_TOP_DBGR12_ADDR,	BIT(4),			4},
@@ -3950,15 +4049,17 @@ static UCHAR dump_txv_CR(IN struct hdev_ctrl *ctrl, IN UINT32 reg_addr, OUT PUIN
 	return valid;
 }
 
-static INT32 chip_check_txv(IN struct hdev_ctrl *ctrl, IN UCHAR *name, IN UINT32 value)
+static INT32 chip_check_txv(IN struct hdev_ctrl *ctrl, UCHAR *name, UINT32 value, UINT8 band_idx)
 {
 	UCHAR found = 0, txv_idx = 0;
 	UINT32 reg_val = 0;
+	UINT32 band_addr_offset = 0x10000;
+
 
 	if (strlen(name) > 0) {
 		while (TXV[txv_idx].name) {
 			if (!strcmp(TXV[txv_idx].name, name)) {
-				dump_txv_CR(ctrl, TXV[txv_idx].reg_addr, &reg_val);
+				dump_txv_CR(ctrl, TXV[txv_idx].reg_addr + (band_addr_offset * band_idx), &reg_val);
 
 				reg_val &= TXV[txv_idx].mask;
 				reg_val >>= TXV[txv_idx].shift;
@@ -4769,7 +4870,7 @@ VOID ShowMsgWatch(RTMP_ADAPTER *pAd)
 				 ("%s: km_total_time zero!\n", __func__));
 		return;
 	}
-	
+
 	ms = (((km_total_time*30)+(km_total_time*52/100))/1000);
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("\n\n\n       Monitor Duration: %d unit = %d ms (unit 30.52us)\n",
@@ -5018,6 +5119,7 @@ static INT32 chip_show_fw_debg_info(struct _RTMP_ADAPTER *pAd)
 	UINT32 t3 = 0;
 	UCHAR idx = 0;
 	UCHAR str[32];
+	INT32 Ret = 0;
 
 	if (IS_MT7915_FW_VER_E2(pAd)) {
 		exp_assert_state_addr = 0x219848;
@@ -5142,21 +5244,48 @@ static INT32 chip_show_fw_debg_info(struct _RTMP_ADAPTER *pAd)
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 		("       dic_exp_type = 0x%x\n", dic_exp_type));
 
-	if (exp_assert_proc_entry_cnt == 0)
-		snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Normal");
+	if (exp_assert_proc_entry_cnt == 0) {
+		Ret = snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Normal");
+		if (os_snprintf_error(sizeof(exp_type), Ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"exp_type snprintf error!\n");
+			return FALSE;
+		}
+	}
 	else if (exp_assert_proc_entry_cnt == 1 &&
 		exp_assert_state > 1 && dic_exp_type == 5) {
-		snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Assert");
+		Ret = snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Assert");
+		if (os_snprintf_error(sizeof(exp_type), Ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"exp_type snprintf error!\n");
+			return FALSE;
+		}
 		fgIsExp = TRUE;
 		fgIsAssert = TRUE;
 	} else if (exp_assert_proc_entry_cnt == 1 && exp_assert_state > 1) {
-		snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Exception");
+		Ret = snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Exception");
+		if (os_snprintf_error(sizeof(exp_type), Ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"exp_type snprintf error!\n");
+			return FALSE;
+		}
 		fgIsExp = TRUE;
 	} else if (exp_assert_proc_entry_cnt > 1) {
-		snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Exception re-entry");
+		Ret = snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Exception re-entry");
+		if (os_snprintf_error(sizeof(exp_type), Ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"exp_type snprintf error!\n");
+			return FALSE;
+		}
 		fgIsExp = TRUE;
-	} else
-		snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Unknown'?");
+	} else {
+		Ret = snprintf(exp_type, sizeof(exp_type), "%s", "exp_type : Unknown'?");
+		if (os_snprintf_error(sizeof(exp_type), Ret)) {
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"exp_type snprintf error!\n");
+			return FALSE;
+		}
+	}
 
 
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -5252,12 +5381,28 @@ static INT32 chip_show_fw_debg_info(struct _RTMP_ADAPTER *pAd)
 		HW_IO_READ32(pAd->hdev_ctrl, 0x219554+(i*224), &t2);
 		HW_IO_READ32(pAd->hdev_ctrl, 0x219560+(i*224), &t3);
 
-		if (i == 0)
-			snprintf(str, sizeof(str), "%s", "WMT");
-		else if (i == 1)
-			snprintf(str, sizeof(str), "%s", "WIFI");
-		else if (i == 2)
-			snprintf(str, sizeof(str), "%s", "WIFI2");
+		if (i == 0) {
+			Ret = snprintf(str, sizeof(str), "%s", "WMT");
+			if (os_snprintf_error(sizeof(str), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str snprintf error!\n");
+				return FALSE;
+			}
+		} else if (i == 1) {
+			Ret = snprintf(str, sizeof(str), "%s", "WIFI");
+			if (os_snprintf_error(sizeof(str), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str snprintf error!\n");
+				return FALSE;
+			}
+		} else if (i == 2) {
+			Ret = snprintf(str, sizeof(str), "%s", "WIFI2");
+			if (os_snprintf_error(sizeof(str), Ret)) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"str snprintf error!\n");
+				return FALSE;
+			}
+		}
 
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("       %s  0x%x  0x%x  %d\n",
@@ -5433,6 +5578,88 @@ static INT chip_set_fw_cp_util_mode(RTMP_ADAPTER *pAd, UINT mode)
 	return 0;
 }
 
+#ifdef LOW_POWER_SUPPORT
+static INT chip_get_data_traffic_cnt(RTMP_ADAPTER *pAd, UINT32 band_idx, UINT32 *tx_cnt, UINT32 *rx_cnt)
+{
+	UINT32 band_offset;
+
+	if (band_idx >= DBDC_BAND_NUM) {
+		return FALSE;
+	}
+
+	band_offset = (WF_WTBLON_TOP_B1BTCRn_ADDR - WF_WTBLON_TOP_B0BTCRn_ADDR) * band_idx;
+	RTMP_IO_READ32(pAd->hdev_ctrl, WF_WTBLON_TOP_B0BTDCRn_ADDR + band_offset, tx_cnt);
+	RTMP_IO_READ32(pAd->hdev_ctrl, WF_WTBLON_TOP_B0BRDCRn_ADDR + band_offset, rx_cnt);
+
+	return TRUE;
+}
+#endif
+
+#ifdef PLE_MONITOR_SUPPORT
+VOID check_ple_buffer_status(struct _RTMP_ADAPTER *pAd)
+{
+	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+	UINT32 ple_stat[ALL_CR_NUM_OF_ALL_AC + 1] = {0}, pg_flow_ctrl[CR_NUM_OF_AC] = {0};
+	UINT32 sta_pause[CR_NUM_OF_AC] = {0};
+	UINT32 hif_max_q, upg_hif;
+	BOOLEAN sta_pause_status = FALSE;
+	int i, j;
+
+	chip_get_ple_acq_stat(pAd, ple_stat);
+	HW_IO_READ32(pAd->hdev_ctrl, WF_PLE_TOP_PG_HIF_GROUP_ADDR, &pg_flow_ctrl[2]);
+	HW_IO_READ32(pAd->hdev_ctrl, WF_PLE_TOP_HIF_PG_INFO_ADDR, &pg_flow_ctrl[3]);
+	chip_get_sta_pause(pAd, sta_pause);
+
+	hif_max_q = (pg_flow_ctrl[2] & WF_PLE_TOP_PG_HIF_GROUP_HIF_MAX_QUOTA_MASK) >> WF_PLE_TOP_PG_HIF_GROUP_HIF_MAX_QUOTA_SHFT;
+	upg_hif = (pg_flow_ctrl[3] & WF_PLE_TOP_HIF_PG_INFO_HIF_SRC_CNT_MASK) >> WF_PLE_TOP_HIF_PG_INFO_HIF_SRC_CNT_SHFT;
+
+	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+				 ("%s(), hif_max_q = %d upg_hif = %d\n", __func__, hif_max_q, upg_hif));
+
+	if ((hif_max_q - upg_hif) < WF_PLE_TOP_HIF_BUFFER_FULL_CHECK_LEVEL) {
+		 /* check PS STA AC Q status */
+		for (j = 0; j < ALL_CR_NUM_OF_ALL_AC; j++) {
+			for (i = 0; i < 32; i++) {
+				if (((ple_stat[j + 1] & (0x1 << i)) >> i) == 0) {
+					UINT32 ac_num = j / CR_NUM_OF_AC;
+					UINT32 sta_num = i + (j % CR_NUM_OF_AC) * 32;
+					STA_TR_ENTRY *tr_entry = NULL;
+
+					/* avoid overflow */
+					if (sta_num >= MAX_LEN_OF_TR_TABLE)
+						continue;
+
+					tr_entry = &tr_ctl->tr_entry[sta_num];
+					if (((sta_pause[j % CR_NUM_OF_AC] & 0x1 << i) >> i) == 1)
+						sta_pause_status = TRUE;
+
+					if (sta_pause_status && tr_entry->ps_time >= WF_STA_PS_STATUS_CONTINUE_TIME) {
+						UINT32 pktcnt, fl_que_ctrl[3] = {0};
+						fl_que_ctrl[0] |= WF_PLE_TOP_FL_QUE_CTRL_0_EXECUTE_MASK;
+						fl_que_ctrl[0] |= (ENUM_UMAC_LMAC_PORT_2 << WF_PLE_TOP_FL_QUE_CTRL_0_Q_BUF_PID_SHFT);
+						fl_que_ctrl[0] |= (ac_num << WF_PLE_TOP_FL_QUE_CTRL_0_Q_BUF_QID_SHFT);
+						fl_que_ctrl[0] |= (sta_num << WF_PLE_TOP_FL_QUE_CTRL_0_Q_BUF_WLANID_SHFT);
+						HW_IO_WRITE32(pAd->hdev_ctrl, WF_PLE_TOP_FL_QUE_CTRL_0_ADDR, fl_que_ctrl[0]);
+						HW_IO_READ32(pAd->hdev_ctrl, WF_PLE_TOP_FL_QUE_CTRL_2_ADDR, &fl_que_ctrl[1]);
+						HW_IO_READ32(pAd->hdev_ctrl, WF_PLE_TOP_FL_QUE_CTRL_3_ADDR, &fl_que_ctrl[2]);
+						pktcnt = (fl_que_ctrl[2] & WF_PLE_TOP_FL_QUE_CTRL_3_QUEUE_PKT_NUM_MASK) >>
+							WF_PLE_TOP_FL_QUE_CTRL_3_QUEUE_PKT_NUM_SHFT;
+
+						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+							 ("%s(), STA%d AC%d, pkt cnt = 0x%03x\n", __func__, sta_num, ac_num, pktcnt));
+
+						/* if sta occupied too much ple buffer, flush it */
+						if (pktcnt > WF_PLE_TOP_HIF_BUFFER_MAX_QUOTA_PER_STA) {
+							HW_FLUSH_PLE_AC_QUEUE(pAd, sta_num, WF_PLE_TOP_HIF_BUFFER_MAX_QUOTA_PER_STA, TRUE);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+#endif
+
 VOID mt7915_chip_dbg_init(struct _RTMP_CHIP_DBG *dbg_ops)
 {
 	dbg_ops->dump_ps_table = NULL;
@@ -5462,6 +5689,9 @@ VOID mt7915_chip_dbg_init(struct _RTMP_CHIP_DBG *dbg_ops)
 	dbg_ops->regular_pause_umac = chip_regular_pause_umac;
 #endif /* RANDOM_PKT_GEN */
 	dbg_ops->get_lpon_frcr = chip_get_lpon_frcr;
+#ifdef PLE_MONITOR_SUPPORT
+	dbg_ops->check_ple_status = check_ple_buffer_status;
+#endif
 #ifdef VOW_SUPPORT
 	dbg_ops->show_sta_acq_info = chip_show_sta_acq_info;
 	dbg_ops->show_txcmdq_info = chip_show_txcmdq_info;
@@ -5490,4 +5720,12 @@ VOID mt7915_chip_dbg_init(struct _RTMP_CHIP_DBG *dbg_ops)
 	dbg_ops->show_fw_dbg_info = chip_show_fw_debg_info;
 	dbg_ops->set_cpu_util_en = chip_set_fw_cp_util_en;
 	dbg_ops->set_cpu_util_mode = chip_set_fw_cp_util_mode;
+#ifdef LOW_POWER_SUPPORT
+	dbg_ops->get_data_traffic_cnt = chip_get_data_traffic_cnt;
+#endif
+#ifdef CONFIG_COLGIN_MT6890
+#ifdef PSE_CHK
+	dbg_ops->chk_pse = chip_chk_pse;
+#endif
+#endif
 }

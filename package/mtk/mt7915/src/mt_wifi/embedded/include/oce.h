@@ -243,9 +243,6 @@ typedef struct oce_msg {
 	OCE_MSG_BODY OceMsgBody;
 } OCE_MSG, *P_OCE_MSG;
 
-ULONG Crcbitbybitfast(
-	unsigned char *p, unsigned long len);
-
 OCE_ERR_CODE OceInit(
 	PRTMP_ADAPTER pAd);
 

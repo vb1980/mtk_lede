@@ -99,6 +99,11 @@ VOID ReleaseOmacIdx(struct hdev_ctrl *ctrl, UINT32 OmacType, struct radio_dev *r
 	struct _OMAC_BSS_CTRL *omac_ctrl = rdev->omac_ctrl;
 	struct _RTMP_CHIP_CAP *cap = &ctrl->chip_cap;
 
+	if(!omac_ctrl){
+		MTWF_DBG(NULL, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "omac_ctrl NULL!\n");
+		return;
+	}
+
 	switch (OmacType) {
 	case WDEV_TYPE_AP:
 	case WDEV_TYPE_ATE_AP:

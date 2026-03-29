@@ -56,6 +56,7 @@
 #ifdef VLAN_SUPPORT
 #include <linux/if_vlan.h>
 #endif /*VLAN_SUPPORT*/
+#include "wnm.h"
 
 /* TODO */
 #undef RT_CONFIG_IF_OPMODE_ON_AP
@@ -103,8 +104,10 @@ static inline void netdev_priv_set(struct net_device *dev, void *priv)
 #endif
 }
 
-
 int DebugLevel = DBG_LVL_ERROR;
+
+int DebugLevel_BkUp = DBG_LVL_ERROR;
+
 
 UINT32 DebugCategory = DBG_CAT_EN_ALL_MASK
 				& ~(0x1 << DBG_CAT_TX)
@@ -152,12 +155,6 @@ UINT32 DebugSubCategory[DBG_LVL_MAX + 1][32] = {
 ULONG RTPktOffsetData = 0, RTPktOffsetLen = 0, RTPktOffsetCB = 0;
 #endif /* OS_ABL_FUNC_SUPPORT */
 
-#ifdef RTMP_RBUS_SUPPORT
-#if defined(CONFIG_RA_CLASSIFIER) || defined(CONFIG_RA_CLASSIFIER_MODULE)
-extern int (*ra_classifier_hook_rx)(struct sk_buff *skb, unsigned long cycle);
-extern volatile unsigned long classifier_cur_cycle;
-#endif /* CONFIG_RA_CLASSIFIER */
-#endif /* RTMP_RBUS_SUPPORT */
 
 #ifdef MEM_ALLOC_INFO_SUPPORT
 MEM_INFO_LIST MemInfoList;
@@ -612,6 +609,12 @@ BOOLEAN RTMPL2FrameTxAction(
 	/* End this frame */
 	skb_put(GET_OS_PKT_TYPE(skb), data_len);
 	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s doen\n", __func__));
+
+	if(!_announce_802_3_packet) {
+		dev_kfree_skb_any(skb);
+		return FALSE;
+	}
+
 	_announce_802_3_packet(pCtrlBkPtr, skb, OpMode);
 	return TRUE;
 }
@@ -1284,37 +1287,6 @@ int RtmpOSWrielessEventSend(
 	return 0;
 }
 
-void RTMPSendWirelessEvent_WSC(
-    IN  VOID            *pAd,
-    IN  USHORT          Event_flag,
-    IN  PUCHAR          pAddr,
-    IN  UCHAR           BssIdx,
-    IN  CHAR            apMode)
-{
-    if ((Event_flag == IW_WSC_STATUS_SUCCESS) || (Event_flag == IW_WSC_STATUS_FAIL) || (Event_flag == IW_WSC_2MINS_TIMEOUT))
-    {
-        char ifname[IFNAMSIZ] = { 0 };
-        PRTMP_ADAPTER pAdapter = pAd;
-
-        if (pAdapter->ApCfg.MBSSID[BssIdx].wdev.if_dev != NULL)
-        {
-            if (apMode == MIN_NET_DEVICE_FOR_MBSSID)
-            {
-                strncpy(ifname, pAdapter->ApCfg.MBSSID[BssIdx].wdev.if_dev->name, IFNAMSIZ);
-            }
-            else if (apMode == MIN_NET_DEVICE_FOR_APCLI)
-            {
-                strncpy(ifname, pAdapter->StaCfg[BssIdx].wdev.if_dev->name, IFNAMSIZ);
-            }
-            else
-            {
-                ASSERT(FALSE);
-            }
-        }
-
-        RtmpOSWrielessEventSend(pAdapter->net_dev, RT_WLAN_EVENT_CUSTOM, Event_flag, NULL, ifname, strlen(ifname));
-    }
-}
 
 int RtmpOSWrielessEventSendExt(
 	IN PNET_DEV pNetDev,
@@ -1592,6 +1564,8 @@ static int RtmpOSNetDevRequestName(
 		prefixLen,
 		slotNameLen;
 	int Status;
+	int ret;
+	UINT LeftBufferSize;
 
 	prefixLen = strlen(pPrefixStr);
 	ASSERT((prefixLen < IFNAMSIZ));
@@ -1600,6 +1574,8 @@ static int RtmpOSNetDevRequestName(
 		memset(suffixName, 0, IFNAMSIZ);
 		memset(desiredName, 0, IFNAMSIZ);
 		strncpy(&desiredName[0], pPrefixStr, prefixLen);
+		/* [coverity] add '0' at the last */
+		desiredName[prefixLen] = '\0';
 #ifdef MULTIPLE_CARD_SUPPORT
 #ifdef RT_SOC_SUPPORT
 
@@ -1612,13 +1588,25 @@ static int RtmpOSNetDevRequestName(
 		else
 #endif /* RT_SOC_SUPPORT */
 #endif /* MULTIPLE_CARD_SUPPORT */
-			sprintf(suffixName, "%d", ifNameIdx);
+			ret = sprintf(suffixName, "%d", ifNameIdx);
+			if (ret < 0) {
+				MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "suffixName sprintf error!!!\n");
+				return NDIS_STATUS_FAILURE;
+			}
 
 		slotNameLen = strlen(suffixName);
 		ASSERT(((slotNameLen + prefixLen) < IFNAMSIZ));
 
-		if (autoSuffix)
-			snprintf(desiredName + strlen(desiredName), sizeof(desiredName) - strlen(desiredName), "%s", suffixName);
+		if (autoSuffix) {
+			LeftBufferSize = sizeof(desiredName) - strlen(desiredName);
+			ret = snprintf(desiredName + strlen(desiredName), LeftBufferSize, "%s", suffixName);
+			if (os_snprintf_error(LeftBufferSize, ret)) {
+				MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					 "desiredName snprintf error!!!\n");
+				return NDIS_STATUS_FAILURE;
+			}
+		}
 		existNetDev = RtmpOSNetDevGetByName(dev, &desiredName[0]);
 
 		if (existNetDev == NULL)
@@ -1652,6 +1640,10 @@ void RtmpOSNetDevClose(PNET_DEV pNetDev)
 
 void RtmpOSNetDevFree(PNET_DEV pNetDev)
 {
+#if (KERNEL_VERSION(2, 6, 31) <= LINUX_VERSION_CODE)
+	void *tmp_ptr;
+#endif
+
 	if (pNetDev == NULL) {
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("pNetDev is NULL!\n"));
 		ASSERT(pNetDev);
@@ -1659,7 +1651,14 @@ void RtmpOSNetDevFree(PNET_DEV pNetDev)
 	}
 
 #if (KERNEL_VERSION(2, 5, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(2, 6, 31) <= LINUX_VERSION_CODE)
+	tmp_ptr = (void *)pNetDev->netdev_ops;
+#endif
 	free_netdev(pNetDev);
+#if (KERNEL_VERSION(2, 6, 31) <= LINUX_VERSION_CODE)
+	if (tmp_ptr)
+		vfree(tmp_ptr);
+#endif
 #else
 	kfree(pNetDev);
 #endif
@@ -1769,13 +1768,7 @@ INT RtmpOSNetDevDestory(VOID *pReserved, PNET_DEV pNetDev)
 
 void RtmpOSNetDevDetach(PNET_DEV pNetDev)
 {
-#if (KERNEL_VERSION(2, 6, 31) <= LINUX_VERSION_CODE)
-	struct net_device_ops *pNetDevOps = (struct net_device_ops *)pNetDev->netdev_ops;
-#endif
 	unregister_netdevice(pNetDev);
-#if (KERNEL_VERSION(2, 6, 31) <= LINUX_VERSION_CODE)
-	vfree(pNetDevOps);
-#endif
 }
 
 
@@ -1792,8 +1785,15 @@ static void RALINK_ET_DrvInfoGet(
 	struct net_device *pDev,
 	struct ethtool_drvinfo *pInfo)
 {
-	strncpy(pInfo->driver, "RALINK WLAN", sizeof("RALINK WLAN"));
-	sprintf(pInfo->bus_info, "CSR 0x%lx", pDev->base_addr);
+	size_t size = sizeof("RALINK WLAN");
+	int ret;
+
+	strncpy(pInfo->driver, "RALINK WLAN", size);
+	ret = sprintf(pInfo->bus_info, "CSR 0x%lx", pDev->base_addr);
+	if (ret < 0) {
+		MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 "bus_info sprintf error!!!\n");
+	}
 }
 
 static struct ethtool_ops RALINK_Ethtool_Ops = {
@@ -2077,9 +2077,12 @@ VOID RtmpDrvAllMacPrint(
 {
 	struct file *file_w;
 	RTMP_STRING *fileName = "MacDump.txt";
+#if 0
 	mm_segment_t orig_fs;
+#endif
 	RTMP_STRING *msg;
 	UINT32 macAddr = 0, macValue = 0;
+	INT ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&msg, 1024);
 
@@ -2090,8 +2093,6 @@ VOID RtmpDrvAllMacPrint(
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
 #endif
-
-
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2107,7 +2108,11 @@ VOID RtmpDrvAllMacPrint(
 			while (macAddr <= AddrEnd) {
 				/*				RTMP_IO_READ32(pAd->hdev_ctrl, macAddr, &macValue); // sample */
 				macValue = *pBufMac++;
-				sprintf(msg, "%04x = %08x\n", macAddr, macValue);
+				ret = sprintf(msg, "%04x = %08x\n", macAddr, macValue);
+				if (ret < 0) {
+					MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "msg sprintf error!!!\n");
+				}
 				/* write data to file */
 #if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
 			if (file_w->f_op->write) {
@@ -2126,7 +2131,11 @@ VOID RtmpDrvAllMacPrint(
 				macAddr += AddrStep;
 			}
 
-			snprintf(msg, 1024, "\nDump all MAC values to %s\n", fileName);
+			ret = snprintf(msg, 1024, "\nDump all MAC values to %s\n", fileName);
+			if (os_snprintf_error(1024, ret)) {
+				MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "msg snprintf error!!!\n");
+			}
 		}
 
 		filp_close(file_w, NULL);
@@ -2147,10 +2156,13 @@ VOID RtmpDrvAllE2PPrint(
 {
 	struct file *file_w;
 	RTMP_STRING *fileName = "EEPROMDump.txt";
+#if 0
 	mm_segment_t orig_fs;
+#endif
 	RTMP_STRING *msg;
 	USHORT eepAddr = 0;
 	USHORT eepValue;
+	INT ret;
 
 	os_alloc_mem(NULL, (UCHAR **)&msg, 1024);
 
@@ -2161,8 +2173,6 @@ VOID RtmpDrvAllE2PPrint(
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
 #endif
-
-
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2177,7 +2187,11 @@ VOID RtmpDrvAllE2PPrint(
 
 			while (eepAddr <= AddrEnd) {
 				eepValue = *pMacContent;
-				sprintf(msg, "%08x = %04x\n", eepAddr, eepValue);
+				ret = sprintf(msg, "%08x = %04x\n", eepAddr, eepValue);
+				if (ret < 0) {
+					MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "msg sprintf error!!!\n");
+				}
 				/* write data to file */
 #if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
 				if (file_w->f_op->write) {
@@ -2197,12 +2211,17 @@ VOID RtmpDrvAllE2PPrint(
 				pMacContent += (AddrStep >> 1);
 			}
 
-			snprintf(msg, 1024, "\nDump all EEPROM values to %s\n",
+			ret = snprintf(msg, 1024, "\nDump all EEPROM values to %s\n",
 					fileName);
+			if (os_snprintf_error(1024, ret)) {
+				MTWF_DBG(NULL, DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "msg snprintf error!!!\n");
+			}
 		}
 
 		filp_close(file_w, NULL);
 	}
+
 #if 0
 	set_fs(orig_fs);
 #endif
@@ -2217,14 +2236,14 @@ VOID RtmpDrvAllRFPrint(
 {
 	struct file *file_w;
 	RTMP_STRING *fileName = "RFDump.txt";
+#if 0
 	mm_segment_t orig_fs;
+#endif
 
 #if 0
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
 #endif
-
-
 	/* open file */
 	file_w = filp_open(fileName, O_WRONLY | O_CREAT, 0);
 
@@ -2254,6 +2273,7 @@ VOID RtmpDrvAllRFPrint(
 
 		filp_close(file_w, NULL);
 	}
+
 #if 0
 	set_fs(orig_fs);
 #endif
@@ -2795,9 +2815,6 @@ void OS_LOAD_CODE_FROM_BIN(unsigned char **image, char *bin_name, void *inf_dev,
 #ifdef RTMP_PCI_SUPPORT
 	dev = (struct device *)(&(((struct pci_dev *)(inf_dev))->dev));
 #endif
-#ifdef RTMP_RBUS_SUPPORT
-	dev = (struct device *) (&(((PPCI_DEV)(inf_dev))->dev));
-#endif /*RTMP_RBUS_SUPPORT*/
 
 	if (request_firmware(&fw_entry, bin_name, dev) != 0) {
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s:fw not available(/lib/firmware/%s)\n", __func__, bin_name));
@@ -2838,8 +2855,10 @@ void os_load_code_from_bin(void *pAd, unsigned char **image, char *bin_name, UIN
 	}
 
 	os_alloc_mem(pAd, image, fw_entry->size);
-	memcpy(*image, fw_entry->data, fw_entry->size);
-	*code_len = fw_entry->size;
+	if (*image) {
+		memcpy(*image, fw_entry->data, fw_entry->size);
+		*code_len = fw_entry->size;
+	}
 	release_firmware(fw_entry);
 }
 
@@ -5063,6 +5082,59 @@ INT os_alloc_mem(
 		return NDIS_STATUS_FAILURE;
 }
 
+VOID BTM_Free_Peer_Entry(PVOID mem)
+{
+	RALINK_TIMER_STRUCT *pTimer_req = NULL, *pTimer_rsp = NULL, *pTimer_APrsp = NULL;
+	BOOLEAN Cancelled = FALSE;
+	BTM_PEER_ENTRY *BtmPeerEntry = NULL;
+
+	BtmPeerEntry = (BTM_PEER_ENTRY *)mem;
+	pTimer_req = &BtmPeerEntry->WaitPeerBTMReqTimer;
+	pTimer_rsp = &BtmPeerEntry->WaitPeerBTMRspTimer;
+#ifdef CONFIG_STA_SUPPORT
+	pTimer_APrsp = &BtmPeerEntry->WaitAPBTMRspTimer;
+#endif /* CONFIG_AP_SUPPORT */
+
+	if (pTimer_req->Valid) {
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitPeerBTMReqTimer isn't release!!, Caller = %pS\n",
+				 __func__, pTimer_req->pCaller));
+
+		/* Cancel Wait peer wnm request frame */
+		RTMPCancelTimer(&BtmPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
+		RTMPReleaseTimer(&BtmPeerEntry->WaitPeerBTMReqTimer, &Cancelled);
+		if (FALSE == Cancelled)
+			MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitPeerBTMReqTimer release Fail\n", __func__));
+		else
+			Cancelled = FALSE;
+	}
+
+	if (pTimer_rsp->Valid) {
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitPeerBTMRspTimer isn't release!!, Caller = %pS\n",
+				 __func__, pTimer_rsp->pCaller));
+
+		/* Cancel Wait peer wnm response frame */
+		RTMPCancelTimer(&BtmPeerEntry->WaitPeerBTMRspTimer, &Cancelled);
+		RTMPReleaseTimer(&BtmPeerEntry->WaitPeerBTMRspTimer, &Cancelled);
+		if (FALSE == Cancelled)
+			MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitPeerBTMRspTimer release Fail\n", __func__));
+	}
+#ifdef CONFIG_STA_SUPPORT
+	if (pTimer_APrsp->Valid) {
+		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitAPBTMRspTimer isn't release!!, Caller = %pS\n",
+				 __func__, pTimer_APrsp->pCaller));
+
+		/* Cancel Wait peer wnm response frame */
+		RTMPCancelTimer(&BtmPeerEntry->WaitAPBTMRspTimer, &Cancelled);
+		RTMPReleaseTimer(&BtmPeerEntry->WaitAPBTMRspTimer, &Cancelled);
+		if (FALSE == Cancelled)
+			MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: WaitAPBTMRspTimer release Fail\n", __func__));
+	}
+#endif /* CONFIG_AP_SUPPORT */
+
+	os_free_mem(BtmPeerEntry);
+
+}
+
 VOID os_free_mem(
 	PVOID mem)
 {
@@ -5414,11 +5486,17 @@ VOID os_module_init(VOID)
 #endif /* MEM_ALLOC_INFO_SUPPORT */
 /* Add out-of-memory notifier */
 	multi_hif_init();
+#ifdef CONFIG_6G_SUPPORT
+	bssmnger_init();
+#endif /* CONFIG_6G_SUPPORT */
 }
 
 /*exit global data structrue for single driver*/
 VOID os_module_exit(VOID)
 {
+#ifdef CONFIG_6G_SUPPORT
+	bssmnger_deinit();
+#endif /* CONFIG_6G_SUPPORT */
 	multi_hif_exit();
 /* Del out-of-memory notifier */
 #ifdef MEM_ALLOC_INFO_SUPPORT

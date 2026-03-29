@@ -213,10 +213,12 @@ VOID WpaMicFailureReportFrame(
 
 	NdisMoveMemory(pPacket->KeyDesc.KeyMicAndData, Mic, LEN_KEY_DESC_MIC);
 	/* copy frame to Tx ring and send MIC failure report frame to authenticator */
-	RTMPToWirelessSta(pAd, pEntry,
-					  Header802_3, LENGTH_802_3,
-					  (PUCHAR)pPacket,
-					  CONV_ARRARY_TO_UINT16(pPacket->Body_Len) + 4, FALSE);
+	if (CONV_ARRARY_TO_UINT16(pPacket->Body_Len) < 65535) {
+		RTMPToWirelessSta(pAd, pEntry,
+						  Header802_3, LENGTH_802_3,
+						  (PUCHAR)pPacket,
+						  CONV_ARRARY_TO_UINT16(pPacket->Body_Len) + 4, FALSE);
+	}
 	MlmeFreeMemory((PUCHAR)pOutBuffer);
 	os_free_mem(mpool);
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("WpaMicFailureReportFrame <-----\n"));
@@ -275,7 +277,7 @@ VOID WpaStaGroupKeySetting(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 {
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 	ASIC_SEC_INFO Info = {0};
-	USHORT Wcid = 0;
+	USHORT Wcid;
 
 	ASSERT(pStaCfg);
 

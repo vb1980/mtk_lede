@@ -544,9 +544,9 @@ static int CFG80211_OpsScan(
 		preq_ndev = pRequest->wdev->netdev;
 		preq_wdev = RTMP_OS_NETDEV_GET_WDEV(preq_ndev);
 
-		CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:%02X:%02X:%02X:%02X:%02X:%02X;\n",
+		CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:"MACSTR";\n",
 		__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(preq_ndev),
-		PRINT_MAC(preq_wdev->if_addr)));
+		MAC2STR(preq_wdev->if_addr)));
 	} else {
 		CFG80211DBG(DBG_LVL_ERROR, ("[%s](%d):ERROR! pRequest=%p; pRequest wireless wdev=%p; wifi_dev=%p\n",
 			__func__, __LINE__, pRequest, pRequest->wdev, RTMP_OS_NETDEV_GET_WDEV(preq_ndev)));
@@ -710,8 +710,8 @@ static int CFG80211_OpsScan(
 			ApSiteSurvey_by_wdev(pAd, &scan_ssid, SCAN_PASSIVE, FALSE, preq_wdev);
 		}
 	} else {
-		CFG80211DBG(DBG_LVL_ERROR, ("[%s](%d):infname: %s, Mac:%02X:%02X:%02X:%02X:%02X:%02X; interface is DOWN\n",
-			__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(preq_ndev), PRINT_MAC(preq_wdev->if_addr)));
+		CFG80211DBG(DBG_LVL_ERROR, ("[%s](%d):infname: %s, Mac:"MACSTR"; interface is DOWN\n",
+			__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(preq_ndev), MAC2STR(preq_wdev->if_addr)));
 		CFG80211OS_ScanEnd(pCfg80211_CB, TRUE);
 		return -ENETDOWN;
 	}
@@ -753,9 +753,9 @@ INT CFG80211_OpsChanWithSet(
 
 	/*interface infos*/
 	pwifi_dev = RTMP_OS_NETDEV_GET_WDEV(dev);
-	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:%02X:%02X:%02X:%02X:%02X:%02X;\n",
+	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:"MACSTR";\n",
 		__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(dev),
-		PRINT_MAC(pwifi_dev->if_addr)));
+		MAC2STR(pwifi_dev->if_addr)));
 
 	/*pad infos*/
 	MAC80211_PAD_GET(pAd, wiphy);
@@ -918,9 +918,9 @@ static int CFG80211_OpsPwrMgmt(
 		__func__, __LINE__, inf_wdev));
 		return -ENOENT;
 	}
-	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:%02X:%02X:%02X:%02X:%02X:%02X;\n",
+	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:"MACSTR";\n",
 		__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(pNdev),
-		PRINT_MAC(inf_wdev->if_addr)));
+		MAC2STR(inf_wdev->if_addr)));
 
 	MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 			("[%s](%d): enabled = %d;\n",
@@ -1323,9 +1323,9 @@ INT CFG80211_OpsAp_StaGet(
 		__func__, __LINE__, inf_wdev));
 		return -ENOENT;
 	}
-	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:%02X:%02X:%02X:%02X:%02X:%02X;\n",
+	CFG80211DBG(DBG_LVL_TRACE, ("[%s](%d):request infname: %s, mac:"MACSTR";\n",
 		__func__, __LINE__, RTMP_OS_NETDEV_GET_DEVNAME(pNdev),
-		PRINT_MAC(inf_wdev->if_addr)));
+		MAC2STR(inf_wdev->if_addr)));
 
 	/*init data*/
 	NdisZeroMemory(pMac, MAC_ADDR_LEN);
@@ -1341,8 +1341,8 @@ INT CFG80211_OpsAp_StaGet(
 				NdisMoveMemory(pMac, pEntry->Addr, MAC_ADDR_LEN);
 				NdisMoveMemory(StaInfo.MAC, pMac, MAC_ADDR_LEN);
 				MTWF_LOG(DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				("[%s](%d):idx: %d, mac: %02X:%02X:%02X:%02X:%02X:%02X;(TYPE:%x)\n",
-				__func__, __LINE__, idx, PRINT_MAC(pMac), pEntry->EntryType));
+				("[%s](%d):idx: %d, mac: "MACSTR";(TYPE:%x)\n",
+				__func__, __LINE__, idx, MAC2STR(pMac), pEntry->EntryType));
 				is_find = TRUE;
 				break;
 			}
@@ -1733,8 +1733,8 @@ static int CFG80211_OpsKeyAdd(
 	if ((pNdev->ieee80211_ptr->iftype == RT_CMD_80211_IFTYPE_AP) ||
 		(pNdev->ieee80211_ptr->iftype == RT_CMD_80211_IFTYPE_P2P_GO)) {
 		if (pMacAddr) {
-			CFG80211DBG(DBG_LVL_OFF, ("80211> KeyAdd STA(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n",
-									  PRINT_MAC(pMacAddr)));
+			CFG80211DBG(DBG_LVL_OFF, ("80211> KeyAdd STA("MACSTR") ==>\n",
+									  MAC2STR(pMacAddr)));
 			NdisCopyMemory(KeyInfo.MAC, pMacAddr, MAC_ADDR_LEN);
 		}
 
@@ -1752,8 +1752,8 @@ static int CFG80211_OpsKeyAdd(
 #ifdef RT_P2P_SPECIFIC_WIRELESS_EVENT
 
 	if (pMacAddr) {
-		CFG80211DBG(DBG_LVL_TRACE, ("80211> P2pSendWirelessEvent(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n",
-									PRINT_MAC(pMacAddr)));
+		CFG80211DBG(DBG_LVL_TRACE, ("80211> P2pSendWirelessEvent("MACSTR") ==>\n",
+									MAC2STR(pMacAddr)));
 		RTMP_DRIVER_80211_SEND_WIRELESS_EVENT(pAd, pMacAddr);
 	}
 
@@ -1860,7 +1860,7 @@ static int CFG80211_OpsKeyDel(
 	CFG80211DBG(DBG_LVL_TRACE, ("80211> %s ==>\n", __func__));
 
 	if (pMacAddr) {
-		CFG80211DBG(DBG_LVL_ERROR, ("80211> KeyDel STA(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n", PRINT_MAC(pMacAddr)));
+		CFG80211DBG(DBG_LVL_ERROR, ("80211> KeyDel STA("MACSTR") ==>\n", MAC2STR(pMacAddr)));
 		NdisCopyMemory(KeyInfo.MAC, pMacAddr, MAC_ADDR_LEN);
 	}
 
@@ -2157,8 +2157,8 @@ static int CFG80211_OpsConnect(
 
 	/* %NULL if not specified (auto-select based on scan)*/
 	if (pSme->bssid != NULL) {
-		CFG80211DBG(DBG_LVL_OFF, ("80211> Connect bssid %02x:%02x:%02x:%02x:%02x:%02x\n",
-								  PRINT_MAC(pSme->bssid)));
+		CFG80211DBG(DBG_LVL_OFF, ("80211> Connect bssid "MACSTR"\n",
+								  MAC2STR(pSme->bssid)));
 		ConnInfo.pBssid = (UINT8 *)pSme->bssid;
 	}
 
@@ -2781,6 +2781,9 @@ static int CFG80211_OpsStartAp(
 		pWdev->IsCFG1xWdev = FALSE;
 	}
 
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	bcn.crypto.sae_pwe = settings->crypto.sae_pwe;
+#endif
 	NdisZeroMemory(&bcn.ssid[0], MAX_LEN_OF_SSID);
 	if (settings->ssid && (settings->ssid_len <= 32))
 		NdisCopyMemory(&bcn.ssid[0], settings->ssid, settings->ssid_len);
@@ -2989,14 +2992,14 @@ static int CFG80211_OpsStaDel(
 
 	if (dev) {
 		rApStaDel.pWdev = RTMP_OS_NETDEV_GET_WDEV(dev);
-		CFG80211DBG(DBG_LVL_OFF, ("80211> %s ==> for bssid (%02X:%02X:%02X:%02X:%02X:%02X)\n",
-									__func__, PRINT_MAC(rApStaDel.pWdev->bssid)));
+		CFG80211DBG(DBG_LVL_OFF, ("80211> %s ==> for bssid ("MACSTR")\n",
+									__func__, MAC2STR(rApStaDel.pWdev->bssid)));
 	} else
 		CFG80211DBG(DBG_LVL_OFF, ("80211> %s ==>", __func__));
 
 	if (pMacAddr) {
-		CFG80211DBG(DBG_LVL_TRACE, ("80211> Delete STA(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n",
-									PRINT_MAC(pMacAddr)));
+		CFG80211DBG(DBG_LVL_TRACE, ("80211> Delete STA("MACSTR") ==>\n",
+									MAC2STR(pMacAddr)));
 		rApStaDel.pSta_MAC = (UINT8 *)pMacAddr;
 	}
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
@@ -3030,8 +3033,8 @@ static int CFG80211_OpsStaDel(
 	if (pMacAddr ==  NULL)
 		RTMP_DRIVER_80211_AP_STA_DEL(pAd, NULL, 0);
 	else {
-		CFG80211DBG(DBG_LVL_TRACE, ("80211> Delete STA(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n",
-									PRINT_MAC(pMacAddr)));
+		CFG80211DBG(DBG_LVL_TRACE, ("80211> Delete STA("MACSTR") ==>\n",
+									MAC2STR(pMacAddr)));
 #if (KERNEL_VERSION(3, 19, 0) <= LINUX_VERSION_CODE)
 		RTMP_DRIVER_80211_AP_STA_DEL(pAd, (VOID *)pMacAddr, params->reason_code);
 #else
@@ -3100,7 +3103,7 @@ static int CFG80211_OpsStaChg(
 	void *pAd;
 	CFG80211_CB *p80211CB;
 
-	CFG80211DBG(DBG_LVL_TRACE, ("80211> Change STA(%02X:%02X:%02X:%02X:%02X:%02X) ==>\n", PRINT_MAC(pMacAddr)));
+	CFG80211DBG(DBG_LVL_TRACE, ("80211> Change STA("MACSTR") ==>\n", MAC2STR(pMacAddr)));
 	MAC80211_PAD_GET(pAd, pWiphy);
 
 	p80211CB = NULL;
@@ -3118,12 +3121,12 @@ static int CFG80211_OpsStaChg(
 */
 	if (params->sta_flags_mask & BIT(NL80211_STA_FLAG_AUTHORIZED)) {
 		if (params->sta_flags_set & BIT(NL80211_STA_FLAG_AUTHORIZED)) {
-			CFG80211DBG(DBG_LVL_TRACE, ("80211> STA(%02X:%02X:%02X:%02X:%02X:%02X) ==> PortSecured\n",
-				PRINT_MAC(pMacAddr)));
+			CFG80211DBG(DBG_LVL_TRACE, ("80211> STA("MACSTR") ==> PortSecured\n",
+				MAC2STR(pMacAddr)));
 			RTMP_DRIVER_80211_AP_MLME_PORT_SECURED(pAd, (VOID *)pMacAddr, 1);
 		} else {
-			CFG80211DBG(DBG_LVL_TRACE, ("80211> STA(%02X:%02X:%02X:%02X:%02X:%02X) ==> PortNotSecured\n",
-				PRINT_MAC(pMacAddr)));
+			CFG80211DBG(DBG_LVL_TRACE, ("80211> STA("MACSTR") ==> PortNotSecured\n",
+				MAC2STR(pMacAddr)));
 			RTMP_DRIVER_80211_AP_MLME_PORT_SECURED(pAd, (VOID *)pMacAddr, 0);
 		}
 	}
@@ -3738,8 +3741,8 @@ static struct wireless_dev *CFG80211_WdevAlloc(
 		MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("80211> Wireless device allocation fail!\n"));
 		return NULL;
 	} /* End of if */
-	
-#if defined(PLATFORM_M_STB)	
+
+#if defined(PLATFORM_M_STB)
 #if (KERNEL_VERSION(3, 0, 0) <= LINUX_VERSION_CODE)
 	pWdev->use_4addr =true;
 #endif /* LINUX_VERSION_CODE 3.0.0 */
@@ -3836,7 +3839,7 @@ static struct wireless_dev *CFG80211_WdevAlloc(
 	/* pWdev->wiphy->flags |= WIPHY_FLAG_STRICT_REGULATORY; */
 #endif /* LINUX_VERSION_CODE: 3.3.0 */
 
-#if defined(PLATFORM_M_STB)	
+#if defined(PLATFORM_M_STB)
 #if (KERNEL_VERSION(3, 0, 0) <= LINUX_VERSION_CODE)
 	pWdev->wiphy->flags |= WIPHY_FLAG_4ADDR_STATION;
 #endif /* LINUX_VERSION_CODE 3.0.0 */

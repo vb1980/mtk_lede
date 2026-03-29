@@ -60,7 +60,7 @@
 #define EEPROM_SIZE					0x400
 #else
 /* #define EEPROM_SIZE					0x200 */
-#define EEPROM_SIZE					0xE00
+#define EEPROM_SIZE					0x400
 #endif /* defined(RTMP_MAC_USB) || defined(RT3883) */
 
 #define EEPROM_DEFULT_BIN_FILE	"RT30xxEEPROM.bin"
@@ -93,8 +93,9 @@
 
 #ifndef EEPROM_DEFAULT_FILE_PATH
 /* RFIC 2820 */
-//#define EEPROM_DEFAULT_FILE_PATH                     "/etc_ro/wlan/RT2880_RT2820_AP_2T3R_V1_6.bin"
-#define EEPROM_DEFAULT_FILE_PATH                     "/etc/wireless/mediatek/MT7915_EEPROM.bin"
+#define EEPROM_DEFAULT_FILE_PATH                     "/etc_ro/wlan/RT2880_RT2820_AP_2T3R_V1_6.bin"
+
+
 
 
 #endif /* EEPROM_DEFAULT_FILE_PATH */
@@ -1542,7 +1543,7 @@ typedef struct _EFUSE_INFO_MODULE_TX_POWER_T {
 } EFUSE_INFO_MODULE_TX_POWER_T, *P_EFUSE_INFO_MODULE_TX_POWER_T;
 #endif /* (CONNAC_WIFI_TX_POWER_EFUSE_TYPE == EFUSE_INFO_TX_POWER_CUSTOMIZED_TYPE_1) */
 #endif /* !(CONNAC_WIFI_TX_POWER_EFUSE_TYPE == EFUSE_INFO_TX_POWER_EXTENDED_TYPE) */
-#endif /* !(CONNAC_WIFI_TX_POWER_EFUSE_TYPE == EFUSE_INFO_TX_POWER_SIMPLE_TYPE) */ 
+#endif /* !(CONNAC_WIFI_TX_POWER_EFUSE_TYPE == EFUSE_INFO_TX_POWER_SIMPLE_TYPE) */
 
 /** element structure (COMMON_MODULE) */
 typedef struct _EFUSE_INFO_ELEMENT_TSSI_PA_CELL_OFFSET_T {
@@ -2436,10 +2437,8 @@ INT rtmp_ee_load_from_bin(
 INT rtmp_ee_write_to_bin(
 	IN struct _RTMP_ADAPTER *pAd);
 
-#ifdef BB_SOC
 BOOLEAN rtmp_ee_bin_read_with_range(struct _RTMP_ADAPTER *pAd, UINT32 start, UINT32 Length, UCHAR *pbuf);
 int rtmp_ee_bin_write_with_range(struct _RTMP_ADAPTER *pAd, UINT32 start, UINT32 Length, UCHAR *pbuf);
-#endif
 
 INT rtmp_ee_write_to_prom(struct _RTMP_ADAPTER *pAd);
 

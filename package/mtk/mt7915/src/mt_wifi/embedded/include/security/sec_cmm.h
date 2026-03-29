@@ -367,6 +367,7 @@ typedef struct _HANDSHAKE_PROFILE {
 	UINT8 WpaState;
 	UINT8 GTKState;
 	UCHAR MsgType; /*Record 4 way/2 way status for message retry judgement */
+	UINT16 ReasonCode;	/* Record 4way failed reason code */
 	UCHAR RSC[6];
 	RALINK_TIMER_STRUCT MsgRetryTimer;
 	UCHAR MsgRetryCounter;
@@ -461,6 +462,10 @@ typedef struct _SECURITY_CONFIG {
 #ifdef DISABLE_HOSTAPD_BEACON
 	UINT8   RsnCap[2];
 #endif
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+	UCHAR RSNXE_Val;
+	UCHAR SaePwe;
+#endif
 
 	/* Encrypt EAPOL frames if session is present */
 	BOOLEAN is_eapol_encrypted;
@@ -495,6 +500,9 @@ typedef struct _SECURITY_CONFIG {
 	UCHAR td_value_fixed_en;
 	UCHAR td_value;
 	UCHAR wait_csa_sa_query;
+#ifdef APCLI_SUPPORT
+	UCHAR apcli_ocv_support;	/* mark it supported when enabled in dat file or set through iwpriv */
+#endif
 #ifdef CONFIG_HOTSPOT_R3
 	BOOLEAN bIsWPA2EntOSEN;
 #endif
@@ -598,5 +606,15 @@ struct key_data_element_ptr {
 /*to support 32 bss, 600 -> 1200*/
 #define MAX_PARAMETER_LEN  1200 /* worse case: WEP128 for MBSS0~15 = (32+1)*16=528 */
 UCHAR sec_get_cipher_key_len(UINT32 cipher);
+
+#ifdef HOSTAPD_WPA3R3_SUPPORT
+/* Hostapd sends below values for PWE Method*/
+enum sae_pwe_mechanism {
+	SAE_PWE_UNSPECIFIED,
+	SAE_PWE_HUNT_AND_PECK,
+	SAE_PWE_HASH_TO_ELEMENT,
+	SAE_PWE_BOTH,
+};
+#endif /*HOSTAPD_WPA3R3_SUPPORT*/
 #endif /* SEC_CMM_H */
 

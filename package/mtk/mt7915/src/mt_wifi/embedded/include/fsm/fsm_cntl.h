@@ -82,7 +82,7 @@ typedef struct _CNTL_MLME_DISCONNECT_STRUCT {
 struct _cntl_api_ops {
 	VOID(*cntl_disconnect_proc)(VOID *elem);
 	VOID(*cntl_connect_proc)(struct wifi_dev *wdev, VOID *data, UINT32 data_len);
-	VOID(*cntl_scan_proc)(VOID *elem);
+	BOOLEAN (*cntl_scan_proc)(VOID *elem);
 	VOID(*cntl_reset_all_fsm_proc)(VOID *elem);
 	VOID(*cntl_join_conf)(VOID *elem);
 	VOID(*cntl_auth_conf)(VOID *elem);
@@ -91,7 +91,6 @@ struct _cntl_api_ops {
 	VOID(*cntl_assoc_conf)(VOID *elem);
 	VOID(*cntl_reassoc_conf)(VOID *elem);
 	VOID(*cntl_disassoc_conf)(VOID *elem);
-	VOID(*cntl_scan_conf)(VOID *elem);
 	VOID(*cntl_error_handle)(VOID *elem);
 };
 

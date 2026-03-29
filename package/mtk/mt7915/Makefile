@@ -6,10 +6,12 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
-PKG_NAME:=mt_wifi
-PKG_VERSION:=7.4.0.0
-P4REV:=8
-PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
+PKG_NAME:=mt7915
+P4REV:=
+PKG_VERSION:=20230628-7a2544-TEST
+#PKG_SOURCE:=mt7915_20230628-7a2544.tar.xz
+%PKG_SOURCE_URL:=
+PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)_mt_wifi
 PKG_KCONFIG:= \
 	AP_SUPPORT \
 	RT_FIRST_CARD \
@@ -143,6 +145,7 @@ PKG_KCONFIG:= \
 	DOT11R_FT_SUPPORT \
 	ENTERPRISE_AP_SUPPORT \
 	MLME_MULTI_QUEUE_SUPPORT\
+	DYNAMIC_WMM_SUPPORT \
 	WIFI_EAP_FEATURE \
 	VLAN_SUPPORT \
 	TXRX_STAT_SUPPORT \
@@ -156,12 +159,14 @@ PKG_KCONFIG:= \
 	DYNAMIC_VLAN_SUPPORT \
 	CUSTOMISED_HOSTAPD_SUPPORT \
 	HOSTAPD_WPA3_SUPPORT \
+	HOSTAPD_WPA3R3_SUPPORT \
 	APCLI_STA_SUPPORT \
 	WDS_STA_SUPPORT \
 	MBSS_AS_WDS_AP_SUPPORT \
 	MBO_SUPPORT \
 	MAP_SUPPORT \
 	MAP_R2_VER_SUPPORT \
+	QOS_R1_SUPPORT \
 	WPA3_SUPPORT \
 	DPP_SUPPORT \
 	OWE_SUPPORT \
@@ -171,14 +176,18 @@ PKG_KCONFIG:= \
 	FIRST_IF_MT7626 \
 	FIRST_IF_AXE \
 	FIRST_IF_MT7915 \
+	FIRST_IF_MT7916 \
 	SECOND_IF_MT7915 \
+	SECOND_IF_MT7916 \
 	SECOND_IF_MT7615E \
 	SECOND_IF_AXE \
 	THIRD_IF_NONE \
 	THIRD_IF_MT7615E \
 	THIRD_IF_MT7915 \
+	THIRD_IF_MT7916 \
 	CHIP_AXE \
 	CHIP_MT7915 \
+	CHIP_MT7916 \
 	RT_THIRD_CARD \
 	RT_THIRD_IF_RF_OFFSET \
 	THIRD_IF_EEPROM_FLASH \
@@ -189,6 +198,7 @@ PKG_KCONFIG:= \
 	MULTI_PROFILE_SUPPORT \
 	PRE_CAL_TRX_SET1_SUPPORT \
 	MWDS \
+	CUSTOMER_VENDOR_IE_SUPPORT \
 	MCAST_RATE_SPECIFIC \
 	WLAN_HOOK \
 	COEX_SUPPORT \
@@ -225,61 +235,71 @@ PKG_KCONFIG:= \
 	WIFI_DBG_TXCMD \
 	WARP_V2 \
 	OCE_SUPPORT\
+	WTBL_TDD_SUPPORT\
 	PROFILING_SUPPORT\
 	HWIFI_SUPPORT\
+	6G_SUPPORT\
+	BSSMGR_CROSS_MODULE_SUPPORT \
+	MT7976_SUPPORT\
+	SNIFFER_RADIOTAP_SUPPORT\
+	WIFI_FW_BIN_LOAD\
+	DBG_ENHANCE\
+	MT76XX_COMBO_DUAL_DRIVER_SUPPORT\
+	AX8400_COMPATIBLE_SUPPORT
 
-PKG_CONFIG_DEPENDS:=$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)))
+PKG_CONFIG_DEPENDS:=$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_MT7915_$c),CONFIG_$(c)))
 
 include $(INCLUDE_DIR)/package.mk
 
 
 TAR_CMD=$(HOST_TAR) -C $(1)/ $(TAR_OPTIONS)
 
-define KernelPackage/mt_wifi
-  CATEGORY:=Kernel modules
-  TITLE:=MTK wifi AP driver
-ifneq ($(CONFIG_MTK_FAST_NAT_SUPPORT), )
+define KernelPackage/mt7915
+  CATEGORY:=MTK Properties
+  TITLE:=MTK wifi MT7915 AP driver
+  DEPENDS:= +wifi-profile
+ifneq ($(CONFIG_MTK_MT7915_FAST_NAT_SUPPORT), )
 ifneq ($(CONFIG_NET_MEDIATEK_HNAT), )
   DEPENDS+=+kmod-mtk-hnat
 endif
 endif
-ifneq ($(CONFIG_MTK_WHNAT_SUPPORT), )
-ifneq ($(CONFIG_MTK_WARP_V2), )
+ifneq ($(CONFIG_MTK_MT7915_WHNAT_SUPPORT), )
+ifneq ($(CONFIG_MTK_MT7915_WARP_V2), )
   FILES:=$(PKG_BUILD_DIR)/mt_wifi_ap/mt_wifi.ko \
-	$(PKG_BUILD_DIR)/mt_wifi/embedded/plug_in/warp_proxy/mtk_warp_proxy.ko
+	$(PKG_BUILD_DIR)/mt_wifi/embedded/plug_in/warp_proxy/$(PKG_NAME)_mtk_warp_proxy.ko
   DEPENDS+=+kmod-warp
-  AUTOLOAD:=$(call AutoProbe,mt_wifi mtk_warp_proxy)
+  AUTOLOAD:=$(call AutoProbe,mt_wifi $(PKG_NAME)_mtk_warp_proxy)
 else
   FILES:=$(PKG_BUILD_DIR)/mt_wifi_ap/mt_wifi.ko \
-	$(PKG_BUILD_DIR)/mt_wifi/embedded/plug_in/whnat/mt_whnat.ko
-  AUTOLOAD:=$(call AutoProbe,mt_wifi mt_whnat)
+	$(PKG_BUILD_DIR)/mt_wifi/embedded/plug_in/whnat/$(PKG_NAME)_mt_whnat.ko
+  AUTOLOAD:=$(call AutoProbe,mt_wifi $(PKG_NAME)_mt_whnat)
 endif
 else
   FILES:=$(PKG_BUILD_DIR)/mt_wifi_ap/mt_wifi.ko
   AUTOLOAD:=$(call AutoProbe,mt_wifi)
 endif  
-  SUBMENU:=Wireless Drivers
+  SUBMENU:=Drivers
   MENU:=1
 endef
 
-define KernelPackage/mt_wifi/config
+define KernelPackage/mt7915/config
 	source "$(SOURCE)/config.in"
 endef
 
+#USE_SOURCE_DIR:=$(MTK_WIFI_DIR)/mt7915
+USE_SOURCE_BIN_DIR:=$(TOPDIR)/../ko_module/wlan_driver/jedi/bin
 
 define Build/Compile
-	$(MAKE) -C "$(LINUX_DIR)" V=0 \
+	$(MAKE) -C "$(LINUX_DIR)" V=1 \
 		CROSS_COMPILE="$(TARGET_CROSS)" \
 		ARCH="$(LINUX_KARCH)" \
 		M="$(PKG_BUILD_DIR)/mt_wifi_ap" \
 		LINUX_DIR="$(KERNEL_BUILD_DIR)" \
-		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)=$(CONFIG_MTK_$(c)))) \
+		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_MT7915_$c),CONFIG_$(c)=$(CONFIG_MTK_MT7915_$(c)))) \
 		modules
 endef
 
-define KernelPackage/mt_wifi/install
-#	$(INSTALL_DIR) $(1)/lib/modules/
-#	$(INSTALL_BIN) $(1)/../../../linux-5.10.143/drivers/net/ethernet/mtk/mtk_hnat/mtkhnat.ko $(1)/lib/modules/
+define KernelPackage/mt7915/install
 endef
 
-$(eval $(call KernelPackage,mt_wifi))
+$(eval $(call KernelPackage,mt7915))

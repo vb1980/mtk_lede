@@ -18,6 +18,11 @@
 #ifdef RTMP_MAC_PCI
 #include	"rt_config.h"
 
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
+#ifndef mmiowb
+#define mmiowb()		do { } while (0)
+#endif
+#endif
 /*
 *
 */
@@ -327,12 +332,21 @@ INT mt_ct_hw_tx(RTMP_ADAPTER *pAd, TX_BLK *tx_blk)
 		if (status != NDIS_STATUS_SUCCESS)
 			return NDIS_STATUS_FAILURE;
 
+#ifdef CONFIG_ATE
+		if (RTMP_GET_BAND_IDX(tx_blk->pPacket))
+			RTMP_SET_BAND_IDX(pkt, RTMP_GET_BAND_IDX(tx_blk->pPacket));
+#endif
+
 		RTMP_SET_PACKET_WDEV(pkt, RTMP_GET_PACKET_WDEV(tx_blk->pPacket));
 
 		if ((tx_blk->FragIdx == TX_FRAG_ID_NO) || (tx_blk->FragIdx == TX_FRAG_ID_LAST))
 			RELEASE_NDIS_PACKET(pAd, tx_blk->pPacket, NDIS_STATUS_SUCCESS);
 
 		p_new_tx_blk->HeaderBuf = hif_get_tx_buf(pAd->hdev_ctrl, p_new_tx_blk, tx_blk->resource_idx, tx_blk->TxFrameType);
+		if (p_new_tx_blk->HeaderBuf == NULL) {
+			RELEASE_NDIS_PACKET(pAd, pkt, NDIS_STATUS_SUCCESS);
+			return NDIS_STATUS_FAILURE;
+		}
 		p_new_tx_blk->pPacket = pkt;
 		p_new_tx_blk->pSrcBufData = GET_OS_PKT_DATAPTR(pkt);
 		p_new_tx_blk->SrcBufLen = GET_OS_PKT_LEN(pkt);

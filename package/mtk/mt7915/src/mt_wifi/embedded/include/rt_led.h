@@ -68,7 +68,6 @@
 /* */
 #define WPS_LED_MODE_11				0x0b
 #define WPS_LED_MODE_12				0x0c
-#define WPS_LED_MODE_13				0x0d /*For tw led*/
 #endif /* WSC_LED_SUPPORT */
 #endif /* WSC_INCLUDED */
 
@@ -92,8 +91,6 @@
 #define LED_WPS_TURN_ON_BLUE_LED				13 /* Turn on the WPS blue LED. */
 #define LED_NORMAL_CONNECTION_WITHOUT_SECURITY	14 /* Successful connection with an AP using OPEN-NONE. */
 #define LED_NORMAL_CONNECTION_WITH_SECURITY		15 /* Successful connection with an AP using an encryption algorithm. */
-#define LED_WPS_SETUP_LOCKED					20 /* WPS process is lock. */
-
 /* For LED Share Mode */
 #endif /* WSC_LED_SUPPORT */
 #endif /* WSC_INCLUDED */
@@ -148,7 +145,7 @@ enum led_controller_mode_list {
 #define LINK_STATUS_ABAND_LINK_UP	0xa0
 #define LINK_STATUS_GBAND_LINK_UP	0x60
 #define LINK_STATUS_RADIO_ON		0x20
-#define LINK_STATUS_RADIO_OFF		0x30
+#define LINK_STATUS_RADIO_OFF		0x00
 #define LINK_STATUS_WPS				0x10
 #define LINK_STATUS_ON_SITE_SURVEY	0x08
 #define LINK_STATUS_POWER_UP		0x04
@@ -165,8 +162,6 @@ enum led_controller_mode_list {
 #define LINK_STATUS_NORMAL_CONNECTION_WITHOUT_SECURITY	0x06 /* Successful connection with an AP using OPEN-NONE. */
 #define LINK_STATUS_NORMAL_CONNECTION_WITH_SECURITY		0x0E /* Successful connection with an AP using an encryption algorithm. */
 #define LINK_STATUS_WPS_BLUE_LED						0x01 /* WPS blue LED. */
-#define LINK_STATUS_WPS_SETUP_LOCKED					0x0D /* WPS setup lock. */
-
 /* LED moe = 10 */
 #define LINK_STATUS_WPS_MODE10_TURN_ON					0x00	/*Use only on Dlink WPS LED (mode 10), turn the WPS LED on. */
 #define LINK_STATUS_WPS_MODE10_FLASH					0x01	/*Use only on Dlink WPS LED (mode 10), let the WPS LED flash, three times persecond. */
@@ -276,8 +271,6 @@ void LED_WLAN_5G_init(RTMP_ADAPTER *pAd, UINT8 led_index);
 void LED_WLAN_WPS_init(RTMP_ADAPTER *pAd, UINT8 led_index);
 void wps_led_control(struct _RTMP_ADAPTER *pAd, UCHAR flag);
 #endif
-
-void twSetLedStatus(UCHAR LinkStatus);
 
 #endif /* __RT_LED_H__ */
 

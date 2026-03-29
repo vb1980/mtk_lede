@@ -288,7 +288,8 @@ typedef struct GNU_PACKED _VHT_MCS_MAP {
 
 typedef struct GNU_PACKED _VHT_MCS_SET {
 #ifdef RT_BIG_ENDIAN
-	UINT16 rsv2:3;
+	UINT16 rsv2:2;
+	UINT16 vht_ext_nss_bw_cap:1;
 	UINT16 tx_high_rate:13;
 	struct _VHT_MCS_MAP tx_mcs_map;
 
@@ -303,7 +304,8 @@ typedef struct GNU_PACKED _VHT_MCS_SET {
 	struct _VHT_MCS_MAP tx_mcs_map;
 
 	UINT16 tx_high_rate:13;
-	UINT16 rsv2:3;
+	UINT16 vht_ext_nss_bw_cap:1;
+	UINT16 rsv2:2;
 #endif /* RT_BIG_ENDIAN */
 } VHT_MCS_SET;
 

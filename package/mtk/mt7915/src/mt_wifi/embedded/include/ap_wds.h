@@ -37,23 +37,31 @@
  * VALID   : WDS entry has finished peer establishment
  */
 enum wds_flags {
-	ASSIGNED = 1,
-	VALID    = (1 << 1),
+	INITED   = (1 << 0),
+	ASSIGNED = (1 << 1),
+	SYNCED   = (1 << 2),
+	VALID    = (1 << 3),
 };
 
+#define WDS_ENTRY_IS_INITED(flag)       ((flag) & INITED)
 #define WDS_ENTRY_IS_ASSIGNED(flag)     ((flag) & ASSIGNED)
+#define WDS_ENTRY_IS_SYNCED(flag)       ((flag) & SYNCED)
 #define WDS_ENTRY_IS_VALID(flag)        ((flag) & VALID)
+#define WDS_ENTRY_SET_INITED(flag)      ((flag) |= INITED)
 #define WDS_ENTRY_SET_ASSIGNED(flag)    ((flag) |= ASSIGNED)
+#define WDS_ENTRY_SET_SYNCED(flag)      ((flag) |= SYNCED)
 #define WDS_ENTRY_SET_VALID(flag)       ((flag) |= VALID)
+#define WDS_ENTRY_SET_FLAG(flag, _F)    ((flag) = (_F))
+#define WDS_ENTRY_CLEAR_FLAG(flag)      ((flag) = 0)
 
 static inline BOOLEAN WDS_IF_UP_CHECK(
 	IN  PRTMP_ADAPTER   pAd,
 	IN  UCHAR band_idx,
 	IN  ULONG ifidx)
 {
-	if ((pAd->WdsTab.flg_wds_init[band_idx] != TRUE) ||
+	if (!WDS_ENTRY_IS_INITED(pAd->WdsTab.WdsEntry[ifidx].flag) ||
 		(ifidx >= MAX_WDS_ENTRY)) {
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s[band%d]WDS forbidden!\n", __func__, band_idx));
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s[band%d] WDSifidx:%ld forbidden!\n", __func__, band_idx, ifidx));
 		return FALSE;
 	}
 

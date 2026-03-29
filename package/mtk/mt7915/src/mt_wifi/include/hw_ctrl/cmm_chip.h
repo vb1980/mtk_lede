@@ -75,6 +75,8 @@ enum ASIC_CAP {
 	fASIC_CAP_ADV_SECURITY = (1 << 25),
 	fASIC_CAP_ADDBA_HW_SSN = (1 << 26),
 	fASIC_CAP_BA_OFFLOAD = (1 << 27),
+	fASIC_CAP_DUAL_PCIE_ONE_PROBE = (1 << 28),
+	fASIC_CAP_NON_WA_UPDATE_TX_FREE_NOTIFY = (1 << 29),
 };
 
 enum MAC_CAP {
@@ -541,7 +543,7 @@ typedef struct _RTMP_CHIP_OP {
 	INT32 (*restore_reg_after_ate)(struct _RTMP_ADAPTER *ad);
 	INT32 (*restore_reg_during_ate)(struct _RTMP_ADAPTER *ad, UINT8 band_idx);
 	INT32 (*set_ifs)(struct _RTMP_ADAPTER *ad, UINT8 band_idx);
-	INT32 (*set_ba_limit)(struct _RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 limit);
+	INT32 (*set_ba_limit)(struct _RTMP_ADAPTER *ad, UINT8 wmm_idx, UINT8 limit, UINT8 band_idx);
 	INT32 (*pause_ac_queue)(struct _RTMP_ADAPTER *ad, UINT8 ac_idx);
 #endif	/* CONFIG_ATE */
 	VOID (*rssi_get)(struct _RTMP_ADAPTER *pAd, UINT16 Wcid, CHAR *RssiSet);
@@ -555,6 +557,9 @@ typedef struct _RTMP_CHIP_OP {
 	VOID (*wps_led_init)(struct _RTMP_ADAPTER *pAd);
 	UCHAR (*wps_led_control)(struct _RTMP_ADAPTER *pAd, UCHAR flag);
 	VOID (*update_chip_cap)(struct _RTMP_ADAPTER *pAd);
+#ifdef WF_RESET_SUPPORT
+	void (*do_wifi_reset)(struct _RTMP_ADAPTER *ad);
+#endif /* WF_RESET_SUPPORT */
 } RTMP_CHIP_OP;
 
 typedef struct _RTMP_CHIP_DBG {
@@ -573,7 +578,7 @@ typedef struct _RTMP_CHIP_DBG {
 	INT32 (*show_cca_info)(struct hdev_ctrl *ctrl, RTMP_STRING *arg);
 	INT32 (*set_cca_en)(struct hdev_ctrl *ctrl, RTMP_STRING *arg);
 	INT32 (*show_txv_info)(struct hdev_ctrl *ctrl, void *data);
-	INT32 (*check_txv)(struct hdev_ctrl *ctrl, UCHAR *name, UINT32 data);
+	INT32 (*check_txv)(struct hdev_ctrl *ctrl, UCHAR *name, UINT32 data, UINT8 band_idx);
 	VOID (*show_bcn_info)(struct hdev_ctrl *ctrl, UCHAR bandidx);
 	VOID (*dump_wtbl_info)(struct _RTMP_ADAPTER *pAd, UINT16 wtbl_idx);
 	VOID (*dump_wtbl_mac)(struct _RTMP_ADAPTER *pAd, UINT16 wtbl_idx);
@@ -588,6 +593,9 @@ typedef struct _RTMP_CHIP_DBG {
 	VOID (*regular_pause_umac)(struct hdev_ctrl *ctrl);
 #endif /* RANDOM_PKT_GEN */
 	UINT32 (*get_lpon_frcr)(RTMP_ADAPTER *pAd);
+#ifdef PLE_MONITOR_SUPPORT
+	VOID (*check_ple_status)(struct _RTMP_ADAPTER *pAd);
+#endif
 #ifdef VOW_SUPPORT
 	UINT32 (*show_sta_acq_info)(RTMP_ADAPTER *pAd, UINT32 *ple_stat,
 		  UINT32 *sta_pause, UINT32 *dis_sta_map, UINT32 dumptxd);
@@ -633,7 +641,15 @@ typedef struct _RTMP_CHIP_DBG {
 #endif
 	INT32 (*show_fw_dbg_info)(RTMP_ADAPTER *pAd);
 	INT32 (*set_cpu_util_en)(RTMP_ADAPTER *pAd, UINT En);
-	INT32 (*set_cpu_util_mode)(RTMP_ADAPTER *pAd, UINT Mode);	
+	INT32 (*set_cpu_util_mode)(RTMP_ADAPTER *pAd, UINT Mode);
+#ifdef LOW_POWER_SUPPORT
+	INT (*get_data_traffic_cnt)(RTMP_ADAPTER *pAd, UINT32 band_idx, UINT32 *tx_cnt, UINT32 *rx_cnt);
+#endif
+#ifdef CONFIG_COLGIN_MT6890
+#ifdef PSE_CHK
+	void (*chk_pse)(RTMP_ADAPTER *pAd);
+#endif
+#endif
 } RTMP_CHIP_DBG;
 
 enum {
@@ -1031,6 +1047,7 @@ typedef struct _RTMP_CHIP_CAP {
 	struct _prek_ee_info prek_ee_info;
 #endif
 	UINT32 hw_version;
+	UINT32 hif_group_page_size;
 } RTMP_CHIP_CAP;
 
 #ifdef OCE_SUPPORT
@@ -1478,6 +1495,5 @@ VOID chip_sw_int_polling(RTMP_ADAPTER *pAd);
 #endif
 #endif
 VOID chip_update_chip_cap(struct _RTMP_ADAPTER *ad);
-
 #endif
 #endif

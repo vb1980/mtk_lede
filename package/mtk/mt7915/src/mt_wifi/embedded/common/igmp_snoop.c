@@ -167,14 +167,14 @@ static VOID IGMPTableDisplay(
 		if (pMulticastFilterTable->Content[i].Valid == TRUE) {
 			PMEMBER_ENTRY pMemberEntry = NULL;
 			pEntry = &pMulticastFilterTable->Content[i];
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("IF(%s) entry #%d, type=%s, GrpId=(%02x:%02x:%02x:%02x:%02x:%02x) memberCnt=%d\n",
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("IF(%s) entry #%d, type=%s, GrpId=("MACSTR") memberCnt=%d\n",
 					 RTMP_OS_NETDEV_GET_DEVNAME(pEntry->net_dev), i, (pEntry->type == 0 ? "static" : "dynamic"),
-					 PRINT_MAC(pEntry->Addr), IgmpMemberCnt(&pEntry->MemberList)));
+					 MAC2STR(pEntry->Addr), IgmpMemberCnt(&pEntry->MemberList)));
 			pMemberEntry = (PMEMBER_ENTRY)pEntry->MemberList.pHead;
 
 			while (pMemberEntry) {
-				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("member mac=(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-						 PRINT_MAC(pMemberEntry->Addr)));
+				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("member mac=("MACSTR")\n",
+						 MAC2STR(pMemberEntry->Addr)));
 				pMemberEntry = pMemberEntry->pNext;
 			}
 		}
@@ -369,18 +369,6 @@ BOOLEAN MulticastFilterTableDeleteEntry(
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR, ("%s Multicase filter table is not ready.\n", __func__));
 		return FALSE;
 	}
-
-    if(pGrpId){
-        if((pGrpId[0] == 0x01)
-            && (pGrpId[1] == 0x00)
-            && (pGrpId[2] == 0x5e)
-            && (pGrpId[3] == 0x00)
-            && (pGrpId[4] == 0x00)
-            && (pGrpId[5] == 0xfb)){
-                MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR, ("%s: the Group is 224.0.0.251 not del, return TRUE.\n", __func__));
-                return TRUE;
-        }
-    }
 
 	RTMP_SEM_LOCK(&pMulticastFilterTable->MulticastFilterTabLock);
 
@@ -669,8 +657,6 @@ INT Set_IgmpSn_BlackList_Proc(IN RTMP_ADAPTER *pAd, IN RTMP_STRING *arg)
 	INT Result = FALSE;
 	BOOLEAN bAdd = FALSE; /* bAdd == FALSE means Delete operation */
 	UCHAR i = 0;
-	UCHAR GroupMacAddr[6];
-	PUCHAR pGroupMacAddr = (PUCHAR)&GroupMacAddr;
 	RTMP_STRING IPString[100] = {'\0'};
 	RTMP_STRING *pIPString = NULL;
 
@@ -1296,8 +1282,8 @@ BOOLEAN IgmpSnoopingGetMulticastTable(RTMP_ADAPTER *pAd, UINT8 ucOwnMacIdx, P_IG
 				COPY_MAC_ADDR(pDrvMcastMember->Addr, pEvtMcastMember->Addr);
 				pDrvMcastMember->TVMode = pEvtMcastMember->TVMode;
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE,
-													("Member[%u] = %02X:%02X:%02X:%02X:%02X:%02X\n",
-													MemberIdx, PRINT_MAC(pDrvMcastMember->Addr)));
+													("Member[%u] = "MACSTR"\n",
+													MemberIdx, MAC2STR(pDrvMcastMember->Addr)));
 			}
 
 			wdev->pIgmpMcastTable->NumOfGroup += 1;
@@ -1361,21 +1347,21 @@ VOID IgmpSnoopingShowMulticastTable(RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 			GroupIdx < min((UINT_32)wdev->pIgmpMcastTable->NumOfGroup, (UINT_32)MAX_LEN_OF_MULTICAST_FILTER_TABLE);
 			GroupIdx++) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF,
-						("	%-2u	      %02X:%02X:%02X:%02X:%02X:%02X				  "
+						("	%-2u	      "MACSTR"				  "
 								"				 "
 								"				 "
 								"    %5u\n",
-								(GroupIdx+1), PRINT_MAC(pDrvMcastTableEntry->GroupAddr),
+								(GroupIdx+1), MAC2STR(pDrvMcastTableEntry->GroupAddr),
 													pDrvMcastTableEntry->AgeOut));
 			for (MemberIdx = 0;
 				MemberIdx < min((UINT_32)pDrvMcastTableEntry->NumOfMember, (UINT_32)FREE_MEMBER_POOL_SIZE);
 				MemberIdx++) {
 				pDrvMcastMember = &pDrvMcastTableEntry->IgmpMcastMember[MemberIdx];
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("	%3u.%-2u                            "
-					"%02X:%02X:%02X:%02X:%02X:%02X		 "
+					MACSTR"		 "
 					"%s\n",
 					(GroupIdx+1), (MemberIdx+1),
-					PRINT_MAC(pDrvMcastMember->Addr),
+					MAC2STR(pDrvMcastMember->Addr),
 					((pDrvMcastMember->TVMode == 0) ? "AUTO":((pDrvMcastMember->TVMode == 1) ? "ENABLE":"NO TVM IE"))));
 			}
 			/* The next group table will start from the end of last member of last group */
@@ -1475,11 +1461,11 @@ BOOLEAN MulticastFilterGetMcastTable(RTMP_ADAPTER *pAd, UINT8 ucOwnMacIdx, struc
 				pEntry = &pMulticastFilterTable->Content[GroupIdx];
 
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF,
-							("	%-2u		  %02X:%02X:%02X:%02X:%02X:%02X 			  "
+							("	%-2u		  "MACSTR" 			  "
 									"				 "
 									"				 "
 									"	 %5u\n",
-									(GroupIdx+1), PRINT_MAC(pEntry->Addr),
+									(GroupIdx+1), MAC2STR(pEntry->Addr),
 														(pEntry->AgeOutTime / OS_HZ)));
 
 				pMemberEntry = (PMEMBER_ENTRY)pEntry->MemberList.pHead;
@@ -1488,10 +1474,10 @@ BOOLEAN MulticastFilterGetMcastTable(RTMP_ADAPTER *pAd, UINT8 ucOwnMacIdx, struc
 
 				while (pMemberEntry) {
 					MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF, ("	%3u.%-2u							"
-						"%02X:%02X:%02X:%02X:%02X:%02X		 "
+						MACSTR"		 "
 						"%s\n",
 						(GroupIdx+1), (MemberIdx+1),
-						PRINT_MAC(pMemberEntry->Addr),
+						MAC2STR(pMemberEntry->Addr),
 						((pMemberEntry->TVMode == 0) ? "AUTO":((pMemberEntry->TVMode == 1) ? "ENABLE":"NO TVM IE"))));
 
 					pMemberEntry = pMemberEntry->pNext;
@@ -1596,7 +1582,13 @@ VOID IGMPSnooping(
 			numOfGroup = ntohs(*((UINT16 *)(pIgmpHeader + 6)));
 			pGroup = (PUCHAR)(pIgmpHeader + 8);
 
-			for (i = 0; i < numOfGroup; i++) {
+			if (numOfGroup > MAX_NUM_OF_GRP) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR,
+					"numOfGroup %d is wrong from IGMPv3 membership report message\n", numOfGroup);
+				break;
+			}
+
+			for (i = 0; i < (int)numOfGroup; i++) {
 				GroupType = (UCHAR)(*pGroup);
 				AuxDataLen = (UCHAR)(*(pGroup + 1));
 				numOfSources = ntohs(*((UINT16 *)(pGroup + 2)));
@@ -1731,60 +1723,6 @@ BOOLEAN isIgmpPkt(
 	return FALSE;
 }
 
-BOOLEAN ismDNS(
-		IN PUCHAR pDstMacAddr,
-		IN PUCHAR pIpHeader)
-{
-		UINT16 IpProtocol = ntohs(*((UINT16 *) (pIpHeader)));
-		UCHAR IpUDP;
-
-		//DBGPRINT(("%s: ===> IpProtocol=%04x\n",  __func__,IpProtocol));
-
-		if (IpProtocol == ETH_P_IP) {
-			IpUDP = (UCHAR) * (pIpHeader + 11);
-			if (IpUDP == IP_UDP)
-			{
-					/* check the ip address : 224.0.0.x  reserved for mDNS & well known Protocol*/
-					if(((UCHAR) * (pIpHeader + (11+7)) == 0xE0)
-						&& ((UCHAR) * (pIpHeader + (11+8)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (11+9)) == 0x00)
-					)
-					return TRUE;
-
-			}
-		}
-		else if (IpProtocol == ETH_P_IPV6)
-		{
-			IpUDP = (UCHAR) * (pIpHeader + 8);
-			if (IpUDP == IP_UDP)
-			{
-					/* check the ipv6 address : ff02::fb  reserved for mDNSv6 */
-					if(((UCHAR) * (pIpHeader + (8+18)) == 0xFF)
-						&& ((UCHAR) * (pIpHeader + (8+19)) == 0x02)
-						&& ((UCHAR) * (pIpHeader + (8+20)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+21)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+22)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+23)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+24)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+25)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+26)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+27)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+28)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+29)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+30)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+31)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+32)) == 0x00)
-						&& ((UCHAR) * (pIpHeader + (8+33)) == 0xFB)
-					)
-					return TRUE;
-
-			}
-		}
-
-		return FALSE;
-}
-
-
 static VOID InsertIgmpMember(
 	IN PMULTICAST_FILTER_TABLE pMulticastFilterTable,
 	IN PLIST_HEADER pList,
@@ -1824,9 +1762,8 @@ static VOID InsertIgmpMember(
 		}
 #endif
 		insertTailList(pList, (RT_LIST_ENTRY *)pMemberEntry);
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s Member Mac=%02x:%02x:%02x:%02x:%02x:%02x\n", __func__,
-				 pMemberEntry->Addr[0], pMemberEntry->Addr[1], pMemberEntry->Addr[2],
-				 pMemberEntry->Addr[3], pMemberEntry->Addr[4], pMemberEntry->Addr[5]));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s Member Mac="MACSTR"\n", __func__,
+				 MAC2STR(pMemberEntry->Addr)));
 	}
 
 	return;
@@ -1906,39 +1843,6 @@ UCHAR IgmpMemberCnt(
 	}
 
 	return getListSize(pList);
-}
-
-
-VOID IgmpMdnsGroupAddMembers(
-	IN PRTMP_ADAPTER pAd,
-	IN PUCHAR pMemberAddr,
-	IN struct wifi_dev *wdev,
-	UCHAR ifIndex,
-	UINT8 Wcid)
-{
-	UCHAR GroupId[6]={0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
-	PNET_DEV pDev;
-	BOOLEAN ret;
-	MAC_TABLE_ENTRY *pEntry = NULL;
-
-	pDev = (ifIndex == MAIN_MBSSID) ? (pAd->net_dev) : (pAd->ApCfg.MBSSID[ifIndex].wdev.if_dev);
-
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR, (" JDY %s pGrpId=[%02x:%02x:%02x:%02x:%02x:%02x]\n", __func__,
-								GroupId[0], GroupId[1], GroupId[2], GroupId[3], GroupId[4], GroupId[5]));
-
-
-	pEntry = MacTableLookup(pAd, pMemberAddr);
-
-	if (IS_ASIC_CAP(pAd, fASIC_CAP_MCU_OFFLOAD))
-		return;
-
-	if (pEntry)
-		ret = AsicMcastEntryInsert(pAd, GroupId, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex, MCAT_FILTER_DYNAMIC, pMemberAddr, pDev, pEntry->wcid);
-	else
-		ret = AsicMcastEntryInsert(pAd, GroupId, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex, MCAT_FILTER_DYNAMIC, pMemberAddr, pDev, 0);
-
-
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR, ("%s: add the Group 224.0.0.251, AsicMcastEntryInsert return %d.\n", __func__, ret));
 }
 
 VOID IgmpGroupDelMembers(
@@ -2035,9 +1939,12 @@ INT Set_IgmpSn_Enable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		}
 	}
 	if (IgmpSnEnableTVMode(pAd, wdev, IsTVModeEnable, TVMode)) {
-		Enable = TVMode;
-	}
-
+		if (TVMode > IGMP_TVM_MODE_DISABLE) {
+			Enable = TVMode;
+			CmdMcastAllowNonMemberEnable(pAd, IGMPSN_G_POLICY, 1);
+		}
+	} else
+		CmdMcastAllowNonMemberEnable(pAd, IGMPSN_G_POLICY, 0);
 
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE,
 		("%s: IgmpSnoopEnable = %u, IsTVModeEnable = %u, TVModeType = %u\n",
@@ -2140,8 +2047,8 @@ INT Set_IgmpSn_AddEntry_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 
 		/* Group-Id must be a MCAST address. */
 		if ((memberCnt > 0) && !IS_MULTICAST_MAC_ADDR(Addr)) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s (%02X:%02X:%02X:%02X:%02X:%02X)\n",
-					 __func__, Addr[0], Addr[1], Addr[2], Addr[3], Addr[4], Addr[5]));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s ("MACSTR")\n",
+					 __func__, MAC2STR(Addr)));
 			if (pEntry)
 				AsicMcastEntryInsert(pAd, GroupId, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex, MCAT_FILTER_STATIC | mwds_type, Addr, pDev, pEntry->wcid);
 			else
@@ -2235,8 +2142,52 @@ INT Set_IgmpSn_DelEntry_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	if (memberCnt == 0)
 		AsicMcastEntryDelete(pAd, GroupId, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex, NULL, pDev, 0);
 
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s (%2X:%2X:%2X:%2X:%2X:%2X)\n",
-			 __func__, Addr[0], Addr[1], Addr[2], Addr[3], Addr[4], Addr[5]));
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s ("MACSTR")\n",
+			 __func__, MAC2STR(Addr)));
+	return TRUE;
+}
+
+INT Set_IgmpSn_Deny_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
+{
+	INT i = 0;
+	UINT8 ucEntryCount = 0, ucAddToList = 0;
+	RTMP_STRING *value;
+	RTMP_STRING *thisChar;
+	UCHAR IpAddr[DENY_IPV4_ADDR_LEN] = {0};
+	UCHAR Addr[IGMP_DENY_TABLE_SIZE_MAX][DENY_IPV4_ADDR_LEN] = {0};
+	POS_COOKIE pObj;
+	UCHAR ifIndex;
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	ifIndex = pObj->ioctl_if;
+
+	while ((thisChar = strsep((char **)&arg, ";")) != NULL) {
+		for (i = 0, value = rstrtok(thisChar, "."); value; value = rstrtok(NULL, ".")) {
+			if ((strlen(value) > 0) && (strlen(value) <= 3)) {
+				int ii;
+				for (ii = 0; ii < strlen(value); ii++)
+					if (!isxdigit(*(value + ii)))
+						return FALSE;
+			} else
+				return FALSE;  /*Invalid */
+
+			IpAddr[i] = (UCHAR)os_str_tol(value, NULL, 10);
+			i++;
+		}
+		if (i != DENY_IPV4_ADDR_LEN)
+			return FALSE;  /*Invalid */
+
+		NdisMoveMemory(&Addr[ucEntryCount], (UCHAR *)IpAddr, DENY_IPV4_ADDR_LEN);
+		ucEntryCount++;
+	}
+	if (ucEntryCount > 0)
+		ucAddToList = 1;
+
+	AsicMcastEntryDenyList(pAd, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex
+							, ucEntryCount, ucAddToList, (UCHAR *)Addr);
+
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE, ("%s ucBssIndex:%d,ucEntryCount:%d ucAddToList:%d\n",
+				 __func__, pAd->ApCfg.MBSSID[ifIndex].wdev.bss_info_argument.ucBssIndex,
+				 ucEntryCount, ucAddToList));
 	return TRUE;
 }
 
@@ -2305,6 +2256,12 @@ INT Set_Igmp_Flooding_CIDR_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 		if (pMcastWLTable == NULL) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_OFF,
 				("%s() Mcast White List Not init, skip this operation\n", __func__));
+			break;
+		}
+
+		if (strlen(arg) >= sizeof(IPString)) {
+			MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR,
+				"%s() arg is too long, size:%ld.\n", __func__, (ULONG)strlen(arg));
 			break;
 		}
 
@@ -2566,8 +2523,8 @@ INT Set_Igmp_Show_Flooding_CIDR_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	RTMP_SEM_LOCK(&pFloodingCIDRFilterTable->MulticastWLTabLock);
 	for (idx = 0; idx < MULTICAST_WHITE_LIST_SIZE_MAX; idx++) {
 		if (pFloodingCIDRFilterTable->EntryTab[idx].bValid) {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("entry #%d, GrpId=%02x:%02x:%02x:%02x:%02x:%02x/%d\n\n",
-				idx,  PRINT_MAC(pFloodingCIDRFilterTable->EntryTab[idx].Addr),pFloodingCIDRFilterTable->EntryTab[idx].PrefixLen));
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("entry #%d, GrpId="MACSTR"/%d\n\n",
+				idx,  MAC2STR(pFloodingCIDRFilterTable->EntryTab[idx].Addr),pFloodingCIDRFilterTable->EntryTab[idx].PrefixLen));
 		}
 	}
 	RTMP_SEM_UNLOCK(&pFloodingCIDRFilterTable->MulticastWLTabLock);
@@ -2681,18 +2638,6 @@ NDIS_STATUS IgmpPktInfoQuery(
 			IgmpMldPkt = isIgmpPkt(pSrcBufVA, pIpHeader);
 			CVT_IPV4_IPV6(GroupIpv6Addr, pDstIpAddr);
 		}
-
-		if (ismDNS(pSrcBufVA, pIpHeader)) {
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE,("%s: Hit mDNS *pInIgmpGroup=%d, *ppGroupEntry=%p\n", __func__, *pInIgmpGroup, *ppGroupEntry));
-			//just update the timestamp
-			*ppGroupEntry = MulticastFilterTableLookup(pAd->pMulticastFilterTable,
-								pSrcBufVA,
-								wdev->if_dev);
-
-			*pInIgmpGroup = IGMP_NONE;
-			return NDIS_STATUS_SUCCESS;
-		}
-
 
 		*ppGroupEntry = MulticastFilterTableLookup(pAd->pMulticastFilterTable, pGroupIpv6Addr, wdev->if_dev);
 		if (IgmpMldPkt) {
@@ -3094,7 +3039,7 @@ VOID MLDSnooping(
 #ifdef IGMP_TVM_SUPPORT
 			if (isIgmpMldExemptPkt(pAd, wdev, pGroupIpAddr, ETH_P_IPV6) == TRUE) {
 				MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE,
-					("Exempt Snooping IGMP Group\n");
+					("Exempt Snooping IGMP Group\n"));
 				break;
 			}
 #endif /* IGMP_TVM_SUPPORT */
@@ -3121,7 +3066,13 @@ VOID MLDSnooping(
 			numOfGroup = ntohs(*((UINT16 *)(pMldHeader + 6)));
 			pGroup = (PUCHAR)(pMldHeader + 8);
 
-			for (i = 0; i < numOfGroup; i++) {
+			if (numOfGroup > MAX_NUM_OF_GRP) {
+				MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_ERROR,
+					"numOfGroup %d is wrong from MLDv2 membership report message\n", numOfGroup);
+				break;
+			}
+
+			for (i = 0; i < (int)numOfGroup; i++) {
 				GroupType = (UCHAR)(*pGroup);
 				AuxDataLen = (UCHAR)(*(pGroup + 1));
 				numOfSources = ntohs(*((UINT16 *)(pGroup + 2)));
@@ -3138,7 +3089,7 @@ VOID MLDSnooping(
 #ifdef IGMP_TVM_SUPPORT
 						if (isIgmpMldExemptPkt(pAd, wdev, pGroupIpAddr, ETH_P_IPV6) == TRUE) {
 							MTWF_LOG(DBG_CAT_PROTO, CATPROTO_IGMP, DBG_LVL_TRACE,
-								("Exempt Snooping MLD Group\n");
+								("Exempt Snooping MLD Group\n"));
 							break;
 						}
 #endif /* IGMP_TVM_SUPPORT */
@@ -3468,3 +3419,4 @@ void calc_mldv2_gen_query_chksum(
 
 
 #endif /* IGMP_SNOOP_SUPPORT */
+

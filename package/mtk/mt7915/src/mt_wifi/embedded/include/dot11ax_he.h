@@ -587,4 +587,22 @@ struct GNU_PACKED ul_ofdma_random_access {
 	UINT8 ocw_range;
 };
 
+#ifdef CONFIG_6G_SUPPORT
+/* HE 6G RNR TBTT Information */
+struct GNU_PACKED he_6g_rnr_tbtt_info_set_w_ssid {
+	UINT8 nap_tbtt_offset;
+	UINT8 bssid[6];
+	UINT32 short_ssid;
+	UINT8 bss_param;
+	UINT8 psd_bw20;
+};
+
+struct GNU_PACKED he_6g_rnr_tbtt_info_set_wo_ssid {
+	UINT8 nap_tbtt_offset;
+	UINT8 bssid[6];
+	UINT8 bss_param;
+	UINT8 psd_bw20;
+};
+#endif /* CONFIG_6G_SUPPORT */
+
 #endif /* _DOT11AX_HE_H_ */

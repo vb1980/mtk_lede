@@ -46,7 +46,7 @@ INT32 MtAsicSetBssidByFw(
 
 INT32 MtAsicSetStaRecByFw(
 	struct _RTMP_ADAPTER *pAd,
-	STA_REC_CFG_T StaRecCfg);
+	STA_REC_CFG_T *pStaCfg);
 
 INT32 MtAsicUpdateStaRecBaByFw(
 	struct _RTMP_ADAPTER *pAd,
@@ -56,7 +56,7 @@ INT32 MtAsicUpdateStaRecBaByFw(
 /*
 	CONNAC F/W cmd PATH:
 */
-INT32 MtAsicUpdateStaRecAadOmByFw(
+VOID MtAsicUpdateStaRecAadOmByFw(
 	IN PRTMP_ADAPTER pAd,
 	IN UINT16 Wcid,
 	IN UINT8 AadOm);
@@ -72,6 +72,11 @@ VOID MtAsicSetWcidAAD_OMByFw(
 	IN UINT16 wcid_idx,
 	IN UCHAR value);
 #endif /* HTC_DECRYPT_IOT */
+
+VOID MtAsicSetWcidPsmByFw(
+	IN struct _RTMP_ADAPTER *pAd,
+	IN UINT16 wcid_idx,
+	IN UCHAR value);
 
 #if defined(MBSS_AS_WDS_AP_SUPPORT) || defined(APCLI_AS_WDS_STA_SUPPORT)
 VOID MtAsicSetWcid4Addr_HdrTransByFw(
@@ -107,6 +112,11 @@ VOID MtAsicGetTxTscByFw(
 	IN struct wifi_dev *wdev,
 	IN UINT32 pn_type_mask,
 	OUT UCHAR *pTxTsc);
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+UINT8 mtf_read_skip_tx(IN struct _RTMP_ADAPTER *pAd, UINT16 wcid);
+VOID mtf_update_skip_tx(IN struct _RTMP_ADAPTER *pAd, UINT16 wcid, UINT8 set);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 VOID mt_wtbltlv_debug(struct _RTMP_ADAPTER *pAd,
 		      UINT16 u2Wcid,

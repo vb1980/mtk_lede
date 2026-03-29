@@ -1879,6 +1879,13 @@ extern "C" {
 #define WF_PLE_TOP_HIF_PG_INFO_HIF_RSV_CNT_MASK                0x00000FFF                // HIF_RSV_CNT[11..0]
 #define WF_PLE_TOP_HIF_PG_INFO_HIF_RSV_CNT_SHFT                0
 
+#ifdef PLE_MONITOR_SUPPORT
+#define WF_STA_PS_STATUS_CONTINUE_TIME                  10
+#define WF_WFDMA_ABNORMAL_MONITOR_TIME                  10
+#define WF_PLE_TOP_HIF_BUFFER_FULL_CHECK_LEVEL          100
+#define WF_PLE_TOP_HIF_BUFFER_MAX_QUOTA_PER_STA         0x6ef
+#endif
+
 /* =====================================================================================
 
   ---PG_HIF_WMTXD_GROUP (0x820C0000 + 0x118)---

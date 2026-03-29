@@ -152,6 +152,7 @@ VOID AsicDelWcidTab(struct _RTMP_ADAPTER *pAd, UINT16 Wcid);
 #ifdef HTC_DECRYPT_IOT
 VOID AsicSetWcidAAD_OM(struct _RTMP_ADAPTER *pAd, UINT16 Wcid, CHAR value);
 #endif /* HTC_DECRYPT_IOT */
+VOID AsicSetWcidPsm(struct _RTMP_ADAPTER *pAd, UINT16 Wcid, UCHAR value);
 
 #if defined(MBSS_AS_WDS_AP_SUPPORT) || defined(APCLI_AS_WDS_STA_SUPPORT)
 VOID AsicSetWcid4Addr_HdrTrans(struct _RTMP_ADAPTER *pAd, UINT16 Wcid, UCHAR IsEnable);
@@ -229,11 +230,14 @@ VOID AsicAddRemoveKeyTab(struct _RTMP_ADAPTER *pAd, struct _ASIC_SEC_INFO *pInfo
 
 #ifdef CONFIG_AP_SUPPORT
 VOID AsicSetWdevIfAddr(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, INT opmode);
+#ifdef DOT11V_MBSSID_SUPPORT
+BOOLEAN asic_update_11v_mbssid_info(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev);
+#endif /* DOT11V_MBSSID_SUPPORT */
 #endif /* CONFIG_AP_SUPPORT */
 
 BOOLEAN AsicDisableBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev);
 BOOLEAN AsicEnableBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev);
-BOOLEAN AsicUpdateBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev);
+BOOLEAN AsicUpdateBeacon(struct _RTMP_ADAPTER *pAd, VOID *wdev, BOOLEAN BcnSntReq);
 
 INT32 AsicDevInfoUpdate(
 	struct _RTMP_ADAPTER *pAd,
@@ -380,6 +384,10 @@ INT32 asic_update_vlan_id(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_i
 INT32 asic_update_vlan_priority(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_idx, UINT8 priority);
 #endif
 
+#ifdef PLE_MONITOR_SUPPORT
+INT32 asic_flush_ac_queue(struct _RTMP_ADAPTER *ad, UINT16 wcid, UINT16 pkt_cnt, BOOLEAN ps_check);
+#endif
+
 #ifdef CONFIG_AP_SUPPORT
 VOID AsicSetMbssHwCRSetting(RTMP_ADAPTER *pAd, UCHAR mbss_idx, BOOLEAN enable);
 VOID AsicSetExtMbssEnableCR(RTMP_ADAPTER *pAd, UCHAR mbss_idx, BOOLEAN enable);
@@ -397,6 +405,7 @@ VOID AsicNotSupportFunc(struct _RTMP_ADAPTER *pAd, const RTMP_STRING *caller);
 #ifdef IGMP_SNOOP_SUPPORT
 BOOLEAN AsicMcastEntryInsert(struct _RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, UINT8 Type, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
 BOOLEAN AsicMcastEntryDelete(struct _RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
+BOOLEAN AsicMcastEntryDenyList(struct _RTMP_ADAPTER *pAd, UINT8 BssIdx, UINT8 ucEntryCount, UINT8 ucAddToList, UINT_8 *pAddr);
 #ifdef IGMP_TVM_SUPPORT
 BOOLEAN AsicMcastConfigAgeOut(RTMP_ADAPTER *pAd, UINT8 AgeOutTime, UINT8 omac_idx);
 BOOLEAN AsicMcastGetMcastTable(RTMP_ADAPTER *pAd, UINT8 ucOwnMacIdx, struct wifi_dev *wdev);
@@ -493,11 +502,12 @@ typedef struct _RTMP_ARCH_OP {
 		BSS_INFO_ARGUMENT_T *bss_info_argument);
 	VOID (*archSetTmrCal)(struct _RTMP_ADAPTER *pAd, UCHAR TmrType, UCHAR Channel, UCHAR Bw);
 	UINT32 (*archGetHwQFromAc)(UCHAR wmm_idx, UCHAR wmm_ac);
-	INT32 (*archSetStaRec)(struct _RTMP_ADAPTER *pAd, STA_REC_CFG_T StaCfg);
+	INT32 (*archSetStaRec)(struct _RTMP_ADAPTER *pAd, STA_REC_CFG_T *pStaCfg);
 	VOID (*archDelWcidTab)(struct _RTMP_ADAPTER *pAd, UINT16 wcid_idx);
 #ifdef HTC_DECRYPT_IOT
 	VOID (*archSetWcidAAD_OM)(struct _RTMP_ADAPTER *pAd, UINT16 wcid_idx, UCHAR value);
 #endif /* HTC_DECRYPT_IOT */
+	VOID (*archSetWcidPsm)(struct _RTMP_ADAPTER *pAd, UINT16 wcid_idx, UCHAR value);
 
 #if defined(MBSS_AS_WDS_AP_SUPPORT) || defined(APCLI_AS_WDS_STA_SUPPORT)
 	VOID (*archSetWcid4Addr_HdrTrans)(struct _RTMP_ADAPTER *pAd, UINT16 wcid_idx, UCHAR IsEnable, UCHAR IsApcliEntry);
@@ -507,7 +517,7 @@ typedef struct _RTMP_ARCH_OP {
 
 	BOOLEAN (*archEnableBeacon)(struct _RTMP_ADAPTER *pAd, VOID *wdev_void);
 	BOOLEAN (*archDisableBeacon)(struct _RTMP_ADAPTER *pAd, VOID *wdev_void);
-	BOOLEAN (*archUpdateBeacon)(struct _RTMP_ADAPTER *pAd, VOID *wdev_void);
+	BOOLEAN (*archUpdateBeacon)(struct _RTMP_ADAPTER *pAd, VOID *wdev_void, BOOLEAN BcnSntReq);
 #ifdef APCLI_SUPPORT
 #ifdef MAC_REPEATER_SUPPORT
 	INT (*archSetReptFuncEnable)(struct _RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR band_idx);
@@ -585,6 +595,10 @@ typedef struct _RTMP_ARCH_OP {
 	UINT16 (*tx_rate_to_tmi_rate)(UINT8 mode, UINT8 mcs, UINT8 nss, BOOLEAN stbc, UINT8 preamble);
 	VOID (*update_raw_counters)(struct _RTMP_ADAPTER *pAd);
 	VOID (*update_mib_bucket)(struct _RTMP_ADAPTER *pAd);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	UINT8 (*read_skip_tx)(RTMP_ADAPTER *pAd, UINT16 wcid);
+	VOID (*update_skip_tx)(RTMP_ADAPTER *pAd, UINT16 wcid, UINT8 set);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #ifdef CONFIG_AP_SUPPORT
 	VOID (*archSetWdevIfAddr)(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, INT opmode);
 	VOID (*archSetMbssHwCRSetting)(struct _RTMP_ADAPTER *pAd, UCHAR mbss_idx, BOOLEAN enable);
@@ -613,7 +627,9 @@ typedef struct _RTMP_ARCH_OP {
 	INT32 (*update_vlan_id)(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_idx, UINT16 vid);
 	INT32 (*update_vlan_priority)(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_idx, UINT8 priority);
 #endif
-
+#ifdef PLE_MONITOR_SUPPORT
+	INT32 (*flush_ac_queue)(struct _RTMP_ADAPTER *ad, UINT16 wcid, UINT16 pkt_cnt, BOOLEAN ps_check);
+#endif
 	/* TX */
 	INT (*check_hw_resource)(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR resource_idx);
 	INT (*set_resource_state)(struct _RTMP_ADAPTER *pAd, UINT8 resource_idx, BOOLEAN state);
@@ -640,6 +656,9 @@ typedef struct _RTMP_ARCH_OP {
 	/*  RX */
 	UINT32 (*rx_pkt_process)(struct _RTMP_ADAPTER *pAd, UINT8 resource_idx, struct _RX_BLK *rx_blk, VOID *rx_pkt);
 	UINT32 (*get_packet_type)(struct _RTMP_ADAPTER *pAd, VOID *rx_packet);
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+	UINT32 (*trans_rxd_into_radiotap)(struct _RTMP_ADAPTER *pAd, VOID *rx_packet, struct _RX_BLK *rx_blk);
+#endif
 	INT32 (*trans_rxd_into_rxblk)(struct _RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, VOID *rx_pkt);
 	UINT32 (*txdone_handle)(struct _RTMP_ADAPTER *pAd, VOID *ptr, UINT8 resource_idx);
 	UINT32 (*rxv_handler)(struct _RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, VOID *rx_packet);
@@ -652,6 +671,7 @@ typedef struct _RTMP_ARCH_OP {
 #ifdef IGMP_SNOOP_SUPPORT
 	BOOLEAN (*archMcastEntryInsert)(RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, UINT8 Type, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
 	BOOLEAN (*archMcastEntryDelete)(RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
+	BOOLEAN (*archMcastEntryDenyList)(RTMP_ADAPTER *pAd, UINT8 BssIdx, UINT8 ucEntryCount, UINT8 ucAddToList, UINT_8 *pAddr);
 #ifdef IGMP_TVM_SUPPORT
 	BOOLEAN (*archMcastConfigAgeout)(RTMP_ADAPTER *pAd, UINT8 AgeOutTime, UINT8 ucOwnMacIdx);
 	BOOLEAN (*archMcastGetMcastTable)(RTMP_ADAPTER *pAd, UINT8 ucOwnMacIdx, struct wifi_dev *wdev);
@@ -694,6 +714,13 @@ typedef struct _RTMP_ARCH_OP {
 	INT (*arch_set_air_mon_rule)(struct _RTMP_ADAPTER *pAd, UCHAR *rule, UCHAR band_idx);
 	INT (*arch_set_air_mon_idx)(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, UCHAR mnt_idx, UCHAR band_idx);
 #endif
+
+#ifdef WIFI_MD_COEX_SUPPORT
+#ifdef COEX_DIRECT_PATH
+	VOID (*set_conn_infra_sysram)(struct _RTMP_ADAPTER *pAd);
+	VOID (*get_wm_pc_status)(struct _RTMP_ADAPTER *pAd);
+#endif/* COEX_DIRECT_PATH */
+#endif /* WIFI_MD_COEX_SUPPORT */
 } RTMP_ARCH_OP;
 
 #ifdef LINK_TEST_SUPPORT
@@ -896,6 +923,10 @@ INT asic_get_hw_resource_state(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev,
 										UINT32 pkt_type, UCHAR resource_idx);
 UINT32 asic_rx_pkt_process(struct _RTMP_ADAPTER *pAd, UINT8 resource_idx, struct _RX_BLK *pRxBlk, VOID *pRxPacket);
 UINT32 asic_get_packet_type(struct _RTMP_ADAPTER *pAd, VOID *rx_packet);
+#ifdef SNIFFER_RADIOTAP_SUPPORT
+UINT32 asic_trans_rxd_into_radiotap(RTMP_ADAPTER *pAd, VOID *rx_packet, struct _RX_BLK *rx_blk);
+#endif
+
 INT32 asic_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, struct _RX_BLK *rx_blk, VOID *rx_pkt);
 VOID asic_dump_rmac_info(struct _RTMP_ADAPTER *pAd, UCHAR *rmac_info);
 INT asic_mlme_hw_tx(struct _RTMP_ADAPTER *pAd, UCHAR *tmac_info, MAC_TX_INFO *info, HTTRANSMIT_SETTING *pTransmit, struct _TX_BLK *tx_blk);
@@ -925,6 +956,10 @@ UCHAR asic_get_nsts_by_mcs(struct _RTMP_ADAPTER *pAd, UCHAR phy_mode, UCHAR mcs,
 UINT16 asic_tx_rate_to_tmi_rate(struct _RTMP_ADAPTER *pAd, UINT8 mode, UINT8 mcs, UINT8 nss, BOOLEAN stbc, UINT8 preamble);
 VOID asic_update_raw_counters(struct _RTMP_ADAPTER *pAd);
 VOID asic_update_mib_bucket(struct _RTMP_ADAPTER *pAd);
+#ifdef ZERO_LOSS_CSA_SUPPORT
+UINT8 AsicReadSkipTx(RTMP_ADAPTER *pAd, UINT16 wcid);
+VOID AsicUpdateSkipTx(RTMP_ADAPTER *pAd, UINT16 wcid, UINT8 set);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 UINT32 asic_get_bcn_tx_cnt(struct _RTMP_ADAPTER *pAd, UCHAR BandIdx);
 #ifdef AIR_MONITOR
 INT asic_set_air_mon_enable(RTMP_ADAPTER *pAd, BOOLEAN enable, UCHAR band_idx);

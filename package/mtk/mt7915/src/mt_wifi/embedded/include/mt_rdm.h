@@ -50,30 +50,17 @@
 #define RDD_2_SUPPORTED 0
 #endif
 
-#if defined(MT7615) || defined(MT7622)
-#define RDD_STOP     0
-#define RDD_START    1
-#define RDD_DET_MODE    2
-#define RDD_DETSTOP   3
-#define CAC_START    4
-#define CAC_END    5
-#define NORMAL_START 6
-#define DISABLE_DFS_CAL 7
-#define RDD_PULSEDBG 8
-#define RDD_READPULSE 9
-#define RDD_RESUME_BF 10
-#ifdef	CONFIG_RCSA_SUPPORT
-#define RDD_DETECT_INFO	11
-#define RDD_ALTX_CTRL	12
-#endif
-
-#else
 typedef enum {
 	RDD_STOP = 0,
 	RDD_START,
 	RDD_DET_MODE,
 	RDD_RADAR_EMULATE,
+#ifdef	CONFIG_RCSA_SUPPORT
+	RDD_DETECT_INFO = 11,
+	RDD_ALTX_CTRL = 12,
+#endif
 	RDD_START_TXQ = 20,
+	RDD_SET_WF_ANT = 30,
 	CAC_START = 50,
 	CAC_END,
 	NORMAL_START,
@@ -92,7 +79,6 @@ typedef enum _ENUM_DFS_RadarReportMode {
 } ENUM_DFS_RadarReportMode, *P_EENUM_DFS_RadarReportMode;
 
 #define DFS_RDD_PULSEDATA_NUM 5
-#endif
 
 #if (RDD_2_SUPPORTED == 1)
 enum {
@@ -112,6 +98,11 @@ enum {
 #define RDD_DEDICATED_RX HW_RDD1
 
 #endif
+
+typedef enum _CAC_OP {
+	CAC_DONE_CHECK = 1,
+	CAC_DONE_UPDATE,
+} ENUM_CAC_OP;
 
 #define RESTRICTION_BAND_LOW	116
 #define RESTRICTION_BAND_HIGH	128
@@ -138,6 +129,11 @@ enum {
 #define DFS_BW40_PRIMCH_NUM	2
 #define DFS_BW80_PRIMCH_NUM	4
 #define DFS_BW160_PRIMCH_NUM	8
+
+#define RadarDetectSelectRandom 0
+#define RadarDetectSelectDFS 1
+#define RadarDetectSelectNonDFS 2
+#define RadarDetectSelectNum    3
 
 #define DFS_MACHINE_BASE	0
 #define DFS_BEFORE_SWITCH    0
@@ -409,6 +405,13 @@ union dfs_zero_wait_msg {
 	} target_ch_show;
 };
 
+#ifdef DFS_ZEROWAIT_SUPPORT
+typedef struct _CHANNEL_SWITCH_CAC {
+	UCHAR Channel;
+	UCHAR cac_req;
+} CHAN_SWITCH_CAC, *PCHAN_SWITCH_CAC;
+#endif
+
 typedef struct _DFS_CH_GRP {
 	UCHAR AvailableBwChIdx[DFS_AVAILABLE_LIST_BW_NUM][DFS_AVAILABLE_LIST_CH_NUM];
 	UCHAR Bw40GroupIdx[DFS_BW40_GROUP_NUM][DFS_BW40_PRIMCH_NUM];
@@ -462,10 +465,14 @@ typedef struct _DFS_PARAM {
 	BOOLEAN DisableDfsCal;
 	BOOLEAN bNoSwitchCh;
 	BOOLEAN bDfsEnable;
+#ifdef MT_BAND4_DFS_SUPPORT /*302502*/
+	BOOLEAN band4DfsEnable;
+#endif
 	UCHAR RadarHitIdxRecord;
 	UCHAR targetCh;
 	UCHAR targetBw;
 	USHORT targetCacValue;
+	UCHAR DfsChSelPrefer;                /*Select prefer channel DFS/non-DFS/All when hit radar*/
 
 	/* DFS zero wait */
 	BOOLEAN bZeroWaitSupport;    /* Save the profile setting of DfsZeroWait */
@@ -523,6 +530,9 @@ typedef struct _DFS_PARAM {
 #if (DFS_ZEROWAIT_SUPPORT_8080 == 1)
 	UCHAR DFSChHitBand;
 #endif
+	UINT32	TriggerEventIntvl;
+	UCHAR	cac_channel;
+	BOOLEAN	CERegCacEn; /* CE regulatory CAC enhancement */
 } DFS_PARAM, *PDFS_PARAM;
 
 /*******************************************************************************
@@ -540,15 +550,34 @@ INT ZeroWaitDfsCmdHandler(
 	RTMP_IOCTL_INPUT_STRUCT * wrq
 	);
 
+#ifdef DFS_ZEROWAIT_SUPPORT
+INT ZeroWaitDfsCacStartHandler(
+	PRTMP_ADAPTER pAd,
+	RTMP_IOCTL_INPUT_STRUCT * wrq
+	);
+
+INT ZeroWaitDfsChannelSwitch(
+	PRTMP_ADAPTER pAd,
+	RTMP_IOCTL_INPUT_STRUCT * wrq
+	);
+#endif
+
 INT ZeroWaitDfsQueryCmdHandler(
 	RTMP_ADAPTER *pAd,
 	RTMP_IOCTL_INPUT_STRUCT * wrq
 	);
 
+INT zero_wait_dfs_update_inband_nondfsch(
+	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
+	INOUT PUCHAR ch
+	);
+
 INT zero_wait_dfs_update_ch(
 	IN PRTMP_ADAPTER pAd,
 	IN struct wifi_dev *wdev,
-	IN PUCHAR ch
+	IN UCHAR OriChannel,
+	INOUT PUCHAR ch
 	);
 
 INT zero_wait_dfs_switch_ch(
@@ -573,6 +602,27 @@ INT Set_ByPassCac_Proc(
 INT Set_RDDReport_Proc(
 	RTMP_ADAPTER *pAd,
 	RTMP_STRING *arg);
+
+/**
+* Trigger_RDD_Event - Trigger RDD related event.
+* @pAd: pointer of the RTMP_ADAPTER
+* @arg: event type (0: not send event, 1: radar detect; 2: CAC timeout; 3: CSA done.)
+*
+* This function is for feature debug
+*
+**/
+INT Trigger_RDD_Event(
+	RTMP_ADAPTER * pAd,
+	RTMP_STRING *arg);
+
+/**
+* MakeUpRDDEvent - Make up radar detected event.
+* @pAd: pointer of the RTMP_ADAPTER
+*
+* This function is for feature debug
+*
+**/
+VOID MakeUpRDDEvent(RTMP_ADAPTER *pAd);
 
 UCHAR DfsPrimToCent(
 	UCHAR Channel, UCHAR Bw);
@@ -614,6 +664,9 @@ INT Show_DfsNonOccupancy_Proc(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_STRING *arg);
 
+INT Nop_List_Backup(
+	IN PRTMP_ADAPTER pAd);
+
 INT show_dfs_ch_info_proc(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_STRING * arg);
@@ -622,7 +675,11 @@ INT Set_DfsNOP_Proc(
 	IN PRTMP_ADAPTER pAd,
 	IN RTMP_STRING *arg);
 
+INT Set_DfsChSelPrefer_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
 /* DFS Zero Wait */
+INT Set_DfsZeroWaitEnable_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
 INT Set_DfsZeroWaitCacTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 INT Set_DedicatedBwCh_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
@@ -635,6 +692,11 @@ INT Set_DfsZeroWaitNOP_Proc(
 
 INT Set_DfsTargetCh_Proc(
 		RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+#ifdef DFS_ZEROWAIT_SUPPORT
+INT Set_ZWDfsCacStart_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Set_ZWDfsChannelSwitch_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif
 
 VOID DfsSetCalibration(
 	IN PRTMP_ADAPTER pAd, UINT_32 DisableDfsCal);
@@ -739,6 +801,7 @@ UINT_8 DfsV10W56FindMaxNopDuration(
 
 UINT_8 DfsV10FindNonNopChannel(
 	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
 	IN UCHAR chGrp,
 	IN UCHAR grpWidth);
 
@@ -773,6 +836,13 @@ BOOLEAN DfsRddReportHandle(/*handle the event of EXT_EVENT_ID_RDD_REPORT*/
 VOID WrapDfsSetNonOccupancy(/*Set Channel non-occupancy time, finish */
 	IN PRTMP_ADAPTER pAd, IN UCHAR rddidx, IN UCHAR bandIdx);
 
+BOOLEAN dfs_cac_op(
+	PRTMP_ADAPTER pAd,
+	struct wifi_dev *wdev,
+	ENUM_CAC_OP op,
+	UCHAR CacChannel
+);
+
 VOID DfsSetNonOccupancy(/*Set Channel non-occupancy time, finish*/
 	IN PRTMP_ADAPTER pAd,
 	IN UCHAR band_idx,
@@ -787,10 +857,10 @@ VOID DfsSelectChannel(/*Select new channel, finish*/
 	IN PRTMP_ADAPTER pAd, PDFS_PARAM pDfsParam, UCHAR band_idx);
 
 UCHAR WrapDfsRandomSelectChannel(/*Select new channel using random selection, finish*/
-	IN PRTMP_ADAPTER pAd, BOOLEAN bSkipDfsCh, UCHAR avoidCh, UCHAR band_idx);
+	IN PRTMP_ADAPTER pAd, UCHAR avoidCh, UCHAR band_idx);
 
 UCHAR DfsRandomSelectChannel(/*Select new channel using random selection, finish*/
-	IN PRTMP_ADAPTER pAd, PDFS_PARAM pDfsParam, BOOLEAN bSkipDfsCh, UCHAR avoidCh, UCHAR band_idx);
+	IN PRTMP_ADAPTER pAd, PDFS_PARAM pDfsParam, UCHAR avoidCh, UCHAR band_idx);
 
 USHORT DfsBwChQueryByDefault(/*Query current available BW & Channel list or select default*/
 	IN PRTMP_ADAPTER pAd, UCHAR Bw, PDFS_PARAM pDfsParam, UCHAR level, BOOLEAN bDefaultSelect, BOOLEAN SkipNonDfsCh, UCHAR band_idx);
@@ -863,7 +933,8 @@ VOID DfsDedicatedExamineSetNewCh(
 
 VOID DfsDedicatedSetNewChStat(
 	IN struct _RTMP_ADAPTER *pAd,
-	IN struct wifi_dev *wdev);
+	IN struct wifi_dev *wdev,
+	IN UCHAR Channel);
 
 INT mtRddControl(
 	IN struct _RTMP_ADAPTER *pAd,
@@ -952,6 +1023,8 @@ VOID dfs_dump_radar_sw_pls_info(IN PRTMP_ADAPTER pAd, IN P_EXT_EVENT_RDD_REPORT_
 VOID dfs_dump_radar_hw_pls_info(IN PRTMP_ADAPTER pAd, IN P_EXT_EVENT_RDD_REPORT_T prRadarReport);
 VOID dfs_dump_radar_sw_pls_info(IN PRTMP_ADAPTER pAd, IN P_EXT_EVENT_RDD_REPORT_T prRadarReport);
 VOID dfs_update_radar_info(IN P_EXT_EVENT_RDD_REPORT_T prRadarReport);
+
+NDIS_STATUS rdd_mbss_init(IN PRTMP_ADAPTER pAd, IN struct wifi_dev *wdev);
 
 #endif /*MT_DFS_SUPPORT*/
 #endif /*_MT_RDM_H_ */

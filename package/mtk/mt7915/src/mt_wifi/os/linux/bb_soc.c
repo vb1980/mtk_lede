@@ -69,10 +69,8 @@ VOID BBUPrepareMAC(IN RTMP_ADAPTER *pAd, PUCHAR macaddr)
 		break;
 	}
 
-	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("current MAC=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 macaddr[0], macaddr[1],
-			 macaddr[2], macaddr[3],
-			 macaddr[4], macaddr[5]));
+	MTWF_LOG(DBG_CAT_INIT, DBG_SUBCAT_ALL, DBG_LVL_WARN, ("current MAC="MACSTR"\n",
+			 MAC2STR(macaddr)));
 	/*generate bssid from cpe mac address end, merge from linos, 20100208*/
 }
 

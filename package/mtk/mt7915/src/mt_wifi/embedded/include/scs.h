@@ -87,8 +87,8 @@ typedef struct _SCS_BSS_ENTRY {
 } SCS_BSS_ENTRY;
 
 typedef struct {
-	UCHAR           BssNr;
-	UCHAR           BssOverlapNr;
+	UINT           BssNr;
+	UINT           BssOverlapNr;
 	SCS_BSS_ENTRY       BssEntry[MAX_LEN_OF_SCS_BSS_TABLE]; /* Number is 6 */
 } SCS_BSS_TABLE, *PSCS_BSS_TABLE;
 #ifdef SCS_FW_OFFLOAD
@@ -246,38 +246,40 @@ typedef struct _SMART_CARRIER_SENSE_CTRL {
 
 #ifdef SCS_FW_OFFLOAD
 typedef struct _SMART_CARRIER_SENSE_CTRL_GEN2_T {
-	UINT_8    u1SCSEnable;
-	UINT_8    u1SCSMinRssi;
-	UINT_32   u4OneSecTxByteCount;
-	UINT_32   u4OneSecRxByteCount;
-	UINT_16   u2CckPdBlkTh;
-	UINT_16   u2OfdmPdBlkTh;
-	UINT_16   u2SCSMinRssiTolerance;
-	UINT_16   u2CckPdThrMax;
-	UINT_16   u2OfdmPdThrMax;
-	UINT_16   u2CckPdThrMin;
-	UINT_16   u2OfdmPdThrMin;
+    UINT_8    u1SCSEnable;
+    INT_8     i1SCSMinRssi;
+    UINT_32   u4OneSecTxByteCount;
+    UINT_32   u4OneSecRxByteCount;
+    UINT_16   u2CckPdBlkTh;
+    UINT_16   u2OfdmPdBlkTh;
+    UINT_16   u2SCSMinRssiTolerance;
+    UINT_16   u2CckPdThrMax;
+    UINT_16   u2OfdmPdThrMax;
+    UINT_16   u2CckPdThrMin;
+    UINT_16   u2OfdmPdThrMin;
 
-	UINT_16   u2IniAvgTput[SCS_STA_NUM];
-	UINT_16   u2LastTputDiff[SCS_STA_NUM];
-	UINT_16   u2LastAvgTput[SCS_STA_NUM];
-	UINT_16   u2LastMaxTput[SCS_STA_NUM];
-	UINT_16   u2LastMinTput[SCS_STA_NUM];
-	UINT_8    u1LastTputIdx[SCS_STA_NUM];
-	BOOL      fgLastTputDone[SCS_STA_NUM];
-	UINT_16   u2CurAvgTput[SCS_STA_NUM];
-	UINT_8    u1CurTputIdx[SCS_STA_NUM];
-	UINT_8    u1TputPeriodScaleBit[SCS_STA_NUM];
+    UINT_16   u2IniAvgTput[SCS_STA_NUM];
+    UINT_16   u2LastTputDiff[SCS_STA_NUM];
+    UINT_16   u2LastAvgTput[SCS_STA_NUM];
+    UINT_16   u2LastMaxTput[SCS_STA_NUM];
+    UINT_16   u2LastMinTput[SCS_STA_NUM];
+    UINT_16   u2LastTputIdx[SCS_STA_NUM];
+    BOOL      fgLastTputDone[SCS_STA_NUM];
+    UINT_16   u2CurAvgTput[SCS_STA_NUM];
+    UINT_16   u2CurTputIdx[SCS_STA_NUM];
+    UINT_8    u1TputPeriodScaleBit[SCS_STA_NUM];
 
-	UINT_8    u1ChannelBusyTh;
-	BOOL      fgChBusy;
-	UINT_8    u1MyTxRxTh;
-	BOOL      fgPDreset;
+    UINT_8    u1LastActiveSTA;
+    UINT_8    u1ContinuousActiveSTAZeroCnt;
+    UINT_8    u1ChannelBusyTh;
+    BOOL      fgChBusy;
+    UINT_8    u1MyTxRxTh;
+    BOOL      fgPDreset;
 
-	UINT_32   u4ChannelBusyTime;
-	UINT_32   u4MyTxAirtime;
-	UINT_32   u4MyRxAirtime;
-	UINT_32   u4OBSSAirtime;
+    UINT_32   u4ChannelBusyTime;
+    UINT_32   u4MyTxAirtime;
+    UINT_32   u4MyRxAirtime;
+    UINT_32   u4OBSSAirtime;
 } SMART_CARRIER_SENSE_CTRL_GEN2_T, *P_SMART_CARRIER_SENSE_CTRL_GEN2_T;
 
 typedef struct _SCS_GLO_CHECK {

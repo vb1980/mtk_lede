@@ -121,7 +121,7 @@ INT	Set_RateAlg_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 			pAd->MacTab.Content[IdEntry].rateAlg = ra_alg;
 	}
 
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Set Alg = %d\n", __func__, ra_alg));
+	MTWF_PRINT("%s: Set Alg = %d\n", __func__, ra_alg);
 	return TRUE;
 }
 
@@ -150,32 +150,32 @@ INT Set_Fixed_Rate_Proc(
 			i4Recv = sscanf(arg, "%d-%d-%d-%d-%d-%d-%d-%d-%d-%d", &(u4WCID),
 							&(u4Mode), &(u4Bw), &(u4Mcs), &(u4VhtNss),
 							&(u4SGI), &(u4Preamble), &(u4STBC), &(u4LDPC), &(u4SpeEn));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
 					 "\t\t\t\tSGI = %d, Preamble = %d, STBC = %d, LDPC = %d, SpeEn = %d\n",
 					 __func__, u4WCID, u4Mode, u4Bw, u4Mcs, u4VhtNss,
-					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn));
+					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn);
 
 			if (i4Recv != 10) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode > MODE_VHT)
 					&& ((u4Mode != HW_HE_SU_MODE) && (u4Mode != HW_HE_EXT_SU_MODE))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown Mode!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown Mode!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Bw > 4) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown BW!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown BW!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -185,19 +185,19 @@ INT Set_Fixed_Rate_Proc(
 				((u4Mode == MODE_HTMIX) && (u4Mcs > 32)) ||
 				((u4Mode == MODE_VHT) && (u4Mcs > 9)) ||
 				((u4Mode == HW_HE_SU_MODE) && (u4Mcs > 27))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown MCS!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown MCS!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == MODE_VHT) && (u4VhtNss > 4)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown VhtNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown VhtNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == HW_HE_SU_MODE) && (u4VhtNss > 4)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown HeNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown HeNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -298,13 +298,13 @@ INT Set_Fixed_Rate_Proc(
 	}
 
 	if (fgStatus == FALSE) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("iwpriv ra0 set FixedRate=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[WCID]Wireless Client ID\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4, HE_SU=8, HE_EXT_SU=9, HE_TRIG_MODE=10\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[BW]BW20=0, BW40=1, BW80=2,BW160=3\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9, HE=0~11\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[VhtNss]VHT/HE=1~4, Other=ignore\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Preamble]Long=0, Other=Short\n"));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "iwpriv ra0 set FixedRate=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[WCID]Wireless Client ID\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4, HE_SU=8, HE_EXT_SU=9, HE_TRIG_MODE=10\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[BW]BW20=0, BW40=1, BW80=2,BW160=3\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9, HE=0~11\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[VhtNss]VHT/HE=1~4, Other=ignore\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Preamble]Long=0, Other=Short\n");
 	} else
 		asic_dump_wtbl_info(pAd, u4WCID);
 
@@ -349,38 +349,36 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 #endif /* RATE_ADAPT_AGBS_SUPPORT */
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d-%d-%d-%d-%d-%d-%d-%d-%d-%d", &(u4WCID),
 							&(u4Mode), &(u4Bw), &(u4Mcs), &(u4VhtNss),
 							&(u4SGI), &(u4Preamble), &(u4STBC), &(u4LDPC), &(u4SpeEn), &(u4Is5G));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
 					 "\t\t\t\tSGI = %d, Preamble = %d, STBC = %d, LDPC = %d, SpeEn = %d, Is5G = %d\n",
 					 __func__, u4WCID, u4Mode, u4Bw, u4Mcs, u4VhtNss,
-					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn, u4Is5G));
+					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn, u4Is5G);
 
 			if (i4Recv != 11) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Mode > MODE_VHT) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow Mode!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow Mode!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Bw > 4) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow BW!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow BW!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -389,13 +387,13 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 				((u4Mode == MODE_OFDM) && (u4Mcs > 7)) ||
 				((u4Mode == MODE_HTMIX) && (u4Mcs > 32)) ||
 				((u4Mode == MODE_VHT) && (u4Mcs > 9))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow MCS!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow MCS!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == MODE_VHT) && (u4VhtNss > 4)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow VhtNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow VhtNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -527,7 +525,7 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 							break;
 
 						default:
-							MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow Nss%d!\n", ucHtNss));
+							MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow Nss%d!\n", ucHtNss);
 							break;
 						}
 					} else {
@@ -553,7 +551,7 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 							break;
 
 						default:
-							MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow Nss%d!\n", ucHtNss));
+							MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow Nss%d!\n", ucHtNss);
 							break;
 						}
 					}
@@ -583,7 +581,7 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 						break;
 
 					default:
-						MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknow Nss%d!\n", u4VhtNss));
+						MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknow Nss%d!\n", u4VhtNss);
 						break;
 					}
 				}
@@ -620,7 +618,7 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 
 				if (!fgFound) {
 					rate[1] = rate[2] = rate[3] = rate[4] = rate[5] = rate[6] = rate[7] = rate[0];
-					MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Cannot find fallback table!\n"));
+					MTWF_DBG(pAd, DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Cannot find fallback table!\n");
 				}
 
 #else
@@ -634,13 +632,13 @@ INT Set_Fixed_Rate_With_FallBack_Proc(
 	}
 
 	if (fgStatus == FALSE) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("iwpriv ra0 set FixedRateFallback=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]-[is5G]\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[WCID]Wireless Client ID\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[BW]BW20=0, BW40=1, BW80=2,BW160=3\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[VhtNss]VHT=1~4, Other=ignore\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Preamble]Long=0, Other=Short\n"));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "iwpriv ra0 set FixedRateFallback=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]-[is5G]\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[WCID]Wireless Client ID\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[BW]BW20=0, BW40=1, BW80=2,BW160=3\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[VhtNss]VHT=1~4, Other=ignore\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Preamble]Long=0, Other=Short\n");
 	} else
 		asic_dump_wtbl_info(pAd, u4WCID);
 
@@ -671,26 +669,26 @@ INT Set_Fixed_Rate_PerBSS_Proc(
 			i4Recv = sscanf(arg, "%d-%d-%d-%d-%d-%d-%d-%d-%d",
 							&(u4Mode), &(u4Bw), &(u4Mcs), &(u4VhtNss),
 							&(u4SGI), &(u4Preamble), &(u4STBC), &(u4LDPC), &(u4SpeEn));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
 					 "\t\t\t\tSGI = %d, Preamble = %d, STBC = %d, LDPC = %d, SpeEn = %d\n",
 					 __func__, u4Mode, u4Bw, u4Mcs, u4VhtNss,
-					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn));
+					 u4SGI, u4Preamble, u4STBC, u4LDPC, u4SpeEn);
 
 			if (i4Recv != 9) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode > MODE_VHT)
 					&& ((u4Mode != HW_HE_SU_MODE) && (u4Mode != HW_HE_EXT_SU_MODE))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown Mode!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown Mode!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Bw > 4) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown BW!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown BW!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -700,19 +698,19 @@ INT Set_Fixed_Rate_PerBSS_Proc(
 				((u4Mode == MODE_HTMIX) && (u4Mcs > 32)) ||
 				((u4Mode == MODE_VHT) && (u4Mcs > 9)) ||
 				((u4Mode == HW_HE_SU_MODE) && (u4Mcs > 27))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown MCS!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown MCS!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == MODE_VHT) && (u4VhtNss > 4)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown VhtNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown VhtNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == HW_HE_SU_MODE) && (u4VhtNss > 4)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Unknown HeNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unknown HeNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -809,12 +807,12 @@ INT Set_Fixed_Rate_PerBSS_Proc(
 	}
 
 	if (fgStatus == FALSE) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("iwpriv ra0 set FixedRatePerBss=[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4, HE_SU=8, HE_EXT_SU=9, HE_TRIG_MODE=10\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[BW]BW20=0, BW40=1, BW80=2,BW160=3\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9, HE=0~11\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[VhtNss]VHT/HE=1~4, Other=ignore\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("[Preamble]Long=0, Other=Short\n"));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "iwpriv ra0 set FixedRatePerBss=[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4, HE_SU=8, HE_EXT_SU=9, HE_TRIG_MODE=10\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[BW]BW20=0, BW40=1, BW80=2,BW160=3\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9, HE=0~11\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[VhtNss]VHT/HE=1~4, Other=ignore\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "[Preamble]Long=0, Other=Short\n");
 	}
 
 	return fgStatus;
@@ -830,13 +828,11 @@ Set_RA_Debug_Proc(
 	MAC_TABLE_ENTRY *pEntry = NULL;
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("%s: arg = %s\n", __func__, arg));
+	MTWF_PRINT("%s: arg = %s\n", __func__, arg);
 	pWlanIndex = strsep(&arg, ":");
 
 	if (pWlanIndex == NULL || arg == NULL) {
-		MTWF_LOG(DBG_CAT_RA, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("%s: Invalid parameters\n", __func__));
+		MTWF_PRINT("%s: Invalid parameters\n", __func__);
 		return FALSE;
 	}
 
@@ -844,7 +840,7 @@ Set_RA_Debug_Proc(
 	u4DebugType = os_str_toul(arg, 0, 10);
 
 	if (!VALID_UCAST_ENTRY_WCID(pAd, u4WlanIndex)) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("u4WlanIndex exceed pAd->MaxUcastEntryNum!\n"));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "u4WlanIndex exceed pAd->MaxUcastEntryNum!\n");
 		return FALSE;
 	}
 	pEntry = &pAd->MacTab.Content[u4WlanIndex];
@@ -889,29 +885,28 @@ INT Set_Fixed_Rate_WO_STA_Proc(
 			i4Recv = sscanf(arg, "%u-%u-%u-%u-%u-%u-%u-%u-%u-%u", &(u4Wcid),
 					&(u4Mode), &(u4Bw), &(u4Mcs), &(u4VhtNss),
 					&(u4ShortGI), &(u4Preamble), &(u4Stbc), &(u4Ldpc), &(u4SpeEn));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
+			MTWF_PRINT("%s():WCID = %d, Mode = %d, BW = %d, MCS = %d, VhtNss = %d\n"
 				"\t\t\t\tSGI = %d, Preamble = %d, STBC = %d, LDPC = %d, SpeEn = %d\n",
 				__func__, u4Wcid, u4Mode, u4Bw, u4Mcs, u4VhtNss,
-				u4ShortGI, u4Preamble, u4Stbc, u4Ldpc, u4SpeEn));
+				u4ShortGI, u4Preamble, u4Stbc, u4Ldpc, u4SpeEn);
 
 			if (i4Recv != FIXED_RATE_WO_STA_PARAM_LIST_MAX) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Input format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Input format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Mode > MODE_VHT) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Unknown Mode!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Unknown Mode!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (u4Bw > BW_160) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Unknown BW!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Unknown BW!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -920,15 +915,15 @@ INT Set_Fixed_Rate_WO_STA_Proc(
 				((u4Mode == MODE_OFDM) && (u4Mcs > MCS_32)) ||
 				((u4Mode == MODE_HTMIX) && (u4Mcs > MCS_32)) ||
 				((u4Mode == MODE_VHT) && (u4Mcs > VHT_RATE_IDX_1SS_MCS9))) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Unknown MCS!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Unknown MCS!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if ((u4Mode == MODE_VHT) && (u4VhtNss > MAX_VHT_NSS_FIXED_RATE)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("Unknown VhtNss!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"Unknown VhtNss!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -960,20 +955,20 @@ INT Set_Fixed_Rate_WO_STA_Proc(
 
 
 	if (fgStatus == FALSE) {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("iwpriv ra0 set FixedRate=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[WCID]Wireless Client ID\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[BW]BW20=0, BW40=1, BW80=2,BW160=3\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[VhtNss]VHT=1~4, Other=ignore\n"));
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("[Preamble]Long=0, Other=Short\n"));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"iwpriv ra0 set FixedRate=[WCID]-[Mode]-[BW]-[MCS]-[VhtNss]-[SGI]-[Preamble]-[STBC]-[LDPC]-[SPE_EN]\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[WCID]Wireless Client ID\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[Mode]CCK=0, OFDM=1, HT=2, GF=3, VHT=4\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[BW]BW20=0, BW40=1, BW80=2,BW160=3\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[MCS]CCK=0~4, OFDM=0~7, HT=0~32, VHT=0~9\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[VhtNss]VHT=1~4, Other=ignore\n");
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"[Preamble]Long=0, Other=Short\n");
 	} else {
 		asic_dump_wtbl_info(pAd, (UINT16)u4Wcid);
 	}
@@ -990,10 +985,11 @@ VOID snd_ra_fw_cmd(UINT32 ra_param, RTMP_ADAPTER *ad, UINT32 wcid, VOID *val)
 	CMD_STAREC_AUTO_RATE_UPDATE_T sta_rec_ra;
 #endif /*RACTRL_FW_OFFLOAD_SUPPORT*/
 
-	chip_cap = hc_get_chip_cap(ad->hdev_ctrl);
 	RTMP_SEM_EVENT_WAIT(&ad->AutoRateLock, ret);
 	entry = &ad->MacTab.Content[wcid];
 	if (IS_ENTRY_NONE(entry)) {
+		MTWF_DBG(ad, DBG_CAT_TEST, CATTEST_RFEATURE, DBG_LVL_ERROR,
+				"pEntry not found\n");
 		RTMP_SEM_EVENT_UP(&ad->AutoRateLock);
 		return;
 	}
@@ -1040,23 +1036,21 @@ INT Set_Fixed_HE_LT_F(
 #endif /* RACTRL_FW_OFFLOAD_SUPPORT */
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4HeLtf));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, HE_LTF = %d\n",
-					 __func__, u4WCID, u4HeLtf));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, HE_LTF = %d\n",
+					 __func__, u4WCID, u4HeLtf);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1102,23 +1096,21 @@ INT Set_Fixed_Mcs_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Mcs));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, MCS = %d\n",
-					 __func__, u4WCID, u4Mcs));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, MCS = %d\n",
+					 __func__, u4WCID, u4Mcs);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1164,23 +1156,21 @@ INT Set_Fixed_VhtNss_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4VhtNss));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, VHT_NSS = %d\n",
-					 __func__, u4WCID, u4VhtNss));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, VHT_NSS = %d\n",
+					 __func__, u4WCID, u4VhtNss);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1226,23 +1216,21 @@ INT Set_Fixed_BW_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Bw));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, BW = %d\n",
-					 __func__, u4WCID, u4Bw));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, BW = %d\n",
+					 __func__, u4WCID, u4Bw);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1288,23 +1276,21 @@ INT Set_Fixed_GI_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Gi));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, GI = %d\n",
-					 __func__, u4WCID, u4Gi));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, GI = %d\n",
+					 __func__, u4WCID, u4Gi);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1350,23 +1336,21 @@ INT Set_Fixed_Ecc_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Ecc));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, ECC = %d\n",
-					 __func__, u4WCID, u4Ecc));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, ECC = %d\n",
+					 __func__, u4WCID, u4Ecc);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1412,23 +1396,21 @@ INT Set_Fixed_STBC_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Stbc));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, STBC = %d\n",
-					 __func__, u4WCID, u4Stbc));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, STBC = %d\n",
+					 __func__, u4WCID, u4Stbc);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1472,23 +1454,21 @@ INT Set_Fixed_UL_HE_LTF_Update(
 #endif /* RACTRL_FW_OFFLOAD_SUPPORT */
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4HeLtf));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, HE_LTF = %d\n",
-					 __func__, u4WCID, u4HeLtf));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, HE_LTF = %d\n",
+					 __func__, u4WCID, u4HeLtf);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1534,23 +1514,21 @@ INT Set_Fixed_UL_Mcs_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Mcs));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, MCS = %d\n",
-					 __func__, u4WCID, u4Mcs));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, MCS = %d\n",
+					 __func__, u4WCID, u4Mcs);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1596,23 +1574,21 @@ INT Set_Fixed_UL_VhtNss_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4VhtNss));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, VHT_NSS = %d\n",
-					 __func__, u4WCID, u4VhtNss));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, VHT_NSS = %d\n",
+					 __func__, u4WCID, u4VhtNss);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1658,23 +1634,21 @@ INT Set_Fixed_UL_GI_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Gi));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, GI = %d\n",
-					 __func__, u4WCID, u4Gi));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, GI = %d\n",
+					 __func__, u4WCID, u4Gi);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1720,23 +1694,21 @@ INT Set_Fixed_UL_Ecc_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Ecc));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, ECC = %d\n",
-					 __func__, u4WCID, u4Ecc));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, ECC = %d\n",
+					 __func__, u4WCID, u4Ecc);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1782,23 +1754,21 @@ INT Set_Fixed_UL_STBC_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Stbc));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, STBC = %d\n",
-					 __func__, u4WCID, u4Stbc));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, STBC = %d\n",
+					 __func__, u4WCID, u4Stbc);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1844,23 +1814,21 @@ INT Set_AutoRate_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d", &(u4WCID));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d\n",
-					 __func__, u4WCID));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d\n",
+					 __func__, u4WCID);
 
 			if (i4Recv != 1) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1904,23 +1872,21 @@ INT Set_UL_AutoRate_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d", &(u4WCID));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d\n",
-					 __func__, u4WCID));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d\n",
+					 __func__, u4WCID);
 
 			if (i4Recv != 1) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}
@@ -1964,8 +1930,6 @@ INT Set_AutoRate_PerBss_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		for (i = 1; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
 			pEntry = &pAd->MacTab.Content[i];
@@ -1996,8 +1960,7 @@ INT Set_AutoRate_PerBss_Update(
 
 			RTMP_SEM_EVENT_UP(&pAd->AutoRateLock);
 		}
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%s():BSS = %d\n", __func__, pObj->ioctl_if));
+		MTWF_PRINT("%s():BSS = %d\n", __func__, pObj->ioctl_if);
 	}
 	return fgStatus;
 }
@@ -2018,23 +1981,21 @@ INT Set_Fixed_Spe_Update(
 
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-	cap = hc_get_chip_cap(pAd->hdev_ctrl);
-
 	if (arg) {
 		do {
 			i4Recv = sscanf(arg, "%d-%d", &(u4WCID), &(u4Spe));
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s():WCID = %d, SPE = %d\n",
-					 __func__, u4WCID, u4Spe));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "%s():WCID = %d, SPE = %d\n",
+					 __func__, u4WCID, u4Spe);
 
 			if (i4Recv != 2) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Format Error!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Format Error!\n");
 				fgStatus = FALSE;
 				break;
 			}
 
 			if (!VALID_UCAST_ENTRY_WCID(pAd, u4WCID)) {
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-									("WCID exceed pAd->MaxUcastEntryNum!\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+									"WCID exceed pAd->MaxUcastEntryNum!\n");
 				fgStatus = FALSE;
 				break;
 			}

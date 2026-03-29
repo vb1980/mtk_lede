@@ -43,9 +43,7 @@ static INT32 WfMcuHwInit(RTMP_ADAPTER *pAd)
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(pAd->hdev_ctrl);
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
-#ifdef CONFIG_FWOWN_SUPPORT
-	DriverOwn(pAd);
-#endif
+
 
 #ifdef WIFI_RAM_EMI_SUPPORT
 	if (ops->parse_emi_phy_addr)
@@ -293,12 +291,6 @@ INT32 WfInit(RTMP_ADAPTER *pAd)
 {
 	INT32 ret = NDIS_STATUS_SUCCESS;
 
-#ifdef CONFIG_COLGIN_MT6890
-#ifdef CONFIG_FWOWN_SUPPORT
-        if (pAd->bIsLowPower == TRUE)
-            DriverOwn(pAd);
-#endif
-#endif
 	ret = WfTopInit(pAd);
 
 	if (ret != NDIS_STATUS_SUCCESS)
@@ -368,11 +360,6 @@ err0:
 
 INT32 WfSysPreInit(RTMP_ADAPTER *pAd)
 {
-#ifdef MT7622
-	if (IS_MT7622(pAd))
-		mt7622_init(pAd);
-
-#endif /* MT7622 */
 
 #ifdef MT7915
 

@@ -150,6 +150,7 @@ textresume:
 					x++;
 					continue;
 				}
+				/* fall through */
 			case '\n':
 				/* \ <lf> -> line continuation */
 				x++;
@@ -406,6 +407,11 @@ static s_int32 hqa_set_tx_path(
 			("%s: tx_path:0x%x\n", __func__, tx_ant));
 	}
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
 	/* Set parameters */
 	CONFIG_SET_PARAM(serv_test, tx_ant, tx_ant, band_idx);
 
@@ -455,6 +461,12 @@ static s_int32 hqa_set_rx_path(
 			("%s: rx_path:%d\n", __func__, rx_ant));
 	}
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	CONFIG_SET_PARAM(serv_test, rx_ant, rx_ant, band_idx);
 
@@ -487,6 +499,12 @@ static s_int32 hqa_set_tx_power_ext(
 				&data, (u_char *)&ch_band);
 	get_param_and_shift_buf(TRUE, sizeof(ant_idx),
 				&data, (u_char *)&ant_idx);
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
 
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
@@ -687,7 +705,7 @@ static s_int32 hqa_set_freq_offset(
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	u_char *data = hqa_frame->data;
-	u_char band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
+	u_int32 band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
 	u_int32 freq_offset = 0;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
@@ -696,14 +714,29 @@ static s_int32 hqa_set_freq_offset(
 	get_param_and_shift_buf(TRUE, sizeof(freq_offset),
 				&data, (u_char *)&freq_offset);
 
+	/* for backward compatible, old format is not bandinfo */
+	if (hqa_frame->length == 8) {
+		get_param_and_shift_buf(TRUE, sizeof(band_idx),
+				&data, (u_char *)&band_idx);
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF,
+			("%s, band_idx:%d\n", __func__, band_idx));
+	}
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	CONFIG_SET_PARAM(serv_test, rf_freq_offset,
 			(u_int32)freq_offset, band_idx);
 
-	ret = mt_serv_set_freq_offset(serv_test);
+	ret = mt_serv_set_freq_offset(serv_test, band_idx);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
-		("%s: freq offset=%u\n", __func__, freq_offset));
+		("%s: freq offset=%u band_idx:%d\n", __func__,
+		freq_offset, band_idx));
 
 	/* Update hqa_frame with response: status (2 bytes) */
 	update_hqa_frame(hqa_frame, 2, ret);
@@ -781,6 +814,22 @@ static s_int32 hqa_set_antswap(
 	return ret;
 }
 
+static s_int32 hqa_set_eeprom_to_fw(
+	struct service_test *serv_test, struct hqa_frame *hqa_frame)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
+
+	ret = mt_serv_set_eeprom_to_fw(serv_test);
+
+	/* Update hqa_frame with response: status (2 bytes) */
+	update_hqa_frame(hqa_frame, 2, ret);
+
+	return ret;
+}
+
 static struct hqa_cmd_entry CMD_SET1[] = {
 	/* cmd id start from 0x1100 */
 	{0x0,	legacy_function},
@@ -794,6 +843,7 @@ static struct hqa_cmd_entry CMD_SET1[] = {
 	{0x9,	legacy_function},
 	{0xb,	hqa_low_power},
 	{0xd,	hqa_get_antswap_capability},
+	{0xc,	hqa_set_eeprom_to_fw},
 	{0xe,	hqa_set_antswap}
 };
 
@@ -883,6 +933,12 @@ static s_int32 hqa_set_fagc_rssi_path(
 	get_param_and_shift_buf(TRUE, sizeof(fagc_path),
 				&data, (u_char *)&fagc_path);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 	CONFIG_SET_PARAM(serv_test, fagc_path, (u_char)fagc_path, band_idx);
@@ -930,6 +986,8 @@ static s_int32 hqa_mac_bbp_reg_read(
 		return ret;
 	}
 
+	sys_ad_zero_mem(test_regs->cr_val, sizeof(u_int32));
+
 	ret = mt_serv_reg_eprm_operation(serv_test, SERV_TEST_REG_MAC_READ);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
@@ -954,7 +1012,7 @@ static s_int32 hqa_mac_bbp_reg_write(
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	struct test_register *test_regs = &serv_test->test_reg;
 	u_char *data = hqa_frame->data;
-	u_int32 cr_val;
+	u_int32 cr_val = 0;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
 
@@ -1008,6 +1066,19 @@ static s_int32 hqa_mac_bbp_reg_bulk_read(
 	get_param_and_shift_buf(TRUE, sizeof(test_regs->cr_num),
 				&data, (u_char *)&test_regs->cr_num);
 
+
+	if (test_regs->cr_num > 371) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: requested len is longer, make it smaller\n",
+			__func__));
+		ret = SERV_STATUS_AGENT_INVALID_LEN;
+
+		/* Update hqa_frame with response: status (2 bytes) */
+		update_hqa_frame(hqa_frame, 2, ret);
+
+		return ret;
+	}
+
 	/* Allocate cr_val memory */
 	cr_total_len = test_regs->cr_num << 2;
 	ret = sys_ad_alloc_mem((pu_char *)&test_regs->cr_val, cr_total_len);
@@ -1022,17 +1093,7 @@ static s_int32 hqa_mac_bbp_reg_bulk_read(
 		return ret;
 	}
 
-	if (test_regs->cr_num > 371) {
-		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
-			("%s: requested len is longer, make it smaller\n",
-			__func__));
-		ret = SERV_STATUS_AGENT_INVALID_LEN;
-
-		/* Update hqa_frame with response: status (2 bytes) */
-		update_hqa_frame(hqa_frame, 2, ret);
-
-		return ret;
-	}
+	sys_ad_zero_mem(test_regs->cr_val, cr_total_len);
 
 	ret = mt_serv_reg_eprm_operation(serv_test,
 					SERV_TEST_REG_MAC_READ_BULK);
@@ -1077,6 +1138,18 @@ static s_int32 hqa_rf_reg_bulk_read(
 	get_param_and_shift_buf(TRUE, sizeof(u_int32),
 				&data, (u_char *)&test_regs->cr_num);
 
+	if (test_regs->cr_num > 371) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: requested len is longer, make it smaller\n",
+			__func__));
+		ret = SERV_STATUS_AGENT_INVALID_LEN;
+
+		/*Update hqa_frame with response: status (2 bytes)*/
+		update_hqa_frame(hqa_frame, 2, ret);
+
+		return ret;
+	}
+
 	/* Allocate cr_val memory */
 	cr_total_len = test_regs->cr_num << 2;
 	ret = sys_ad_alloc_mem((pu_char *)&test_regs->cr_val, cr_total_len);
@@ -1090,6 +1163,8 @@ static s_int32 hqa_rf_reg_bulk_read(
 
 		return ret;
 	}
+
+	sys_ad_zero_mem(test_regs->cr_val, cr_total_len);
 
 	ret = mt_serv_reg_eprm_operation(serv_test,
 					SERV_TEST_REG_RF_READ_BULK);
@@ -1125,6 +1200,18 @@ static s_int32 hqa_rf_reg_bulk_write(
 				&data, (u_char *)&test_regs->cr_addr);
 	get_param_and_shift_buf(TRUE, sizeof(u_int32),
 				&data, (u_char *)&test_regs->cr_num);
+
+	if (test_regs->cr_num > 371) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: requested len is longer, make it smaller\n",
+			__func__));
+		ret = SERV_STATUS_AGENT_INVALID_LEN;
+
+		/*Update hqa_frame with response: status (2 bytes)*/
+		update_hqa_frame(hqa_frame, 2, ret);
+
+		return ret;
+	}
 
 	/* Allocate cr_val memory */
 	cr_total_len = test_regs->cr_num << 2;
@@ -1188,6 +1275,8 @@ static s_int32 hqa_read_eeprom(
 		return ret;
 	}
 
+	sys_ad_zero_mem(test_eprms->value, sizeof(u_int16));
+
 	ret = mt_serv_reg_eprm_operation(serv_test, SERV_TEST_EEPROM_READ);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
@@ -1212,7 +1301,7 @@ static s_int32 hqa_write_eeprom(
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	struct test_eeprom *test_eprms = &serv_test->test_eprm;
 	u_char *data = hqa_frame->data;
-	u_int16 value;
+	u_int16 value = 0;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
 
@@ -1531,6 +1620,12 @@ static s_int32 hqa_get_tx_power(
 	get_param_and_shift_buf(TRUE, sizeof(ant_idx),
 				&data, (u_char *)&ant_idx);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u, error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 	CONFIG_SET_PARAM(serv_test, pwr_param.ant_idx,
@@ -1582,6 +1677,12 @@ static s_int32 hqa_set_cfg_on_off(
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u, error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 	CONFIG_SET_PARAM(serv_test, log_type, (u_char)type, band_idx);
@@ -1602,11 +1703,16 @@ static s_int32 hqa_get_freq_offset(
 	struct service_test *serv_test, struct hqa_frame *hqa_frame)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
-	u_int32 freq_offset = 0;
+	u_char *data = hqa_frame->data;
+	u_int32 freq_offset = 0, band_idx = 0;
 
-	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
+		("%s: get freq offset, band_idx: %d\n", __func__, band_idx));
 
-	ret = mt_serv_get_freq_offset(serv_test, &freq_offset);
+	get_param_and_shift_buf(TRUE, sizeof(band_idx),
+					&data, (u_char *)&band_idx);
+
+	ret = mt_serv_get_freq_offset(serv_test, &freq_offset, band_idx);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
 		("%s: freq offset: %d\n", __func__, freq_offset));
@@ -1650,6 +1756,12 @@ static s_int32 hqa_dbdc_tx_tone(
 				&data, (u_char *)&param.rf_pwr);
 	get_param_and_shift_buf(TRUE, sizeof(param.digi_pwr),
 				&data, (u_char *)&param.digi_pwr);
+
+	if (param.band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u, error!!\n", __func__, param.band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
 
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)param.band_idx);
@@ -1726,6 +1838,12 @@ static s_int32 hqa_dbdc_continuous_tx(
 	get_param_and_shift_buf(TRUE, sizeof(param.tx_fd_mode),
 				&data, (u_char *) &param.tx_fd_mode);
 
+	if (param.band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx: %d error!!\n", __func__, param.band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)param.band_idx);
 	CONFIG_SET_PARAM(serv_test, tx_tone_en,
@@ -1779,6 +1897,12 @@ static s_int32 hqa_set_rx_filter_pkt_len(
 	get_param_and_shift_buf(TRUE, sizeof(rx_pkt_len),
 				&data, (u_char *)&rx_pkt_len);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u, error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 	CONFIG_SET_PARAM(serv_test, rx_filter_en,
@@ -1830,7 +1954,7 @@ static s_int32 hqa_get_cfg_on_off(
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	u_char *data = hqa_frame->data;
-	s_int32 type = 0, band_idx = 0;
+	u_int32 type = 0, band_idx = 0;
 	u_int32 result = 0;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
@@ -1841,13 +1965,22 @@ static s_int32 hqa_get_cfg_on_off(
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
 
-	ret = mt_serv_get_cfg_on_off(serv_test, type, &result);
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx:%d error\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err_out;
+	}
+
+	ret = mt_serv_get_cfg_on_off(serv_test, band_idx, type, &result);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
 		("%s: type=%u, result=%u\n", __func__, type, result));
 
 	/* Update hqa_frame with response: status (2 bytes) */
 	result = SERV_OS_HTONL(result);
+
+err_out:
 	sys_ad_move_mem(hqa_frame->data + 2, &result, sizeof(result));
 	update_hqa_frame(hqa_frame, 2 + sizeof(result), ret);
 
@@ -1881,6 +2014,8 @@ static s_int32 hqa_ca53_reg_read(
 		return ret;
 	}
 
+	sys_ad_zero_mem(test_regs->cr_val, sizeof(u_long));
+
 	ret = mt_serv_reg_eprm_operation(serv_test, SERV_TEST_REG_CA53_READ);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
@@ -1905,7 +2040,7 @@ static s_int32 hqa_ca53_reg_write(
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	struct test_register *test_regs = &serv_test->test_reg;
 	u_char *data = hqa_frame->data;
-	u_int32 cr_val;
+	u_int32 cr_val = 0;
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
 
@@ -2036,7 +2171,7 @@ static s_int32 hqa_get_fw_info(
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	struct serv_fw_info *fw_info = NULL;
-	u_char op_mode;
+	u_char op_mode = 0;
 	u_int8 loop, month = 0;
 	u_char date[8], time[6];
 	u_char *kernel_info = NULL;
@@ -2149,6 +2284,39 @@ static s_int32 hqa_set_short_gi(
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
 		("%s: sgi enable=%u\n", __func__, sgi));
+
+	/* Update hqa_frame with response: status (2 bytes) */
+	update_hqa_frame(hqa_frame, 2, ret);
+
+	return ret;
+}
+
+static s_int32 hqa_set_fixed_payload(
+	struct service_test *serv_test, struct hqa_frame *hqa_frame)
+
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_char *data = hqa_frame->data;
+	u_char band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
+	u_int32 fixed_payload = 0;
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
+
+	/* Request format type: Enable (4 bytes) */
+	get_param_and_shift_buf(TRUE, sizeof(fixed_payload),
+				&data, (u_char *)&fixed_payload);
+
+	if (fixed_payload == 0) {
+		/* Set parameters for random */
+		fixed_payload = 2;
+	} else {
+		fixed_payload = 1;
+	}
+	CONFIG_SET_PARAM(serv_test, fixed_payload,
+			(u_char)fixed_payload, band_idx);
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
+		("%s: fixed_payload =%u\n", __func__, fixed_payload));
 
 	/* Update hqa_frame with response: status (2 bytes) */
 	update_hqa_frame(hqa_frame, 2, ret);
@@ -2282,6 +2450,14 @@ static s_int32 hqa_get_rx_statistics_all(
 		goto error2;
 
 	/* check wifi path combination for specific band */
+
+	if (band_idx >= 2) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: invalid band index(%d).\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto error2;
+	}
+
 	ret = mt_serv_get_wf_path_comb(serv_test,
 			band_idx,
 			dbdc_mode,
@@ -2407,6 +2583,46 @@ error2:
 	return ret;
 }
 
+static s_int32 hqa_get_rf_type_capability(
+	struct service_test *serv_test, struct hqa_frame *hqa_frame)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_char *data = hqa_frame->data;
+	u_int32 tx_ant = 0, rx_ant = 0;
+	u_int32 band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
+
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE, ("%s\n", __func__));
+
+	/* Request format type */
+	get_param_and_shift_buf(TRUE, sizeof(band_idx),
+			&data, (u_char *)&band_idx);
+
+	ret = mt_serv_get_rf_type_capability(serv_test, band_idx,
+			&tx_ant, &rx_ant);
+
+	if (ret) {
+		ret = SERV_STATUS_AGENT_NOT_SUPPORTED;
+	}
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
+		("%s: tx_ant: %d, rx_ant: %d\n", __func__, tx_ant, rx_ant));
+
+	/* Get parameters */
+	tx_ant = SERV_OS_HTONL(tx_ant);
+	rx_ant = SERV_OS_HTONL(rx_ant);
+
+	sys_ad_move_mem((hqa_frame->data + 2),
+			&tx_ant, sizeof(tx_ant));
+	sys_ad_move_mem((hqa_frame->data + 2 + sizeof(tx_ant)),
+			&rx_ant, sizeof(rx_ant));
+	/* Update hqa_frame with response: status (2 bytes) */
+	update_hqa_frame(hqa_frame,
+			2 + sizeof(tx_ant) + sizeof(rx_ant), ret);
+
+	return ret;
+}
+
 static s_int32 hqa_get_rxv_dump(
 	struct service_test *serv_test, struct hqa_frame *hqa_frame)
 {
@@ -2419,6 +2635,7 @@ static s_int32 hqa_get_rxv_dump(
 	u_int32 buf = 0;
 	u_int8 *ptr = NULL, *ptr3 = NULL;
 	u_int32 *ptr2 = NULL;
+	u_int32 *ptr2_temp = NULL;
 	u_int32 buf_size = 0;
 	u_int32 mem_buf_len = 0;
 	u_int16 len = 0, dw_cnt = 0, dw_idx = 0;
@@ -2479,7 +2696,8 @@ static s_int32 hqa_get_rxv_dump(
 		ret = sys_ad_alloc_mem((pu_char *)&ptr2, mem_buf_len);
 		if (ret != SERV_STATUS_SUCCESS)
 			goto error1;
-
+		sys_ad_zero_mem(ptr2, mem_buf_len);
+		ptr2_temp = ptr2;
 		/* keep pointer for further update value */
 		ptr3 = ptr;
 		buf_size += sizeof(rxv_cnt);
@@ -2494,7 +2712,6 @@ static s_int32 hqa_get_rxv_dump(
 			entry_idx = idx;
 			if (idx < 0)
 				entry_idx += ring_attr.dump_entry_total_num;
-
 			ret = mt_serv_get_rxv_dump_content(serv_test,
 				entry_idx, ptr2, &len);
 			if (ret != SERV_STATUS_SUCCESS)
@@ -2521,10 +2738,8 @@ static s_int32 hqa_get_rxv_dump(
 
 			/* increment used buffer size */
 			buf_size += len;
-
-			sys_ad_zero_mem(ptr2, mem_buf_len);
 		}
-
+		ptr2 = ptr2_temp;
 		/* free allocated memory */
 		sys_ad_free_mem(ptr2);
 		ptr2 = NULL;
@@ -2612,10 +2827,12 @@ static s_int32 hqa_calibration_test_mode(
 	/* Set parameters */
 	test_config = &serv_test->test_config[serv_test->ctrl_band_idx];
 
+	if (test_config->op_mode < fTEST_IDLE ||
+		test_config->op_mode > fTEST_IN_ICAPOVERLAP)
+		test_config = &serv_test->test_config[0];
+
 	if (test_config) {
 		if (mode == fTEST_OPER_NORMAL_MODE) {
-			/*  ignore config normal mode when go into testmode first
-				avoid bssinfo is released by fw */
 			if (test_config->op_mode == fTEST_IDLE)
 				bypass = 1;
 
@@ -2636,7 +2853,8 @@ static s_int32 hqa_calibration_test_mode(
 
 	if (bypass)
 		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
-			("%s: Mode = %d bypass=%d !!!\n", __func__, mode, bypass));
+			("\033[1;33m%s: Mode=%d, bypass=%d, band_idx=%d !!!\033[0m\n", __func__,
+			mode, bypass, serv_test->ctrl_band_idx));
 	else
 		ret = mt_serv_calibration_test_mode(serv_test, mode);
 
@@ -2731,7 +2949,7 @@ static s_int32 hqa_mps_set_seq_data(
 	struct test_mps_setting *mps_setting = NULL;
 	u_char *data = hqa_frame->data;
 	u_int32 *param = NULL;
-	u_int32 band_idx = 0; 
+	u_int32 band_idx = 0;
 	u_int32 idx, value = 0;
 	u_int16 len;
 
@@ -2759,6 +2977,12 @@ static s_int32 hqa_mps_set_seq_data(
 	}
 
 	/* Set parameters */
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx error(%d)!!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
+	}
 	serv_test->ctrl_band_idx = (u_char)band_idx;
 	test_config = &serv_test->test_config[band_idx];
 
@@ -2831,7 +3055,7 @@ static s_int32 hqa_mps_set_payload_length(
 	struct test_mps_setting *mps_setting = NULL;
 	u_char *data = hqa_frame->data;
 	u_int32 *param = NULL;
-	u_int32 band_idx = 0; 
+	u_int32 band_idx = 0;
 	u_int32 idx, value = 0;
 	u_int16 len;
 
@@ -2857,8 +3081,13 @@ static s_int32 hqa_mps_set_payload_length(
 					&data, (u_char *)&value);
 		param[idx] = value;
 	}
-
 	/* Set parameters */
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx error(%d)!!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
+	}
 	serv_test->ctrl_band_idx = (u_char)band_idx;
 	test_config = &serv_test->test_config[band_idx];
 
@@ -2959,6 +3188,13 @@ static s_int32 hqa_mps_set_packet_count(
 		param[idx] = value;
 	}
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx error(%d)!!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
+	}
+
 	/* Set parameters */
 	serv_test->ctrl_band_idx = (u_char)band_idx;
 	test_config = &serv_test->test_config[band_idx];
@@ -3054,6 +3290,12 @@ static s_int32 hqa_mps_set_power_gain(
 	}
 
 	/* Set parameters */
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx error(%d)!!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
+	}
 	serv_test->ctrl_band_idx = (u_char)band_idx;
 	test_config = &serv_test->test_config[band_idx];
 
@@ -3123,6 +3365,12 @@ static s_int32 hqa_mps_start(
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 
@@ -3145,6 +3393,12 @@ static s_int32 hqa_mps_stop(
 
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx: %d error!!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
 
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
@@ -3250,8 +3504,7 @@ static s_int32 hqa_get_band_mode(
 
 	/* Set parameters */
 	band_state = SERV_GET_PADDR(serv_test, test_bstat);
-	serv_test->ctrl_band_idx = (u_char)band_idx;
-	ret = mt_serv_get_band_mode(serv_test);
+	ret = mt_serv_get_band_mode(serv_test, (u_int8)band_idx);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_TRACE,
 		("%s: band_type=%u\n",
@@ -3341,6 +3594,12 @@ static s_int32 hqa_log_on_off(
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 
+	if (log_type >= TEST_LOG_TYPE_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: log_type: %d error!!\n", __func__, log_type));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	ret = mt_serv_log_on_off(serv_test, log_type, log_ctrl, log_size);
 
 	/* Update hqa_frame with response: status (2 bytes) */
@@ -3383,6 +3642,13 @@ static s_int32 hqa_mps_set_nss(
 		get_param_and_shift_buf(TRUE, sizeof(u_int32),
 					&data, (u_char *) &value);
 		param[idx] = value;
+	}
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx: %d error!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
 	}
 
 	/* Set parameters */
@@ -3514,6 +3780,13 @@ static s_int32 hqa_mps_set_per_packet_bw(
 		param[idx] = value;
 	}
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: band_idx (%d)error!!!\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err;
+	}
+
 	/* Set parameters */
 	serv_test->ctrl_band_idx = (u_char)band_idx;
 	test_config = &serv_test->test_config[band_idx];
@@ -3582,7 +3855,7 @@ static s_int32 hqa_icap_ctrl(
 	u_int32 control = 0, resp_len = 2;
 	u_int32 value = 0, i = 0;
 	u_long max_data_len = 0;
-	u_char src_addr[SERV_MAC_ADDR_LEN];
+	u_char src_addr[SERV_MAC_ADDR_LEN] = {0};
 	s_int32 *icap_data = NULL;
 	s_int32 *icap_data_cnt = NULL;
 	struct hqa_rbist_cap_start icap_info;
@@ -4090,6 +4363,8 @@ static s_int32 hqa_translate_ru_allocation(
 static s_int32 hqa_set_ru_info(
 	struct service_test *serv_test, struct hqa_frame *hqa_frame)
 {
+#define SEG_STA_CNT		16
+
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	u_int32 resp_len = 2;
 	u_int32 band_idx = serv_test->ctrl_band_idx;
@@ -4113,6 +4388,20 @@ static s_int32 hqa_set_ru_info(
 				   sizeof(u_int32),
 				   &data,
 				   (u_char *)&seg_sta_cnt[1]);
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%d, error\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err_out;
+	}
+
+	if ((seg_sta_cnt[0] > SEG_STA_CNT || seg_sta_cnt[0] < 0)
+		|| (seg_sta_cnt[1] > SEG_STA_CNT || seg_sta_cnt[1] < 0)) {
+		ret = SERV_STATUS_AGENT_INVALID_PARAM;
+		goto err_out;
+	}
+
 	len -= sizeof(u_int32)*3;		/* array length */
 
 	if (seg_sta_cnt[0]+seg_sta_cnt[1] == 0) {
@@ -4120,7 +4409,7 @@ static s_int32 hqa_set_ru_info(
 		goto err_out;
 	}
 
-	len /= (seg_sta_cnt[0]+seg_sta_cnt[1]);	/* per ru length */
+	len /= (seg_sta_cnt[0] + seg_sta_cnt[1]);	/* per ru length */
 	param_cnt = len/sizeof(u_int32);	/* param count */
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 		 ("%s: Band:%d [ru_segment 0]:%d, [ru_segment 1]:%d\n",
@@ -4299,6 +4588,7 @@ static struct hqa_cmd_entry CMD_SET5[] = {
 	{0x19,	hqa_mps_start},
 	{0x1a,	hqa_mps_stop},
 	{0x1c,	hqa_get_rx_statistics_all},
+	{0x1e,	hqa_get_rf_type_capability},
 	{0x21,	legacy_function},
 	{0x22,	hqa_check_efuse_mode_type},
 	{0x23,	hqa_check_efuse_nativemode_type},
@@ -4445,6 +4735,12 @@ static s_int32 hqa_set_txcontent_ext(
 	if (param.payload_len > TEST_MAX_PATTERN_SIZE)
 		param.payload_len = TEST_MAX_PATTERN_SIZE;
 
+	if (param.band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("param.band_idx: %d error!\n", param.band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)param.band_idx);
 	for (sta_seq = 0; sta_seq < MAX_MULTI_TX_STA ; sta_seq++) {
@@ -4577,6 +4873,12 @@ static s_int32 hqa_start_tx_ext(
 	if (!param.pkt_cnt)
 		param.pkt_cnt = 0x8fffffff;
 
+	if (param.band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: param.band_idx:%d error!\n", __func__, param.band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)param.band_idx);
 	CONFIG_SET_PARAM(serv_test, tx_stat.tx_cnt,
@@ -4657,6 +4959,13 @@ static s_int32 hqa_start_rx_ext(
 				&data, (u_char *)&own_mac);
 	get_param_and_shift_buf(TRUE, sizeof(u_int32),
 				&data, (u_char *)&rx_path);
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx:%d error\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	get_param_and_shift_buf(TRUE, sizeof(u_int32), &data,
 				(u_char *)CONFIG_GET_PADDR(serv_test,
 							   mu_rx_aid,
@@ -4734,6 +5043,13 @@ static s_int32 hqa_stop_tx_ext(
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u error\n", __func__, band_idx));
+		ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
+		goto err_out;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 
@@ -4772,6 +5088,13 @@ static s_int32 hqa_stop_rx_ext(
 	get_param_and_shift_buf(TRUE, sizeof(band_idx),
 				&data, (u_char *)&band_idx);
 
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx:%d error\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
 
@@ -4803,6 +5126,13 @@ static s_int32 hqa_set_tx_time(
 				&data, (u_char *)&band_idx);
 	get_param_and_shift_buf(TRUE, sizeof(is_tx_time),
 				&data, (u_char *)&is_tx_time);
+
+
+	if (band_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: band_idx=%u error!\n", __func__, band_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
 
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)band_idx);
@@ -4899,6 +5229,12 @@ static s_int32 hqa_off_ch_scan(
 		break;
 	}
 
+	if (dbdc_idx >= TEST_DBDC_BAND_NUM) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("%s: dbdc_idx 0x%x is out of range\n", __func__, dbdc_idx));
+		return SERV_STATUS_AGENT_INVALID_BANDIDX;
+	}
+
 	/* Set parameters */
 	SERV_SET_PARAM(serv_test, ctrl_band_idx, (u_char)dbdc_idx);
 	CONFIG_SET_PARAM(serv_test, off_ch_param.ext_id,
@@ -4977,6 +5313,7 @@ static s_int32 hqa_set_ibf_value_ext(
 	struct service_test *serv_test, struct hqa_frame *hqa_frame)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
+	s_int32 tmplen = 0;
 	u_char  *data = hqa_frame->data;
 	u_char  ctrl_band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
 	u_char  *txbf_info = CONFIG_GET_PARAM(serv_test,
@@ -5032,16 +5369,39 @@ static s_int32 hqa_set_ibf_value_ext(
 
 	switch (action) {
 	case HQA_TXBF_INIT:
-		sprintf(cmd, "%d", (u_char)arg[0]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d", (u_char)arg[0]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_TXBF_INIT snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		mt_agent_set_txbf_dut_init_proc(serv_test, cmd);
 		break;
 
 	case HQA_CHANNEL:
-		if (arg[1] == 1)
-			sprintf(cmd, "%d:1", (u_char)arg[0]);
-		else
-			sprintf(cmd, "%d", (u_char)arg[0]);
-
+		if (arg[1] == 1) {
+			tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+				"%d:1", (u_char)arg[0]);
+			if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_CHANNEL snprintf error(%d)!\n",
+				__func__, tmplen));
+				ret = SERV_STATUS_AGENT_INVALID_PARAM;
+				goto HQA_IBF_CMD_FAIL;
+			}
+		} else {
+			tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d",
+							(u_char)arg[0]);
+			if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+				SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_CHANNEL_else snprintf error(%d)!\n",
+				__func__, tmplen));
+				ret = SERV_STATUS_AGENT_INVALID_PARAM;
+				goto HQA_IBF_CMD_FAIL;
+			}
+		}
 		mt_agent_set_channel(serv_test, cmd);
 		break;
 
@@ -5050,12 +5410,26 @@ static s_int32 hqa_set_ibf_value_ext(
 		break;
 
 	case HQA_TX_POW0:
-		sprintf(cmd, "%d", (u_char)arg[0]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d", (u_char)arg[0]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_TX_POW0 snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		mt_agent_set_pwr(serv_test, cmd);
 		break;
 
 	case HQA_TX_ANT:
-		sprintf(cmd, "%d", (u_char)arg[0]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d", (u_char)arg[0]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_TX_ANT snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		mt_agent_set_txant(serv_test, cmd);
 		break;
 
@@ -5065,19 +5439,41 @@ static s_int32 hqa_set_ibf_value_ext(
 		break;
 
 	case HQA_RX_ANT:
-		sprintf(cmd, "%d", (u_char)arg[0]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d", (u_char)arg[0]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_RX_ANT snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		mt_agent_set_rxant(serv_test, cmd);
 		break;
 
 	case HQA_TXBF_LNA_GAIN:
-		sprintf(cmd, "%d", (u_char)arg[0]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%d", (u_char)arg[0]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_TXBF_LNA_GAIN snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		mt_agent_set_txbf_lna_gain(serv_test, cmd);
 		break;
 
 	case HQA_IBF_PHASE_COMP:
 		/* BW:DBDC idx:Group:Read from E2P:Dis compensation */
-		sprintf(cmd, "%02x:%02x:%02x:%02x:%02x",
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+		"%02x:%02x:%02x:%02x:%02x",
 				arg[0], arg[1], arg[2], arg[3], arg[4]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_IBF_PHASE_COMP snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ibf_phase_comp(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5092,8 +5488,15 @@ static s_int32 hqa_set_ibf_value_ext(
 		arg[2] = 0; /* for test purpose */
 
 		/* fgBf:WLAN idx:Txcnt */
-		sprintf(cmd, "%02x:%02x:%02x:%02x",
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "%02x:%02x:%02x:%02x",
 				arg[0], arg[1], arg[2], arg[3]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_IBF_TX snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_tx_pkt_with_ibf(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5106,7 +5509,15 @@ static s_int32 hqa_set_ibf_value_ext(
 
 	case HQA_IBF_PROF_UPDATE:
 		/* Pfmu idx:Nr:Nc */
-		sprintf(cmd, "%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+			"%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: HQA_IBF_PROF_UPDATE snprintf error(%d)!\n",
+			__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ibf_profile_update(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5118,7 +5529,14 @@ static s_int32 hqa_set_ibf_value_ext(
 		sys_ad_zero_mem(cmd, sizeof(char) * (HQA_BF_STR_SIZE));
 
 		/* Wlan Id:EBf:IBf:Mu:PhaseCalFlg */
-		sprintf(cmd, "01:00:01:00:01");
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE, "01:00:01:00:01");
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: HQA_IBF_PROF_UPDATE snprintf error(%d)!\n",
+			__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_txbf_tx_apply(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5131,7 +5549,15 @@ static s_int32 hqa_set_ibf_value_ext(
 
 	case HQA_EBF_PROF_UPDATE:
 		/* Pfmu idx:Nr:Nc */
-		sprintf(cmd, "%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+				"%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: HQA_EBF_PROF_UPDATE snprintf error(%d)!\n",
+			__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ebf_profile_update(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5151,8 +5577,16 @@ static s_int32 hqa_set_ibf_value_ext(
 		CONFIG_SET_PARAM(serv_test, op_mode, oper_mode, ctrl_band_idx);
 
 		/* Group idx:Group_L_M_H:fgSX2:Calibration type:Lna level */
-		sprintf(cmd, "%02x:%02x:%02x:%02x:%02x",
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+				"%02x:%02x:%02x:%02x:%02x",
 				arg[0], arg[1], arg[2], arg[3], arg[4]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s: HQA_IBF_INST_CAL snprintf error(%d)!\n",
+				__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ibf_inst_cal(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5172,8 +5606,16 @@ static s_int32 hqa_set_ibf_value_ext(
 		arg[4] = 1; /* Force LNA gain is middle gain */
 
 		/* Group idx:Group_L_M_H:fgSX2:Calibration type:Lna level */
-		sprintf(cmd, "%02x:%02x:%02x:%02x:%02x",
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+				"%02x:%02x:%02x:%02x:%02x",
 				arg[0], arg[1], arg[2], arg[3], arg[4]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, tmplen)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: HQA_IBF_INST_VERIFY snprintf error(%d)!\n",
+			__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ibf_inst_cal(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5189,7 +5631,15 @@ static s_int32 hqa_set_ibf_value_ext(
 
 	case HQA_IBF_PHASE_E2P_UPDATE:
 		/* Group idx:fgSX2:E2P update type */
-		sprintf(cmd, "%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		tmplen = snprintf(cmd, HQA_BF_STR_SIZE,
+			"%02x:%02x:%02x", arg[0], arg[1], arg[2]);
+		if (sys_snprintf_error(HQA_BF_STR_SIZE, ret)) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: HQA_IBF_PHASE_E2P_UPDATE snprintf error(%d)!)\n",
+			__func__, tmplen));
+			ret = SERV_STATUS_AGENT_INVALID_PARAM;
+			goto HQA_IBF_CMD_FAIL;
+		}
 		ret = mt_agent_set_ibf_phase_cal_e2p_update(serv_test, cmd);
 
 		if (ret != SERV_STATUS_SUCCESS) {
@@ -5269,9 +5719,15 @@ static s_int32 hqa_update_ibf_chan_prof_update_ext(
 	get_param_and_shift_buf(TRUE, sizeof(u_int32),
 				&data, (u_char *)&angle_h41);
 
-	sprintf(cmd, "%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x",
+	ret = snprintf(cmd, HQA_BF_STR_SIZE,
+		"%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x:%03x",
 	pfmu_idx, subcarr_idx, fg_final_data, h11, angle_h11, h21, angle_h21,
 			h31, angle_h31, h41, angle_h41);
+	if (sys_snprintf_error(HQA_BF_STR_SIZE, ret)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+		("hqa_update_ibf_chan_prof_update_ext snprintf error!\n"));
+		goto HQA_PROFILE_UPDATE_FAIL;
+	}
 	ret = mt_agent_set_txbf_chan_profile_update(serv_test, cmd);
 
 	if (ret == FALSE) {
@@ -5344,7 +5800,7 @@ s_int32 mt_agent_set_ibf_phase_cal_e2p_update(
 {
 	u_int32  i;
 	u_char   group_idx, update_type, *value;
-	u_int32  buf[3] = {0};
+	u_long   buf[3] = {0};
 	boolean  fgSx2;
 	s_int32  ret = SERV_STATUS_SUCCESS;
 
@@ -6447,24 +6903,41 @@ s_int32 mt_agent_set_txbf_dut_init_proc(
 	fg_dbdc = (boolean)(in_value & 1);
 
 	/* set ATEDA=00:11:11:11:11:11 */
-	snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
+	ret = snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
 			0x11, 0x11, 0x11, 0x11, 0x11);
+	if (sys_snprintf_error(sizeof(cmdStr), ret)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("set_txbf_dut_init_proc_1 snprintf error!\n"));
+		goto err_out;
+	}
 	mt_agent_set_txbf_da(serv_test, cmdStr);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF,
 			 ("%s: mt_agent_set_txbf_da()!!\n", __func__));
 
 	/* set ATESA=00:22:22:22:22:22 */
-	snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
+	ret = snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
 			0x22, 0x22, 0x22, 0x22, 0x22);
+	if (sys_snprintf_error(sizeof(cmdStr), ret)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("set_txbf_dut_init_proc_2 snprintf error!\n"));
+		goto err_out;
+	}
+
 	mt_agent_set_txbf_sa(serv_test, addr, cmdStr);
 
 	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF,
 			 ("%s: mt_serv_set_device_info()!!\n", __func__));
 
 	/* set ATEBSSID=00:22:22:22:22:22 */
-	snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
+	ret = snprintf(cmdStr, sizeof(cmdStr), "00:%.2x:%.2x:%.2x:%.2x:%.2x",
 			0x22, 0x22, 0x22, 0x22, 0x22);
+	if (sys_snprintf_error(sizeof(cmdStr), ret)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("set_txbf_dut_init_proc_3 snprintf error!\n"));
+		goto err_out;
+	}
+
 	mt_agent_set_txbf_bssid(serv_test, cmdStr);
 
 	mt_agent_set_bss_info(serv_test, cmdStr);
@@ -6679,7 +7152,9 @@ s_int32 mt_agent_hqa_cmd_string_parser(
 	u_char tmpdata[100] = { 0 };
 	s_int8 tmp_mac[SERV_MAC_ADDR_LEN] = { 0 };
 	u_int16 tmp_length = 0;
-	u_int32 tmp_value = 0;
+	u_int32 tmp_value_32 = 0;
+	u_int16 tmp_value_16 = 0;
+	u_int8  tmp_value_8 = 0;
 	u_char *data = NULL;
 	u_int16 ret = 0;
 	u_int8 parasize = 0;
@@ -6737,34 +7212,34 @@ s_int32 mt_agent_hqa_cmd_string_parser(
 					(u_char *)&tmp_mac, &data);
 				} else if (parasize == 4) {
 					ret = kstrtou32(apc_argv[j], 0,
-					&tmp_value);
+					&tmp_value_32);
 					if (ret != SERV_STATUS_SUCCESS) {
 						SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 						("%s Covert fail!!!\n", __func__));
 						return SERV_STATUS_AGENT_FAIL;
 					}
 					set_param_and_shift_buf(TRUE, parasize,
-					(u_char *)&tmp_value, &data);
+					(u_char *)&tmp_value_32, &data);
 				} else if (parasize == 2) {
 					ret = kstrtou16(apc_argv[j], 0,
-					(u_int16 *)&tmp_value);
+					&tmp_value_16);
 					if (ret != SERV_STATUS_SUCCESS) {
 						SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 						("%s Covert fail!!!\n", __func__));
 						return SERV_STATUS_AGENT_FAIL;
 					}
 					set_param_and_shift_buf(TRUE, parasize,
-					(u_char *)&tmp_value, &data);
+					(u_char *)&tmp_value_16, &data);
 				} else {
 					ret = kstrtou8(apc_argv[j], 0,
-					(u_int8 *)&tmp_value);
+					&tmp_value_8);
 					if (ret != SERV_STATUS_SUCCESS) {
 						SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
 						("%s Covert fail!!!\n", __func__));
 						return SERV_STATUS_AGENT_FAIL;
 					}
 					set_param_and_shift_buf(TRUE, parasize,
-					(u_char *)&tmp_value, &data);
+					&tmp_value_8, &data);
 				}
 			}
 		}
@@ -6893,6 +7368,7 @@ static struct agent_cli_act_handler cli_act_cmds[] = {
 	{"DPDREK", mt_serv_dpd_prek},
 	{"TXCONT", mt_serv_continuous_tx},
 	{"TXCONTSTOP", mt_serv_continuous_tx_stop},
+	{"checkTXV", mt_serv_check_txv},
 	{"", NULL}	/* the last entry */
 };
 
@@ -6918,10 +7394,94 @@ s_int32 mt_agent_cli_act(u_char *name, struct service *serv)
 				 ("%s: No support %s !\n", __func__, name));
 	}
 
-	if (!ret)
-		return TRUE;
-	else
-		return FALSE;
+	return ret;
+}
+
+s_int32 mt_agent_show_TxDone(struct service_test *serv_test)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_int32 tx_cnt0 = 0, tx_cnt1 = 0;
+
+	ret = mt_serv_get_tx_info(serv_test);
+
+	if (ret)
+		return ret;
+
+	/* Get parameters */
+	tx_cnt0 = CONFIG_GET_PARAM(serv_test, tx_stat.tx_done_cnt,
+				TEST_DBDC_BAND0);
+
+	SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF, ("%s(): tx done count of band[%d]: %u\n",
+				__func__, TEST_DBDC_BAND0, tx_cnt0));
+
+	if (IS_TEST_DBDC(serv_test->test_winfo)) {
+		tx_cnt1 = CONFIG_GET_PARAM(serv_test, tx_stat.tx_done_cnt,
+					TEST_DBDC_BAND1);
+
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF, ("%s(): tx done count of band[%d]: %u\n",
+					__func__, TEST_DBDC_BAND1, tx_cnt1));
+	}
+	return ret;
+}
+
+s_int32 mt_agent_show_ru_info(struct service_test *serv_test)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_int16 sta_idx = 0;
+	u_char band_idx;
+	struct test_ru_info *ru_sta;
+
+	band_idx = SERV_GET_PARAM(serv_test, ctrl_band_idx);
+	ru_sta = (struct test_ru_info *)CONFIG_GET_PADDR(serv_test,
+							ru_info_list,
+							band_idx);
+
+	for (sta_idx = 0 ; sta_idx < MAX_MULTI_TX_STA ; sta_idx++) {
+		if (ru_sta[sta_idx].valid) {
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_OFF,
+				("(%s) RU index[%u] in Segment[%u]: Allocation[%u]"
+				"aid[%u](0: N/A) TX mcs[%u],nss[%u], ldpc[%u], "
+				"start spetial stream:%u, mpdu length:%u, alpha:%d\n",
+				__func__, (ru_sta[sta_idx].ru_index >> 1),
+				(ru_sta[sta_idx].ru_index & 0x1), ru_sta[sta_idx].allocation,
+				ru_sta[sta_idx].aid, ru_sta[sta_idx].rate, ru_sta[sta_idx].nss,
+				ru_sta[sta_idx].ldpc, ru_sta[sta_idx].start_sp_st,
+				ru_sta[sta_idx].mpdu_length, ru_sta[sta_idx].alpha));
+		}
+	}
+
+	return ret;
+}
+
+static struct agent_cli_show_handler cli_show_cmds[] = {
+	{"ATETXDONE", mt_agent_show_TxDone},
+	{"ATERUINFO", mt_agent_show_ru_info},
+	{"", NULL}	/* the last entry */
+};
+
+s_int32 mt_agent_cli_show(u_char *name, struct service *serv)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	struct service_test *serv_test = NULL;
+	struct agent_cli_show_handler *entry = cli_show_cmds;
+
+	serv_test = (struct service_test *)serv->serv_handle;
+
+	while (strlen(entry->name)) {
+		if (strcmp(name, entry->name) == 0) {
+			ret = entry->handler(serv_test);
+			break;
+		}
+
+		entry++;
+	}
+
+	if (strlen(entry->name) == 0) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				 ("%s: No support %s !\n", __func__, name));
+	}
+
+	return ret;
 }
 
 static struct agent_cli_set_w_handler cli_set_w_cmds[] = {
@@ -6954,10 +7514,7 @@ s_int32 mt_agent_cli_set_w(u_char *name, struct service *serv, u_char *param)
 	} else
 		ret = SERV_STATUS_AGENT_INVALID_PARAM;
 
-	if (!ret)
-		return TRUE;
-	else
-		return FALSE;
+	return ret;
 }
 
 static struct agent_cli_set_dw_handler cli_set_dw_cmds[] = {
@@ -6967,6 +7524,7 @@ static struct agent_cli_set_dw_handler cli_set_dw_cmds[] = {
 	{"ATETXSTBC", hqa_set_stbc},
 	{"ATETXMODE", hqa_set_preamble},
 	{"ATETXGI", hqa_set_short_gi},
+	{"ATEFIXEDPAYLOAD", hqa_set_fixed_payload},
 	{"", NULL}	/* the last entry */
 };
 
@@ -6995,10 +7553,7 @@ s_int32 mt_agent_cli_set_dw(u_char *name, struct service *serv, u_char *param)
 	} else
 		ret = SERV_STATUS_AGENT_INVALID_PARAM;
 
-	if (!ret)
-		return TRUE;
-	else 
-		return FALSE;
+	return ret;
 }
 
 s_int32 mt_agent_set_bw(struct service_test *serv_test, u_char *arg)
@@ -7232,7 +7787,7 @@ s_int32 mt_agent_set_ru_cli(struct service_test *serv_test, u_char *arg)
 					&ru_info[i].mpdu_length,
 					&ru_info[i].alpha);
 
-			if (strlen(value) > 0 && input_cnt == 9) {
+			if (input_cnt == 9) {
 				ru_info[i].valid = TRUE;
 
 				if (ru_info[i].mpdu_length == 0)
@@ -7387,10 +7942,7 @@ s_int32 mt_agent_cli_set_ext(u_char *name, struct service *serv, u_char *arg)
 		entry++;
 	}
 
-	if(!ret)
-		return TRUE;
-	else
-		return FALSE;
+	return ret;
 }
 
 /*****************************************************************************

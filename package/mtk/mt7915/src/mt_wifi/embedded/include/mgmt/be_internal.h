@@ -103,5 +103,5 @@ VOID operate_loader_eap_trx_stream(struct wifi_dev *wdev, struct wlan_operate *o
 VOID operate_loader_vht_bw(struct wlan_operate *op);
 VOID operate_loader_vht_ldpc(struct wlan_operate *op, UCHAR vht_ldpc);
 
-
+VOID phy_freq_get_cfg(struct wifi_dev *wdev, struct freq_cfg *fcfg);
 #endif /*__BE_INTERNAL_H__*/

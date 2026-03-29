@@ -122,8 +122,8 @@ VOID TmrReportParser(RTMP_ADAPTER *pAd, TMR_FRM_STRUC *tmr, BOOLEAN fgFinalResul
 		NdisCopyMemory(PeerAddr + 2, (UCHAR *)pta_16, 4);
 
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, dbg_lvl,
-			("Readable TA = %02x:%02x:%02x:%02x:%02x:%02x\n",
-			PRINT_MAC(PeerAddr)));
+			("Readable TA = "MACSTR"\n",
+			MAC2STR(PeerAddr)));
 
 	} else {
 		/* TMR Initiator, Tx case */

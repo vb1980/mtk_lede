@@ -57,6 +57,7 @@
 //                     MCU_SYSRAM SW CR Definitions
 //
 //****************************************************************************
+#define WF_MCU_WA_SW_DEF_CR_BASE         0x0041F180
 #define WF_SW_DEF_CR_BASE                0x0041F200
 
 #define WF_SW_DEF_CR_WACPU_STAT_ADDR            (WF_SW_DEF_CR_BASE + 0x000) /* F200 */
@@ -65,6 +66,7 @@
 #define WF_SW_DEF_CR_WA2WM_ACTION_ADDR          (WF_SW_DEF_CR_BASE + 0x00C) /* F20C */
 #define WF_SW_DEF_CR_LP_DBG0_ADDR               (WF_SW_DEF_CR_BASE + 0x010) /* F210 */
 #define WF_SW_DEF_CR_LP_DBG1_ADDR               (WF_SW_DEF_CR_BASE + 0x014) /* F214 */
+#define WF_SW_DEF_CR_SER_STEPS_ADDR             (WF_SW_DEF_CR_BASE + 0x038) /* F238 */
 #define WF_SW_DEF_CR_SER_STATUS_ADDR            (WF_SW_DEF_CR_BASE + 0x040) /* F240 */
 #define WF_SW_DEF_CR_PLE_STATUS_ADDR            (WF_SW_DEF_CR_BASE + 0x044) /* F244 */
 #define WF_SW_DEF_CR_PLE1_STATUS_ADDR           (WF_SW_DEF_CR_BASE + 0x048) /* F248 */
@@ -89,6 +91,7 @@
 #define WF_SW_DEF_CR_RSVD_DBG_8                 (WF_SW_DEF_CR_BASE + 0x0C0) /* F2C0 */
 #define WF_SW_DEF_CR_RSVD_DBG_9                 (WF_SW_DEF_CR_BASE + 0x0C4) /* F2C4 */
 
+#define WF_MCU_WA_SW_DEF_CR_SER_ADDR            (WF_MCU_WA_SW_DEF_CR_BASE + 0x004) /* F184 */
 
 /* =====================================================================================
 

@@ -135,6 +135,9 @@ HAS_CLIENT_WDS_SUPPORT=n
 HAS_SNIFFER_SUPPORT=n
 #endif
 
+#ifdef CONFIG_SNIFFER_RADIOTAP_SUPPOR
+HAS_SNIFFER_RADIOTAP_SUPPORT=n
+#endif
 
 ################################################################
 # AP IOT Feature Selection
@@ -230,6 +233,10 @@ WFLAGS += -DPKTLOSS_CHK
 endif
 ifeq ($(HAS_DABS_QOS), y)
 WFLAGS += -DDABS_QOS
+endif
+
+ifeq ($(HAS_SNIFFER_RADIOTAP_SUPPORT),y)
+WFLAGS += -DSNIFFER_RADIOTAP_SUPPORT
 endif
 
 #ifdef MT_DFS_SUPPORT

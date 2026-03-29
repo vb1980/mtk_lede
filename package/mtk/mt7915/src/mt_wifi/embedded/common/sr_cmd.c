@@ -331,7 +331,18 @@ typedef struct _SR_SD_T {
     UINT_32 u4TtlAirTimeRatio[RAM_BAND_NUM];
     UINT_32 u4OBSSAirTimeRatio[RAM_BAND_NUM];
     UINT_8  u1Rule[RAM_BAND_NUM];
-    UINT_8  u1Rsv[3][RAM_BAND_NUM];
+    /* SRSD - OBSS Monitor */
+    UINT_8  u1ModeMcsIdx[RAM_BAND_NUM];
+    UINT_8  u1SrTxState[RAM_BAND_NUM];
+    UINT_8  u1LowTrafficCnt[RAM_BAND_NUM];
+    UINT_8  u1ContWeakChkPnt[RAM_BAND_NUM];
+    UINT_8  u1ObssLongPktPnt[RAM_BAND_NUM];
+    UINT_16 u2ObssLongPkt[RAM_BAND_NUM][3];
+    UINT_16 u2RxrptMcs[12][RAM_BAND_NUM];
+    UINT_32 u4TxByteSum[RAM_BAND_NUM];
+    UINT_32 u4TxdPgCnt[RAM_BAND_NUM];
+    UINT_32 u4SrTxCnt[RAM_BAND_NUM];
+    /*End - SRSD - OBSS Monitor*/
 } SR_SD_T, *P_SR_SD_T;
 /* END SR SD (Scene Detection) */
 
@@ -387,14 +398,14 @@ typedef enum _ENUM_SR_CMD_SUBID {
     /*Reseve for SR_CFG = 0x22*/
     SR_CMD_SET_SR_CFG_DPD_ENABLE = 0x23,
     SR_CMD_GET_SR_CFG_DPD_ENABLE = 0x24,
-    /*Reseve for SR_CFG = 0x25*/
-    /*Reseve for SR_CFG = 0x26*/
-    /*Reseve for SR_CFG = 0x27*/
-    /*Reseve for SR_CFG = 0x28*/
-    /*Reseve for SR_CFG = 0x29*/
-    /*Reseve for SR_CFG = 0x2A*/
-    /*Reseve for SR_CFG = 0x2B*/
-    /*Reseve for SR_CFG = 0x2C*/
+    SR_CMD_SET_SR_CFG_SR_TX_ENABLE = 0x25,
+    SR_CMD_GET_SR_CFG_SR_TX_ENABLE = 0x26,
+    SR_CMD_SET_SR_CFG_SR_SD_OM_ENABLE = 0x27,
+    SR_CMD_GET_SR_CFG_SR_SD_OM_ENABLE = 0x28,
+    SR_CMD_SET_SR_CFG_SR_TX_ALIGN_ENABLE = 0x29,
+    SR_CMD_GET_SR_CFG_SR_TX_ALIGN_ENABLE = 0x2A,
+    SR_CMD_SET_SR_CFG_SR_TX_ALIGN_RSSI_THR = 0x2B,
+    SR_CMD_GET_SR_CFG_SR_TX_ALIGN_RSSI_THR = 0x2C,
     /*Reseve for SR_CFG = 0x2D*/
     /*Reseve for SR_CFG = 0x2E*/
     /*Reseve for SR_CFG = 0x2F*/
@@ -709,10 +720,10 @@ typedef enum _ENUM_SR_EVENT_SUBID {
     SR_EVENT_GET_SR_CFG_PROFILE = 0x10,
     /*Reseve for SR_CFG = 0x11*/
     SR_EVENT_GET_SR_CFG_DPD_ENABLE = 0x12,
-    /*Reseve for SR_CFG = 0x13*/
-    /*Reseve for SR_CFG = 0x14*/
-    /*Reseve for SR_CFG = 0x15*/
-    /*Reseve for SR_CFG = 0x16*/
+    SR_EVENT_GET_SR_CFG_SR_TX_ENABLE = 0x13,
+    SR_EVENT_GET_SR_CFG_SR_SD_OM_ENABLE = 0x14,
+    SR_EVENT_GET_SR_CFG_SR_TX_ALIGN_ENABLE = 0x15,
+    SR_EVENT_GET_SR_CFG_SR_TX_ALIGN_RSSI_THR = 0x16,
     /*Reseve for SR_CFG = 0x17*/
     /*Reseve for SR_CFG = 0x18*/
     /*Reseve for SR_CFG = 0x19*/
@@ -3128,7 +3139,7 @@ NDIS_STATUS SetSrCfgProfile(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 }
 
 /** SR_CMD_SET_SR_CFG_DPD_ENABLE **/
-NDIS_STATUS SetSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING *arg)
+NDIS_STATUS SetSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 {
 	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
 
@@ -3136,6 +3147,62 @@ NDIS_STATUS SetSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING *arg)
 	if (Status != NDIS_STATUS_SUCCESS) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			 ("%s: iwpriv ra0 set srcfgdpden=1\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_SET_SR_CFG_SR_TX_ALIGN_ENABLE **/
+NDIS_STATUS SetSrCfgSrTxAlignEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_SET_SR_CFG_SR_TX_ALIGN_ENABLE, SR_CMD_SET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 set srcfgsrtxalignen=1\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_SET_SR_CFG_SR_TX_ALIGN_RSSI_THR **/
+NDIS_STATUS SetSrCfgSrTxAlignRssiThr(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_SET_SR_CFG_SR_TX_ALIGN_RSSI_THR, SR_CMD_SET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 set srcfgsrtxalignrssi=40\n", __func__));
+        }
+
+	return Status;
+}
+
+/** SR_CMD_SET_SR_CFG_SR_TX_ENABLE **/
+NDIS_STATUS SetSrCfgSrTxEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_SET_SR_CFG_SR_TX_ENABLE, SR_CMD_SET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 set srcfgsrtxen=1\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_SET_SR_CFG_SR_SD_OM_ENABLE **/
+NDIS_STATUS SetSrCfgObssMonitorEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_SET_SR_CFG_SR_SD_OM_ENABLE, SR_CMD_SET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 set srcfgomen=1\n", __func__));
 	}
 
 	return Status;
@@ -3695,7 +3762,7 @@ NDIS_STATUS ShowSrCfgProfile(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 }
 
 /** SR_CMD_GET_SR_CFG_DPD_ENABLE **/
-NDIS_STATUS ShowSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING *arg)
+NDIS_STATUS ShowSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 {
 	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
 
@@ -3703,6 +3770,62 @@ NDIS_STATUS ShowSrCfgDPDEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING *arg)
 	if (Status != NDIS_STATUS_SUCCESS) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			 ("%s: iwpriv ra0 show srcfgdpden=0\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_GET_SR_CFG_SR_TX_ALIGN_ENABLE **/
+NDIS_STATUS ShowSrCfgSrTxAlignEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_GET_SR_CFG_SR_TX_ALIGN_ENABLE, SR_CMD_GET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 show srcfgsrtxalignen=0\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_GET_SR_CFG_SR_TX_ALIGN_RSSI_THR **/
+NDIS_STATUS ShowSrCfgSrTxAlignRssiThr(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_GET_SR_CFG_SR_TX_ALIGN_RSSI_THR, SR_CMD_GET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 show srcfgsrtxalignrssi=0\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_GET_SR_CFG_SR_TX_ENABLE **/
+NDIS_STATUS ShowSrCfgSrTxEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_GET_SR_CFG_SR_TX_ENABLE, SR_CMD_GET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 show srcfgsrtxen=0\n", __func__));
+	}
+
+	return Status;
+}
+
+/** SR_CMD_GET_SR_CFG_SR_SD_OM_ENABLE **/
+NDIS_STATUS ShowSrCfgObssMonitorEnable(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+{
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+
+	Status = SrCmdShow(pAd, arg, SR_CMD_GET_SR_CFG_SR_SD_OM_ENABLE, SR_CMD_GET_DEFAULT_ARG_NUM);
+	if (Status != NDIS_STATUS_SUCCESS) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			 ("%s: iwpriv ra0 show srcfgomen=0\n", __func__));
 	}
 
 	return Status;
@@ -4342,6 +4465,10 @@ VOID EventSrHandler(PRTMP_ADAPTER pAd, UINT8 *Data, UINT_32 Length)
 	case SR_EVENT_GET_SR_CFG_SR_SD_OBSS_RATIO:
 	case SR_EVENT_GET_SR_CFG_PROFILE:
 	case SR_EVENT_GET_SR_CFG_DPD_ENABLE:
+	case SR_EVENT_GET_SR_CFG_SR_TX_ALIGN_ENABLE:
+	case SR_EVENT_GET_SR_CFG_SR_TX_ALIGN_RSSI_THR:
+	case SR_EVENT_GET_SR_CFG_SR_TX_ENABLE:
+	case SR_EVENT_GET_SR_CFG_SR_SD_OM_ENABLE:
 		PrintSrEvent((P_SR_EVENT_T)Data);
 		break;
 	case SR_EVENT_GET_SR_SRG_BITMAP:
@@ -4738,7 +4865,10 @@ VOID PrintSrCnt(IN UINT_8 u1DbdcIdx, IN P_SR_CNT_T prSrCnt)
 
 VOID PrintSrSd(IN UINT_8 u1DbdcIdx, IN P_SR_SD_T prSrSd)
 {
-	CHAR * srsdrules[4] = {"1 - NO CONNECTED", "2 - NO CONGESTION", "3 - NO INTERFERENCE", "4 - ALL RULE PASS" };
+	UINT_8 u1McsIdx = 0;
+	CHAR * srsdrules[4] = {"1 - NO CONNECTED", "2 - NO CONGESTION", "3 - NO INTERFERENCE", "4 - SR ON"};
+	CHAR * srtxstate[9] = {"1 - ON OM INIT", "2 - OFF SRSD FAIL", "3 - ON SRSD PASS", "4 - ON LOW TPUT", "5 - ON OM START", "6 - ON CONT WEAK", "7 - ON CONT NORM", "8 - ON LONG PKT CHK", "9 - OFF ENV DETECTED"};
+
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Band%d\n", __func__, u1DbdcIdx));
 
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -4786,6 +4916,36 @@ VOID PrintSrSd(IN UINT_8 u1DbdcIdx, IN P_SR_SD_T prSrSd)
 		  prSrSd->u4MyRxAirtime[u1DbdcIdx],
 		  prSrSd->u4OBSSAirTimeRatio[u1DbdcIdx] / 10,
 		  prSrSd->u4OBSSAirTimeRatio[u1DbdcIdx] % 10));
+
+		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		 ("OBSS Monitor\n"
+		  " 	 Tx         State      = %s\n"
+		  " 	 Tx   Byte  Sum        = %d\n"
+		  " 	 TxD  PG    Cnt        = %d\n"
+		  " 	 Low  Tput  Cnt        = %d\n"
+		  " 	 Contention Point      = %d\n"
+		  " 	 Long Pkt   Point      = %d\n"
+		  " 	 Pkt  Len   Short      = %d\n"
+		  " 	 Pkt  Len   Middle     = %d\n"
+		  " 	 Pkt  Len   Long       = %d\n"
+		  " 	 SR   Tx    Cnt        = %d\n"
+		  " 	 Mode       MCS        = %d\n"
+		  "-------------------------------------------------------------------\n"
+		  "OBSS Rate Distribution\n",
+		  srtxstate[prSrSd->u1SrTxState[u1DbdcIdx]],
+		  prSrSd->u4TxByteSum[u1DbdcIdx],
+		  prSrSd->u4TxdPgCnt[u1DbdcIdx],
+		  prSrSd->u1LowTrafficCnt[u1DbdcIdx],
+		  prSrSd->u1ContWeakChkPnt[u1DbdcIdx],
+		  prSrSd->u1ObssLongPktPnt[u1DbdcIdx],
+		  prSrSd->u2ObssLongPkt[u1DbdcIdx][0],
+		  prSrSd->u2ObssLongPkt[u1DbdcIdx][1],
+		  prSrSd->u2ObssLongPkt[u1DbdcIdx][2],
+		  prSrSd->u4SrTxCnt[u1DbdcIdx],
+		  prSrSd->u1ModeMcsIdx[u1DbdcIdx]));
+
+		for (u1McsIdx = 0; u1McsIdx < SR_RCPITBL_MCS_NUM; u1McsIdx++)
+			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, (" 	 MCS[%2d] = %x\n", u1McsIdx, prSrSd->u2RxrptMcs[u1McsIdx][u1DbdcIdx]));
 
 }
 

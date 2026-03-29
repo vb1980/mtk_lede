@@ -117,7 +117,15 @@ struct DOT11_H {
 	UINT32 csa_ap_bitmap;	/* csa ap index bitmap */
 #ifdef CONFIG_MAP_SUPPORT
 	BOOLEAN cac_not_required;
+	BOOLEAN ChChangeCSA;
 #endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	INT ChnlSwitchState;
+	UINT8 ChannelSwitchTriggerCSACount; 	/*User defined Channel Switch trigger count*/
+	RALINK_TIMER_STRUCT CSALastBcnTxEventTimer;
+	RALINK_TIMER_STRUCT ChnlSwitchStaNullAckWaitTimer;
+	UCHAR CSA0EventApidx;	/*save apidx rcvd in CSA event , to be used later in*/
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 };
 
 #ifdef MT_DFS_SUPPORT
@@ -159,8 +167,19 @@ VOID ChannelSwitchingCountDownProc(
 	IN PRTMP_ADAPTER	pAd,
 	struct wifi_dev *wdev);
 
+NTSTATUS DropRadarEventHandler(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt);
 NTSTATUS Dot11HCntDownTimeoutAction(RTMP_ADAPTER *pAd, PCmdQElmt CMDQelmt);
-
+#ifdef ZERO_LOSS_CSA_SUPPORT
+NTSTATUS LastBcnTxChannelSwitch(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt);
+NTSTATUS DisableZeroLossStaTraffic(PRTMP_ADAPTER pAd, PCmdQElmt CMDQelmt);
+INT	Set_CHSWPeriod_Proc(IN	PRTMP_ADAPTER	pAd, IN	RTMP_STRING *arg);
+INT	Set_ZeroLossStaAdd_Proc(IN	PRTMP_ADAPTER	pAd, IN	RTMP_STRING *arg);
+INT	Set_ZeroLossStaRemove_Proc(IN	PRTMP_ADAPTER	pAd, IN	RTMP_STRING *arg);
+INT	Set_STA_Tx_Unblock_Timeout_Proc(IN	PRTMP_ADAPTER	pAd, IN	RTMP_STRING *arg);
+INT Show_ChannelSwitchTime_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT Show_PerSTA_StopTx_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT	Show_ZeroLossStaList_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #endif /* CONFIG_AP_SUPPORT */
 
 VOID RadarDetectPeriodic(

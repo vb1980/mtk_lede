@@ -150,7 +150,11 @@ typedef struct GNU_PACKED _RRM_BEACON_REP_INFO {
 typedef union GNU_PACKED _RRM_BSSID_INFO {
 	struct GNU_PACKED {
 #ifdef RT_BIG_ENDIAN
-		UINT32 Reserved:18;
+		UINT32 Reserved:14;
+		UINT32 _20_TU_ProbeRspActive:1;
+		UINT32 CO_locatedAP:1;
+		UINT32 HE_ER_BSS:1;
+		UINT32 HE:1;
 		UINT32 FTM:1;
 		UINT32 VHT:1;
 		UINT32 HT:1;
@@ -178,7 +182,11 @@ typedef union GNU_PACKED _RRM_BSSID_INFO {
 		UINT32 HT:1;
 		UINT32 VHT:1;
 		UINT32 FTM:1;
-		UINT32 Reserved:18;
+		UINT32 HE:1;
+		UINT32 HE_ER_BSS:1;
+		UINT32 CO_locatedAP:1;
+		UINT32 _20_TU_ProbeRspActive:1;
+		UINT32 Reserved:14;
 #endif
 	} field;
 	UINT32 word;

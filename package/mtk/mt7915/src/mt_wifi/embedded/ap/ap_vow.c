@@ -92,13 +92,8 @@
 #define VOW_BSS_SETTING_BEGIN   16
 #define VOW_BSS_SETTING_END     (VOW_BSS_SETTING_BEGIN + 16)
 
-#if (defined(MT7622) || defined(MT7615))
-#define WF_WTBLON	0x23000
-#define LPON_FREE_RUN	0x2427c
-#else
 #define WF_WTBLON	0x29000
 #define LPON_FREE_RUN	0x2b07c
-#endif
 
 /* global variables */
 PRTMP_ADAPTER pvow_pad;
@@ -144,7 +139,8 @@ INT32 vow_set_sta(PRTMP_ADAPTER pad, UINT16 sta_id, UINT32 subcmd)
 		Setting |= (pad->vow_sta_cfg[sta_id].dwrr_quantum[WMM_AC_VI] << pad->vow_gen.VOW_STA_WMM_AC2_OFFSET);
 		Setting |= (pad->vow_sta_cfg[sta_id].dwrr_quantum[WMM_AC_VO] << pad->vow_gen.VOW_STA_WMM_AC3_OFFSET);
 		sta_ctrl.rAirTimeCtrlValue.u4ComValue = cpu2le32(Setting);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, Setting));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(SubCmd %x, Value = 0x%x)\n", subcmd, Setting);
 		break;
 
 	case ENUM_VOW_DRR_CTRL_FIELD_STA_BSS_GROUP:
@@ -205,8 +201,9 @@ INT32 vow_set_sta(PRTMP_ADAPTER pad, UINT16 sta_id, UINT32 subcmd)
 	case ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L6:
 	case ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L7:
 		sta_ctrl.rAirTimeCtrlValue.u4ComValue = pad->vow_cfg.vow_sta_dwrr_quantum[subcmd - ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L0];
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n",
-				 __func__, subcmd, pad->vow_cfg.vow_sta_dwrr_quantum[subcmd - ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L0]));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(SubCmd %x, Value = 0x%x)\n",
+				  subcmd, pad->vow_cfg.vow_sta_dwrr_quantum[subcmd - ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L0]);
 #ifdef RT_BIG_ENDIAN
 		sta_ctrl.rAirTimeCtrlValue.u4ComValue = cpu2le32(sta_ctrl.rAirTimeCtrlValue.u4ComValue);
 #endif
@@ -217,11 +214,11 @@ INT32 vow_set_sta(PRTMP_ADAPTER pad, UINT16 sta_id, UINT32 subcmd)
 
 		/* station quantum configruation */
 		for (i = 0; i < VOW_MAX_STA_DWRR_NUM; i++) {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(vow_sta_dwrr_quantum[%d] = 0x%x)\n", __func__, i, pad->vow_cfg.vow_sta_dwrr_quantum[i]));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(vow_sta_dwrr_quantum[%d] = 0x%x)\n", i, pad->vow_cfg.vow_sta_dwrr_quantum[i]);
 			sta_ctrl.rAirTimeCtrlValue.rAirTimeQuantumAllField.ucAirTimeQuantum[i] = pad->vow_cfg.vow_sta_dwrr_quantum[i];
 		}
 
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, Setting));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, Setting);
 	}
 	break;
 
@@ -230,17 +227,17 @@ INT32 vow_set_sta(PRTMP_ADAPTER pad, UINT16 sta_id, UINT32 subcmd)
 #ifdef RT_BIG_ENDIAN
 		sta_ctrl.rAirTimeCtrlValue.u4ComValue = cpu2le32(sta_ctrl.rAirTimeCtrlValue.u4ComValue);
 #endif
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, pad->vow_sta_cfg[sta_id].paused));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, pad->vow_sta_cfg[sta_id].paused);
 	}
 	break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 		break;
 	}
 
 	ret = MtCmdSetVoWDRRCtrl(pad, &sta_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T));
 	return ret;
 }
 
@@ -256,9 +253,9 @@ INT vow_set_sta_DWRR_max_time(PRTMP_ADAPTER pad)
 #ifdef RT_BIG_ENDIAN
 	sta_ctrl.rAirTimeCtrlValue.u4ComValue = cpu2le32(sta_ctrl.rAirTimeCtrlValue.u4ComValue);
 #endif
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(sta_max_wait_time = 0x%x)\n", __func__, pad->vow_cfg.sta_max_wait_time));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(sta_max_wait_time = 0x%x)\n", pad->vow_cfg.sta_max_wait_time);
 	ret = MtCmdSetVoWDRRCtrl(pad, &sta_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T));
 	return ret;
 }
 /***********************************************************/
@@ -280,22 +277,23 @@ VOID vow_fill_group_all(PRTMP_ADAPTER pad, UINT8 group_id, EXT_CMD_BSS_CTRL_T *g
 	/* DW3 */
 	group_ctrl->arAllBssGroupMultiField[group_id].u4MaxWaitTime = pad->vow_bss_cfg[group_id].max_wait_time;
 	group_ctrl->arAllBssGroupMultiField[group_id].u4MaxBacklogSize = pad->vow_bss_cfg[group_id].max_backlog_size;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(Group id = 0x%x, min_rate %d, max_rate %d, min_ratio %d, max_ratio %d)\n",
-			 __func__, group_id,
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(Group id = 0x%x, min_rate %d, max_rate %d, min_ratio %d, max_ratio %d)\n",
+			 group_id,
 			 pad->vow_bss_cfg[group_id].min_rate,
 			 pad->vow_bss_cfg[group_id].max_rate,
 			 pad->vow_bss_cfg[group_id].min_airtime_ratio,
-			 pad->vow_bss_cfg[group_id].max_airtime_ratio));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(min rate token = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].min_rate_token));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max rate token = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_rate_token));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(min airtime token = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].min_airtime_token));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max airtime token = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_airtime_token));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(min rate bucket = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].min_ratebucket_size));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max rate bucket = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_ratebucket_size));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(min airtime bucket = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].min_airtimebucket_size));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max airtime bucket = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_airtimebucket_size));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max baclog size = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_backlog_size));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(max wait time = 0x%x)\n", __func__, pad->vow_bss_cfg[group_id].max_wait_time));
+			 pad->vow_bss_cfg[group_id].max_airtime_ratio);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(min rate token = 0x%x)\n", pad->vow_bss_cfg[group_id].min_rate_token);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max rate token = 0x%x)\n", pad->vow_bss_cfg[group_id].max_rate_token);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(min airtime token = 0x%x)\n", pad->vow_bss_cfg[group_id].min_airtime_token);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max airtime token = 0x%x)\n", pad->vow_bss_cfg[group_id].max_airtime_token);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(min rate bucket = 0x%x)\n", pad->vow_bss_cfg[group_id].min_ratebucket_size);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max rate bucket = 0x%x)\n", pad->vow_bss_cfg[group_id].max_ratebucket_size);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(min airtime bucket = 0x%x)\n", pad->vow_bss_cfg[group_id].min_airtimebucket_size);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max airtime bucket = 0x%x)\n", pad->vow_bss_cfg[group_id].max_airtimebucket_size);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max baclog size = 0x%x)\n", pad->vow_bss_cfg[group_id].max_backlog_size);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(max wait time = 0x%x)\n", pad->vow_bss_cfg[group_id].max_wait_time);
 }
 /* for group configuration */
 INT vow_set_group(PRTMP_ADAPTER pad, UINT8 group_id, UINT32 subcmd)
@@ -315,52 +313,52 @@ INT vow_set_group(PRTMP_ADAPTER pad, UINT8 group_id, UINT32 subcmd)
 
 	case ENUM_BSSGROUP_CTRL_MIN_RATE_TOKEN_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].min_rate_token;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_RATE_TOKEN_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_rate_token;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MIN_TOKEN_BUCKET_TIME_SIZE_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].min_airtimebucket_size;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MIN_AIRTIME_TOKEN_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].min_airtime_token;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MIN_TOKEN_BUCKET_LENG_SIZE_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].min_ratebucket_size;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_TOKEN_BUCKET_TIME_SIZE_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_airtimebucket_size;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_AIRTIME_TOKEN_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_airtime_token;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_TOKEN_BUCKET_LENG_SIZE_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_ratebucket_size;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_WAIT_TIME_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_wait_time;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_MAX_BACKLOG_SIZE_CFG_ITEM:
 		group_ctrl.u4SingleFieldIDValue = pad->vow_bss_cfg[group_id].max_backlog_size;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(SubCmd %x, Value = 0x%x)\n", __func__, subcmd, group_ctrl.u4SingleFieldIDValue));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(SubCmd %x, Value = 0x%x)\n", subcmd, group_ctrl.u4SingleFieldIDValue);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_ALL_ITEM_FOR_ALL_GROUP: {
@@ -389,7 +387,7 @@ INT vow_set_group(PRTMP_ADAPTER pad, UINT8 group_id, UINT32 subcmd)
 	case ENUM_BSSGROUP_CTRL_BW_GROUP_QUANTUM_L_0F:
 		/* Group DWRR quantum */
 		group_ctrl.ucBssGroupQuantumTime[group_id] = pad->vow_bss_cfg[group_id].dwrr_quantum;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(group %d DWRR quantum = 0x%x)\n", __func__, group_id, pad->vow_bss_cfg[group_id].dwrr_quantum));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(group %d DWRR quantum = 0x%x)\n", group_id, pad->vow_bss_cfg[group_id].dwrr_quantum);
 		break;
 
 	case ENUM_BSSGROUP_CTRL_BW_GROUP_QUANTUM_ALL: {
@@ -397,18 +395,18 @@ INT vow_set_group(PRTMP_ADAPTER pad, UINT8 group_id, UINT32 subcmd)
 
 		for (i = 0; i < VOW_MAX_GROUP_NUM; i++) {
 			group_ctrl.ucBssGroupQuantumTime[i] = pad->vow_bss_cfg[i].dwrr_quantum;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(group %d DWRR quantum = 0x%x)\n", __func__, i, pad->vow_bss_cfg[i].dwrr_quantum));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(group %d DWRR quantum = 0x%x)\n", i, pad->vow_bss_cfg[i].dwrr_quantum);
 		}
 	}
 	break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 		break;
 	}
 
 	ret = MtCmdSetVoWGroupCtrl(pad, &group_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_BSS_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_BSS_CTRL_T));
 	return ret;
 }
 
@@ -427,9 +425,9 @@ INT vow_set_group_DWRR_max_time(PRTMP_ADAPTER pad)
 #ifdef RT_BIG_ENDIAN
 	sta_ctrl.rAirTimeCtrlValue.u4ComValue = cpu2le32(sta_ctrl.rAirTimeCtrlValue.u4ComValue);
 #endif
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(group_max_wait_time = 0x%x)\n", __func__, pad->vow_cfg.group_max_wait_time));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(group_max_wait_time = 0x%x)\n", pad->vow_cfg.group_max_wait_time);
 	ret = MtCmdSetVoWDRRCtrl(pad, &sta_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_VOW_DRR_CTRL_T));
 	return ret;
 }
 
@@ -516,19 +514,26 @@ INT vow_set_feature_all(PRTMP_ADAPTER pad)
 	feature_ctrl.u4VowScheduleType = pad->vow_sch_cfg.sch_type;
 	feature_ctrl.u4VowSchedulePolicy = pad->vow_sch_cfg.sch_policy;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2Bss_0_to_16_CtrlValue  = 0x%x)\n", __func__, pad->vow_cfg.per_bss_enable));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2RefillPerildValue = 0x%x)\n", __func__, pad->vow_cfg.refill_period));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2Dbdc1SearchRuleValue = 0x%x)\n", __func__, pad->vow_cfg.dbdc1_search_rule));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2Dbdc0SearchRuleValue = 0x%x)\n", __func__, pad->vow_cfg.dbdc0_search_rule));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2EnTxopNoChangeBssValue = 0x%x)\n", __func__, pad->vow_cfg.en_txop_no_change_bss));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2AirTimeFairnessValue = 0x%x)\n", __func__, pad->vow_cfg.en_airtime_fairness));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2EnbwrefillValue = 0x%x)\n", __func__, pad->vow_cfg.en_bw_refill));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2EnbwCtrlValue = 0x%x)\n", __func__, pad->vow_cfg.en_bw_ctrl));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2WeightedAirTimeFairnessValue = 0x%x)\n", __func__, pad->vow_watf_en));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2BssCheckTimeToken_0_to_16_CtrlValue = 0x%x)\n", __func__, feature_ctrl.u2BssCheckTimeToken_0_to_16_CtrlValue));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(u2BssCheckLengthToken_0_to_16_CtrlValue = 0x%x)\n", __func__, feature_ctrl.u2BssCheckLengthToken_0_to_16_CtrlValue));
+	if (pad->vow_gen.VOW_GEN == VOW_GEN_FALCON) {
+		if (vow_is_enabled(pad)) {
+			feature_ctrl.u4IfApplyRxEifsToZeroFlag = TRUE; /* 1'b */
+			feature_ctrl.u4ApplyRxEifsToZeroValue =	pad->vow_misc_cfg.zero_eifs_time; /* 1'b */
+		}
+	}
+
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2Bss_0_to_16_CtrlValue  = 0x%x)\n", pad->vow_cfg.per_bss_enable);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2RefillPerildValue = 0x%x)\n", pad->vow_cfg.refill_period);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2Dbdc1SearchRuleValue = 0x%x)\n", pad->vow_cfg.dbdc1_search_rule);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2Dbdc0SearchRuleValue = 0x%x)\n", pad->vow_cfg.dbdc0_search_rule);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2EnTxopNoChangeBssValue = 0x%x)\n", pad->vow_cfg.en_txop_no_change_bss);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2AirTimeFairnessValue = 0x%x)\n", pad->vow_cfg.en_airtime_fairness);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2EnbwrefillValue = 0x%x)\n", pad->vow_cfg.en_bw_refill);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2EnbwCtrlValue = 0x%x)\n", pad->vow_cfg.en_bw_ctrl);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2WeightedAirTimeFairnessValue = 0x%x)\n", pad->vow_watf_en);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2BssCheckTimeToken_0_to_16_CtrlValue = 0x%x)\n", feature_ctrl.u2BssCheckTimeToken_0_to_16_CtrlValue);
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(u2BssCheckLengthToken_0_to_16_CtrlValue = 0x%x)\n", feature_ctrl.u2BssCheckLengthToken_0_to_16_CtrlValue);
 	ret = MtCmdSetVoWFeatureCtrl(pad, &feature_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_VOW_FEATURE_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_VOW_FEATURE_CTRL_T));
 	return ret;
 }
 
@@ -552,22 +557,24 @@ INT vow_set_rx_airtime(PRTMP_ADAPTER pad, UINT8 cmd, UINT32 subcmd)
 		switch (subcmd) {
 		case ENUM_RX_AT_FEATURE_SUB_TYPE_AIRTIME_EN:
 			rx_at_ctrl.rRxAtGeneralCtrl.rRxAtFeatureSubCtrl.fgRxAirTimeEn = pad->vow_rx_time_cfg.rx_time_en;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
-					 __func__, cmd, subcmd, pad->vow_rx_time_cfg.rx_time_en));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
+					 cmd, subcmd, pad->vow_rx_time_cfg.rx_time_en);
 			break;
 
 		case ENUM_RX_AT_FEATURE_SUB_TYPE_MIBTIME_EN:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(Not implemented yet = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(Not implemented yet = 0x%x)\n", subcmd);
 			break;
 
 		case ENUM_RX_AT_FEATURE_SUB_TYPE_EARLYEND_EN:
 			rx_at_ctrl.rRxAtGeneralCtrl.rRxAtFeatureSubCtrl.fgRxEarlyEndEn = pad->vow_rx_time_cfg.rx_early_end_en;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
-					 __func__, cmd, subcmd, pad->vow_rx_time_cfg.rx_early_end_en));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
+					 cmd, subcmd, pad->vow_rx_time_cfg.rx_early_end_en);
 			break;
 
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such sub command = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(No such sub command = 0x%x)\n", subcmd);
 		}
 
 		break;
@@ -576,16 +583,17 @@ INT vow_set_rx_airtime(PRTMP_ADAPTER pad, UINT8 cmd, UINT32 subcmd)
 		switch (subcmd) {
 		case ENUM_RX_AT_BITWISE_SUB_TYPE_AIRTIME_CLR: /* clear all RX airtime counters */
 			rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.fgRxAirTimeClrEn = TRUE;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
-					 __func__, cmd, subcmd, rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.fgRxAirTimeClrEn));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"(cmd = 0x%x, subcmd = 0x%x, value = 0x%x)\n",
+					 cmd, subcmd, rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.fgRxAirTimeClrEn);
 			break;
 
 		case ENUM_RX_AT_BITWISE_SUB_TYPE_MIBTIME_CLR:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(Not implemented yet = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(Not implemented yet = 0x%x)\n", subcmd);
 			break;
 
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such sub command = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(No such sub command = 0x%x)\n", subcmd);
 		}
 
 		break;
@@ -594,12 +602,13 @@ INT vow_set_rx_airtime(PRTMP_ADAPTER pad, UINT8 cmd, UINT32 subcmd)
 		switch (subcmd) {
 		case ENUM_RX_AT_TIME_VALUE_SUB_TYPE_ED_OFFSET_CTRL:
 			rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.ucEdOffsetValue = pad->vow_rx_time_cfg.ed_offset;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd =  0x%x, value = 0x%x)\n",
-					 __func__, cmd, subcmd, pad->vow_rx_time_cfg.ed_offset));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"(cmd = 0x%x, subcmd =  0x%x, value = 0x%x)\n",
+					 cmd, subcmd, pad->vow_rx_time_cfg.ed_offset);
 			break;
 
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such sub command = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(No such sub command = 0x%x)\n", subcmd);
 		}
 
 		break;
@@ -608,18 +617,19 @@ INT vow_set_rx_airtime(PRTMP_ADAPTER pad, UINT8 cmd, UINT32 subcmd)
 		switch (subcmd) {
 
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such sub command = 0x%x)\n", __func__, subcmd));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(No such sub command = 0x%x)\n", subcmd);
 		}
 
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 		break;
 	}
 
 	ret = MtCmdSetVoWRxAirtimeCtrl(pad, &rx_at_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_RX_AT_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_RX_AT_CTRL_T));
 	return ret;
 }
 
@@ -635,11 +645,14 @@ INT vow_set_wmm_selection(PRTMP_ADAPTER pad, UINT8 om)
 	rx_at_ctrl.u4CtrlSubFieldID = ENUM_RX_AT_BITWISE_SUB_TYPE_STA_WMM_CTRL;
 	rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.ucOwnMacID = om;
 	rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.fgtoApplyWm00to03MibCfg = pad->vow_rx_time_cfg.wmm_backoff_sel[om];
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, OM = 0x%x, Map = 0x%x)\n",
-			 __func__, rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.ucOwnMacID, ENUM_RX_AT_BITWISE_SUB_TYPE_STA_WMM_CTRL, om,
-			 pad->vow_rx_time_cfg.wmm_backoff_sel[om]));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(cmd = 0x%x, subcmd = 0x%x, OM = 0x%x, Map = 0x%x)\n",
+			 rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.ucOwnMacID,
+			 ENUM_RX_AT_BITWISE_SUB_TYPE_STA_WMM_CTRL, om,
+			 pad->vow_rx_time_cfg.wmm_backoff_sel[om]);
 	ret = MtCmdSetVoWRxAirtimeCtrl(pad, &rx_at_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_RX_AT_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n",
+			ret, sizeof(EXT_CMD_RX_AT_CTRL_T));
 	return ret;
 }
 
@@ -655,11 +668,13 @@ INT vow_set_mbss2wmm_map(PRTMP_ADAPTER pad, UINT8 bss_idx)
 	rx_at_ctrl.u4CtrlSubFieldID = ENUM_RX_AT_BITWISE_SUB_TYPE_MBSS_WMM_CTRL;
 	rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.ucMbssGroup = bss_idx;
 	rx_at_ctrl.rRxAtGeneralCtrl.rRxAtBitWiseSubCtrl.ucWmmGroup = pad->vow_rx_time_cfg.bssid2wmm_set[bss_idx];
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, bss_idx = 0x%x, Map = 0x%x)\n",
-			 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, bss_idx,
-			 pad->vow_rx_time_cfg.bssid2wmm_set[bss_idx]));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(cmd = 0x%x, subcmd = 0x%x, bss_idx = 0x%x, Map = 0x%x)\n",
+			 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, bss_idx,
+			 pad->vow_rx_time_cfg.bssid2wmm_set[bss_idx]);
 	ret = MtCmdSetVoWRxAirtimeCtrl(pad, &rx_at_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_RX_AT_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n",
+			ret, sizeof(EXT_CMD_RX_AT_CTRL_T));
 	return ret;
 }
 
@@ -690,12 +705,13 @@ INT vow_set_backoff_time(PRTMP_ADAPTER pad, UINT8 target)
 			pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_VO];
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.rRxAtBackoffAcQMask =
 			(ENUM_RX_AT_AC_Q0_MASK_T | ENUM_RX_AT_AC_Q1_MASK_T | ENUM_RX_AT_AC_Q2_MASK_T | ENUM_RX_AT_AC_Q3_MASK_T);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
 				 pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_BK],
 				 pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_BE],
 				 pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_VI],
-				 pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_VO]));
+				 pad->vow_rx_time_cfg.wmm_backoff[target][WMM_AC_VO]);
 		break;
 
 	case ENUM_RX_AT_WMM_GROUP_PEPEATER:
@@ -709,12 +725,13 @@ INT vow_set_backoff_time(PRTMP_ADAPTER pad, UINT8 target)
 			pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_VO];
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.rRxAtBackoffAcQMask =
 			(ENUM_RX_AT_AC_Q0_MASK_T | ENUM_RX_AT_AC_Q1_MASK_T | ENUM_RX_AT_AC_Q2_MASK_T | ENUM_RX_AT_AC_Q3_MASK_T);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
 				 pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_BK],
 				 pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_BE],
 				 pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_VI],
-				 pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_VO]));
+				 pad->vow_rx_time_cfg.repeater_wmm_backoff[WMM_AC_VO]);
 		break;
 
 	case ENUM_RX_AT_WMM_GROUP_STA:
@@ -728,37 +745,41 @@ INT vow_set_backoff_time(PRTMP_ADAPTER pad, UINT8 target)
 			pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_VO];
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.rRxAtBackoffAcQMask =
 			(ENUM_RX_AT_AC_Q0_MASK_T | ENUM_RX_AT_AC_Q1_MASK_T | ENUM_RX_AT_AC_Q2_MASK_T | ENUM_RX_AT_AC_Q3_MASK_T);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, BK = 0x%x, BE = 0x%x, VI = 0x%x, VO = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
 				 pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_BK],
 				 pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_BE],
 				 pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_VI],
-				 pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_VO]));
+				 pad->vow_rx_time_cfg.om_wmm_backoff[WMM_AC_VO]);
 		break;
 
 	case ENUM_RX_AT_NON_QOS:
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.rRxATBackOffCfg.u2AC0Backoff =
 			pad->vow_rx_time_cfg.non_qos_backoff;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, backoff time = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
-				 pad->vow_rx_time_cfg.non_qos_backoff));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, backoff time = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
+				 pad->vow_rx_time_cfg.non_qos_backoff);
 		break;
 
 	case ENUM_RX_AT_OBSS:
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtTimeValueSubCtrl.rRxATBackOffCfg.u2AC0Backoff =
 			pad->vow_rx_time_cfg.obss_backoff;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, backoff time = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
-				 pad->vow_rx_time_cfg.obss_backoff));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group = 0x%x, backoff time = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target,
+				 pad->vow_rx_time_cfg.obss_backoff);
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, target));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", target);
 		break;
 	}
 
 	ret = MtCmdSetVoWRxAirtimeCtrl(pad, &rx_at_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_RX_AT_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_RX_AT_CTRL_T));
 	return ret;
 }
 
@@ -776,26 +797,29 @@ INT vow_get_rx_time_counter(PRTMP_ADAPTER pad, UINT8 target, UINT8 band_idx)
 	switch (target) {
 	case ENUM_RX_AT_REPORT_SUB_TYPE_RX_NONWIFI_TIME:
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtReportSubCtrl.ucRxNonWiFiBandIdx = band_idx;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, target = 0x%x, band_idx = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target, band_idx));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, target = 0x%x, band_idx = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target, band_idx);
 		break;
 
 	case ENUM_RX_AT_REPORT_SUB_TYPE_RX_OBSS_TIME:
 		rx_at_ctrl.rRxAtGeneralCtrl.rRxAtReportSubCtrl.ucRxObssBandIdx = band_idx;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, target = 0x%x, band_idx = 0x%x)\n",
-				 __func__, rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target, band_idx));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, target = 0x%x, band_idx = 0x%x)\n",
+				 rx_at_ctrl.u4CtrlFieldID, rx_at_ctrl.u4CtrlSubFieldID, target, band_idx);
 		break;
 
 	case ENUM_RX_AT_REPORT_SUB_TYPE_MIB_OBSS_TIME:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(Not implemented yet = 0x%x)\n", __func__, target));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(Not implemented yet = 0x%x)\n", target);
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, target));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", target);
 	}
 
 	ret = MtCmdGetVoWRxAirtimeCtrl(pad, &rx_at_ctrl);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_RX_AT_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_RX_AT_CTRL_T));
 
 	if (target == ENUM_RX_AT_REPORT_SUB_TYPE_RX_NONWIFI_TIME)
 		return rx_at_ctrl.rRxAtGeneralCtrl.rRxAtReportSubCtrl.u4RxNonWiFiBandTimer;
@@ -829,22 +853,25 @@ INT vow_set_at_estimator(PRTMP_ADAPTER pad, UINT32 subcmd)
 	switch (subcmd) {
 	case ENUM_AT_PROC_EST_FEATURE_CTRL:
 		at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.fgAtEstimateOnOff = pad->vow_at_est.at_estimator_en;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_at_est.at_estimator_en));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_at_est.at_estimator_en);
 		break;
 
 	case ENUM_AT_PROC_EST_MONITOR_PERIOD_CTRL:
 		at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.u2AtEstMonitorPeriod = cpu2le16(pad->vow_at_est.at_monitor_period);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_at_est.at_monitor_period));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_at_est.at_monitor_period);
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 	}
 
 	ret = MtCmdSetVoWModuleCtrl(pad, &at_proc);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T));
 	return ret;
 }
 
@@ -873,25 +900,27 @@ INT vow_set_at_estimator_group(PRTMP_ADAPTER pad, UINT32 subcmd, UINT8 group_id)
 		at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.u4GroupRatioBitMask =
 			cpu2le32(at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.u4GroupRatioBitMask);
 #endif
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group %d, val = 0x%x/0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, group_id,
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group %d, val = 0x%x/0x%x)\n",
+				 u4CtrlFieldID, subcmd, group_id,
 				 pad->vow_bss_cfg[group_id].max_airtime_ratio,
-				 pad->vow_bss_cfg[group_id].min_airtime_ratio));
+				 pad->vow_bss_cfg[group_id].min_airtime_ratio);
 		break;
 
 	case ENUM_AT_PROC_EST_GROUP_TO_BAND_MAPPING:
 		at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.ucGrouptoSelectBand = group_id;
 		at_proc.rAtProcGeneralCtrl.rAtEstimateSubCtrl.ucBandSelectedfromGroup = pad->vow_bss_cfg[group_id].band_idx;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, group %d, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, group_id, pad->vow_bss_cfg[group_id].band_idx));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, group %d, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, group_id, pad->vow_bss_cfg[group_id].band_idx);
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 	}
 
 	ret = MtCmdSetVoWModuleCtrl(pad, &at_proc);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T));
 	return ret;
 }
 
@@ -913,34 +942,39 @@ INT vow_set_bad_node(PRTMP_ADAPTER pad, UINT32 subcmd)
 	switch (subcmd) {
 	case ENUM_AT_PROC_BAD_NODE_FEATURE_CTRL:
 		at_proc.rAtProcGeneralCtrl.rAtBadNodeSubCtrl.fgAtBadNodeOnOff = pad->vow_badnode.bn_en;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_badnode.bn_en));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_badnode.bn_en);
 		break;
 
 	case ENUM_AT_PROC_BAD_NODE_MONITOR_PERIOD_CTRL:
 		at_proc.rAtProcGeneralCtrl.rAtBadNodeSubCtrl.u2AtBadNodeMonitorPeriod = cpu2le16(pad->vow_badnode.bn_monitor_period);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_badnode.bn_monitor_period));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_badnode.bn_monitor_period);
 		break;
 
 	case ENUM_AT_PROC_BAD_NODE_FALLBACK_THRESHOLD:
 		at_proc.rAtProcGeneralCtrl.rAtBadNodeSubCtrl.ucFallbackThreshold = pad->vow_badnode.bn_fallback_threshold;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_badnode.bn_fallback_threshold));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_badnode.bn_fallback_threshold);
 		break;
 
 	case ENUM_AT_PROC_BAD_NODE_PER_THRESHOLD:
 		at_proc.rAtProcGeneralCtrl.rAtBadNodeSubCtrl.ucTxPERThreshold = pad->vow_badnode.bn_per_threshold;
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
-				 __func__, u4CtrlFieldID, subcmd, pad->vow_badnode.bn_per_threshold));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"(cmd = 0x%x, subcmd = 0x%x, val = 0x%x)\n",
+				 u4CtrlFieldID, subcmd, pad->vow_badnode.bn_per_threshold);
 		break;
 
 	default:
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(No such command = 0x%x)\n", __func__, subcmd));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "(No such command = 0x%x)\n", subcmd);
 	}
 
 	ret = MtCmdSetVoWModuleCtrl(pad, &at_proc);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s:(ret = %d), sizeof %zu\n", __func__, ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T)));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"(ret = %d), sizeof %zu\n", ret, sizeof(EXT_CMD_AT_PROC_MODULE_CTRL_T));
 	return ret;
 }
 
@@ -952,7 +986,7 @@ void vow_dump_umac_CRs(PRTMP_ADAPTER pad)
 		UINT32 val = 0;
 
 		RTMP_IO_READ32(pad->hdev_ctrl, i, &val);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("0x%0x -> 0x%0x\n", i, val));
+		MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "0x%0x -> 0x%0x\n", i, val);
 	}
 }
 /* ---------------------- end -------------------------------*/
@@ -1124,6 +1158,11 @@ void vow_variable_reset(PRTMP_ADAPTER pAd)
 	pAd->vow_sch_cfg.sch_type = VOW_SCH_FOLLOW_ALGO;
 	pAd->vow_sch_cfg.sch_policy = VOW_SCH_POL_SRR;
 
+	if (pAd->vow_gen.VOW_GEN == VOW_GEN_FALCON) {
+		pAd->vow_misc_cfg.zero_eifs_time = TRUE;
+		pAd->vow_rx_time_cfg.obss_backoff = 0;
+	}
+
 	return;
 
 }
@@ -1134,8 +1173,8 @@ VOID vow_init(PRTMP_ADAPTER pad)
 	UINT32 idx;
 	/* for M2M test */
 	pvow_pad = pad;
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("\x1b[31m%s: start ...\x1b[m\n", __func__));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "\x1b[31m: start ...\x1b[m\n");
 
 	pad->vow_gen.VOW_FEATURE = 0;
 	pad->vow_gen.VOW_FEATURE |= VOW_FEATURE_ATF;
@@ -1166,8 +1205,8 @@ VOID vow_init(PRTMP_ADAPTER pad)
 		pad->bss_group.group_idx[idx] = 0;
 
 	/* configure badnode detector */
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("\x1b[31m%s: end ...\x1b[m\n", __func__));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "\x1b[31m: end ...\x1b[m\n");
 }
 
 VOID vow_init_CR_offset(PRTMP_ADAPTER pad)
@@ -1495,8 +1534,8 @@ UINT16 vow_convert_rate_token(PRTMP_ADAPTER pad, UINT8 type, UINT8 group_id)
 		token = (period * rate);
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s: period %dus, rate %u, token %u\n", __func__, period, rate, token));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "period %dus, rate %u, token %u\n",  period, rate, token);
 	return token;
 }
 
@@ -1520,8 +1559,9 @@ UINT16 vow_convert_airtime_token(PRTMP_ADAPTER pad, UINT8 type, UINT8 group_id)
 	tmp = ((UINT64)period * atime * ratio) << 3;
 	/* printk("%s: tmp %llu\n", __FUNCTION__, tmp); */
 	token = div64_u64(tmp, 100000000);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s: period %dus, ratio %u, available time %u, token %u\n", __func__, period, ratio, atime, token));
+	MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			 "period %dus, ratio %u, available time %u, token %u\n",
+			 period, ratio, atime, token);
 	return token;
 }
 
@@ -1575,12 +1615,11 @@ INT set_vow_min_rate_token(
 
 			pad->vow_bss_cfg[group].min_rate_token = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_RATE_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1605,12 +1644,11 @@ INT set_vow_max_rate_token(
 
 			pad->vow_bss_cfg[group].max_rate_token = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_RATE_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1635,12 +1673,11 @@ INT set_vow_min_airtime_token(
 
 			pad->vow_bss_cfg[group].min_airtime_token = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_AIRTIME_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("group %d set %u.\n", group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1665,12 +1702,11 @@ INT set_vow_max_airtime_token(
 
 			pad->vow_bss_cfg[group].max_airtime_token = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_AIRTIME_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1695,12 +1731,11 @@ INT set_vow_min_rate_bucket(
 
 			pad->vow_bss_cfg[group].min_ratebucket_size = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_TOKEN_BUCKET_LENG_SIZE_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("group %d set %u.\n",  group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1725,12 +1760,11 @@ INT set_vow_max_rate_bucket(
 
 			pad->vow_bss_cfg[group].max_ratebucket_size = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_TOKEN_BUCKET_LENG_SIZE_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1755,12 +1789,11 @@ INT set_vow_min_airtime_bucket(
 
 			pad->vow_bss_cfg[group].min_airtimebucket_size = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_TOKEN_BUCKET_TIME_SIZE_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("group %d set %u.\n", group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1785,12 +1818,11 @@ INT set_vow_max_airtime_bucket(
 
 			pad->vow_bss_cfg[group].max_airtimebucket_size = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_TOKEN_BUCKET_TIME_SIZE_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1815,12 +1847,11 @@ INT set_vow_max_backlog_size(
 
 			pad->vow_bss_cfg[group].max_backlog_size = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_BACKLOG_SIZE_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1845,12 +1876,11 @@ INT set_vow_max_wait_time(
 
 			pad->vow_bss_cfg[group].max_wait_time = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_WAIT_TIME_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("group %d set %u.\n", group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1875,12 +1905,11 @@ INT set_vow_group_dwrr_max_wait_time(
 
 			pad->vow_cfg.group_max_wait_time = val;
 			ret = vow_set_group_DWRR_max_time(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1903,8 +1932,7 @@ INT set_vow_sta_pause(
 		if ((rv > 1) && (IS_WCID_VALID(pad, sta))) {
 			pad->vow_sta_cfg[sta].paused = val;
 			vow_set_sta(pad, sta, ENUM_VOW_DRR_CTRL_FIELD_STA_PAUSE_SETTING);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sta %d set %u.\n", __func__, sta, val));
+			MTWF_PRINT("%s: sta %d set %u.\n", __func__, sta, val);
 		} else
 			return FALSE;
 	} else
@@ -1927,13 +1955,13 @@ INT set_vow_sta_group(
 			INT ret;
 
 			pad->vow_sta_cfg[sta].group = val;
+
 			ret = vow_set_sta(pad, sta, ENUM_VOW_DRR_CTRL_FIELD_STA_BSS_GROUP);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sta %d group %u.\n", __func__, sta, val));
+			MTWF_PRINT("%s: sta %d group %u.\n", __func__, sta, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -1969,13 +1997,13 @@ INT set_vow_bw_en(
 						pad->vow_cfg.en_bw_ctrl || (pad->vow_cfg.en_airtime_fairness &&
 						pad->vow_watf_en), 0);
 #endif
+
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 
@@ -2004,12 +2032,11 @@ INT set_vow_refill_en(
 
 			pad->vow_cfg.en_bw_refill = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2034,15 +2061,14 @@ INT set_vow_airtime_fairness_en(
 
 			pad->vow_cfg.en_airtime_fairness = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 #if defined (FQ_SCH_SUPPORT)
 			if (pad->vow_cfg.en_airtime_fairness == 0)
 				set_fq_enable(pad, "0-0");
 #endif
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2067,12 +2093,11 @@ INT set_vow_txop_switch_bss_en(
 
 			pad->vow_cfg.en_txop_no_change_bss = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2101,12 +2126,11 @@ INT set_vow_dbdc_search_rule(
 				pad->vow_cfg.dbdc1_search_rule = val;
 
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2131,12 +2155,11 @@ INT set_vow_refill_period(
 
 			pad->vow_cfg.refill_period = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2162,12 +2185,11 @@ INT set_vow_bss_en(
 			pad->vow_cfg.per_bss_enable &= ~(1 << group);
 			pad->vow_cfg.per_bss_enable |= (val << group);
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2193,12 +2215,11 @@ INT set_vow_spl_sta_num(
 
 			pad->vow_misc_cfg.spl_sta_count = (UINT8)sta_num;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, sta_num));
+			MTWF_PRINT("%s: set %u.\n", __func__, sta_num);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 " set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2221,11 +2242,9 @@ INT set_vow_mcli_schedule_en(
 		if ((rv > 0)) {
 			pad->vow_cfg.mcli_schedule_en = val;
 			if (pad->vow_cfg.mcli_schedule_en)
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("%s: mcli schedule code enable.\n", __func__));
+				MTWF_PRINT("%s: mcli schedule code enable.\n", __func__);
 			else
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					("%s: mcli schedule code disable.\n", __func__));
+				MTWF_PRINT("%s: mcli schedule code disable.\n", __func__);
 		} else
 			return FALSE;
 	} else
@@ -2251,22 +2270,28 @@ INT set_vow_mcli_schedule_parm(
 		if (VALID_MBSS(pad, ifIndex))
 			wdev = &pad->ApCfg.MBSSID[ifIndex].wdev;
 		else
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s(): invalid MBSS index %d\n", __func__, ifIndex));
+			MTWF_DBG(pad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"invalid MBSS index %d\n", ifIndex);
 	} else if (if_type == INT_APCLI) {
 		if (ifIndex < MAX_MULTI_STA)
 			wdev = &pad->StaCfg[ifIndex].wdev;
 		else
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s(): invalid APCLI index %d\n", __func__, ifIndex));
+			MTWF_DBG(pad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"invalid APCLI index %d\n", ifIndex);
 	} else if (if_type == INT_WDS) {
 		if (ifIndex < MAX_WDS_ENTRY)
 			wdev = &pad->WdsTab.WdsEntry[ifIndex].wdev;
 		else
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s(): invalid WDS index %d\n", __func__, ifIndex));
+			MTWF_DBG(pad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"invalid WDS index %d\n", ifIndex);
 	} else {
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("Unexpected if_type\n"));
+		MTWF_DBG(pad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Unexpected if_type\n");
+		return FALSE;
+	}
+
+	if (!wdev) {
+		MTWF_DBG(pad, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"invalid, wdev is NULL\n");
 		return FALSE;
 	}
 
@@ -2285,37 +2310,32 @@ INT set_vow_mcli_schedule_parm(
 		switch (cmd) {
 		case MCLI_TCP_CNT_TH:
 			pad->vow_cfg.mcli_sch_cfg.tcp_cnt_th = op1;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%s: tcp_cnt_th=%u\n", __func__, pad->vow_cfg.mcli_sch_cfg.tcp_cnt_th));
+			MTWF_PRINT("%s: tcp_cnt_th=%u\n", __func__, pad->vow_cfg.mcli_sch_cfg.tcp_cnt_th);
 			break;
 		case MCLI_DL_WRR_ENABLE:
-			pad->vow_cfg.mcli_sch_cfg.dl_wrr_en[bandidx] = (op1 > 0);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("%s:band%u dl_wrr_en=%u\n", __func__, bandidx,
-				pad->vow_cfg.mcli_sch_cfg.dl_wrr_en[bandidx]));
+			pad->vow_cfg.mcli_sch_cfg.dl_wrr_en = (op1 > 0);
+			MTWF_PRINT("%s: dl_wrr_en=%u\n", __func__, pad->vow_cfg.mcli_sch_cfg.dl_wrr_en);
 			break;
 		case MCLI_CWMIN_CWMAX_PARAM:
 			if (op1 == VOW_MCLI_DL_MODE) {
 				pad->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_DL_MODE][bandidx] = op2;
 				pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_DL_MODE][bandidx] = op3;
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("%s:band%u, DL mode, cwmin:cwmax=%u:%u\n", __func__, bandidx,
+				MTWF_PRINT("%s:band%u, DL mode, cwmin:cwmax=%u:%u\n", __func__, bandidx,
 					pad->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_DL_MODE][bandidx],
-					pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_DL_MODE][bandidx]));
+					pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_DL_MODE][bandidx]);
 			} else if (op1 == VOW_MCLI_UL_MODE) {
 				pad->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_UL_MODE][bandidx] = op2;
 				pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_UL_MODE][bandidx] = op3;
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("%s:band%u, UL mode, cwmin:cwmax=%u:%u\n", __func__, bandidx,
+				MTWF_PRINT("%s:band%u, UL mode, cwmin:cwmax=%u:%u\n", __func__, bandidx,
 					pad->vow_cfg.mcli_sch_cfg.cwmin[VOW_MCLI_UL_MODE][bandidx],
-					pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_UL_MODE][bandidx]));
+					pad->vow_cfg.mcli_sch_cfg.cwmax[VOW_MCLI_UL_MODE][bandidx]);
 			} else
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					("%s: mode%u not support now\n", __func__, op1));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"mode%u not support now\n", op1);
 			break;
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s: Invaild parameter combination, cmd:%d, op:%d\n", __func__, cmd, op1));
+			MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"Invaild parameter combination, cmd:%d, op:%d\n", cmd, op1);
 			break;
 		}
 	} else
@@ -2338,12 +2358,11 @@ INT set_vow_sta_dwrr_quantum(
 
 			pad->vow_cfg.vow_sta_dwrr_quantum[id] = val;
 			ret = vow_set_sta(pad, VOW_ALL_STA, ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_QUANTUM_L0 + id);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set quantum id %u, val %d.\n", __func__, id, val));
+			MTWF_PRINT("%s: set quantum id %u, val %d.\n", __func__, id, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2365,8 +2384,7 @@ INT set_vow_sta_frr_quantum(
 		if ((rv > 0) && (val <= 0xff)) {
 			pad->vow_sta_frr_quantum = val;
 			pad->vow_sta_frr_flag = FALSE;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s: set FRR quantum %d.\n", __FUNCTION__, val));
+			MTWF_PRINT("%s: set FRR quantum %d.\n", __FUNCTION__, val);
 		} else
 			return FALSE;
 	} else
@@ -2386,8 +2404,7 @@ INT set_vow_near_far_en(
 
 		if (rv == 1) {
 			pad->vow_misc_cfg.near_far_ctrl.adjust_en = val;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 		} else
 			return FALSE;
 	} else
@@ -2409,9 +2426,8 @@ INT set_vow_near_far_th(
 		if (rv > 1) {
 			pad->vow_misc_cfg.near_far_ctrl.slow_phy_th = slow_th;
 			pad->vow_misc_cfg.near_far_ctrl.fast_phy_th = fast_th;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set slow_th %u, fast_th %d.\n",
-					  __func__, slow_th, fast_th));
+			MTWF_PRINT("%s: set slow_th %u, fast_th %d.\n",
+					  __func__, slow_th, fast_th);
 		} else
 			return FALSE;
 	} else
@@ -2434,12 +2450,11 @@ INT set_vow_airtime_ctrl_en(
 
 			pad->vow_bss_cfg[group].at_on = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2464,12 +2479,11 @@ INT set_vow_bw_ctrl_en(
 
 			pad->vow_bss_cfg[group].bw_on = val;
 			ret = vow_set_feature_all(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2493,14 +2507,13 @@ INT set_vow_schedule_ctrl(
 			INT ret = vow_set_schedule_ctrl(pad, (UINT8)sch_type, (UINT8)sch_policy);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sch_type %u sch_policy %u.\n", __func__,
-					  pad->vow_sch_cfg.sch_type, pad->vow_sch_cfg.sch_policy));
+			MTWF_PRINT("%s: sch_type %u sch_policy %u.\n", __func__,
+					  pad->vow_sch_cfg.sch_type, pad->vow_sch_cfg.sch_policy);
 		} else
 			return FALSE;
 	} else
@@ -2513,9 +2526,8 @@ INT show_vow_schedule_ctrl(
 	IN  PRTMP_ADAPTER pad,
 	IN  RTMP_STRING * arg)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("%s: sch_type %u sch_policy %u.\n", __func__,
-			  pad->vow_sch_cfg.sch_type, pad->vow_sch_cfg.sch_policy));
+	MTWF_PRINT("%s: sch_type %u sch_policy %u.\n", __func__,
+			  pad->vow_sch_cfg.sch_type, pad->vow_sch_cfg.sch_policy);
 
 	return TRUE;
 }
@@ -2536,13 +2548,12 @@ INT set_vow_sta_ac_priority(
 			ret = vow_set_sta(pad, sta, ENUM_VOW_DRR_CTRL_FIELD_STA_PRIORITY);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: sta %d W ENUM_VOW_DRR_PRIORITY_CFG_ITEM failed.\n", __func__, sta));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "sta %d W ENUM_VOW_DRR_PRIORITY_CFG_ITEM failed.\n", sta);
 				return FALSE;
 			}
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sta %d W AC change rule %d.\n", __func__, sta, pad->vow_sta_cfg[sta].ac_change_rule));
+			MTWF_PRINT("%s: sta %d W AC change rule %d.\n", __func__, sta, pad->vow_sta_cfg[sta].ac_change_rule);
 		} else
 			return FALSE;
 	} else
@@ -2565,12 +2576,11 @@ INT set_vow_sta_dwrr_quantum_id(
 
 			pad->vow_sta_cfg[sta].dwrr_quantum[ac] = val;
 			ret = vow_set_sta(pad, sta, ENUM_VOW_DRR_CTRL_FIELD_STA_AC0_QUA_ID + ac);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set sta %d, ac %d, quantum id %u.\n", __func__, sta, ac, val));
+			MTWF_PRINT("%s: set sta %d, ac %d, quantum id %u.\n", __func__, sta, ac, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2595,12 +2605,11 @@ INT set_vow_bss_dwrr_quantum(
 
 			pad->vow_bss_cfg[group].dwrr_quantum = val;
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_BW_GROUP_QUANTUM_L_00 + group);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set group %d, quantum id %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: set group %d, quantum id %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2626,12 +2635,11 @@ INT set_vow_dwrr_max_wait_time(
 			pad->vow_cfg.sta_max_wait_time = val;
 			/* ret = vow_set_sta(pad, 0xFF, ENUM_VOW_DRR_CTRL_FIELD_AIRTIME_DEFICIT_BOUND); */
 			ret = vow_set_sta_DWRR_max_time(pad);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2657,12 +2665,11 @@ INT set_vow_min_rate(
 			pad->vow_bss_cfg[group].min_rate = val;
 			pad->vow_bss_cfg[group].min_rate_token = vow_convert_rate_token(pad, VOW_MIN, group);
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_RATE_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set rate %u\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set rate %u\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2688,12 +2695,11 @@ INT set_vow_max_rate(
 			pad->vow_bss_cfg[group].max_rate = val;
 			pad->vow_bss_cfg[group].max_rate_token = vow_convert_rate_token(pad, VOW_MAX, group);
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_RATE_TOKEN_CFG_ITEM);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2719,13 +2725,17 @@ INT set_vow_min_ratio(
 			pad->vow_bss_cfg[group].min_airtime_ratio = val;
 			pad->vow_bss_cfg[group].min_airtime_token = vow_convert_airtime_token(pad, VOW_MIN, group);
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MIN_AIRTIME_TOKEN_CFG_ITEM);
+			if (ret) {
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"set group command failed.\n");
+				return FALSE;
+			}
 			ret = vow_set_at_estimator_group(pad, ENUM_AT_PROC_EST_GROUP_RATIO_CTRL, group);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2751,13 +2761,17 @@ INT set_vow_max_ratio(
 			pad->vow_bss_cfg[group].max_airtime_ratio = val;
 			pad->vow_bss_cfg[group].max_airtime_token = vow_convert_airtime_token(pad, VOW_MAX, group);
 			ret = vow_set_group(pad, group, ENUM_BSSGROUP_CTRL_MAX_AIRTIME_TOKEN_CFG_ITEM);
+			if (ret) {
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set group command failed.\n");
+				return FALSE;
+			}
 			ret = vow_set_at_estimator_group(pad, ENUM_AT_PROC_EST_GROUP_RATIO_CTRL, group);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d set %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d set %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pad, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2781,12 +2795,11 @@ INT set_vow_rx_counter_clr(
 			INT ret;
 
 			ret = vow_set_rx_airtime(pAd, ENUM_RX_AT_BITWISE_CTRL, ENUM_RX_AT_BITWISE_SUB_TYPE_AIRTIME_CLR);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2811,12 +2824,11 @@ INT set_vow_rx_airtime_en(
 
 			pAd->vow_rx_time_cfg.rx_time_en = val;
 			ret = vow_set_rx_airtime(pAd, ENUM_RX_AT_FEATURE_CTRL, ENUM_RX_AT_FEATURE_SUB_TYPE_AIRTIME_EN);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2841,12 +2853,11 @@ INT set_vow_rx_early_end_en(
 
 			pAd->vow_rx_time_cfg.rx_early_end_en = val;
 			ret = vow_set_rx_airtime(pAd, ENUM_RX_AT_FEATURE_CTRL, ENUM_RX_AT_FEATURE_SUB_TYPE_EARLYEND_EN);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2871,12 +2882,11 @@ INT set_vow_rx_ed_offset(
 
 			pAd->vow_rx_time_cfg.ed_offset = val;
 			ret = vow_set_rx_airtime(pAd, ENUM_RX_AT_TIMER_VALUE_CTRL, ENUM_RX_AT_TIME_VALUE_SUB_TYPE_ED_OFFSET_CTRL);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2902,12 +2912,11 @@ INT set_vow_rx_obss_backoff(
 
 			pAd->vow_rx_time_cfg.obss_backoff = val;
 			ret = vow_set_backoff_time(pAd, ENUM_RX_AT_OBSS);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2933,12 +2942,11 @@ INT set_vow_rx_wmm_backoff(
 
 			pAd->vow_rx_time_cfg.wmm_backoff[wmm][ac] = val;
 			ret = vow_set_backoff_time(pAd, wmm);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: wmm %d ac %d set %u.\n", __func__, wmm, ac, val));
+			MTWF_PRINT("%s: wmm %d ac %d set %u.\n", __func__, wmm, ac, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2963,12 +2971,11 @@ INT set_vow_rx_non_qos_backoff(
 
 			pAd->vow_rx_time_cfg.non_qos_backoff = val;
 			ret = vow_set_backoff_time(pAd, ENUM_RX_AT_NON_QOS);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set %u.\n", __func__, val));
+			MTWF_PRINT("%s: set %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -2993,12 +3000,11 @@ INT set_vow_rx_om_wmm_backoff(
 
 			pAd->vow_rx_time_cfg.om_wmm_backoff[ac] = val;
 			ret = vow_set_backoff_time(pAd, ENUM_RX_AT_WMM_GROUP_STA);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set ac %d, val = %u.\n", __func__, ac, val));
+			MTWF_PRINT("set ac %d, val = %u.\n", ac, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -3023,12 +3029,11 @@ INT set_vow_rx_repeater_wmm_backoff(
 
 			pAd->vow_rx_time_cfg.repeater_wmm_backoff[ac] = val;
 			ret = vow_set_backoff_time(pAd, ENUM_RX_AT_WMM_GROUP_PEPEATER);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set ac %d, val = %u.\n", __func__, ac, val));
+			MTWF_PRINT("%s: set ac %d, val = %u.\n", __func__, ac, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -3053,12 +3058,11 @@ INT set_vow_rx_bss_wmmset(
 
 			pAd->vow_rx_time_cfg.bssid2wmm_set[bss_idx] = val;
 			ret = vow_set_mbss2wmm_map(pAd, bss_idx);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: bss_idx %d set %u.\n", __func__, bss_idx, val));
+			MTWF_PRINT("%s: bss_idx %d set %u.\n", __func__, bss_idx, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -3083,12 +3087,11 @@ INT set_vow_rx_om_wmm_select(
 
 			pAd->vow_rx_time_cfg.wmm_backoff_sel[om_idx] = val;
 			ret = vow_set_wmm_selection(pAd, om_idx);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: OM MAC index %d set %u.\n", __func__, om_idx, val));
+			MTWF_PRINT("%s: OM MAC index %d set %u.\n", __func__, om_idx, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -3221,8 +3224,7 @@ INT set_vow_charge_sta_dwrr(
 
 		if ((rv > 3) && (IS_WCID_VALID(pAd, sta)) && (ac < WMM_NUM_OF_AC)) {
 			halUmacVoWChargeAitTimeDRR(sta, ac, mode, val);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sta%d/ac%d %c charge--> %u.\n", __func__, sta, ac, mode == 0 ? 'd' : 'a', val));
+			MTWF_PRINT("%s: sta%d/ac%d %c charge--> %u.\n", __func__, sta, ac, mode == 0 ? 'd' : 'a', val);
 		} else
 			return FALSE;
 	} else
@@ -3242,8 +3244,7 @@ INT set_vow_charge_bw_time(
 
 		if ((rv > 1) && (group < VOW_MAX_GROUP_NUM)) {
 			halUmacVoWChargeBwTokenTime(group, mode, val);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val));
+			MTWF_PRINT("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val);
 		} else
 			return FALSE;
 	} else
@@ -3263,8 +3264,7 @@ INT set_vow_charge_bw_len(
 
 		if ((rv > 1) && (group < VOW_MAX_GROUP_NUM)) {
 			halUmacVoWChargeBwTokenLength(group, mode, val);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val));
+			MTWF_PRINT("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val);
 		} else
 			return FALSE;
 	} else
@@ -3284,8 +3284,7 @@ INT set_vow_charge_bw_dwrr(
 
 		if ((rv > 1) && (group < VOW_MAX_GROUP_NUM)) {
 			halUmacVoWChargeBwDrrTime(group, mode, val);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val));
+			MTWF_PRINT("%s: group%d %c charge--> %u.\n", __func__, group, mode == 0 ? 'd' : 'a', val);
 		} else
 			return FALSE;
 	} else
@@ -3312,8 +3311,8 @@ INT set_vow_sta_psm(
 			if (pAd->vow_gen.VOW_GEN == VOW_GEN_FALCON) {
 				ret = chip_dbg->set_sta_psm(pAd, sta, psm);
 				if (ret != TRUE)
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						("%s: set psm failed\n", __func__));
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"set psm failed\n");
 			} else {
 				/* clear PSM update mask bit31 */
 				RTMP_IO_WRITE32(pAd->hdev_ctrl, WF_WTBLON, 0x80000000);
@@ -3330,8 +3329,7 @@ INT set_vow_sta_psm(
 				}
 			}
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: sta%d psm--> %u.\n", __func__, sta, psm));
+			MTWF_PRINT("%s: sta%d psm--> %u.\n", __func__, sta, psm);
 		} else
 			ret = FALSE;
 	} else
@@ -3353,8 +3351,7 @@ INT set_vow_monitor_sta(
 
 		if ((rv > 0) && (IS_WCID_VALID(pAd, sta))) {
 			pAd->vow_monitor_sta = sta;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: monitor sta%d.\n", __func__, sta));
+			MTWF_PRINT("%s: monitor sta%d.\n", __func__, sta);
 		} else
 			return FALSE;
 	} else
@@ -3374,8 +3371,7 @@ INT set_vow_monitor_bss(
 
 		if ((rv > 0) && (bss <= 16)) {
 			pAd->vow_monitor_bss = bss;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: monitor bss%d.\n", __func__, bss));
+			MTWF_PRINT("%s: monitor bss%d.\n", __func__, bss);
 		} else
 			return FALSE;
 	} else
@@ -3395,8 +3391,7 @@ INT set_vow_monitor_mbss(
 
 		if ((rv > 0) && (bss < 16)) {
 			pAd->vow_monitor_mbss = bss;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: monitor mbss%d.\n", __func__, bss));
+			MTWF_PRINT("%s: monitor mbss%d.\n", __func__, bss);
 		} else
 			return FALSE;
 	} else
@@ -3416,8 +3411,7 @@ INT set_vow_avg_num(
 
 		if ((rv > 0) && (num < 1000)) {
 			pAd->vow_avg_num = num;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: average numer %d.\n", __func__, num));
+			MTWF_PRINT("%s: average numer %d.\n", __func__, num);
 		} else
 			return FALSE;
 	} else
@@ -3442,8 +3436,7 @@ INT set_vow_dvt_en(
 				vow_init(pAd);
 			}
 			pAd->vow_dvt_en = en;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: DVT enable %d.\n", __func__, pAd->vow_dvt_en));
+			MTWF_PRINT("%s: DVT enable %d.\n", __func__, pAd->vow_dvt_en);
 		} else
 			return FALSE;
 	} else
@@ -3464,8 +3457,7 @@ INT set_vow_show_en(
 		if (rv > 0) {
 			pAd->vow_show_en = en;
 			vow_set_feature_all(pAd);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: DVT Show enable %d.\n", __func__, pAd->vow_show_en));
+			MTWF_PRINT("%s: DVT Show enable %d.\n", __func__, pAd->vow_show_en);
 		} else
 			return FALSE;
 	} else
@@ -3478,8 +3470,7 @@ INT set_vow_help(
 	IN  PRTMP_ADAPTER pAd,
 	IN  RTMP_STRING * arg)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== Group table =========\n"
+	MTWF_PRINT("======== Group table =========\n"
 			  "vow_min_rate_token = <group>-<token>\n"
 			  "vow_max_rate_token = <group>-<token>\n"
 			  "vow_min_airtime_token = <group>-<token>\n"
@@ -3501,9 +3492,8 @@ INT set_vow_help(
 			  "vow_spl_sta_num = <sta num> in txop\n"
 			  "vow_airtime_control_en = <group>-<0/1> 0:disable, 1:enable\n"
 			  "vow_bw_control_en = <group>-<0/1> 0:disable, 1:enable\n"
-			  "vow_sch_ctrl = <type>-<policy> (type->0:algo,1:hw, policy->0:SRR,1:WRR)\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== Group others =============\n"
+			  "vow_sch_ctrl = <type>-<policy> (type->0:algo,1:hw, policy->0:SRR,1:WRR)\n");
+	MTWF_PRINT("======== Group others =============\n"
 			  "vow_bss_dwrr_quantum = <group>-<time> 256us\n"
 			  "vow_group_dwrr_max_wait_time = <time> 256us\n"
 			  "vow_group2band_map = <group>-<band>\n"
@@ -3519,9 +3509,8 @@ INT set_vow_help(
 			  "vow_min_rate = <group>-<Mbps>\n"
 			  "vow_max_rate = <group>-<Mbps>\n"
 			  "vow_min_ratio = <group>-<%%>\n"
-			  "vow_max_ratio = <group>-<%%>\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== Rx Config =============\n"
+			  "vow_max_ratio = <group>-<%%>\n");
+	MTWF_PRINT("======== Rx Config =============\n"
 			  "vow_rx_counter_clr = <n>\n"
 			  "vow_rx_airtime_en = <0/1> 0:dieable, 1:enable\n"
 			  "vow_rx_early_end_en = <0/1> 0:dieable, 1:enable\n"
@@ -3535,9 +3524,8 @@ INT set_vow_help(
 			  "vow_rx_om_wmm_sel = <OM idx>-<val> 0:RX WMM(1to1), 1:OM wmm\n"
 			  "======== Airtime estimator =============\n"
 			  "vow_at_est_en = <0/1> 0:dieable, 1:enable\n"
-			  "vow_at_mon_period = <period> ms\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== Badnode detector =============\n"
+			  "vow_at_mon_period = <period> ms\n");
+	MTWF_PRINT("======== Badnode detector =============\n"
 			  "vow_bn_en = <0/1> 0:dieable, 1:enable\n"
 			  "vow_bn_mon_period = <period> ms\n"
 			  "vow_bn_fallback_th = <count>\n"
@@ -3565,7 +3553,7 @@ INT set_vow_help(
 			  "vow_watf_q = <level>-<quantum> unit 256us\n"
 			  "vow_watf_add_entry = <level>-<Addr>\n"
 			  "vow_watf_del_entry = <Addr>\n"
-			 ));
+			 );
 	return TRUE;
 }
 
@@ -3582,8 +3570,7 @@ INT set_vow_show_sta(
 
 		if ((rv > 0) && (IS_WCID_VALID(pAd, sta))) {
 			pAd->vow_show_sta = sta;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: show station up to %d.\n", __func__, pAd->vow_show_sta));
+			MTWF_PRINT("%s: show station up to %d.\n", __func__, pAd->vow_show_sta);
 		} else
 			return FALSE;
 	} else
@@ -3603,8 +3590,7 @@ INT set_vow_show_mbss(
 
 		if ((rv > 0) && (mbss <= 16)) {
 			pAd->vow_show_mbss = mbss;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: show MBSS up to %d.\n", __func__, pAd->vow_show_mbss));
+			MTWF_PRINT("%s: show MBSS up to %d.\n", __func__, pAd->vow_show_mbss);
 		} else
 			return FALSE;
 	} else
@@ -3658,9 +3644,8 @@ INT show_vow_dump_sta(
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8354, &val2);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8358, &val3);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x835c, &val4);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("STA%d: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n",
-					sta, val1, val2, val3, val4));
+		MTWF_PRINT("STA%d: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n",
+					sta, val1, val2, val3, val4);
 	}
 
 	return TRUE;
@@ -3704,15 +3689,13 @@ INT show_vow_dump_bss_bitmap(
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8354, &val2);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8358, &val3);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x835c, &val4);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Group%d BitMap: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4));
+		MTWF_PRINT("Group%d BitMap: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4);
 #if (MAX_LEN_OF_MAC_TABLE > 128)
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8690, &val1);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8694, &val2);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8698, &val3);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x869c, &val4);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Group%d BitMap: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4));
+		MTWF_PRINT("Group%d BitMap: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4);
 #endif
 	}
 
@@ -3760,8 +3743,7 @@ INT show_vow_dump_bss(
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8354, &val2);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x8358, &val3);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x835c, &val4);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("Group%d Config: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4));
+		MTWF_PRINT("Group%d Config: 0x%08X, 0x%08X, 0x%08X, 0x%08X.\n", group, val1, val2, val3, val4);
 	}
 
 	return TRUE;
@@ -3792,8 +3774,7 @@ INT vow_show_bss_atoken(
 			RTMP_IO_READ32(pAd->hdev_ctrl, (val_offset + 0x8), &val3);
 			RTMP_IO_READ32(pAd->hdev_ctrl, (val_offset + 0xc), &val4);
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Group%d airtime token: max 0x%08X, min 0x%08X.\n", group, val2, val1));
+			MTWF_PRINT("Group%d airtime token: max 0x%08X, min 0x%08X.\n", group, val2, val1);
 		} else
 			return FALSE;
 	} else
@@ -3827,8 +3808,7 @@ INT vow_show_bss_ltoken(
 			RTMP_IO_READ32(pAd->hdev_ctrl, (val_offset + 0x8), &val3);
 			RTMP_IO_READ32(pAd->hdev_ctrl, (val_offset + 0xc), &val4);
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Group%d length token: max 0x%08X, min 0x%08X\n", group, val4, val3));
+			MTWF_PRINT("Group%d length token: max 0x%08X, min 0x%08X\n", group, val4, val3);
 		} else
 			return FALSE;
 	} else
@@ -3871,9 +3851,8 @@ INT vow_show_bss_dtoken(
 			if (val2_ori >> 17)
 				val2_sign_ext = ~(0x3FFFF - val2_ori) + 1;
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("Group%d airtime token: max %d(0x%08X), min %d(0x%08X)\n",
-				group, val1_sign_ext, val1_ori, val2_sign_ext, val2_ori));
+			MTWF_PRINT("Group%d airtime token: max %d(0x%08X), min %d(0x%08X)\n",
+				group, val1_sign_ext, val1_ori, val2_sign_ext, val2_ori);
 		} else
 			return FALSE;
 	} else
@@ -3931,9 +3910,8 @@ INT vow_show_sta_dtoken(
 			if (val4 >> 17)
 				val4_sign_ext = ~(0x3FFFF - val4) + 1;
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("Sta%d deficit token: ac0 %d(0x%08X), ac1 %d(0x%08X), ac2 %d(0x%08X), ac3 %d(0x%08X)\n",
-				sta, val1_sign_ext, val1, val2_sign_ext, val2, val3_sign_ext, val3, val4_sign_ext, val4));
+			MTWF_PRINT("Sta%d deficit token: ac0 %d(0x%08X), ac1 %d(0x%08X), ac2 %d(0x%08X), ac3 %d(0x%08X)\n",
+				sta, val1_sign_ext, val1, val2_sign_ext, val2, val3_sign_ext, val3, val4_sign_ext, val4);
 		} else
 			return FALSE;
 	} else
@@ -3949,12 +3927,12 @@ INT show_vow_rx_time(
 {
 	UINT32 counter[4];
 
+
 	counter[0] = vow_get_rx_time_counter(pAd, ENUM_RX_AT_REPORT_SUB_TYPE_RX_NONWIFI_TIME, 0);
 	counter[1] = vow_get_rx_time_counter(pAd, ENUM_RX_AT_REPORT_SUB_TYPE_RX_NONWIFI_TIME, 1);
 	counter[2] = vow_get_rx_time_counter(pAd, ENUM_RX_AT_REPORT_SUB_TYPE_RX_OBSS_TIME, 0);
 	counter[3] = vow_get_rx_time_counter(pAd, ENUM_RX_AT_REPORT_SUB_TYPE_RX_OBSS_TIME, 1);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("%s: nonwifi %u/%u, obss %u/%u.\n", __func__, counter[0], counter[1], counter[2], counter[3]));
+	MTWF_PRINT("%s: nonwifi %u/%u, obss %u/%u.\n", __func__, counter[0], counter[1], counter[2], counter[3]);
 	return TRUE;
 }
 
@@ -3971,26 +3949,21 @@ INT show_vow_sta_conf(
 			UINT32 pri, q;
 			CHAR * pri_str[] = {"No change.", "To BE.", "To BK."};
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: ************ sta%d ***********\n", __func__, sta));
+			MTWF_PRINT("%s: ************ sta%d ***********\n", __func__, sta);
 			/* group */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Group --> %u\n", pAd->vow_sta_cfg[sta].group));
+			MTWF_PRINT("Group --> %u\n", pAd->vow_sta_cfg[sta].group);
 			/* priority */
 			pri = pAd->vow_sta_cfg[sta].ac_change_rule;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Priority --> %s(%u)\n", pri_str[pri], pri));
+			MTWF_PRINT("Priority --> %s(%u)\n", pri_str[pri], pri);
 			/* airtime quantum for AC */
 			q = pAd->vow_sta_cfg[sta].dwrr_quantum[WMM_AC_BK];
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Ac0 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q));
+			MTWF_PRINT("Ac0 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
 			q = pAd->vow_sta_cfg[sta].dwrr_quantum[WMM_AC_BE];
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Ac1 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q));
+			MTWF_PRINT("Ac1 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
 			q = pAd->vow_sta_cfg[sta].dwrr_quantum[WMM_AC_VI];
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Ac2 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q));
+			MTWF_PRINT("Ac2 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
 			q = pAd->vow_sta_cfg[sta].dwrr_quantum[WMM_AC_VO];
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Ac3 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q));
+			MTWF_PRINT("Ac3 --> %uus(%u)\n", (pAd->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
 		} else
 			return FALSE;
 	} else
@@ -4005,11 +3978,17 @@ INT show_vow_all_sta_conf(
 {
 	UINT32 i;
 	UINT16 wtbl_max_num = WTBL_MAX_NUM(pAd);
+	int ret = 0;
 
 	for (i = 0; i < wtbl_max_num; i++) {
 		CHAR str[4];
 
-		sprintf(str, "%d", i);
+		ret = snprintf(str, sizeof(str), "%d", i);
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "str snprintf error.\n");
+			return FALSE;
+		}
 		show_vow_sta_conf(pAd, str);
 	}
 
@@ -4028,49 +4007,40 @@ INT show_vow_bss_conf(
 		if ((rv > 0) && (bss < VOW_MAX_GROUP_NUM)) {
 			UINT32 val;
 
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: ************** Group%d **********\n", __func__, bss));
+			MTWF_PRINT("%s: ************** Group%d **********\n", __func__, bss);
 			/* per BSS bw control */
 			val = pAd->vow_cfg.per_bss_enable & (1UL << bss);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("BW control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val));
+			MTWF_PRINT("BW control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val);
 			/* per BSS airtime control */
 			val = pAd->vow_bss_cfg[bss].at_on;
 			/* val = halUmacVoWGetDisablePerBssCheckTimeTokenFeature(bss); */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Airtime control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val));
+			MTWF_PRINT("Airtime control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val);
 			/* per BSS TP control */
 			/* val = halUmacVoWGetDisablePerBssCheckLengthTokenFeature(bss); */
 			val = pAd->vow_bss_cfg[bss].bw_on;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Rate control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val));
+			MTWF_PRINT("Rate control --> %s(%d)\n", val == 0 ? "Disable" : "Enable", val);
 			/* Rate Setting */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Rate --> %u/%uMbps\n", pAd->vow_bss_cfg[bss].max_rate, pAd->vow_bss_cfg[bss].min_rate));
+			MTWF_PRINT("Rate --> %u/%uMbps\n", pAd->vow_bss_cfg[bss].max_rate, pAd->vow_bss_cfg[bss].min_rate);
 			/* Airtime Setting */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Airtime ratio --> %u/%u %%\n", pAd->vow_bss_cfg[bss].max_airtime_ratio, pAd->vow_bss_cfg[bss].min_airtime_ratio));
+			MTWF_PRINT("Airtime ratio --> %u/%u %%\n", pAd->vow_bss_cfg[bss].max_airtime_ratio, pAd->vow_bss_cfg[bss].min_airtime_ratio);
 			/* Rate token */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Rate token --> %u Byte(%u)/%u Byte(%u)\n",
+			MTWF_PRINT("Rate token --> %u Byte(%u)/%u Byte(%u)\n",
 					  (pAd->vow_bss_cfg[bss].max_rate_token >> 3),
 					  pAd->vow_bss_cfg[bss].max_rate_token,
 					  (pAd->vow_bss_cfg[bss].min_rate_token >> 3),
-					  pAd->vow_bss_cfg[bss].min_rate_token));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Rate bucket --> %u Byte/%u Byte\n",
+					  pAd->vow_bss_cfg[bss].min_rate_token);
+			MTWF_PRINT("Rate bucket --> %u Byte/%u Byte\n",
 					  pAd->vow_bss_cfg[bss].max_ratebucket_size << 10,
-					  pAd->vow_bss_cfg[bss].min_ratebucket_size << 10));
+					  pAd->vow_bss_cfg[bss].min_ratebucket_size << 10);
 			/* Airtime token */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Airtime token --> %u us(%u)/%u us(%u)\n",
+			MTWF_PRINT("Airtime token --> %u us(%u)/%u us(%u)\n",
 					  (pAd->vow_bss_cfg[bss].max_airtime_token >> 3),
 					  pAd->vow_bss_cfg[bss].max_airtime_token,
 					  (pAd->vow_bss_cfg[bss].min_airtime_token >> 3),
-					  pAd->vow_bss_cfg[bss].min_airtime_token));
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Airtime bucket --> %u us/%u us\n",
+					  pAd->vow_bss_cfg[bss].min_airtime_token);
+			MTWF_PRINT("Airtime bucket --> %u us/%u us\n",
 					  pAd->vow_bss_cfg[bss].max_airtimebucket_size << 10,
-					  pAd->vow_bss_cfg[bss].min_airtimebucket_size << 10));
+					  pAd->vow_bss_cfg[bss].min_airtimebucket_size << 10);
 		} else
 			return FALSE;
 	} else
@@ -4084,11 +4054,16 @@ INT show_vow_all_bss_conf(
 	IN  RTMP_STRING * arg)
 {
 	UINT32 i;
-
+	int ret = 0;
 	for (i = 0; i < VOW_MAX_GROUP_NUM; i++) {
 		CHAR str[4];
 
-		sprintf(str, "%d", i);
+		ret = snprintf(str, sizeof(str), "%d", i);
+		if (os_snprintf_error(sizeof(str), ret)) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "str snprintf error.\n");
+			return FALSE;
+		}
 		show_vow_bss_conf(pAd, str);
 	}
 
@@ -4110,17 +4085,13 @@ INT show_vow_near_far(
 	NEAR_FAR_CTRL_T *near_far_ctrl = &pAd->vow_misc_cfg.near_far_ctrl;
 	UINT32 band_idx;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("adjust_en = %d\n", near_far_ctrl->adjust_en));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("slow_phy_th = %d\n", near_far_ctrl->slow_phy_th));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-		("fast_phy_th = %d\n", near_far_ctrl->fast_phy_th));
+	MTWF_PRINT("adjust_en = %d\n", near_far_ctrl->adjust_en);
+	MTWF_PRINT("slow_phy_th = %d\n", near_far_ctrl->slow_phy_th);
+	MTWF_PRINT("fast_phy_th = %d\n", near_far_ctrl->fast_phy_th);
 
 	for (band_idx = 0; band_idx < DBDC_BAND_NUM; band_idx++)
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			("band(%d) near_far_txop_running = %d\n",
-			 band_idx, pAd->txop_ctl[band_idx].near_far_txop_running));
+		MTWF_PRINT("band(%d) near_far_txop_running = %d\n",
+			 band_idx, pAd->txop_ctl[band_idx].near_far_txop_running);
 
 	return TRUE;
 }
@@ -4129,8 +4100,7 @@ INT show_vow_help(
 	IN  PRTMP_ADAPTER pAd,
 	IN  RTMP_STRING * arg)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_rx_time (Non-wifi/OBSS)\n"
+	MTWF_PRINT("vow_rx_time (Non-wifi/OBSS)\n"
 			  "vow_sta_conf = <wlanidx>\n"
 			  "vow_sta_conf\n"
 			  "vow_bss_conf = <group>\n"
@@ -4143,7 +4113,7 @@ INT show_vow_help(
 			  "vow_show_bss_dtoken = <group> DWRR\n"
 			  "vow_show_bss_atoken = <group> airtime\n"
 			  "vow_show_bss_ltoken = <group> length\n"
-			  "vow_sch_ctrl(type->0:algo,1:hw, policy->0:SRR,1:WRR)\n"));
+			  "vow_sch_ctrl(type->0:algo,1:hw, policy->0:SRR,1:WRR)\n");
 	return TRUE;
 }
 /* airtime estimator */
@@ -4161,12 +4131,11 @@ INT set_vow_at_est_en(
 
 			pAd->vow_at_est.at_estimator_en = val;
 			ret = vow_set_at_estimator(pAd, ENUM_AT_RPOCESS_ESTIMATE_MODULE_CTRL);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: value %u.\n", __func__, val));
+			MTWF_PRINT("%s: value %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4191,12 +4160,11 @@ INT set_vow_at_mon_period(
 
 			pAd->vow_at_est.at_monitor_period = val;
 			ret = vow_set_at_estimator(pAd, ENUM_AT_PROC_EST_MONITOR_PERIOD_CTRL);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: period %u.\n", __func__, val));
+			MTWF_PRINT("%s: period %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "%s: set command failed.\n", __func__);
 				return FALSE;
 			}
 		} else
@@ -4221,12 +4189,11 @@ INT set_vow_group2band_map(
 
 			pAd->vow_bss_cfg[group].band_idx = val;
 			ret = vow_set_at_estimator_group(pAd, ENUM_AT_PROC_EST_GROUP_TO_BAND_MAPPING, group);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: group %d, band %u.\n", __func__, group, val));
+			MTWF_PRINT("%s: group %d, band %u.\n", __func__, group, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4251,12 +4218,11 @@ INT set_vow_bn_en(
 
 			pAd->vow_badnode.bn_en = val;
 			ret = vow_set_bad_node(pAd, ENUM_AT_PROC_BAD_NODE_FEATURE_CTRL);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: value %u.\n", __func__, val));
+			MTWF_PRINT("%s: value %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4281,12 +4247,11 @@ INT set_vow_bn_mon_period(
 
 			pAd->vow_badnode.bn_monitor_period = val;
 			ret = vow_set_bad_node(pAd, ENUM_AT_PROC_BAD_NODE_MONITOR_PERIOD_CTRL);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: period %u.\n", __func__, val));
+			MTWF_PRINT("%s: period %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4311,12 +4276,11 @@ INT set_vow_bn_fallback_th(
 
 			pAd->vow_badnode.bn_fallback_threshold = val;
 			ret = vow_set_bad_node(pAd, ENUM_AT_PROC_BAD_NODE_FALLBACK_THRESHOLD);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: period %u.\n", __func__, val));
+			MTWF_PRINT("%s: period %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4341,12 +4305,11 @@ INT set_vow_bn_per_th(
 
 			pAd->vow_badnode.bn_per_threshold = val;
 			ret = vow_set_bad_node(pAd, ENUM_AT_PROC_BAD_NODE_PER_THRESHOLD);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: per %u.\n", __func__, val));
+			MTWF_PRINT("%s: per %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4369,8 +4332,7 @@ INT set_vow_counter_test_en(
 
 		if (rv > 0) {
 			MtCmdSetVoWCounterCtrl(pAd, 1, on);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: on = %d\n", __func__, on));
+			MTWF_PRINT("%s: on = %d\n", __func__, on);
 		} else
 			return FALSE;
 	} else
@@ -4390,8 +4352,7 @@ INT set_vow_counter_test_period(
 
 		if (rv > 0) {
 			MtCmdSetVoWCounterCtrl(pAd, 2, period);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: period = %d\n", __func__, period));
+			MTWF_PRINT("%s: period = %d\n", __func__, period);
 		} else
 			return FALSE;
 	} else
@@ -4411,8 +4372,7 @@ INT set_vow_counter_test_band(
 
 		if (rv > 0) {
 			MtCmdSetVoWCounterCtrl(pAd, 3, band);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: band = %d\n", __func__, band));
+			MTWF_PRINT("%s: band = %d\n", __func__, band);
 		} else
 			return FALSE;
 	} else
@@ -4432,8 +4392,7 @@ INT set_vow_counter_test_avgcnt(
 
 		if (rv > 0) {
 			MtCmdSetVoWCounterCtrl(pAd, 4, avgcnt);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: avgcnt = %d\n", __func__, avgcnt));
+			MTWF_PRINT("%s: avgcnt = %d\n", __func__, avgcnt);
 		} else
 			return FALSE;
 	} else
@@ -4453,8 +4412,7 @@ INT set_vow_counter_test_target(
 
 		if (rv > 0) {
 			MtCmdSetVoWCounterCtrl(pAd, 5, target);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: target = %d\n", __func__, target));
+			MTWF_PRINT("%s: target = %d\n", __func__, target);
 		} else
 			return FALSE;
 	} else
@@ -4472,28 +4430,20 @@ INT show_vow_watf_info(
 	INT			level, Num;
 
 	pwatf = &pAd->vow_watf_mac[0];
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== WATF Information ========\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_watf_en: %d\n", pAd->vow_watf_en));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_watf_q_lv0: %d\n", pAd->vow_watf_q_lv0));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_watf_q_lv1: %d\n", pAd->vow_watf_q_lv1));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_watf_q_lv2: %d\n", pAd->vow_watf_q_lv2));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("vow_watf_q_lv3: %d\n", pAd->vow_watf_q_lv3));
+	MTWF_PRINT("======== WATF Information ========\n");
+	MTWF_PRINT("vow_watf_en: %d\n", pAd->vow_watf_en);
+	MTWF_PRINT("vow_watf_q_lv0: %d\n", pAd->vow_watf_q_lv0);
+	MTWF_PRINT("vow_watf_q_lv1: %d\n", pAd->vow_watf_q_lv1);
+	MTWF_PRINT("vow_watf_q_lv2: %d\n", pAd->vow_watf_q_lv2);
+	MTWF_PRINT("vow_watf_q_lv3: %d\n", pAd->vow_watf_q_lv3);
 
 	for (level = 0; level < VOW_WATF_LEVEL_NUM; level++) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("======== WATF LV%d's MAC Address List ========\n", level));
+		MTWF_PRINT("======== WATF LV%d's MAC Address List ========\n", level);
 
 		for (Num = 0; Num < pwatf->Num; Num++) {
 			NdisMoveMemory(&macAddr, pwatf->Entry[Num].Addr, MAC_ADDR_LEN);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Entry %d: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					  Num, macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+			MTWF_PRINT("Entry %d: "MACSTR"\n",
+					  Num, MAC2STR(macAddr));
 		}
 
 		pwatf++;
@@ -4523,12 +4473,11 @@ INT set_vow_watf_en(
 					    || (pAd->vow_cfg.en_airtime_fairness
 						&& pAd->vow_watf_en), 0);
 #endif
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: vow_watf_en is set to %u.\n", __func__, val));
+			MTWF_PRINT("%s: vow_watf_en is set to %u.\n", __func__, val);
 
 			if (ret) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set command failed.\n", __func__));
+				MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "set command failed.\n");
 				return FALSE;
 			}
 		} else
@@ -4545,7 +4494,7 @@ INT set_vow_watf_q(
 {
 	UINT8		*pwatf_string;
 	UINT32		val, rv, level;
-
+	int ret = 0;
 	if (arg && vow_watf_is_enabled(pAd)) {
 		rv = sscanf(arg, "%d-%d", &level, &val);
 
@@ -4557,47 +4506,71 @@ INT set_vow_watf_q(
 			switch (level) {
 			case 0: {
 				pAd->vow_watf_q_lv0 =  val;
-				sprintf(pwatf_string, "%d-%d", 0, pAd->vow_watf_q_lv0);
+				ret = snprintf(pwatf_string, 32, "%d-%d", 0, pAd->vow_watf_q_lv0);
+				if (os_snprintf_error(sizeof(pwatf_string), ret)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "pwatf_string snprintf error.\n");
+					os_free_mem(pwatf_string);
+					return FALSE;
+				}
 				set_vow_sta_dwrr_quantum(pAd, pwatf_string);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("vow_watf_q_lv0 is set to %d\n", pAd->vow_watf_q_lv0));
+				MTWF_PRINT("vow_watf_q_lv0 is set to %d\n", pAd->vow_watf_q_lv0);
 				break;
 			}
 
 			case 1: {
 				pAd->vow_watf_q_lv1 =  val;
-				sprintf(pwatf_string, "%d-%d", 1, pAd->vow_watf_q_lv1);
+				ret = snprintf(pwatf_string, 32, "%d-%d", 1, pAd->vow_watf_q_lv1);
+				if (os_snprintf_error(sizeof(pwatf_string), ret)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "pwatf_string snprintf error.\n");
+					os_free_mem(pwatf_string);
+					return FALSE;
+				}
 				set_vow_sta_dwrr_quantum(pAd, pwatf_string);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("vow_watf_q_lv1 is set to %d\n", pAd->vow_watf_q_lv1));
+				MTWF_PRINT("vow_watf_q_lv1 is set to %d\n", pAd->vow_watf_q_lv1);
 				break;
 			}
 
 			case 2: {
 				pAd->vow_watf_q_lv2 =  val;
-				sprintf(pwatf_string, "%d-%d", 2, pAd->vow_watf_q_lv2);
+				ret = snprintf(pwatf_string, 32, "%d-%d", 2, pAd->vow_watf_q_lv2);
+				if (os_snprintf_error(sizeof(pwatf_string), ret)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "pwatf_string snprintf error.\n");
+					os_free_mem(pwatf_string);
+					return FALSE;
+				}
 				set_vow_sta_dwrr_quantum(pAd, pwatf_string);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("vow_watf_q_lv2 is set to %d\n", pAd->vow_watf_q_lv2));
+				MTWF_PRINT("vow_watf_q_lv2 is set to %d\n", pAd->vow_watf_q_lv2);
 				break;
 			}
 
 			case 3: {
 				pAd->vow_watf_q_lv3 =  val;
-				sprintf(pwatf_string, "%d-%d", 3, pAd->vow_watf_q_lv3);
+				ret = snprintf(pwatf_string, 32, "%d-%d", 3, pAd->vow_watf_q_lv3);
+				if (os_snprintf_error(sizeof(pwatf_string), ret)) {
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						 "pwatf_string snprintf error.\n");
+					os_free_mem(pwatf_string);
+					return FALSE;
+				}
 				set_vow_sta_dwrr_quantum(pAd, pwatf_string);
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("vow_watf_q_lv3 is set to %d\n", pAd->vow_watf_q_lv3));
+				MTWF_PRINT("vow_watf_q_lv3 is set to %d\n", pAd->vow_watf_q_lv3);
 				break;
 			}
 
 			default:
-				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("vow_watf_q_lv is setting fail.\n"));
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"vow_watf_q_lv is setting fail.\n");
 			}
 
 			if (pwatf_string != NULL)
 				os_free_mem(pwatf_string);
 		} else {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Wrong format, vow_watf_q=[Level]-[Quantum]\n"
+			MTWF_PRINT("Wrong format, vow_watf_q=[Level]-[Quantum]\n"
 					  "[Level] should be among 0 to 3 !\n"
-					  "[Quantum] unit is 256us.\n"));
+					  "[Quantum] unit is 256us.\n");
 			return FALSE;
 		}
 	} else
@@ -4632,9 +4605,8 @@ INT set_vow_watf_add_entry(
 				for (j = 0; j < ptmpwatf->Num; j++)
 					if (memcmp(ptmpwatf->Entry[j].Addr, &macAddr, MAC_ADDR_LEN) == 0) {
 						isDuplicate = TRUE;
-						MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-								 ("This MAC Address %02x:%02x:%02x:%02x:%02x:%02x is duplicate.\n",
-								  macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+						MTWF_PRINT("This MAC Address "MACSTR" is duplicate.\n",
+								  MAC2STR(macAddr));
 						break;
 					}
 
@@ -4643,14 +4615,12 @@ INT set_vow_watf_add_entry(
 
 			if (!isDuplicate) {
 				NdisMoveMemory(pwatf->Entry[pwatf->Num++].Addr, &macAddr, MAC_ADDR_LEN);
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("The entry Level %d - %02x:%02x:%02x:%02x:%02x:%02x is set complete!\n",
-						  level, macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+				MTWF_PRINT("The entry Level %d - "MACSTR" is set complete!\n",
+						  level, MAC2STR(macAddr));
 			}
 		} else {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Wrong format, vow_watf_add_entry=[Level]-[Addr]:[Addr]:[Addr]:[Addr]:[Addr]:[Addr]\n"
-					  "[Level] should be among 0 to 3 !\n"));
+			MTWF_PRINT("Wrong format, vow_watf_add_entry=[Level]-[Addr]:[Addr]:[Addr]:[Addr]:[Addr]:[Addr]\n"
+					  "[Level] should be among 0 to 3 !\n");
 			return FALSE;
 		}
 	} else
@@ -4686,17 +4656,14 @@ INT set_vow_watf_del_entry(
 				if (memcmp(pwatf->Entry[i].Addr, &macAddr, MAC_ADDR_LEN) == 0) {
 					isFound = TRUE;
 					NdisZeroMemory(pwatf->Entry[i].Addr, MAC_ADDR_LEN);
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-							 ("The entry %02x:%02x:%02x:%02x:%02x:%02x founded will be deleted!\n",
-							  macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+					MTWF_PRINT("The entry "MACSTR" founded will be deleted!\n",
+							  MAC2STR(macAddr));
 					break;
 				}
 			}
 
 			if (!isFound) {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("The entry %02x:%02x:%02x:%02x:%02x:%02x is not in the list!\n",
-						  macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]));
+				MTWF_PRINT("The entry "MACSTR" is not in the list!\n", MAC2STR(macAddr));
 			} else {
 				for (i = 0; i < pwatf->Num; i++) {
 					if (memcmp(pwatf->Entry[i].Addr, &nullAddr, MAC_ADDR_LEN) == 0)
@@ -4708,9 +4675,8 @@ INT set_vow_watf_del_entry(
 				pwatf->Num--;
 			}
 		} else {
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Wrong format, vow_watf_add_entry=[Level]-[Addr]:[Addr]:[Addr]:[Addr]:[Addr]:[Addr]\n"
-					  "[Level] should be among 0 to 3 !\n"));
+			MTWF_PRINT("Wrong format, vow_watf_add_entry=[Level]-[Addr]:[Addr]:[Addr]:[Addr]:[Addr]:[Addr]\n"
+					  "[Level] should be among 0 to 3 !\n");
 			return FALSE;
 		}
 	} else
@@ -4737,9 +4703,9 @@ VOID set_vow_watf_sta_dwrr(
 				if (memcmp(pwatf->Entry[j].Addr, Addr, MAC_ADDR_LEN) == 0) {
 					isFound = TRUE;
 					level = i;
-					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-							 ("This MAC Address %02x:%02x:%02x:%02x:%02x:%02x is found in list.\n",
-							  Addr[0], Addr[1], Addr[2], Addr[3], Addr[4], Addr[5]));
+					MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+							 "This MAC Address "MACSTR" is found in list.\n",
+							  MAC2STR(Addr));
 					break;
 				}
 			}
@@ -4751,14 +4717,14 @@ VOID set_vow_watf_sta_dwrr(
 			for (i = 0; i < 4; i++)
 				pAd->vow_sta_cfg[Wcid].dwrr_quantum[i] = level;
 
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Update STA %d's DWRR quantum with LV%d\n", Wcid, level));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "Update STA %d's DWRR quantum with LV%d\n", Wcid, level);
 		} else {
 			for (i = 0; i < 4; i++)
 				pAd->vow_sta_cfg[Wcid].dwrr_quantum[i] = level;
 
-			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("Update STA %d's DWRR quantum with default LV%d\n", Wcid, level));
+			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "Update STA %d's DWRR quantum with default LV%d\n", Wcid, level);
 		}
 	}
 }
@@ -4789,40 +4755,23 @@ INT show_vow_info(
 	IN  PRTMP_ADAPTER pAd,
 	IN  RTMP_STRING * arg)
 {
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== VOW Control Information ========\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("ATC Enbale: %d\n", pAd->vow_cfg.en_bw_ctrl));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("ATF Enbale: %d\n", pAd->vow_cfg.en_airtime_fairness));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("WATF Enable: %d\n", pAd->vow_watf_en));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("en_bw_refill: %d\n", pAd->vow_cfg.en_bw_refill));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("en_txop_no_change_bss: %d\n", pAd->vow_cfg.en_txop_no_change_bss));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("dbdc0_search_rule: %d\n", pAd->vow_cfg.dbdc0_search_rule));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("dbdc1_search_rule: %d\n", pAd->vow_cfg.dbdc1_search_rule));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("refill_period: %d\n", pAd->vow_cfg.refill_period));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("SPL sta num: %d\n", pAd->vow_misc_cfg.spl_sta_count));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== VOW Max Deficit Information ========\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("VOW Max Deficit(unit 256us): %d\n", pAd->vow_cfg.sta_max_wait_time));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== VOW Quantum Information ========\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Quantum ID 0 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[0]));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Quantum ID 1 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[1]));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Quantum ID 2 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[2]));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("Quantum ID 3 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[3]));
+	MTWF_PRINT("======== VOW Control Information ========\n");
+	MTWF_PRINT("ATC Enbale: %d\n", pAd->vow_cfg.en_bw_ctrl);
+	MTWF_PRINT("ATF Enbale: %d\n", pAd->vow_cfg.en_airtime_fairness);
+	MTWF_PRINT("WATF Enable: %d\n", pAd->vow_watf_en);
+	MTWF_PRINT("en_bw_refill: %d\n", pAd->vow_cfg.en_bw_refill);
+	MTWF_PRINT("en_txop_no_change_bss: %d\n", pAd->vow_cfg.en_txop_no_change_bss);
+	MTWF_PRINT("dbdc0_search_rule: %d\n", pAd->vow_cfg.dbdc0_search_rule);
+	MTWF_PRINT("dbdc1_search_rule: %d\n", pAd->vow_cfg.dbdc1_search_rule);
+	MTWF_PRINT("refill_period: %d\n", pAd->vow_cfg.refill_period);
+	MTWF_PRINT("SPL sta num: %d\n", pAd->vow_misc_cfg.spl_sta_count);
+	MTWF_PRINT("======== VOW Max Deficit Information ========\n");
+	MTWF_PRINT("VOW Max Deficit(unit 256us): %d\n", pAd->vow_cfg.sta_max_wait_time);
+	MTWF_PRINT("======== VOW Quantum Information ========\n");
+	MTWF_PRINT("Quantum ID 0 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[0]);
+	MTWF_PRINT("Quantum ID 1 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[1]);
+	MTWF_PRINT("Quantum ID 2 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[2]);
+	MTWF_PRINT("Quantum ID 3 value(unit 256us): %d\n", pAd->vow_cfg.vow_sta_dwrr_quantum[3]);
 	return TRUE;
 }
 
@@ -4867,8 +4816,8 @@ VOID vow_display_info_periodic(
 		INT32 k, l;
 		UINT32 counter[2] = {0};
 		UINT32 at_info[4] = {0};
-		UINT32 addr, phymode, rate, DW6 = 0, DW10 = 0;
-		UINT32 ple_stat_num = 16;
+		UINT32 addr = 0, phymode, rate, DW6 = 0, DW10 = 0;
+		UINT32 ple_stat_num;
 		UINT32 total_nonempty_cnt = 0;
 
 		vow_idx++;
@@ -4922,25 +4871,28 @@ VOID vow_display_info_periodic(
 			}
 
 			if (i <= pAd->vow_show_sta) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("sta%d: tx -> %u, rx -> %u, vow_idx %d\n",
-						 i, tx_diff_time, rx_diff_time, vow_idx));
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("sta%d: addr %x:%x, Mode %d, MCS %d, vow_idx %d\n",
-						 i, (addr & 0xff), (addr >> 8), phymode, rate, vow_idx));
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"sta%d: tx -> %u, rx -> %u, vow_idx %d\n",
+						 i, tx_diff_time, rx_diff_time, vow_idx);
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"sta%d: addr %x:%x, Mode %d, MCS %d, vow_idx %d\n",
+						 i, (addr & 0xff), (addr >> 8), phymode, rate, vow_idx);
 			}
 
 			if (vow_idx == pAd->vow_avg_num) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("AVG sta%d: tx -> %u(%u), rx -> %u(%u)\n", i,
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 "AVG sta%d: tx -> %u(%u), rx -> %u(%u)\n", i,
 						 vow_tx_time[i]/pAd->vow_avg_num,
 						 vow_tx_time[i],
 						 vow_rx_time[i]/pAd->vow_avg_num,
-						 vow_rx_time[i]));
+						 vow_rx_time[i]);
 				vow_avg_sum_time = 0;
 				vow_tx_time[i] = 0;
 				vow_rx_time[i] = 0;
 			}
 		}
 
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("Total Airtime: %u\n", vow_sum_tx_rx_time));
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "Total Airtime: %u\n", vow_sum_tx_rx_time);
 		vow_sum_tx_rx_time = 0;
 
 		/* tx counter */
@@ -4961,20 +4913,21 @@ VOID vow_display_info_periodic(
 			}
 
 			if (i <= pAd->vow_show_sta) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("sta%d: tx cnt -> %u/%u, tx fail -> %u/%u, vow_idx %d\n",
-						 i, tx_ok[0], tx_ok[1], tx_fail[0], tx_fail[1], vow_idx));
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"sta%d: tx cnt -> %u/%u, tx fail -> %u/%u, vow_idx %d\n",
+						 i, tx_ok[0], tx_ok[1], tx_fail[0], tx_fail[1], vow_idx);
 			}
 
 			vow_tx_ok[i] += tx_ok_sum;
 			vow_tx_fail[i] += tx_fail_sum;
 
 			if (vow_idx == pAd->vow_avg_num) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-						 ("AVG sta%d: tx cnt -> %u(%u), tx fail -> %u(%u)\n", i,
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 "AVG sta%d: tx cnt -> %u(%u), tx fail -> %u(%u)\n", i,
 						  vow_tx_ok[i]/pAd->vow_avg_num,
 						  vow_tx_ok[i],
 						  vow_tx_fail[i]/pAd->vow_avg_num,
-						  vow_tx_fail[i]));
+						  vow_tx_fail[i]);
 				vow_tx_ok[i] = 0;
 				vow_tx_fail[i] = 0;
 			}
@@ -4990,17 +4943,18 @@ VOID vow_display_info_periodic(
 				RTMP_IO_READ32(pAd->hdev_ctrl, WF_WTBLON + 0x110 + (i << 2), &txb);
 				RTMP_IO_READ32(pAd->hdev_ctrl, WF_WTBLON + 0x130 + (i << 2), &rxb);
 			}
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("BSS%d: tx byte -> %u, rx byte -> %u\n", i, txb, rxb));
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"BSS%d: tx byte -> %u, rx byte -> %u\n", i, txb, rxb);
 			vow_tx_bss_byte[i] += txb;
 			vow_rx_bss_byte[i] += rxb;
 
 			if (vow_idx == pAd->vow_avg_num) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-						 ("AVG bss%d: tx -> %u(%u), rx -> %u(%u)\n", i,
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 "AVG bss%d: tx -> %u(%u), rx -> %u(%u)\n", i,
 						  vow_tx_bss_byte[i]/pAd->vow_avg_num,
 						  vow_tx_bss_byte[i],
 						  vow_rx_bss_byte[i]/pAd->vow_avg_num,
-						  vow_rx_bss_byte[i]));
+						  vow_rx_bss_byte[i]);
 				vow_tx_bss_byte[i] = 0;
 				vow_rx_bss_byte[i] = 0;
 			}
@@ -5016,18 +4970,19 @@ VOID vow_display_info_periodic(
 				RTMP_IO_READ32(pAd->hdev_ctrl, WF_WTBLON + 0x2C0 + (i << 2), &rxb);
 			}
 			if (i < pAd->vow_show_mbss)
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("MBSS%d: tx byte -> %u, rx byte -> %u\n", i, txb, rxb));
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"MBSS%d: tx byte -> %u, rx byte -> %u\n", i, txb, rxb);
 
 			vow_tx_mbss_byte[i] += txb;
 			vow_rx_mbss_byte[i] += rxb;
 
 			if (vow_idx == pAd->vow_avg_num) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-						 ("AVG mbss%d: tx -> %u(%u), rx -> %u(%u)\n", i,
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						 "AVG mbss%d: tx -> %u(%u), rx -> %u(%u)\n", i,
 						  vow_tx_mbss_byte[i]/pAd->vow_avg_num,
 						  vow_tx_mbss_byte[i],
 						  vow_rx_mbss_byte[i]/pAd->vow_avg_num,
-						  vow_rx_mbss_byte[i]));
+						  vow_rx_mbss_byte[i]);
 				vow_tx_mbss_byte[i] = 0;
 				vow_rx_mbss_byte[i] = 0;
 			}
@@ -5041,7 +4996,8 @@ VOID vow_display_info_periodic(
 
 		if (vow_last_free_cnt) {
 			vow_interval += (free_cnt - vow_last_free_cnt);
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("free count %d\n", free_cnt - vow_last_free_cnt));
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"free count %d\n", free_cnt - vow_last_free_cnt);
 			vow_last_free_cnt = free_cnt;
 		}
 
@@ -5054,18 +5010,20 @@ VOID vow_display_info_periodic(
 
 		RTMP_IO_READ32(pAd->hdev_ctrl, offset, &cnt);
 		vow_ampdu_cnt += cnt;
-		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("AMPDU[Band0] count %d\n", cnt));
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "AMPDU[Band0] count %d\n", cnt);
 		if (pAd->CommonCfg.dbdc_mode) {
 			RTMP_IO_READ32(pAd->hdev_ctrl, MIB_M0SDR14 + 0x200, &cnt);
 			vow_ampdu_cnt += cnt;
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				("AMPDU[Band1] count %d\n", cnt));
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				"AMPDU[Band1] count %d\n", cnt);
 		}
 		if (vow_idx == pAd->vow_avg_num) {
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("total ampdu cnt -> %u, avg ampdu cnt --> %d\n",
-					 vow_ampdu_cnt, vow_ampdu_cnt/pAd->vow_avg_num));
-			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("total interval -> %u, avg interval --> %d\n",
-					 vow_interval, vow_interval/pAd->vow_avg_num));
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"total ampdu cnt -> %u, avg ampdu cnt --> %d\n",
+					 vow_ampdu_cnt, vow_ampdu_cnt/pAd->vow_avg_num);
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"total interval -> %u, avg interval --> %d\n",
+					 vow_interval, vow_interval/pAd->vow_avg_num);
 			vow_interval = 0;
 			vow_idx = 0;
 			vow_ampdu_cnt = 0;
@@ -5074,12 +5032,13 @@ VOID vow_display_info_periodic(
 		/* Show obss/non-wifi airtime */
 		if (pAd->vow_gen.VOW_GEN == VOW_GEN_FALCON) {
 			chip_dbg->get_obss_nonwifi_airtime(pAd, at_info);
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("nonwifi %u/%u, obss %u/%u.\n", at_info[0], at_info[1], at_info[2], at_info[3]));
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 "nonwifi %u/%u, obss %u/%u.\n", at_info[0], at_info[1], at_info[2], at_info[3]);
 		} else {
 			HW_IO_READ32(pAd->hdev_ctrl, 0x215B4, &counter[0]); /* nonwifi airtime counter - band 0 */
 			HW_IO_READ32(pAd->hdev_ctrl, 0x215B8, &counter[1]); /* obss airtime counter - band 0 */
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("nonwifi: %u, obss: %u.\n", counter[0], counter[1]));
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					"nonwifi: %u, obss: %u.\n", counter[0], counter[1]);
 		}
 
 		/* PLE Info  Mark for Debug */
@@ -5155,6 +5114,8 @@ VOID vow_display_info_periodic(
 #if (MAX_LEN_OF_MAC_TABLE > 128)
 			ple_stat_num = 32;
 			total_nonempty_cnt = 0;
+#else
+			ple_stat_num = 16;
 #endif
 			for (l = 1; l <= ple_stat_num; l++) { /* show AC Q info */
 				for (k = 0; k < 32; k++) {
@@ -5175,8 +5136,8 @@ VOID vow_display_info_periodic(
 					if (wdev)
 						wmmidx = HcGetWmmIdx(pAd, wdev);
 
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-							 ("STA%d AC%d: ", sta_num, ac_num));
+					MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+							 "STA%d AC%d: ", sta_num, ac_num);
 					fl_que_ctrl[0] |= (0x1 << 31);
 					fl_que_ctrl[0] |= (0x2 << 14);
 					fl_que_ctrl[0] |= (ac_num << 8);
@@ -5189,16 +5150,16 @@ VOID vow_display_info_periodic(
 					pktcnt = fl_que_ctrl[2] & 0xfff;
 					total_nonempty_cnt++;
 					if (total_nonempty_cnt <= 20)
-						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-							("tail/head fid = 0x%03x/0x%03x, pkt cnt = %x\n",
-							 tfid, hfid, pktcnt));
+						MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+							"tail/head fid = 0x%03x/0x%03x, pkt cnt = %x\n",
+							 tfid, hfid, pktcnt);
 				}
 			}
 		}
 
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-				 ("**************[nonempty STAs : %d]************************\n",
-				 total_nonempty_cnt));
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 "**************[nonempty STAs : %d]************************\n",
+				 total_nonempty_cnt);
 	}
 }
 

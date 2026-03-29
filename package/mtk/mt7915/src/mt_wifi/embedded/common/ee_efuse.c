@@ -440,7 +440,7 @@ static NTSTATUS eFuseWriteRegisters(
 	IN	USHORT *pData)
 {
 	USHORT	i, Loop = 0, StartBlock = 0, EndBlock = 0;
-	USHORT	LogicalAddress, BlkNum = 0xffff;
+	USHORT	LogicalAddress = 0, BlkNum = 0xffff;
 	UCHAR	EFSROM_AOUT;
 	USHORT addr, tmpaddr, InBuf[3], tmpOffset;
 	USHORT buffer[8];
@@ -1037,7 +1037,7 @@ VOID eFuseGetFreeBlockCount(IN PRTMP_ADAPTER pAd,
 		*EfuseFreeBlock = ops->get_efuse_free_blk_bnum(pAd, 0x0);;
 	} else {
 		USHORT i = 0, StartBlock = 0, EndBlock = 0;
-		USHORT	LogicalAddress;
+		USHORT	LogicalAddress = 0;
 		USHORT	FirstFreeBlock = 0xffff, LastFreeBlock = 0xffff;
 		struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 
@@ -1241,7 +1241,7 @@ INT show_efuseinfo_proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	USHORT  length = cap->EEPROM_DEFAULT_BIN_SIZE;
 	UCHAR   index;
 	USHORT offset = 0;
-	USHORT value;
+	USHORT value = 0;
 
 	for (offset = 0; offset < length; offset += EFUSE_BLOCK_SIZE) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("offset 0x%04x: ", offset));

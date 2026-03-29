@@ -5,6 +5,12 @@
 #include "rtmp_type.h"
 #include "spectrum_def.h"
 
+typedef enum _ENUM_MEASURE_REQ_TYPE {
+	BCN_MEASURE_REQ,
+	BCN_MEASURE_REP,
+	NB_MEASURE_REQ,
+	SET_MEASURE_REQ
+} ENUM_MEASURE_REQ_TYPE;
 
 UINT8 GetRegulatoryMaxTxPwr(
 	IN PRTMP_ADAPTER pAd,
@@ -173,15 +179,18 @@ VOID MeasureReqTabExit(
 
 PMEASURE_REQ_ENTRY MeasureReqLookUp(
 	IN PRTMP_ADAPTER	pAd,
-	IN UINT8			DialogToken);
+	IN UINT8			DialogToken,
+	IN UINT8			measuretype);
 
 PMEASURE_REQ_ENTRY MeasureReqInsert(
 	IN PRTMP_ADAPTER	pAd,
-	IN UINT8			DialogToken);
+	IN UINT8			DialogToken,
+	IN UINT8			measuretype);
 
 VOID MeasureReqDelete(
 	IN PRTMP_ADAPTER	pAd,
-	IN UINT8			DialogToken);
+	IN UINT8			DialogToken,
+	IN UINT8			measuretype);
 
 VOID InsertChannelRepIE(
 	IN PRTMP_ADAPTER pAd,
@@ -254,5 +263,24 @@ VOID rcsa_recovery(
 	struct wifi_dev *wdev);
 
 #endif
+#ifdef ZERO_LOSS_CSA_SUPPORT
+VOID NotifyBroadcastChSwAnn(
+	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
+	IN UINT8 ChSwMode,
+	IN UINT8 NewCh);
+
+VOID NotifyBroadcastExtChSwAnn(
+	IN PRTMP_ADAPTER pAd,
+	IN struct wifi_dev *wdev,
+	IN UINT8 ChSwMode,
+	IN UINT8 NewCh);
+
+VOID EnqueueChSwAnnNew(
+	IN PRTMP_ADAPTER pAd,
+	IN MAC_TABLE_ENTRY *pEntry,
+	IN UINT8 ChSwMode,
+	IN UINT8 NewCh);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #endif /* __SPECTRUM_H__ */
 

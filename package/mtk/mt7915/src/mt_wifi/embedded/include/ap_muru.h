@@ -772,6 +772,7 @@ typedef struct _MURU_DL_MANUAL_CONFIG {
 	UINT8		u1SigBCmprs;
 	UINT8		au1RU[8];
 	UINT8		au1C26[2];
+	UINT8		u1AckPly;
 	MURU_DL_USER_INFO	arUserInfoDl[MAX_NUM_TXCMD_USER_INFO];
 } MURU_DL_MANUAL_CONFIG, *P_MURU_DL_MANUAL_CONFIG;
 
@@ -814,7 +815,8 @@ typedef struct _MURU_CMM_MANUAL_CONFIG {
 	UINT8		u1SchType;
 	UINT8		u1Band;
 	UINT8		u1WmmSet;
-    UINT8       u1SpeIdx;
+	UINT8		u1SpeIdx;
+	UINT8		u1ProcType;
 } MURU_CMM_MANUAL_CONFIG, *P_MURU_CMM_MANUAL_CONFIG;
 
 typedef struct _CMD_MURU_MANCFG_INTERFACER {
@@ -1129,6 +1131,14 @@ typedef struct _CMD_MURU_CMM_DLUL_CFG {
 } CMD_MURU_CMM_DLUL_CFG, *P_CMD_MURU_CMM_DLUL_CFG;
 
 enum {
+	/* Set MURU DLUL Command, select Band or BSS */
+	MURU_SET_DLUL_BY_BAND = 0,
+	MURU_SET_DLUL_BY_BSS = 1,
+	MURU_SET_DLUL_READ = 2,
+	MURU_SET_DLUL_MAX
+};
+
+enum {
 	MURU_CFG_DL_OFDMA_BIT = 0,
 	MURU_CFG_UL_OFDMA_BIT = 1,
 	MURU_CFG_DL_MIMO_BIT = 2,
@@ -1137,7 +1147,8 @@ enum {
 };
 
 typedef struct _CMD_MURU_SET_DLUL_VAL {
-	UINT_8  u1BandIdx;
+	UINT_8  u1BandBssSelect;
+	UINT_8  u1Index;
 	UINT_8  u1DlUlUpdList;
 	UINT_8  u1DlUlVal;
 	UINT_8  u1Reserved;
@@ -1160,7 +1171,11 @@ INT SetMuru20MDynAlgo(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetMuruProtFrameThr(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetMuruPlatformTypeProc(RTMP_ADAPTER *pAd);
 INT SetMuruCfgDlUlVal(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
-INT MtCmdSetMuruCfgDlUlVal(RTMP_ADAPTER *pAd, UINT_8 BandIdx, UINT_8 DlUlUpdList, UINT_8 DlUlVal);
+INT SetMuOfdmaDlEnableProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT SetMuOfdmaUlEnableProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT SetMuMimoDlEnableProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT SetMuMimoUlEnableProc(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+INT MtCmdSetMuruCfgDlUlVal(RTMP_ADAPTER *pAd, UINT_8 u1BandBssSelect, UINT_8 u1Index, UINT_8 DlUlUpdList, UINT_8 DlUlVal);
 INT SetMuruTxopOnOff(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetMuruUlOnOff(RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 INT SetMuruTypeSelect(RTMP_ADAPTER *pAd, RTMP_STRING *arg);

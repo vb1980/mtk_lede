@@ -1506,8 +1506,8 @@ TDLS_MlmeDiscoveryReqAction(
 
 	if (INFRA_ON(pAd)) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("Send Discovery Request to Peer ::%02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-				  PRINT_MAC(PeerMacAddr)));
+				 ("Send Discovery Request to Peer ::"MACSTR" !!!\n",
+				  MAC2STR(PeerMacAddr)));
 		/* Build TDLS Discovery Request Frame */
 		NStatus = TDLS_DiscoveryReqAction(pAd, PeerMacAddr);
 
@@ -1555,9 +1555,8 @@ TDLS_MlmeTunneledReqAction(
 	NdisMoveMemory(PeerMacAddr, Elem->Msg, MAC_ADDR_LEN);
 
 	if (INFRA_ON(pAd)) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Send Tunneled Probe Request to Peer ::%02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-				 PeerMacAddr[0], PeerMacAddr[1], PeerMacAddr[2],
-				 PeerMacAddr[3], PeerMacAddr[4], PeerMacAddr[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Send Tunneled Probe Request to Peer ::"MACSTR" !!!\n",
+				 MAC2STR(PeerMacAddr)));
 		/* Build TDLS Tunneled Probe Request Frame */
 		NStatus = TDLS_TunneledProbeRequest(pAd, PeerMacAddr);
 
@@ -1634,9 +1633,9 @@ TDLS_PeerTunneledReqRspAction(
 
 	if (!MAC_ADDR_EQUAL(pFrame->Hdr.Addr3, pAd->CommonCfg.Bssid)) {
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN,
-				 ("PeerTdlsTunneledReqSanity --> It's not my BSSID[%02x:%02x:%02x:%02x:%02x:%02x] Addr3[%02x:%02x:%02x:%02x:%02x:%02x]\n",
-				  PRINT_MAC(pAd->CommonCfg.Bssid),
-				  PRINT_MAC(pFrame->Hdr.Addr3)));
+				 ("PeerTdlsTunneledReqSanity --> It's not my BSSID["MACSTR"] Addr3["MACSTR"]\n",
+				  MAC2STR(pAd->CommonCfg.Bssid),
+				  MAC2STR(pFrame->Hdr.Addr3)));
 		/* return; */
 	}
 
@@ -1895,13 +1894,8 @@ VOID TDLS_DiscoveryRspPublicAction(
 									USHORT		Reason = REASON_UNSPECIFY;
 									INT			idx;
 
-									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-											 pTdlsPeer->Responder[0],
-											 pTdlsPeer->Responder[1],
-											 pTdlsPeer->Responder[2],
-											 pTdlsPeer->Responder[3],
-											 pTdlsPeer->Responder[4],
-											 pTdlsPeer->Responder[5]));
+									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down "MACSTR" !!!\n",
+											 MAC2STR(pTdlsPeer->Responder)));
 									idx = TDLS_SearchLinkId(pAd, pTdlsPeer->Responder);
 
 									if (idx == -1 || idx == MAX_NUM_OF_TDLS_ENTRY)
@@ -1935,8 +1929,8 @@ VOID TDLS_DiscoveryRspPublicAction(
 									USHORT		Reason = REASON_UNSPECIFY;
 									INT			idx;
 
-									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-											 PRINT_MAC(pTdlsPeer->Responder)));
+									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n !!! Will tear down "MACSTR" !!!\n",
+											 MAC2STR(pTdlsPeer->Responder)));
 									idx = TDLS_SearchLinkId(pAd, pTdlsPeer->Responder);
 
 									if (idx == -1 || idx == MAX_NUM_OF_TDLS_ENTRY)
@@ -1979,8 +1973,8 @@ VOID TDLS_DiscoveryRspPublicAction(
 								if (LinkId == -1 || LinkId == MAX_NUM_OF_TDLS_ENTRY) {
 									RT_802_11_TDLS	Tdls;
 
-									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n!!! Auto Setup TDLS to %02x:%02x:%02x:%02x:%02x:%02x !!!\n",
-											 PRINT_MAC(pTdlsPeer->Responder)));
+									MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n!!! Auto Setup TDLS to "MACSTR" !!!\n",
+											 MAC2STR(pTdlsPeer->Responder)));
 									NdisZeroMemory(&Tdls, sizeof(RT_802_11_TDLS));
 									Tdls.TimeOut = 0;
 									COPY_MAC_ADDR(Tdls.MacAddr, pTdlsPeer->Responder);
@@ -2158,8 +2152,8 @@ TDLS_PeerSetupReqAction(
 		StatusCode = MLME_REQUEST_DECLINED;
 
 	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s() - received a request from %02x:%02x:%02x:%02x:%02x:%02x\n",
-			  __func__, PRINT_MAC(PeerAddr)));
+			 ("%s() - received a request from "MACSTR"\n",
+			  __func__, MAC2STR(PeerAddr)));
 
 	if ((pAd->StaCfg[0].wdev.WepStatus != Ndis802_11WEPDisabled) && (RsnLen == 0))
 		StatusCode = MLME_INVALID_SECURITY_POLICY;
@@ -2523,8 +2517,8 @@ TDLS_PeerSetupRspAction(
 			TIIe))
 		LocalStatusCode = MLME_REQUEST_DECLINED;
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s() - received a response from %02x:%02x:%02x:%02x:%02x:%02x with StatusCode=%d\n",
-			 __func__, PRINT_MAC(PeerAddr), StatusCode));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s() - received a response from "MACSTR" with StatusCode=%d\n",
+			 __func__, MAC2STR(PeerAddr), StatusCode));
 
 	if (StatusCode != MLME_SUCCESS)
 		COPY_MAC_ADDR(PeerAddr, &pFrame->Hdr.Addr3);
@@ -2869,8 +2863,8 @@ TDLS_PeerSetupConfAction(
 	if (StatusCode != MLME_SUCCESS)
 		COPY_MAC_ADDR(PeerAddr, &pFrame->Hdr.Addr3);
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsSetupConfAction() received a confirm from %02x:%02x:%02x:%02x:%02x:%02x with StatusCode=%d\n",
-			 PeerAddr[0], PeerAddr[1], PeerAddr[2], PeerAddr[3], PeerAddr[4], PeerAddr[5], StatusCode));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsSetupConfAction() received a confirm from "MACSTR" with StatusCode=%d\n",
+			 MAC2STR(PeerAddr), StatusCode));
 	/* Drop not within my TDLS Table that created before ! */
 	LinkId = TDLS_SearchLinkId(pAd, PeerAddr);
 
@@ -3179,8 +3173,8 @@ TDLS_PeerTearDownAction(
 								&ReasonCode,
 								&FTLen,
 								FTIe)) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsTearDownAction() from %02x:%02x:%02x:%02x:%02x:%02x Sanity Check Fail\n",
-				 SA[0], SA[1], SA[2], SA[3], SA[4], SA[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsTearDownAction() from "MACSTR" Sanity Check Fail\n",
+				 MAC2STR(SA)));
 		return;
 	}
 
@@ -3191,14 +3185,14 @@ TDLS_PeerTearDownAction(
 	else
 		COPY_MAC_ADDR(SA, &pHdr->Addr2);
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TDLS - PeerTdlsTearDownAction() from %02x:%02x:%02x:%02x:%02x:%02x with ReasonCode=%d\n",
-			 SA[0], SA[1], SA[2], SA[3], SA[4], SA[5], ReasonCode));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TDLS - PeerTdlsTearDownAction() from "MACSTR" with ReasonCode=%d\n",
+			 MAC2STR(SA), ReasonCode));
 	/* Drop not within my TDLS Table that created before ! */
 	LinkId = TDLS_SearchLinkId(pAd, SA);
 
 	if (LinkId == -1 || LinkId == MAX_NUM_OF_TDLS_ENTRY) {
-		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsTearDownAction() can not find from %02x:%02x:%02x:%02x:%02x:%02x on TDLS entry !!!\n",
-				 SA[0], SA[1], SA[2], SA[3], SA[4], SA[5]));
+		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("TDLS - PeerTdlsTearDownAction() can not find from "MACSTR" on TDLS entry !!!\n",
+				 MAC2STR(SA)));
 		return;
 	}
 
@@ -3256,8 +3250,8 @@ VOID TDLS_LinkTimeoutAction(
 	PRT_802_11_TDLS		pTDLS = (PRT_802_11_TDLS)FunctionContext;
 	PRTMP_ADAPTER			pAd;
 
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("TdlsTimeout - Failed to wait for the response, terminate the setup procedure (%02x:%02x:%02x:%02x:%02x:%02x)\n",
-			 pTDLS->MacAddr[0], pTDLS->MacAddr[1], pTDLS->MacAddr[2], pTDLS->MacAddr[3], pTDLS->MacAddr[4], pTDLS->MacAddr[5]));
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("TdlsTimeout - Failed to wait for the response, terminate the setup procedure ("MACSTR")\n",
+			 MAC2STR(pTDLS->MacAddr)));
 	/*
 	 *	11.2.1.14.1 Peer U-APSD Behavior at the PU buffer STA
 	 *	When no corresponding TDLS Peer Traffic Response frame has been

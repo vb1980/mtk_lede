@@ -53,7 +53,7 @@ VOID Start_MCC(RTMP_ADAPTER *pAd)
 	MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("!!!!Current Tsf LSB = = %ld\n",  Lowpart));
 	RTMP_IO_READ32(pAd->hdev_ctrl, LPON_T1STR, &temp);
 	temp = temp & 0x0000FFFF;
-	NextTbtt	= temp % pAd->CommonCfg.BeaconPeriod;
+	NextTbtt = temp % pAd->CommonCfg.BeaconPeriod[DBDC_BAND0];
 	MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("!!!!NextTbtt =  %ld\n", NextTbtt));
 	temp = NextTbtt * 1024 + Lowpart;
 	MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("!!!!Tsf LSB + TimeTillTbtt= %ld\n", temp));

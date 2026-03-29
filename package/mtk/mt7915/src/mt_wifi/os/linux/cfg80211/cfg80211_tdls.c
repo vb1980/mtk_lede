@@ -210,8 +210,8 @@ VOID InitPeerEntryRateCapability(
 		CHAR    ii;
 
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_TRACE,
-				 ("TDLS - Receive Peer HT Capable STA from %02x:%02x:%02x:%02x:%02x:%02x\n",
-				  PRINT_MAC(pEntry->Addr)));
+				 ("TDLS - Receive Peer HT Capable STA from "MACSTR"\n",
+				  MAC2STR(pEntry->Addr)));
 
 		if ((pHtCapability->HtCapInfo.GF) &&
 			wlan_config_get_greenfield(wdev) &&
@@ -352,7 +352,8 @@ BOOLEAN CFG80211DRV_StaTdlsInsertDeletepEntry(
 	UCHAR op_ht_bw = wlan_operate_get_ht_bw(wdev);
 
 	peer = (UCHAR *)pData;
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("=====>  %s() peer: %02x:%02x:%02x:%02x:%02x:%02x ,op: %d\n", __func__, PRINT_MAC(peer), Data));
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+        ("=====>  %s() peer: "MACSTR" ,op: %d\n", __func__, MAC2STR(peer), Data));
 	pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.IneedKey = 0;
 
 	if (Data == tdls_insert_entry) {
@@ -644,7 +645,9 @@ VOID cfg_tdls_rcv_PeerTrafficIndication(PRTMP_ADAPTER pAd, UINT8 dialog_token, U
 	tdls_entry_wcid = cfg_tdls_search_wcid(pAd, peer);
 
 	if (tdls_entry_wcid == -1) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("%s(): can't find valid link ID, tdls link to (%02X:%02X:%02X:%02X:%02X:%02X) doesn't exist.\n", __func__, PRINT_MAC(peer)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+            ("%s(): can't find valid link ID, tdls link to ("MACSTR") doesn't exist.\n",
+            __func__, MAC2STR(peer)));
 		return;
 	}
 
@@ -669,7 +672,9 @@ VOID cfg_tdls_rcv_PeerTrafficResponse(PRTMP_ADAPTER pAd, UINT8 *peer)
 	i = cfg_tdls_search_ValidLinkIndex(pAd, peer);
 
 	if (i == -1) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("%s(): can't find valid link ID, tdls link to (%02X:%02X:%02X:%02X:%02X:%02X) doesn't exist.\n", __func__, PRINT_MAC(peer)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+            ("%s(): can't find valid link ID, tdls link to ("MACSTR") doesn't exist.\n",
+            __func__, MAC2STR(peer)));
 		return;
 	}
 
@@ -703,7 +708,9 @@ VOID cfg_tdls_send_PeerTrafficIndication(PRTMP_ADAPTER pAd, UINT8 *peer)
 	tdls_entry_link_index = cfg_tdls_search_ValidLinkIndex(pAd, peer);
 
 	if (tdls_entry_link_index == -1) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("%s(): can't find valid link ID, tdls link to (%02X:%02X:%02X:%02X:%02X:%02X) doesn't exist.\n", __func__, PRINT_MAC(peer)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+            ("%s(): can't find valid link ID, tdls link to ("MACSTR") doesn't exist.\n",
+            __func__, MAC2STR(peer)));
 		return;
 	}
 
@@ -759,8 +766,9 @@ VOID cfg_tdls_PTITimeoutAction(
 	if (pTDLS->FlgIsWaitingUapsdTraRsp == TRUE) {
 		MAC_TABLE_ENTRY	*pMacEntry = NULL;
 		/* timeout for traffic response frame */
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("tdls uapsd> traffic rsp timeout!!!\npeerMAC(%02X:%02X:%02X:%02X:%02X:%02X), send link teardown\n"
-				 , PRINT_MAC(pTDLS->MacAddr)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF,
+		("tdls uapsd> traffic rsp timeout!!!\npeerMAC("MACSTR"), send link teardown\n",
+		MAC2STR(pTDLS->MacAddr)));
 		pTDLS->FlgIsWaitingUapsdTraRsp = FALSE;
 		pMacEntry = MacTableLookup(pAd, pTDLS->MacAddr);
 
@@ -1461,11 +1469,13 @@ INT cfg_tdls_EntryInfo_Display_Proc(
 	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("\n%-19s\n", "MAC\n"));
 
 	for (i = 0; i < MAX_NUM_OF_CFG_TDLS_ENTRY; i++) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("TDLS Entry %d MAC %02x:%02x:%02x:%02x:%02x:%02x\n", i, PRINT_MAC(pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].MacAddr)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF,
+            ("TDLS Entry %d MAC "MACSTR"\n", i,
+            MAC2STR(pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].MacAddr)));
 
 		if (pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].EntryValid == TRUE) {
 			PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].MacTabMatchWCID];
-			/* MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%02x:%02x:%02x:%02x:%02x:%02x\n",PRINT_MAC(pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].MacAddr))); */
+			/* MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, (""MACSTR"\n", MAC2STR(pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[i].MacAddr))); */
 			/*MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%-8d\n", pAd->StaCfg[0].DLSEntry[i].TimeOut)); */
 			/* MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("\n")); */
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("TDLS Entry %d is valid, bInitiator = %d\n"
@@ -1475,9 +1485,8 @@ INT cfg_tdls_EntryInfo_Display_Proc(
 #ifdef DOT11_N_SUPPORT
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%-8s%-10s%-6s%-6s%-6s%-6s", "MIMOPS", "PhMd", "BW", "MCS", "SGI", "STBC"));
 #endif /* DOT11_N_SUPPORT */
-			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("\n%02X:%02X:%02X:%02X:%02X:%02X  ",
-					 pEntry->Addr[0], pEntry->Addr[1], pEntry->Addr[2],
-					 pEntry->Addr[3], pEntry->Addr[4], pEntry->Addr[5]));
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("\n"MACSTR"  ",
+					 MAC2STR(pEntry->Addr)));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%-4d", (int)pEntry->Aid));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%-4d", (int)pEntry->apidx));
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_OFF, ("%-4d", (int)pEntry->PsMode));
@@ -1572,8 +1581,10 @@ VOID cfg_tdls_rx_parsing(PRTMP_ADAPTER pAd, RX_BLK *pRxBlk)
 					if (os_equal_mem(pEid->Octet, WME_INFO_ELEM, 6) && (pEid->Len == 7))
 						pCfgTdls->TDLSEntry[tdls_entry_index].QosCapability = pEid->Octet[6];
 
-					MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("%s : RCV QosCapa 0x[%x] from peer MAC: (%02X:%02X:%02X:%02X:%02X:%02X)\n"
-							 , __func__, pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[tdls_entry_index].QosCapability, PRINT_MAC(peerMAC)));
+					MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+					("%s : RCV QosCapa 0x[%x] from peer MAC: ("MACSTR")\n",
+					__func__, pAd->StaCfg[0].wpa_supplicant_info.CFG_Tdls_info.TDLSEntry[tdls_entry_index].QosCapability,
+					MAC2STR(peerMAC)));
 					break;
 
 				case IE_HT_CAP:
@@ -2165,8 +2176,9 @@ VOID cfg_tdls_prepare_null_frame(PRTMP_ADAPTER	pAd, BOOLEAN powersave, UCHAR dir
 
 VOID cfg_tdls_auto_teardown(PRTMP_ADAPTER pAd, PMAC_TABLE_ENTRY pEntry)
 {
-	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR, ("%s(): auto teardown link with (%02X:%02X:%02X:%02X:%02X:%02X)!!\n"
-			 , __func__, PRINT_MAC(pEntry->Addr)));
+	MTWF_LOG(DBG_CAT_PROTO, CATPROTO_TDLS, DBG_LVL_ERROR,
+        ("%s(): auto teardown link with ("MACSTR")!!\n",
+        __func__, MAC2STR(pEntry->Addr)));
 #if (KERNEL_VERSION(3, 8, 0) <= LINUX_VERSION_CODE)
 	cfg80211_tdls_oper_request(pAd->net_dev, pEntry->Addr, NL80211_TDLS_TEARDOWN, 25, GFP_KERNEL);
 	mdelay(1);

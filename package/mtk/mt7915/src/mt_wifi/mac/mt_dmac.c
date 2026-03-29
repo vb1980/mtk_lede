@@ -2872,8 +2872,8 @@ static VOID dump_wtbl_basic_info(RTMP_ADAPTER *pAd, struct wtbl_struc *tb)
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("Basic Info(DW0~DW1):\n"));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			 ("\tAddr: %02x:%02x:%02x:%02x:%02x:%02x(D0[B0~15], D1[B0~31])\n",
-			  PRINT_MAC(addr)));
+			 ("\tAddr: "MACSTR"(D0[B0~15], D1[B0~31])\n",
+			  MAC2STR(addr)));
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			 ("\tMUAR_Idx(D0[B16~21]):%d\n",
 			  basic_info->wtbl_d0.field.muar_idx));
@@ -3226,37 +3226,11 @@ INT32 mtd_trans_rxd_into_rxblk(RTMP_ADAPTER *pAd, RX_BLK *pRxBlk, PNDIS_PACKET p
 	pRxBlk->key_idx = rx_base->RxD1.KeyId;
 	pRxBlk->channel_freq = rx_base->RxD1.ChFreq;
 	pRxBlk->TID = rx_base->RxD2.RxDTid;
-#if defined(MT7615) || defined(MT7622) || defined(P18) || defined(MT7663) || defined(MT7626)
-
-	if (IS_MT7615(pAd) || IS_MT7622(pAd) || IS_P18(pAd) || IS_MT7663(pAd) || IS_MT7626(pAd)) {
-#ifdef HDR_TRANS_RX_SUPPORT
-
-		if (rx_base->RxD1.HdrTranslation)
-			RX_BLK_SET_FLAG(pRxBlk, fRX_HDR_TRANS);
-
-		if ((rx_base->RxD1.HdrTranslation && ((rx_base->RxD0.RfbGroupVld & RXS_GROUP4) == 0)) ||
-			((rx_base->RxD1.HdrTranslation == 0) && (rx_base->RxD0.RfbGroupVld & RXS_GROUP4) && (rx_base->RxD0.PktType != RMAC_RX_PKT_TYPE_RX_DUP_RFB)) ||
-			(rx_base->RxD2.HdrTransFail == 1)) {
-			MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-					 ("%s(): Error! HdrTrans=%d, GrpVld=%d, HdrTransFail=%d\n",
-					  __func__, rx_base->RxD1.HdrTranslation,
-					  rx_base->RxD0.RfbGroupVld,
-					  rx_base->RxD2.HdrTransFail));
-		}
-
-#endif /* HDR_TRANA_RX_SUPPORT */
-		pRxBlk->pRxInfo->U2M = (rx_base->RxD1.a1_type == 0x1 ? 1 : 0);
-		pRxBlk->pRxInfo->Mcast = (rx_base->RxD1.a1_type == 0x2 ? 1 : 0);
-		pRxBlk->pRxInfo->Bcast = (rx_base->RxD1.a1_type == 0x3 ? 1 : 0);
-	}
-
-#else
 	{
 		pRxBlk->pRxInfo->U2M = rx_base->RxD1.UcastToMe;
 		pRxBlk->pRxInfo->Mcast = rx_base->RxD1.Mcast;
 		pRxBlk->pRxInfo->Bcast = rx_base->RxD1.Bcast;
 	}
-#endif
 
 	if (RxdGrp1 != NULL) {
 		UINT64 pn1 = RxdGrp1->rxd_9.RscPn1.PN;
@@ -3491,7 +3465,7 @@ static VOID EventTxFreeNotifyHandler(RTMP_ADAPTER *pAd, PKT_TOKEN_CB *cb,
 #endif /* #if defined(VOW_SUPPORT) && defined(VOW_DVT) */
 
 
-		if (token_id > que->pkt_tkid_max)
+		if (token_id > que->pkt_tkid_end)
 			continue;
 
 #ifdef CONFIG_HOTSPOT_R2

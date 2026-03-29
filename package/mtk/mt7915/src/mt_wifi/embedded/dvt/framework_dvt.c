@@ -498,7 +498,7 @@ INT dvt_ut_seudo_sta_connect(struct _RTMP_ADAPTER *ad, struct dvt_seudo_sta *sta
 		if (WMODE_CAP_AC(phy_mode) && (wdev->channel > 14)) {
 			VHT_CAP_IE vht_cap;
 
-			vht_mode_adjust(ad, entry, &vht_cap, NULL);
+			vht_mode_adjust(ad, entry, &vht_cap, NULL, NULL);
 			dot11_vht_mcs_to_internal_mcs(ad, wdev, &vht_cap, &entry->MaxHTPhyMode);
 			set_vht_cap(ad, entry, &vht_cap);
 			DVT_LOG("PhyCap&Mode,%s&BW,%s&MC,0x%x&Word,0x%x",

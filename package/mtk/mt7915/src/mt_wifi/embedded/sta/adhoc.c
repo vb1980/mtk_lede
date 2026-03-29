@@ -60,8 +60,8 @@ BOOLEAN adhoc_add_peer_from_beacon(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, BCN
 			if (pEntry == NULL) {
 				pEntry = MacTableInsertEntry(pAd, bcn_ie_list->Addr2, wdev, ENTRY_ADHOC, OPMODE_STA, FALSE);
 #ifdef RT_CFG80211_SUPPORT
-				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Another adhoc joining, add to our MAC table ==> %02x:%02x:%02x:%02x:%02x:%02x\n",
-						 PRINT_MAC(bcn_ie_list->Addr2)));
+				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Another adhoc joining, add to our MAC table ==> "MACSTR"\n",
+						 MAC2STR(bcn_ie_list->Addr2)));
 				RT_CFG80211_JOIN_IBSS(pAd, pStaCfg->MlmeAux.Bssid);
 				CFG80211OS_NewSta(pAd->net_dev, bcn_ie_list->Addr2, NULL, 0, FALSE);
 #endif /* RT_CFG80211_SUPPORT */

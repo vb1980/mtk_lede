@@ -83,8 +83,8 @@ VOID RedInit(PRTMP_ADAPTER pAd)
 	/* For 7615 (CR4 offload)*/
 	if (pAd->red_mcu_offload) {
 		MtCmdCr4Set(pAd, CR4_SET_ID_RED_ENABLE, pAd->red_en, 0);
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s: set CR4/N9 RED Enable to %d.\n", __func__, pAd->red_en));
+		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				 "set CR4/N9 RED Enable to %d.\n", pAd->red_en);
 	} else {
 		if (pAd->red_en) {
 			/*For 7622 (No CR4), need to initial the parameter on driver */
@@ -114,8 +114,8 @@ VOID RedInit(PRTMP_ADAPTER pAd)
 			RTMPSetTimer(&pAd->red_badnode_timer, BADNODE_TIMER_PERIOD);
 
 		}
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set Driver/N9 RED Enable to %d.\n", __func__, pAd->red_en));
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "set Driver/N9 RED Enable to %d.\n", pAd->red_en);
 
 	}
 
@@ -125,7 +125,25 @@ VOID RedInit(PRTMP_ADAPTER pAd)
 	}
 	*/
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: RED Initiailize Done.\n", __func__));
+#ifdef DABS_QOS
+#if defined(QOS_R1) && defined(MSCS_PROPRIETARY)
+	if (IS_QOSR1_ENABLE(pAd)) {
+		SendQoSCmd(pAd, QOS_CMD_ENABLE_DLY_POLICY, NULL);
+		if (FastPathCheckMIC(pAd, FAST_PATH_CMD_GET_CAP, 0,
+						0, NO_MIC, 0, NULL, &event_fastpath) == NDIS_STATUS_SUCCESS) {
+			if (!event_fastpath.cap.ucSupportFastPath)
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+						"fw not support dabs\n");
+			else {
+				pAd->dabs_version = event_fastpath.cap.ucVersion;
+				pAd->SupportFastPath = event_fastpath.cap.ucSupportFastPath;
+				}
+		}
+	} else
+		SendQoSCmd(pAd, QOS_CMD_PARAM_RESET, NULL);
+#endif
+#endif
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, "RED Initiailize Done.\n");
 }
 
 VOID RedResetSta(UINT16 u2WlanIdx, UINT_8 ucMode, UINT_8 ucBW, RTMP_ADAPTER *pAd)
@@ -369,8 +387,8 @@ VOID appShowRedDebugMessage(RTMP_ADAPTER *pAd)
 			/*Only if EnqueueCnt >0 or DropCnt >0, show this AC's message */
 			pkt_buf_cnt = prAcElm->u2EnqueueCnt - prAcElm->u2DequeueCnt;
 			if ((pkt_buf_cnt > 0) || (prAcElm->u2DropCnt > 0)) {
-				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-					 ("STA %d, AC %d, Len %d, Thres %d, Drop %d, ShiftBit %d, qEmpty %d, ATRatio %d, G/Bcnt %d/%d, IsBad %d, msdu %d msducnt (%d %d)\n",
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					 "STA %d, AC %d, Len %d, Thres %d, Drop %d, ShiftBit %d, qEmpty %d, ATRatio %d, G/Bcnt %d/%d, IsBad %d, msdu %d msducnt (%d %d)\n",
 					  (i),
 					  (j),
 					  (pkt_buf_cnt),
@@ -385,7 +403,7 @@ VOID appShowRedDebugMessage(RTMP_ADAPTER *pAd)
 					  (prRedSta->i4MpduTime),
 					  (prRedSta->tx_msdu_avg_cnt),
 					  (prRedSta->tx_msdu_cnt)
-					 ));
+					 );
 				prAcElm->u2DropCnt = 0;
 				prAcElm->u2qEmptyCnt = 0;
 			}
@@ -498,11 +516,9 @@ INT set_red_enable(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 
 			if (pAd->red_mcu_offload) {
 				MtCmdCr4Set(pAd, CR4_SET_ID_RED_ENABLE, pAd->red_en, 0);
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set CR4/N9 RED Enable to %d.\n", __func__, pAd->red_en));
+				MTWF_PRINT("%s: set CR4/N9 RED Enable to %d.\n", __func__, pAd->red_en);
 			} else {
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set Driver/N9 RED Enable to %d.\n", __func__, pAd->red_en));
+				MTWF_PRINT("%s: set Driver/N9 RED Enable to %d.\n", __func__, pAd->red_en);
 			}
 		} else if (en == 2) {
 			if (pAd->red_mcu_offload)
@@ -525,12 +541,10 @@ INT set_red_target_delay(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 		if ((rv > 0) && (tarDelay >= 1) && (tarDelay <= 32767)) {
 			if (pAd->red_mcu_offload) {
 				MtCmdCr4Set(pAd, CR4_SET_ID_RED_TARGET_DELAY, tarDelay, 0);
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set CR4 RED TARGET_DELAY to %d.\n", __func__, tarDelay));
+				MTWF_PRINT("%s: set CR4 RED TARGET_DELAY to %d.\n", __func__, tarDelay);
 			} else {
 				RedSetTargetDelay(tarDelay, pAd);
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set Driver RED TARGET_DELAY to %d.\n", __func__, tarDelay));
+				MTWF_PRINT("%s: set Driver RED TARGET_DELAY to %d.\n", __func__, tarDelay);
 			}
 		} else
 			return FALSE;
@@ -550,12 +564,10 @@ INT set_red_show_sta(PRTMP_ADAPTER pAd,	RTMP_STRING *arg)
 		if ((rv > 0) && (IS_WCID_VALID(pAd, sta))) {
 			if (pAd->red_mcu_offload) {
 				MtCmdCr4Set(pAd, CR4_SET_ID_RED_SHOW_STA, sta, 0);
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set CR4 RED show sta to %d.\n", __func__, sta));
+				MTWF_PRINT("%s: set CR4 RED show sta to %d.\n", __func__, sta);
 			} else {
 				pAd->red_sta_num = sta;
-				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-						 ("%s: set Driver RED show sta to %d.\n", __func__, sta));
+				MTWF_PRINT("%s: set Driver RED show sta to %d.\n", __func__, sta);
 			}
 		} else
 			return FALSE;
@@ -567,15 +579,18 @@ INT set_red_show_sta(PRTMP_ADAPTER pAd,	RTMP_STRING *arg)
 
 INT set_red_debug_enable(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 {
-	UINT32 en, rv;
+	UINT32 en;
+	INT rv;
 
 	if (arg) {
 		rv = sscanf(arg, "%d", &en);
+		if (rv <= 0) {
+			MTWF_PRINT("%s: sscand error\n", __func__);
+		}
 
 		if ((pAd->red_mcu_offload == FALSE) && (rv > 0) && (en <= 1)) {
 			pAd->red_debug_en = en;
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-					 ("%s: set RED Debug Message Enable to %d.\n", __func__, pAd->red_debug_en));
+			MTWF_PRINT("%s: set RED Debug Message Enable to %d.\n", __func__, pAd->red_debug_en);
 		} else
 			return FALSE;
 	} else
@@ -595,26 +610,21 @@ INT show_red_info(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 
 	uRedStaNum = pAd->red_sta_num;
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("======== RED(per-STA Tail Drop) Information ========\n"));
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("RED Enbale: %d\n", pAd->red_en));
+	MTWF_PRINT("======== RED(per-STA Tail Drop) Information ========\n");
+	MTWF_PRINT("RED Enbale: %d\n", pAd->red_en);
 
 	if (pAd->red_mcu_offload == FALSE) {
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("RED Target Delay: %d(us)\n", pAd->red_targetdelay));
-		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("RED Monitor STA: %d\n", pAd->red_sta_num));
+		MTWF_PRINT("RED Target Delay: %d(us)\n", pAd->red_targetdelay);
+		MTWF_PRINT("RED Monitor STA: %d\n", pAd->red_sta_num);
 	}
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("Dump RED Total Drop Count:\n"));
+	MTWF_PRINT("Dump RED Total Drop Count:\n");
 	for (i = 1; i <= (wtbl_max_num - MAX_MBSSID_NUM(pAd)); i++) {
 		tr_entry = &tr_ctl->tr_entry[i];
 		if (tr_entry->StaRec.ConnectionState != STATE_PORT_SECURE)
 			continue;
 		prAcElm = &(((P_RED_STA_T)&(pAd->red_sta[i]))->arRedElm[WMM_AC_BK]);
 		for (j = WMM_AC_BK; j <= WMM_AC_VO; j++, prAcElm++)
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("STA%d[AC%d]:%u \n",
-				i, j, prAcElm->u2TotalDropCnt));
+			MTWF_PRINT("STA%d[AC%d]:%u \n",	i, j, prAcElm->u2TotalDropCnt);
 	}
 
 	return TRUE;
@@ -635,7 +645,7 @@ INT set_red_dump_reset(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 		prRedSta++;
 	}
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: RED dump reset\n", __func__));
+	MTWF_PRINT("%s: RED dump reset\n", __func__);
 
 
 	return TRUE;
@@ -659,22 +669,19 @@ INT set_red_drop(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 
 		switch (cmd) {
 		case 0:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s: set band%u total token:%u\n", __func__, param[0], param[1]));
+			MTWF_PRINT("%s: set band%u total token:%u\n", __func__, param[0], param[1]);
 			MtCmdCr4Set(pAd, WA_SET_OPTION_RED_QLEN_DROP_TOKEN, param[0], param[1]);
 			break;
 		case 1:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s: set band%u free token bound:%u\n", __func__, param[0], param[1]));
+			MTWF_PRINT("%s: set band%u free token bound:%u\n", __func__, param[0], param[1]);
 			MtCmdCr4Set(pAd, WA_SET_OPTION_RED_QLEN_DROP_FREE_BOUND, param[0], param[1]);
 			break;
 		case 2:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s: set band%u qlen threshold:%u/100\n", __func__, param[0], param[1]));
+			MTWF_PRINT("%s: set band%u qlen threshold:%u/100\n", __func__, param[0], param[1]);
 			MtCmdCr4Set(pAd, WA_SET_OPTION_RED_QLEN_DROP_THRESHOLD, param[0], param[1]);
 			break;
 		default:
-			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: qlen drop dump\n", __func__));
+			MTWF_PRINT("%s: qlen drop dump\n", __func__);
 			MtCmdCr4Set(pAd, WA_SET_OPTION_RED_QLEN_DROP_DUMP, 0, 0);
 			break;
 		}
@@ -683,7 +690,7 @@ INT set_red_drop(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 
 	MtCmdFwLog2Host(pAd, 1, 0);
 
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: RED set drop config\n", __func__));
+	MTWF_PRINT("%s: RED set drop config\n", __func__);
 
 	return ret;
 }
@@ -699,6 +706,7 @@ VOID red_qlen_drop_setting(PRTMP_ADAPTER pAd, UINT8 op)
 	UINT8 band_num = 1, ucBandIdx = 0, threshold = 100;
 	UINT16 token_cnt = 0, ring_occupy = 0, upbound = 0;
 	INT32 i;
+	INT32 n;
 	BOOLEAN fgDisable = TRUE;
 	struct wifi_dev *wdev = NULL;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
@@ -770,6 +778,9 @@ VOID red_qlen_drop_setting(PRTMP_ADAPTER pAd, UINT8 op)
 
 			break;
 		default:
+
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "invalid band index.\n");
 			break;
 		}
 
@@ -779,11 +790,23 @@ VOID red_qlen_drop_setting(PRTMP_ADAPTER pAd, UINT8 op)
 			threshold = 100;
 		}
 
-		sprintf(buf, "0-%u-%u\n", ucBandIdx, token_cnt);
+		n = snprintf(buf, sizeof(buf), "0-%u-%u\n", ucBandIdx, token_cnt);
+		if (n < 0 || n >= sizeof(buf)) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 		set_red_drop(pAd, buf);
-		sprintf(buf, "1-%u-%u\n", ucBandIdx, upbound);
+		n = snprintf(buf, sizeof(buf), "1-%u-%u\n", ucBandIdx, upbound);
+		if (n < 0 || n >= sizeof(buf)) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 		set_red_drop(pAd, buf);
-		sprintf(buf, "2-%u-%u\n", ucBandIdx, threshold);
+		n = snprintf(buf, sizeof(buf), "2-%u-%u\n", ucBandIdx, threshold);
+		if (n < 0 || n >= sizeof(buf)) {
+			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				 "%s:%d snprintf Error\n", __func__, __LINE__);
+		}
 		set_red_drop(pAd, buf);
 	}
 

@@ -129,8 +129,8 @@ VOID uapsd_config_get(struct wifi_dev *wdev, struct uapsd_config *cfg);
 		__pMacEntry->FlgPsModeIsWakeForAWhile = TRUE;							\
 		__pMacEntry->VirtualTimeout = RTMP_PS_VIRTUAL_MAX_TIME_OUT;				\
 		MTWF_LOG(DBG_CAT_PS, CATPS_UAPSD, DBG_LVL_TRACE,												\
-				 ("%02x:%02x:%02x:%02x:%02x:%02x will not sleep for a while!\n",		\
-				  PRINT_MAC(__pMacEntry->Addr)));	\
+				 (MACSTR" will not sleep for a while!\n",		\
+				  MAC2STR(__pMacEntry->Addr)));	\
 	}
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -140,8 +140,8 @@ VOID uapsd_config_get(struct wifi_dev *wdev, struct uapsd_config *cfg);
 		__pMacEntry->FlgPsModeIsWakeForAWhile = FALSE;							\
 		__pMacEntry->VirtualTimeout = 0;										\
 		MTWF_LOG(DBG_CAT_PS, CATPS_UAPSD, DBG_LVL_TRACE,												\
-				 ("%02x:%02x:%02x:%02x:%02x:%02x can sleep (ps mode = %d)!\n",		\
-				  PRINT_MAC(__pMacEntry->Addr), __pMacEntry->PsMode));		\
+				 (MACSTR" can sleep (ps mode = %d)!\n",		\
+				  MAC2STR(__pMacEntry->Addr), __pMacEntry->PsMode));		\
 	}
 
 /* check if the peer virtual ps mode timeout */

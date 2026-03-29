@@ -995,8 +995,8 @@ VOID MtAsicSetApCliBssid(
 {
 	UINT32 val;
 
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): Set BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 __func__, pBssid[0], pBssid[1], pBssid[2], pBssid[3], pBssid[4], pBssid[5]));
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(): Set BSSID="MACSTR"\n",
+			 __func__, MAC2STR(pBssid)));
 	val = (UINT32)((pBssid[0]) |
 				   (UINT32)(pBssid[1] << 8) |
 				   (UINT32)(pBssid[2] << 16) |
@@ -1035,8 +1035,8 @@ VOID MtAsicInsertRepeaterEntry(
 	RMAC_MAR1_STRUC rmac_mcbcs1;
 
 	COPY_MAC_ADDR(tempMAC, pAddr);
-	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n%s %02x:%02x:%02x:%02x:%02x:%02x-%02x\n",
-			 __func__, tempMAC[0], tempMAC[1], tempMAC[2], tempMAC[3], tempMAC[4], tempMAC[5], CliIdx));
+	MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\n%s "MACSTR"-%02x\n",
+			 __func__, MAC2STR(tempMAC), CliIdx));
 	os_zero_mem(&rmac_mcbcs0, sizeof(RMAC_MAR0_STRUC));
 	rmac_mcbcs0.addr_31_0 = tempMAC[0] + (tempMAC[1] << 8) + (tempMAC[2] << 16) + (tempMAC[3] << 24);
 	MAC_IO_WRITE32(pAd->hdev_ctrl, RMAC_MAR0, rmac_mcbcs0.addr_31_0);
@@ -1629,7 +1629,7 @@ INT MtAsicSetWmmParam(RTMP_ADAPTER *pAd, UCHAR idx, UINT32 AcNum, UINT32 EdcaTyp
 #if defined(COMPOS_TESTMODE_WIN)
 	;/* no function */
 #else
-	MtCmdEdcaParameterSet(pAd, EdcaParam);
+	MtCmdEdcaParameterSet(pAd, &EdcaParam);
 #endif
 	return TRUE;
 }
@@ -3688,14 +3688,6 @@ INT32 MtAsicGetFwSyncValue(RTMP_ADAPTER *pAd)
 		RTMP_IO_WRITE32(pAd->hdev_ctrl, MCU_PCIE_REMAP_2, RemapBase);
 		RTMP_IO_READ32(pAd->hdev_ctrl, 0x80000 + RemapOffset, &value);
 		RTMP_IO_WRITE32(pAd->hdev_ctrl, MCU_PCIE_REMAP_2, RestoreValue);
-	}
-
-#endif
-#if defined(RTMP_RBUS_SUPPORT) || defined(RTMP_USB_SUPPORT) || defined(RTMP_SDIO_SUPPORT)
-
-	if (IS_RBUS_INF(pAd) || IS_USB_INF(pAd) || IS_SDIO_INF(pAd)) {
-		MAC_IO_READ32(pAd->hdev_ctrl, SW_SYN0, &value);
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: Current SW_SYN0(%d)\n", __func__, value));
 	}
 
 #endif

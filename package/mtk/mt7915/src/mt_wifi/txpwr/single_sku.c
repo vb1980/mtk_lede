@@ -32,48 +32,6 @@
 /*******************************************************************************
  *    INCLUDED INTERNAL FILES
  ******************************************************************************/
-#if defined(MT7615) || defined(MT7622)
-#include	"txpwr/SKUTable_1.h"
-#include	"txpwr/SKUTable_2.h"
-#include	"txpwr/SKUTable_3.h"
-#include	"txpwr/SKUTable_4.h"
-#include	"txpwr/SKUTable_5.h"
-#include	"txpwr/SKUTable_6.h"
-#include	"txpwr/SKUTable_7.h"
-#include	"txpwr/SKUTable_8.h"
-#include	"txpwr/SKUTable_9.h"
-#include	"txpwr/SKUTable_10.h"
-#include	"txpwr/SKUTable_11.h"
-#include	"txpwr/SKUTable_12.h"
-#include	"txpwr/SKUTable_13.h"
-#include	"txpwr/SKUTable_14.h"
-#include	"txpwr/SKUTable_15.h"
-#include	"txpwr/SKUTable_16.h"
-#include	"txpwr/SKUTable_17.h"
-#include	"txpwr/SKUTable_18.h"
-#include	"txpwr/SKUTable_19.h"
-#include	"txpwr/SKUTable_20.h"
-#include	"txpwr/BFBackoffTable_1.h"
-#include	"txpwr/BFBackoffTable_2.h"
-#include	"txpwr/BFBackoffTable_3.h"
-#include	"txpwr/BFBackoffTable_4.h"
-#include	"txpwr/BFBackoffTable_5.h"
-#include	"txpwr/BFBackoffTable_6.h"
-#include	"txpwr/BFBackoffTable_7.h"
-#include	"txpwr/BFBackoffTable_8.h"
-#include	"txpwr/BFBackoffTable_9.h"
-#include	"txpwr/BFBackoffTable_10.h"
-#include	"txpwr/BFBackoffTable_11.h"
-#include	"txpwr/BFBackoffTable_12.h"
-#include	"txpwr/BFBackoffTable_13.h"
-#include	"txpwr/BFBackoffTable_14.h"
-#include	"txpwr/BFBackoffTable_15.h"
-#include	"txpwr/BFBackoffTable_16.h"
-#include	"txpwr/BFBackoffTable_17.h"
-#include	"txpwr/BFBackoffTable_18.h"
-#include	"txpwr/BFBackoffTable_19.h"
-#include	"txpwr/BFBackoffTable_20.h"
-#endif
 #if defined(AXE) || defined(MT7915)
 #include 	"txpwr/PowerLimit_mt7915.h"
 #else
@@ -120,931 +78,6 @@ extern RTMP_STRING *__rstrtok;
  *    PRIVATE FUNCTIONS
  ******************************************************************************/
 
-#if defined(MT7615) || defined(MT7622)
-INT MtSingleSkuLoadParam(RTMP_ADAPTER *pAd)
-{
-	CHAR *buffer;
-	CHAR *readline, *token;
-	CHAR *ptr;
-	INT index, i;
-	CH_POWER_V0 *StartCh = NULL;
-	UINT8 band = 0;
-	UINT8 channel, *temp;
-	CH_POWER_V0 *pwr = NULL;
-
-	/* Link list Init */
-	DlListInit(&pAd->PwrLimitSkuList);
-	/* allocate memory for buffer SKU value */
-	os_alloc_mem(pAd, (UCHAR **)&buffer, MAX_POWER_LIMIT_BUFFER_SIZE);
-
-	if (!buffer)
-		return FALSE;
-
-	pAd->CommonCfg.SKUTableIdx = pAd->EEPROMImage[SINGLE_SKU_TABLE_EFFUSE_ADDRESS] & BITS(0, 6);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, (KBLU "%s: SKU Table index = %d \n" KNRM, __func__,
-			 pAd->CommonCfg.SKUTableIdx));
-	/* card information file exists so reading the card information */
-	os_zero_mem(buffer, MAX_POWER_LIMIT_BUFFER_SIZE);
-
-	switch (pAd->CommonCfg.SKUTableIdx) {
-	case SKUTABLE_1:
-		os_move_mem(buffer, SKUvalue_1, sizeof(SKUvalue_1));
-		break;
-
-	case SKUTABLE_2:
-		os_move_mem(buffer, SKUvalue_2, sizeof(SKUvalue_2));
-		break;
-
-	case SKUTABLE_3:
-		os_move_mem(buffer, SKUvalue_3, sizeof(SKUvalue_3));
-		break;
-
-	case SKUTABLE_4:
-		os_move_mem(buffer, SKUvalue_4, sizeof(SKUvalue_4));
-		break;
-
-	case SKUTABLE_5:
-		os_move_mem(buffer, SKUvalue_5, sizeof(SKUvalue_5));
-		break;
-
-	case SKUTABLE_6:
-		os_move_mem(buffer, SKUvalue_6, sizeof(SKUvalue_6));
-		break;
-
-	case SKUTABLE_7:
-		os_move_mem(buffer, SKUvalue_7, sizeof(SKUvalue_7));
-		break;
-
-	case SKUTABLE_8:
-		os_move_mem(buffer, SKUvalue_8, sizeof(SKUvalue_8));
-		break;
-
-	case SKUTABLE_9:
-		os_move_mem(buffer, SKUvalue_9, sizeof(SKUvalue_9));
-		break;
-
-	case SKUTABLE_10:
-		os_move_mem(buffer, SKUvalue_10, sizeof(SKUvalue_10));
-		break;
-
-	case SKUTABLE_11:
-		os_move_mem(buffer, SKUvalue_11, sizeof(SKUvalue_11));
-		break;
-
-	case SKUTABLE_12:
-		os_move_mem(buffer, SKUvalue_12, sizeof(SKUvalue_12));
-		break;
-
-	case SKUTABLE_13:
-		os_move_mem(buffer, SKUvalue_13, sizeof(SKUvalue_13));
-		break;
-
-	case SKUTABLE_14:
-		os_move_mem(buffer, SKUvalue_14, sizeof(SKUvalue_14));
-		break;
-
-	case SKUTABLE_15:
-		os_move_mem(buffer, SKUvalue_15, sizeof(SKUvalue_15));
-		break;
-
-	case SKUTABLE_16:
-		os_move_mem(buffer, SKUvalue_16, sizeof(SKUvalue_16));
-		break;
-
-	case SKUTABLE_17:
-		os_move_mem(buffer, SKUvalue_17, sizeof(SKUvalue_17));
-		break;
-
-	case SKUTABLE_18:
-		os_move_mem(buffer, SKUvalue_18, sizeof(SKUvalue_18));
-		break;
-
-	case SKUTABLE_19:
-		os_move_mem(buffer, SKUvalue_19, sizeof(SKUvalue_19));
-		break;
-
-	case SKUTABLE_20:
-		os_move_mem(buffer, SKUvalue_20, sizeof(SKUvalue_20));;
-		break;
-
-	default:
-		os_move_mem(buffer, SKUvalue_20, sizeof(SKUvalue_20));
-		break;
-	}
-
-	for (readline = ptr = buffer, index = 0; (ptr = os_str_chr(readline, '\t')) != NULL; readline = ptr + 1, index++)
-	{
-		*ptr = '\0';
-
-		if (readline[0] == '!')
-			continue;
-
-		/* Band Info Parsing */
-		if (!strncmp(readline, "Band: ", 6)) {
-			token = rstrtok(readline + 6, " ");
-
-			/* sanity check for non-Null pointer */
-			if (!token)
-				continue;
-
-			band = (UINT8)os_str_tol(token, 0, 10);
-
-			if (band == 2)
-				band = 0;
-			else if (band == 5)
-				band = 1;
-
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("band = %d\n", band));
-		}
-
-		/* Rate Info Parsing for each channel */
-		if (!strncmp(readline, "Ch", 2)) {
-			/* Dynamic allocate memory for parsing structure */
-			os_alloc_mem(pAd, (UINT8 **)&pwr, sizeof(*pwr));
-			/* set default value to 0 for parsing structure */
-			os_zero_mem(pwr, sizeof(*pwr));
-			token = rstrtok(readline + 2, " ");
-
-			/* sanity check for non-Null pointer */
-			if (!token) {
-				/* free memory buffer before escape this loop */
-				os_free_mem(pwr);
-				/* escape this loop for Null pointer */
-				continue;
-			}
-
-			channel = (UINT8)os_str_tol(token, 0, 10);
-			pwr->StartChannel = channel;
-			pwr->band = band;
-
-			/* Rate Info Parsing (CCK) */
-			if (band == 0) {
-				for (i = 0; i < SINGLE_SKU_TABLE_CCK_LENGTH; i++) {
-					token = rstrtok(NULL, " ");
-
-					/* sanity check for non-Null pointer */
-					if (!token)
-						break;
-
-					/* config CCK Power Limit */
-					MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitCCK + i, token);
-				}
-			}
-
-			/* Rate Info Parsing (OFDM) */
-			for (i = 0; i < SINGLE_SKU_TABLE_OFDM_LENGTH; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config ofdm Power Limit */
-				MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitOFDM + i, token);
-			}
-
-#ifdef DOT11_VHT_AC
-
-			/* Rate Info Parsing (VHT20) */
-			for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config vht20 Power Limit */
-				MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitVHT20 + i, token);
-			}
-
-			/* Rate Info Parsing (VHT40) */
-			for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config vht40 Power Limit */
-				MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitVHT40 + i, token);
-			}
-
-			/* if (pwr->StartChannel > 14) */
-			if (band == 1) {
-				/* Rate Info Parsing (VHT80) */
-				for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-					token = rstrtok(NULL, " ");
-
-					/* sanity check for non-Null pointer */
-					if (!token)
-						break;
-
-					/* config vht80 Power Limit */
-					MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitVHT80 + i, token);
-				}
-
-				/* Rate Info Parsing (VHT160) */
-				for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-					token = rstrtok(NULL, " ");
-
-					/* sanity check for non-Null pointer */
-					if (!token)
-						break;
-
-					/* config vht160 Power Limit */
-					MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitVHT160 + i, token);
-				}
-			}
-
-#endif /* DOT11_VHT_AC */
-
-			/* Tx Stream offset Info Parsing */
-			for (i = 0; i < SINGLE_SKU_TABLE_TX_OFFSET_NUM; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config Tx stream offset */
-				MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitTxStreamDelta + i, token);
-			}
-
-			/* Tx Spatial Stream offset Info Parsing */
-			for (i = 0; i < SINGLE_SKU_TABLE_NSS_OFFSET_NUM; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config Tx spatial stream offset */
-				MtPowerLimitFormatTrans(pAd, pwr->u1PwrLimitTxNSSDelta + i, token);
-			}
-
-			/* Create New Data Structure to simpilify the SKU table (Represent together for channels with same rate Info, band Info, Tx Stream offset Info, Tx Spatial stream offset Info) */
-			if (!StartCh) {
-				/* (Begining) assign new pointer head to SKU table contents for this channel */
-				StartCh = pwr;
-				/* add tail for Link list */
-				DlListAddTail(&pAd->PwrLimitSkuList, &pwr->List);
-			} else {
-				BOOLEAN fgSameCont = TRUE;
-
-				/* if (pwr->StartChannel <= 14) */
-				if (band == 0) {
-					for (i = 0; i < SINGLE_SKU_TABLE_CCK_LENGTH; i++) {
-						if (StartCh->u1PwrLimitCCK[i] != pwr->u1PwrLimitCCK[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_OFDM_LENGTH; i++) {
-						if (StartCh->u1PwrLimitOFDM[i] != pwr->u1PwrLimitOFDM[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-						if (StartCh->u1PwrLimitVHT20[i] != pwr->u1PwrLimitVHT20[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-						if (StartCh->u1PwrLimitVHT40[i] != pwr->u1PwrLimitVHT40[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-						if (StartCh->u1PwrLimitVHT80[i] != pwr->u1PwrLimitVHT80[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++) {
-						if (StartCh->u1PwrLimitVHT160[i] != pwr->u1PwrLimitVHT160[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_TX_OFFSET_NUM; i++) {
-						if (StartCh->u1PwrLimitTxStreamDelta[i] != pwr->u1PwrLimitTxStreamDelta[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					for (i = 0; i < SINGLE_SKU_TABLE_NSS_OFFSET_NUM; i++) {
-						if (StartCh->u1PwrLimitTxNSSDelta[i] != pwr->u1PwrLimitTxNSSDelta[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					if (StartCh->band != pwr->band)
-						fgSameCont = FALSE;
-				}
-
-				/* check similarity of SKU table content for different channel */
-				if (fgSameCont)
-					os_free_mem(pwr);
-				else {
-					/* Assign new pointer head to SKU table contents for this channel */
-					StartCh = pwr;
-					/* add tail for Link list */
-					DlListAddTail(&pAd->PwrLimitSkuList, &StartCh->List);
-				}
-			}
-
-			/* Increment total channel counts for channels with same SKU table contents */
-			StartCh->num++;
-			/* allocate memory for channel list with same SKU table contents */
-			os_alloc_mem(pAd, (PUINT8 *)&temp, StartCh->num);
-
-			/* backup non-empty channel list to temp buffer */
-			if (NULL != StartCh->Channel) {
-				/* copy channel list to temp buffer */
-				os_move_mem(temp, StartCh->Channel, StartCh->num - 1);
-				/* free memory for channel list used before assign pointer of temp memory buffer */
-				os_free_mem(StartCh->Channel);
-			}
-
-			/* assign pointer of temp memory buffer */
-			StartCh->Channel = temp;
-			/* update latest channel number to channel list */
-			StartCh->Channel[StartCh->num - 1] = channel;
-		}
-	}
-
-	/* print out Sku table info */
-	MtShowSkuTable(pAd, DBG_LVL_INFO);
-
-	os_free_mem(buffer);
-	return TRUE;
-}
-
-VOID MtSingleSkuUnloadParam(RTMP_ADAPTER *pAd)
-{
-	CH_POWER_V0 *ch, *ch_temp;
-	DlListForEachSafe(ch, ch_temp, &pAd->PwrLimitSkuList, CH_POWER_V0, List) {
-		DlListDel(&ch->List);
-
-		/* free memory for channel list with same table contents */
-		os_free_mem(ch->Channel);
-
-		/* free memory for table contents*/
-		os_free_mem(ch);
-	}
-}
-
-INT MtBfBackOffLoadParam(RTMP_ADAPTER *pAd)
-{
-	CHAR *buffer;
-	CHAR *readline, *token;
-	CHAR *ptr;
-	INT index, i;
-	BACKOFF_POWER *StartCh = NULL;
-	UINT8 band = 0;
-	UINT8 channel, *temp;
-	BACKOFF_POWER *pwr = NULL;
-	BACKOFF_POWER *ch, *ch_temp;
-
-	DlListInit(&pAd->PwrLimitBackoffList);
-	/* init*/
-	os_alloc_mem(pAd, (UCHAR **)&buffer, MAX_POWER_LIMIT_BUFFER_SIZE);
-
-	if (buffer == NULL)
-		return FALSE;
-
-	pAd->CommonCfg.SKUTableIdx = pAd->EEPROMImage[SINGLE_SKU_TABLE_EFFUSE_ADDRESS] & BITS(0, 6);
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: BFBackoff Table index = %d \n", __func__,
-			 pAd->CommonCfg.SKUTableIdx));
-	/* card information file exists so reading the card information */
-	os_zero_mem(buffer, MAX_POWER_LIMIT_BUFFER_SIZE);
-
-	switch (pAd->CommonCfg.SKUTableIdx) {
-	case SKUTABLE_1:
-		os_move_mem(buffer, BFBackoffvalue_1, sizeof(BFBackoffvalue_1));
-		break;
-
-	case SKUTABLE_2:
-		os_move_mem(buffer, BFBackoffvalue_2, sizeof(BFBackoffvalue_2));
-		break;
-
-	case SKUTABLE_3:
-		os_move_mem(buffer, BFBackoffvalue_3, sizeof(BFBackoffvalue_3));
-		break;
-
-	case SKUTABLE_4:
-		os_move_mem(buffer, BFBackoffvalue_4, sizeof(BFBackoffvalue_4));
-		break;
-
-	case SKUTABLE_5:
-		os_move_mem(buffer, BFBackoffvalue_5, sizeof(BFBackoffvalue_5));
-		break;
-
-	case SKUTABLE_6:
-		os_move_mem(buffer, BFBackoffvalue_6, sizeof(BFBackoffvalue_6));
-		break;
-
-	case SKUTABLE_7:
-		os_move_mem(buffer, BFBackoffvalue_7, sizeof(BFBackoffvalue_7));
-		break;
-
-	case SKUTABLE_8:
-		os_move_mem(buffer, BFBackoffvalue_8, sizeof(BFBackoffvalue_8));
-		break;
-
-	case SKUTABLE_9:
-		os_move_mem(buffer, BFBackoffvalue_9, sizeof(BFBackoffvalue_9));
-		break;
-
-	case SKUTABLE_10:
-		os_move_mem(buffer, BFBackoffvalue_10, sizeof(BFBackoffvalue_10));
-		break;
-
-	case SKUTABLE_11:
-		os_move_mem(buffer, BFBackoffvalue_11, sizeof(BFBackoffvalue_11));
-		break;
-
-	case SKUTABLE_12:
-		os_move_mem(buffer, BFBackoffvalue_12, sizeof(BFBackoffvalue_12));
-		break;
-
-	case SKUTABLE_13:
-		os_move_mem(buffer, BFBackoffvalue_13, sizeof(BFBackoffvalue_13));
-		break;
-
-	case SKUTABLE_14:
-		os_move_mem(buffer, BFBackoffvalue_14, sizeof(BFBackoffvalue_14));
-		break;
-
-	case SKUTABLE_15:
-		os_move_mem(buffer, BFBackoffvalue_15, sizeof(BFBackoffvalue_15));
-		break;
-
-	case SKUTABLE_16:
-		os_move_mem(buffer, BFBackoffvalue_16, sizeof(BFBackoffvalue_16));
-		break;
-
-	case SKUTABLE_17:
-		os_move_mem(buffer, BFBackoffvalue_17, sizeof(BFBackoffvalue_17));
-		break;
-
-	case SKUTABLE_18:
-		os_move_mem(buffer, BFBackoffvalue_18, sizeof(BFBackoffvalue_18));
-		break;
-
-	case SKUTABLE_19:
-		os_move_mem(buffer, BFBackoffvalue_19, sizeof(BFBackoffvalue_19));
-		break;
-
-	case SKUTABLE_20:
-		os_move_mem(buffer, BFBackoffvalue_20, sizeof(BFBackoffvalue_20));
-		break;
-
-	default:
-		os_move_mem(buffer, SKUvalue_20, sizeof(SKUvalue_20));
-		break;
-	}
-
-	for (readline = ptr = buffer, index = 0; (ptr = os_str_chr(readline, '\t')) != NULL; readline = ptr + 1, index++)
-	{
-		*ptr = '\0';
-
-		if (readline[0] == '!')
-			continue;
-
-		/* Band Info Parsing */
-		if (!strncmp(readline, "Band: ", 6)) {
-			token = rstrtok(readline + 6, " ");
-
-			/* sanity check for non-Null pointer */
-			if (!token)
-				continue;
-
-			band = (UINT8)os_str_tol(token, 0, 10);
-
-			if (band == 2)
-				band = 0;
-			else if (band == 5)
-				band = 1;
-
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("band = %d\n", band));
-		}
-
-		/* BF Backoff Info Parsing for each channel */
-		if (!strncmp(readline, "Ch", 2)) {
-			/* Dynamic allocate memory for parsing structure */
-			os_alloc_mem(pAd, (UINT8 **)&pwr, sizeof(*pwr));
-			/* set default value to 0 for parsing structure */
-			os_zero_mem(pwr, sizeof(*pwr));
-			token = rstrtok(readline + 2, " ");
-
-			/* sanity check for non-Null pointer */
-			if (!token) {
-				/* free memory buffer before escape this loop */
-				os_free_mem(pwr);
-				/* escape this loop for Null pointer */
-				continue;
-			}
-
-			channel = (UINT8)os_str_tol(token, 0, 10);
-			pwr->StartChannel = channel;
-			pwr->band = band;
-
-			/* BF Backoff Info Parsing */
-			for (i = 0; i < 3; i++) {
-				token = rstrtok(NULL, " ");
-
-				/* sanity check for non-Null pointer */
-				if (!token)
-					break;
-
-				/* config bf power Limit */
-				MtPowerLimitFormatTrans(pAd, pwr->PwrMax + i, token);
-			}
-
-			/* Create New Data Structure to simpilify the SKU table (Represent together for channels with same BF Backoff Info) */
-			if (!StartCh) {
-				/* (Begining) assign new pointer head to SKU table contents for this channel */
-				StartCh = pwr;
-				/* add tail for Link list */
-				DlListAddTail(&pAd->PwrLimitBackoffList, &pwr->List);
-			} else {
-				BOOLEAN fgSameCont = TRUE;
-
-				if (fgSameCont) {
-					for (i = 0; i < 3; i++) {
-						if (StartCh->PwrMax[i] != pwr->PwrMax[i]) {
-							fgSameCont = FALSE;
-							break;
-						}
-					}
-				}
-
-				if (fgSameCont) {
-					if (StartCh->band != pwr->band)
-						fgSameCont = FALSE;
-				}
-
-				/* check similarity of SKU table content for different channel */
-				if (fgSameCont)
-					os_free_mem(pwr);
-				else {
-					/* Assign new pointer head to SKU table contents for this channel */
-					StartCh = pwr;
-					/* add tail for Link list */
-					DlListAddTail(&pAd->PwrLimitBackoffList, &StartCh->List);
-				}
-			}
-
-			/* Increment total channel counts for channels with same SKU table contents */
-			StartCh->num++;
-			/* allocate memory for channel list with same SKU table contents */
-			os_alloc_mem(pAd, (PUINT8 *)&temp, StartCh->num);
-
-			/* backup non-empty channel list to temp buffer */
-			if (StartCh->Channel != NULL) {
-				/* copy channel list to temp buffer */
-				os_move_mem(temp, StartCh->Channel, StartCh->num - 1);
-				/* free memory for channel list used before assign pointer of temp memory buffer */
-				os_free_mem(StartCh->Channel);
-			}
-
-			/* assign pointer of temp memory buffer */
-			StartCh->Channel = temp;
-			/* update latest channel number to channel list */
-			StartCh->Channel[StartCh->num - 1] = channel;
-		}
-	}
-
-	DlListForEachSafe(ch, ch_temp, &pAd->PwrLimitBackoffList, BACKOFF_POWER, List) {
-		int i;
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("start ch = %d, ch->num = %d\n", ch->StartChannel, ch->num));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("Band: %d \n", ch->band));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("Channel: "));
-
-		for (i = 0; i < ch->num; i++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%d ", ch->Channel[i]));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("\n"));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("Max Power: "));
-
-		for (i = 0; i < 3; i++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%d ", ch->PwrMax[i]));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("\n"));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("-----------------------------------------------------------------\n"));
-	}
-
-	os_free_mem(buffer);
-	return TRUE;
-}
-
-VOID MtBfBackOffUnloadParam(RTMP_ADAPTER *pAd)
-{
-	BACKOFF_POWER *ch, *ch_temp;
-	DlListForEachSafe(ch, ch_temp, &pAd->PwrLimitBackoffList, BACKOFF_POWER, List) {
-		DlListDel(&ch->List);
-
-		/* free memory for channel list with same table contents */
-		os_free_mem(ch->Channel);
-
-		/* free memory for table contents*/
-		os_free_mem(ch);
-	}
-}
-
-VOID MtFillSkuParam(RTMP_ADAPTER *pAd, UINT8 channel, UINT8 Band, UINT8 TxStream, UINT8 *txPowerSku)
-{
-	CH_POWER_V0 *ch, *ch_temp;
-	UINT8 start_ch;
-	UINT8 i, j;
-	UINT8 TxOffset = 0;
-	UINT8 band_local = 0;
-
-	/* -----------------------------------------------------------------------------------------------------------------------*/
-	/* This part is due to MtCmdChannelSwitch is not ready for 802.11j and variable channel_band is always 0				  */
-	/* -----------------------------------------------------------------------------------------------------------------------*/
-
-	if (channel >= 16) /* must be 5G */
-		band_local = 1;
-	else if ((channel <= 14) && (channel >= 8)) /* depends on "channel_band" in MtCmdChannelSwitch */
-		band_local = Band;
-	else if (channel <= 8) /* must be 2.4G */
-		band_local = 0;
-
-	DlListForEachSafe(ch, ch_temp, &pAd->PwrLimitSkuList, CH_POWER_V0, List) {
-		start_ch = ch->StartChannel;
-		/* if (channel >= start_ch) */
-		/* { */
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: channel = %d, start_ch = %d , Band = %d\n", __func__, channel,
-				 start_ch, Band));
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: ch->num = %d\n", __func__, ch->num));
-
-		for (j = 0; j < ch->num; j++) {
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: In for loop, channel = %d, ch->Channel[%d] = %d\n", __func__,
-					 channel, j, ch->Channel[j]));
-
-			if (Band == ch->band) {
-				MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: Band check, ch->Channel[%d] = %d\n", __func__, j,
-						 ch->Channel[j]));
-
-				if (channel == ch->Channel[j]) {
-					for (i = 0; i < SINGLE_SKU_TABLE_CCK_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("CCK[%d]: 0x%x\n", i, ch->u1PwrLimitCCK[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_OFDM_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("OFDM[%d]: 0x%x\n", i, ch->u1PwrLimitOFDM[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VHT20[%d]: 0x%x\n", i, ch->u1PwrLimitVHT20[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VHT40[%d]: 0x%x\n", i, ch->u1PwrLimitVHT40[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VHT80[%d]: 0x%x\n", i, ch->u1PwrLimitVHT80[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_VHT_LENGTH; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("VHT160[%d]: 0x%x\n", i, ch->u1PwrLimitVHT160[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_TX_OFFSET_NUM; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TxStreamDelta(%dT): 0x%x (ref to 4T)\n", (3 - i),
-								 ch->u1PwrLimitTxStreamDelta[i]));
-
-					for (i = 0; i < SINGLE_SKU_TABLE_TX_OFFSET_NUM; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TxNSSDelta(%dSS): 0x%x (ref to 4SS)\n", i, ch->u1PwrLimitTxNSSDelta[i]));
-
-					MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TxStream = %d\n", TxStream));
-
-					/* check the TxStream 1T/2T/3T/4T*/
-					if (TxStream == 1) {
-						TxOffset = ch->u1PwrLimitTxStreamDelta[2];
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("ch->u1PwrLimitTxStreamDelta[2] = %d\n", ch->u1PwrLimitTxStreamDelta[2]));
-					} else if (TxStream == 2) {
-						TxOffset = ch->u1PwrLimitTxStreamDelta[1];
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("ch->u1PwrLimitTxStreamDelta[1] = %d\n", ch->u1PwrLimitTxStreamDelta[1]));
-					} else if (TxStream == 3) {
-						TxOffset = ch->u1PwrLimitTxStreamDelta[0];
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("ch->u1PwrLimitTxStreamDelta[0] = %d\n", ch->u1PwrLimitTxStreamDelta[0]));
-					} else if (TxStream == 4)
-						TxOffset = 0;
-					else
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("The TxStream value is invalid.\n"));
-
-					MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("TxOffset = %d\n", TxOffset));
-					/* Fill in the SKU table for destination channel*/
-					txPowerSku[SKU_CCK_1_2]	   = ch->u1PwrLimitCCK[0]	?  (ch->u1PwrLimitCCK[0]	+ TxOffset) : 0x3F;
-					txPowerSku[SKU_CCK_55_11]	   = ch->u1PwrLimitCCK[1]	?  (ch->u1PwrLimitCCK[1]	+ TxOffset) : 0x3F;
-					txPowerSku[SKU_OFDM_6_9]	   = ch->u1PwrLimitOFDM[0]   ?  (ch->u1PwrLimitOFDM[0]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_OFDM_12_18]	 = ch->u1PwrLimitOFDM[1]   ?  (ch->u1PwrLimitOFDM[1]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_OFDM_24_36]	 = ch->u1PwrLimitOFDM[2]   ?  (ch->u1PwrLimitOFDM[2]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_OFDM_48]		= ch->u1PwrLimitOFDM[3]   ?  (ch->u1PwrLimitOFDM[3]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_OFDM_54]		= ch->u1PwrLimitOFDM[4]   ?  (ch->u1PwrLimitOFDM[4]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_0_8]	   = ch->u1PwrLimitVHT20[0]  ?  (ch->u1PwrLimitVHT20[0]  + TxOffset) : 0x3F;
-					/*MCS32 is a special rate will chose the max power, normally will be OFDM 6M */
-					txPowerSku[SKU_HT20_32]	   =  ch->u1PwrLimitOFDM[0]  ?  (ch->u1PwrLimitOFDM[0]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_1_2_9_10]  = ch->u1PwrLimitVHT20[1]  ?  (ch->u1PwrLimitVHT20[1]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_3_4_11_12] = ch->u1PwrLimitVHT20[2]  ?  (ch->u1PwrLimitVHT20[2]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_5_13]	   = ch->u1PwrLimitVHT20[3]  ?  (ch->u1PwrLimitVHT20[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_6_14]	   = ch->u1PwrLimitVHT20[3]  ?  (ch->u1PwrLimitVHT20[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT20_7_15]	   = ch->u1PwrLimitVHT20[4]  ?  (ch->u1PwrLimitVHT20[4]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_0_8]	   = ch->u1PwrLimitVHT40[0]  ?  (ch->u1PwrLimitVHT40[0]  + TxOffset) : 0x3F;
-					/*MCS32 is a special rate will chose the max power, normally will be OFDM 6M */
-					txPowerSku[SKU_HT40_32]	   =  ch->u1PwrLimitOFDM[0]  ?  (ch->u1PwrLimitOFDM[0]   + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_1_2_9_10]  = ch->u1PwrLimitVHT40[1]  ?  (ch->u1PwrLimitVHT40[1]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_3_4_11_12] = ch->u1PwrLimitVHT40[2]  ?  (ch->u1PwrLimitVHT40[2]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_5_13]	   = ch->u1PwrLimitVHT40[3]  ?  (ch->u1PwrLimitVHT40[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_6_14]	   = ch->u1PwrLimitVHT40[3]  ?  (ch->u1PwrLimitVHT40[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_HT40_7_15]	   = ch->u1PwrLimitVHT40[4]  ?  (ch->u1PwrLimitVHT40[4]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_0]	   = ch->u1PwrLimitVHT20[0]  ?  (ch->u1PwrLimitVHT20[0]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_1_2]	   = ch->u1PwrLimitVHT20[1]  ?  (ch->u1PwrLimitVHT20[1]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_3_4]	   = ch->u1PwrLimitVHT20[2]  ?  (ch->u1PwrLimitVHT20[2]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_5_6]	   = ch->u1PwrLimitVHT20[3]  ?  (ch->u1PwrLimitVHT20[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_7]	   = ch->u1PwrLimitVHT20[4]  ?  (ch->u1PwrLimitVHT20[4]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_8]	   = ch->u1PwrLimitVHT20[5]  ?  (ch->u1PwrLimitVHT20[5]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT20_9]	   = ch->u1PwrLimitVHT20[6]  ?  (ch->u1PwrLimitVHT20[6]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_0]	   = ch->u1PwrLimitVHT40[0]  ?  (ch->u1PwrLimitVHT40[0]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_1_2]	   = ch->u1PwrLimitVHT40[1]  ?  (ch->u1PwrLimitVHT40[1]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_3_4]	   = ch->u1PwrLimitVHT40[2]  ?  (ch->u1PwrLimitVHT40[2]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_5_6]	   = ch->u1PwrLimitVHT40[3]  ?  (ch->u1PwrLimitVHT40[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_7]	   = ch->u1PwrLimitVHT40[4]  ?  (ch->u1PwrLimitVHT40[4]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_8]	   = ch->u1PwrLimitVHT40[5]  ?  (ch->u1PwrLimitVHT40[5]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT40_9]	   = ch->u1PwrLimitVHT40[6]  ?  (ch->u1PwrLimitVHT40[6]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_0]	   = ch->u1PwrLimitVHT80[0]  ?  (ch->u1PwrLimitVHT80[0]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_1_2]	   = ch->u1PwrLimitVHT80[1]  ?  (ch->u1PwrLimitVHT80[1]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_3_4]	   = ch->u1PwrLimitVHT80[2]  ?  (ch->u1PwrLimitVHT80[2]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_5_6]	   = ch->u1PwrLimitVHT80[3]  ?  (ch->u1PwrLimitVHT80[3]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_7]	   = ch->u1PwrLimitVHT80[4]  ?  (ch->u1PwrLimitVHT80[4]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_8]	   = ch->u1PwrLimitVHT80[5]  ?  (ch->u1PwrLimitVHT80[5]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT80_9]	   = ch->u1PwrLimitVHT80[6]  ?  (ch->u1PwrLimitVHT80[6]  + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_0]	   = ch->u1PwrLimitVHT160[0] ?  (ch->u1PwrLimitVHT160[0] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_1_2]	   = ch->u1PwrLimitVHT160[1] ?  (ch->u1PwrLimitVHT160[1] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_3_4]	   = ch->u1PwrLimitVHT160[2] ?  (ch->u1PwrLimitVHT160[2] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_5_6]	   = ch->u1PwrLimitVHT160[3] ?  (ch->u1PwrLimitVHT160[3] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_7]	   = ch->u1PwrLimitVHT160[4] ?  (ch->u1PwrLimitVHT160[4] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_8]	   = ch->u1PwrLimitVHT160[5] ?  (ch->u1PwrLimitVHT160[5] + TxOffset) : 0x3F;
-					txPowerSku[SKU_VHT160_9]	   = ch->u1PwrLimitVHT160[6] ?  (ch->u1PwrLimitVHT160[6] + TxOffset) : 0x3F;
-					txPowerSku[SKU_1SS_Delta]	   = ch->u1PwrLimitTxNSSDelta[0] ?  ch->u1PwrLimitTxNSSDelta[0] : 0x0;
-					txPowerSku[SKU_2SS_Delta]	   = ch->u1PwrLimitTxNSSDelta[1] ?  ch->u1PwrLimitTxNSSDelta[1] : 0x0;
-					txPowerSku[SKU_3SS_Delta]	   = ch->u1PwrLimitTxNSSDelta[2] ?  ch->u1PwrLimitTxNSSDelta[2] : 0x0;
-					txPowerSku[SKU_4SS_Delta]	   = ch->u1PwrLimitTxNSSDelta[3] ?  ch->u1PwrLimitTxNSSDelta[3] : 0x0;
-
-					for (i = 0; i < SKU_TOTAL_SIZE; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("txPowerSku[%d]: 0x%x\n", i, txPowerSku[i]));
-
-					break;
-				}
-			}
-		}
-
-		/* } */
-	}
-}
-
-VOID MtFillBackoffParam(RTMP_ADAPTER *pAd, UINT8 channel, UINT8 Band, UINT8 *BFPowerBackOff)
-{
-	BACKOFF_POWER *ch, *ch_temp;
-	UINT8 start_ch;
-	UINT8 i, j;
-	UINT8 band_local = 0;
-
-	/* -----------------------------------------------------------------------------------------------------------------------*/
-	/* This part is due to MtCmdChannelSwitch is not ready for 802.11j and variable channel_band is always 0				  */
-	/* -----------------------------------------------------------------------------------------------------------------------*/
-
-	if (channel >= 16) /* must be 5G */
-		band_local = 1;
-	else if ((channel <= 14) && (channel >= 8)) /* depends on "channel_band" in MtCmdChannelSwitch */
-		band_local = Band;
-	else if (channel <= 8) /* must be 2.4G */
-		band_local = 0;
-
-	DlListForEachSafe(ch, ch_temp, &pAd->PwrLimitBackoffList, BACKOFF_POWER, List) {
-		start_ch = ch->StartChannel;
-		/* if (channel >= start_ch) */
-		/* { */
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: channel = %d, start_ch = %d , Band = %d\n", __func__, channel,
-				 start_ch, Band));
-		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: ch->num = %d\n", __func__, ch->num));
-
-		for (j = 0; j < ch->num; j++) {
-			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: In for loop, channel = %d, ch->Channel[%d] = %d\n", __func__,
-					 channel, j, ch->Channel[j]));
-
-			if (Band == ch->band) {
-				MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s: Band check, ch->Channel[%d] = %d\n", __func__, j,
-						 ch->Channel[j]));
-
-				if (channel == ch->Channel[j]) {
-					for (i = 0; i < 3; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("Max Power[%d]: 0x%x\n", i, ch->PwrMax[i]));
-
-					/* Fill in the SKU table for destination channel*/
-					BFPowerBackOff[0] = ch->PwrMax[0] ? (ch->PwrMax[0]) : 0x3F;
-					BFPowerBackOff[1] = ch->PwrMax[1] ? (ch->PwrMax[1]) : 0x3F;
-					BFPowerBackOff[2] = ch->PwrMax[2] ? (ch->PwrMax[2]) : 0x3F;
-
-					for (i = 0; i < 3; i++)
-						MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("BFPowerBackOff[%d]: 0x%x\n", i, BFPowerBackOff[i]));
-
-					break;
-				}
-			}
-		}
-
-		/* } */
-	}
-}
-
-VOID MtShowSkuTable(RTMP_ADAPTER *pAd, UINT8 u1DebugLevel)
-{
-	UINT8 u1ColIdx;
-	P_CH_POWER_V0 prPwrLimitTbl, prTempPwrLimitTbl;
-
-	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("-----------------------------------------------------------------\n"));
-	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("SKU table index: %d \n", pAd->CommonCfg.SKUTableIdx));
-
-	DlListForEachSafe(prPwrLimitTbl, prTempPwrLimitTbl, &pAd->PwrLimitSkuList, CH_POWER_V0, List) {
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("start channel: %d, ChListNum: %d\n", prPwrLimitTbl->StartChannel, prPwrLimitTbl->num));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("Band: %d \n", prPwrLimitTbl->band));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("Channel: "));
-		for (u1ColIdx = 0; u1ColIdx < prPwrLimitTbl->num; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->Channel[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("CCK: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_CCK_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitCCK[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("OFDM: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_OFDM_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitOFDM[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("VHT20: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_VHT_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitVHT20[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("VHT40: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_VHT_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitVHT40[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("VHT80: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_VHT_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitVHT80[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("VHT160: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_VHT_LENGTH; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitVHT160[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("TxStreamDelta: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_TX_OFFSET_NUM; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitTxStreamDelta[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("TxNSSDelta: "));
-		for (u1ColIdx = 0; u1ColIdx < SINGLE_SKU_TABLE_NSS_OFFSET_NUM; u1ColIdx++)
-			MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("%d ", prPwrLimitTbl->u1PwrLimitTxNSSDelta[u1ColIdx]));
-		MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("\n"));
-	}
-
-	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, u1DebugLevel, ("-----------------------------------------------------------------\n"));
-}
-
-#else
 NDIS_STATUS MtPwrLimitLoadParamHandle(RTMP_ADAPTER *pAd, UINT8 u1Type)
 {
 	PCHAR pi1Buffer;
@@ -1159,7 +192,7 @@ NDIS_STATUS MtParsePwrLimitTable(RTMP_ADAPTER *pAd, PCHAR pi1Buffer, UINT8 u1Typ
 	P_CH_POWER_V1 prTbl = NULL, prStartCh = NULL;
 
 	/* sanity check for null pointer */
-	if (!pi1Buffer)
+	if (!pi1Buffer || u1Type >= POWER_LIMIT_TABLE_TYPE_NUM)
 		goto error;
 
 	for (pcReadline = pcptr = pi1Buffer; (pcptr = os_str_chr(pcReadline, '\t')) != NULL; pcReadline = pcptr + 1) {
@@ -1524,7 +557,6 @@ error1:
 	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s: null pointer for list of power limit table to show power limit info !!\n", __func__));
 	return NDIS_STATUS_FAILURE;
 }
-#endif /* defined(MT7615) || defined(MT7622) */
 
 NDIS_STATUS MtPwrGetPwrLimitInstanceSku(RTMP_ADAPTER *pAd, ENUM_POWER_LIMIT_PARAMETER_INSTANCE_TYPE eInstanceIdx, PVOID *ppvBuffer)
 {
@@ -1946,3 +978,134 @@ error1:
 	return NDIS_STATUS_FAILURE;
 }
 
+#ifdef CONFIG_TXPWR_LIMIT_SUPPORT
+static inline BOOLEAN IsChannelPresent(
+	IN PRTMP_ADAPTER pAd,
+	IN UCHAR channel,
+	IN CHANNEL_CTRL * pChCtrl)
+{
+	INT i;
+
+	for (i = 0; i < pChCtrl->ChListNum; i++) {
+		if (pChCtrl->ChList[i].Channel == channel)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+static inline void parse_pwr_info(
+	IN PRTMP_ADAPTER pAd,
+	IN P_CH_POWER_V1 prPwrLimitTbl,
+	IN UINT8 u1ChListIdx,
+	IN PUINT8 pu1FillParamTypeLen,
+	IN PUINT8 pu1RawDataIdxOffset,
+	IN UINT8 TypeFillNum,
+	IN wdev_tx_power_limit *txpwrinfo)
+{
+	UINT8 u1RateIdx, u1FillParamType, u1ParseParamType, u1ParamIdx, u1ParamIdx2;
+	INT8 pwr20 = 0, pwr40 = 0, pwr80 = 0, pwr = 0;
+
+	txpwrinfo->tx_pwr[txpwrinfo->ch_num].channel =	prPwrLimitTbl->pu1ChList[u1ChListIdx];
+	/* update sku parameter for cck, ofdm, ht20/40, vht20/40/80/160 to buffer */
+	for (u1FillParamType = 0, u1ParseParamType = 0, u1ParamIdx = 0, u1ParamIdx2 = 0;
+			u1FillParamType < TypeFillNum; u1FillParamType++, u1ParseParamType++) {
+		/* raw data index increment for different parameter type */
+		u1ParamIdx2 = *(pu1RawDataIdxOffset + u1ParseParamType);
+
+		for (u1RateIdx = 0; u1RateIdx < *(pu1FillParamTypeLen + u1FillParamType); u1RateIdx++) {
+			pwr = *(prPwrLimitTbl->pu1PwrLimit + u1ParamIdx2 + u1RateIdx);
+			if ((u1FillParamType < 3 || u1FillParamType == 4) && (pwr > pwr20))
+				pwr20 = pwr;
+			else if ((u1FillParamType == 3 || u1FillParamType == 5) && (pwr > pwr40))
+				pwr40 = pwr;
+			else if ((u1FillParamType == 6) && (pwr > pwr80))
+				pwr80 = pwr;
+			else {
+				MTWF_LOG(DBG_SUBCAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+					("ch:%d u1ParamIdx2:%d u1FillParamType:%d pu1FillParamTypeLen%d pwr:%d\n",
+					prPwrLimitTbl->pu1ChList[u1ChListIdx], u1ParamIdx2,
+					u1FillParamType, *(pu1FillParamTypeLen + u1FillParamType), pwr));
+			}
+		}
+		/* data index increment for different parameter type */
+		u1ParamIdx += *(pu1FillParamTypeLen + u1FillParamType);
+	}
+	txpwrinfo->tx_pwr[txpwrinfo->ch_num].pwrlimit[0] = pwr20;
+	txpwrinfo->tx_pwr[txpwrinfo->ch_num].pwrlimit[1] = pwr40;
+	txpwrinfo->tx_pwr[txpwrinfo->ch_num].pwrlimit[2] = pwr80;
+	MTWF_LOG(DBG_SUBCAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		("%s: ch_num:%d ch:%d pwr:%d/%d/%d\n", __func__, txpwrinfo->ch_num,
+		txpwrinfo->tx_pwr[txpwrinfo->ch_num].channel, pwr20, pwr40, pwr80));
+	txpwrinfo->ch_num += 1;
+}
+
+NDIS_STATUS MtGetMaxTxPwrLimit(RTMP_ADAPTER *pAd, UINT8 band_idx, wdev_tx_power_limit *txpwrinfo, UINT8 u1Type)
+{
+	CHANNEL_CTRL *pChCtrl = NULL;
+	UINT8 u1ChListIdx;
+	PUINT8 pu1FillParamTypeLen = NULL;
+	PUINT8 pu1RawDataIdxOffset = NULL;
+	P_CH_POWER_V1 prPwrLimitTbl, prTempPwrLimitTbl;
+	RTMP_CHIP_CAP *pChipCap = hc_get_chip_cap(pAd->hdev_ctrl);
+	UINT8 u1TypeFillNum[TABLE_PARSE_TYPE_NUM] = {pChipCap->single_sku_type_num, pChipCap->backoff_type_num};
+	PDL_LIST pList = NULL;
+	BOOLEAN ChPresent = FALSE;
+	UINT8 ChBand = 0;
+
+	pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, band_idx);
+
+	/* sanity check for null pointer */
+	if (!txpwrinfo)
+		goto error0;
+
+	/* update power limit value data length */
+	MtPwrGetPwrLimitInstance(pAd, u1Type, POWER_LIMIT_DATA_LENGTH, (PVOID *)&pu1FillParamTypeLen);
+
+	/* sanity check for null pointer */
+	if (!pu1FillParamTypeLen)
+		goto error1;
+
+	/* update power limit value raw data offset */
+	MtPwrGetPwrLimitInstance(pAd, u1Type, POWER_LIMIT_RAW_DATA_OFFSET, (PVOID *)&pu1RawDataIdxOffset);
+
+	/* update power limit link list */
+	MtPwrGetPwrLimitInstance(pAd, u1Type, POWER_LIMIT_LINK_LIST, (PVOID *)&pList);
+
+	/* sanity check for null pointer */
+	if (!pu1RawDataIdxOffset)
+		goto error1;
+
+	if (pChCtrl->ChList[0].Channel >= 18)
+		ChBand = 1;
+
+	txpwrinfo->ch_num = 0;
+
+	DlListForEachSafe(prPwrLimitTbl, prTempPwrLimitTbl, pList, CH_POWER_V1, List) {
+		/* search for specific channel */
+		for (u1ChListIdx = 0; u1ChListIdx < prPwrLimitTbl->u1ChNum; u1ChListIdx++) {
+			/* check Channel Band and Channel */
+			ChPresent = IsChannelPresent(pAd, prPwrLimitTbl->pu1ChList[u1ChListIdx], pChCtrl);
+			MTWF_LOG(DBG_SUBCAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("ch:%d, ChBand:%d ChPresent:%d\n", prPwrLimitTbl->pu1ChList[u1ChListIdx],
+				prPwrLimitTbl->u1ChBand, ChPresent));
+			if ((ChBand == prPwrLimitTbl->u1ChBand) && ChPresent) {
+				parse_pwr_info(pAd, prPwrLimitTbl, u1ChListIdx, pu1FillParamTypeLen,
+					pu1RawDataIdxOffset, u1TypeFillNum[u1Type], txpwrinfo);
+			}
+		}
+	}
+
+	return NDIS_STATUS_SUCCESS;
+
+error0:
+	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: null pointer for buffer to fill power limit table !!\n", __func__));
+	return NDIS_STATUS_FAILURE;
+
+error1:
+	MTWF_LOG(DBG_CAT_POWER, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+		("%s: null pointer for parameter related to fill power limit table proc !!\n", __func__));
+	return NDIS_STATUS_FAILURE;
+}
+#endif

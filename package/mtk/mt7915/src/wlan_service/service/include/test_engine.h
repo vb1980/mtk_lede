@@ -62,7 +62,8 @@ s_int32 mt_engine_subscribe_tx(
 	struct test_operation *ops,
 	struct test_wlan_info *winfos,
 	void *virtual_device,
-	struct test_configuration *configs);
+	struct test_configuration *configs,
+	u_int8 ctrl_band_idx);
 s_int32 mt_engine_unsubscribe_tx(
 	struct test_wlan_info *winfos,
 	struct test_configuration *configs);

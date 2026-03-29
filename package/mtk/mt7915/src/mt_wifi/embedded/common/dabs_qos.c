@@ -23,6 +23,7 @@
 #ifdef DABS_QOS
 
 #include <net/ip.h>
+#include "ra_ac_q_mgmt.h"
 
 static const UINT8 ac_queue_to_up[WMM_NUM_OF_AC] = {
 	1 /* AC_BK */, 0 /* AC_BE */, 5 /* AC_VI */, 7 /* AC_VO */
@@ -437,6 +438,10 @@ INT set_dabs_qos_param(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 				&ip_src[0], &ip_src[1], &ip_src[2], &ip_src[3],
 				&ip_dest[0], &ip_dest[1], &ip_dest[2], &ip_dest[3],
 				&param[3], &param[4], &param[5]);
+			if (rv == 0) {
+				ret = 0;
+				goto error;
+			}
 
 			param[1] = (ip_src[3]<<24) | (ip_src[2] << 16) | (ip_src[1] << 8)
 				| (ip_src[0] << 0);
@@ -481,18 +486,35 @@ INT set_dabs_qos_param(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s: set qos_param qos related for idx:%u\n", __func__, param[0]));
 			if ((target_qos_param.delay_req > 0) && (target_qos_param.delay_req < 65535)) {
-				if (pAd->pbc_bound[PBC_AC_BK] == PBC_WMM_UP_DEFAULT_BK)
-				{
-					pAd->pbc_bound[PBC_AC_VO] = 1200;
-					pAd->pbc_bound[PBC_AC_VI] = 4000;
-					pAd->pbc_bound[PBC_AC_BE] = 1200;
-					pAd->pbc_bound[PBC_AC_BK] = 1000;
+				if (pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK] == PBC_WMM_UP_DEFAULT_BK) {
+					pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO] = 1200;
+					pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI] = 4000;
+					pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE] = 1200;
+					pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK] = 1000;
 
 					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 						("%s: set pbc_ubound=[%u,%u,%u,%u]\n", __func__,
-						pAd->pbc_bound[PBC_AC_BK], pAd->pbc_bound[PBC_AC_BE],
-						pAd->pbc_bound[PBC_AC_VI], pAd->pbc_bound[PBC_AC_VO]));
+						pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK],
+						pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE],
+						pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI],
+						pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO]));
 				}
+#ifdef DBDC_MODE
+				if (pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK] == PBC_WMM_UP_DEFAULT_BK) {
+					pAd->pbc_bound[DBDC_BAND1][PBC_AC_VO] = 1200;
+					pAd->pbc_bound[DBDC_BAND1][PBC_AC_VI] = 4000;
+					pAd->pbc_bound[DBDC_BAND1][PBC_AC_BE] = 1200;
+					pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK] = 1000;
+
+					MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						("%s: set pbc_ubound=[%u,%u,%u,%u]\n", __func__,
+						pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK],
+						pAd->pbc_bound[DBDC_BAND1][PBC_AC_BE],
+						pAd->pbc_bound[DBDC_BAND1][PBC_AC_VI],
+						pAd->pbc_bound[DBDC_BAND1][PBC_AC_VO]));
+				}
+
+#endif
 			}
 			break;
 		case 2:
@@ -561,17 +583,30 @@ INT set_dabs_qos_param(PRTMP_ADAPTER pAd, RTMP_STRING *arg)
 			OS_SPIN_LOCK_BH(&qos_param_table_lock);
 			memset(&qos_param_table[0], 0, sizeof(struct qos_param_rec)*MAX_QOS_PARAM_TBL);
 			OS_SPIN_UNLOCK_BH(&qos_param_table_lock);
-			pAd->pbc_bound[PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE;
-			pAd->pbc_bound[PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK;
-			pAd->pbc_bound[PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO;
-			pAd->pbc_bound[PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI;
+			pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE_BAND0;
+			pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK_BAND0;
+			pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO_BAND0;
+			pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI_BAND0;
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s: clean up table ret=%u\n",__func__, ret));
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 				("%s: reset pbc_ubound=[%u,%u,%u,%u]\n", __func__,
-				pAd->pbc_bound[PBC_AC_BK], pAd->pbc_bound[PBC_AC_BE],
-				pAd->pbc_bound[PBC_AC_VI], pAd->pbc_bound[PBC_AC_VO]));
-
+				pAd->pbc_bound[DBDC_BAND0][PBC_AC_BK], pAd->pbc_bound[DBDC_BAND0][PBC_AC_BE],
+				pAd->pbc_bound[DBDC_BAND0][PBC_AC_VI], pAd->pbc_bound[DBDC_BAND0][PBC_AC_VO]));
+#ifdef DBDC_MODE
+			pAd->pbc_bound[DBDC_BAND1][PBC_AC_BE] = PBC_WMM_UP_DEFAULT_BE;
+			pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK] = PBC_WMM_UP_DEFAULT_BK;
+			pAd->pbc_bound[DBDC_BAND1][PBC_AC_VO] = PBC_WMM_UP_DEFAULT_VO;
+			pAd->pbc_bound[DBDC_BAND1][PBC_AC_VI] = PBC_WMM_UP_DEFAULT_VI;
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: clean up table ret=%u\n", __func__, ret));
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s: reset pbc_ubound=[%u,%u,%u,%u]\n", __func__,
+				pAd->pbc_bound[DBDC_BAND1][PBC_AC_BK],
+				pAd->pbc_bound[DBDC_BAND1][PBC_AC_BE],
+				pAd->pbc_bound[DBDC_BAND1][PBC_AC_VI],
+				pAd->pbc_bound[DBDC_BAND1][PBC_AC_VO]));
+#endif
 			break;
 		case 7:
 			for (idx = 0; idx < MAX_QOS_PARAM_TBL; idx++) {

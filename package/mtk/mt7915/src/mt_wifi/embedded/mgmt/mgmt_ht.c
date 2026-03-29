@@ -106,7 +106,8 @@ INT ht_mode_adjust(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, HT_CAPABILITY_IE 
 	}
 	pEntry->MaxHTPhyMode.field.STBC = (peer_ht_cap->HtCapInfo.RxSTBC & ht_cap->HtCapInfo.TxSTBC);
 
-	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(), MODE = %d, BW = %d, SGI = %d, STBC = %d\n", __func__,
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		("%s(), MODE = %d, BW = %d, SGI = %d, STBC = %d\n", __func__,
 			 pEntry->MaxHTPhyMode.field.MODE,
 			 pEntry->MaxHTPhyMode.field.BW,
 			 pEntry->MaxHTPhyMode.field.ShortGI,
@@ -175,7 +176,7 @@ INT get_ht_max_mcs(UCHAR *desire_mcs, UCHAR *cap_mcs)
 
 INT get_ht_cent_ch(RTMP_ADAPTER *pAd, UINT8 *rf_bw, UINT8 *ext_ch, UCHAR Channel)
 {
-	UCHAR op_ht_bw = HT_BW_20;
+	UCHAR op_ht_bw = BW_20;
 	UCHAR op_ext_cha = EXTCHA_NONE;
 	UCHAR i;
 	struct wifi_dev *wdev;
@@ -191,7 +192,7 @@ INT get_ht_cent_ch(RTMP_ADAPTER *pAd, UINT8 *rf_bw, UINT8 *ext_ch, UCHAR Channel
 			op_ht_bw = wlan_operate_get_ht_bw(wdev);
 			op_ext_cha = wlan_operate_get_ext_cha(wdev);
 
-			if (op_ht_bw == HT_BW_40)
+			if (op_ht_bw == BW_40)
 				break;
 		}
 	}
@@ -259,14 +260,13 @@ UINT16 ht_max_mpdu_size[2] = {3839u, 7935u};
 
 VOID set_sta_ht_cap(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *entry, HT_CAPABILITY_IE *ht_ie)
 {
-	UCHAR ht_gi = GI_400;
-	UINT8 ba_en = 1;
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+	UCHAR ht_gi = wlan_config_get_ht_gi(entry->wdev);
+	UINT8 ba_en = wlan_config_get_ba_enable(entry->wdev);
 
 	/* set HT capabilty flag for entry */
 	CLIENT_STATUS_SET_FLAG(entry, fCLIENT_STATUS_HT_CAPABLE);
 
-	ht_gi = wlan_config_get_ht_gi(entry->wdev);
 	if (ht_gi == GI_400) {
 		if (ht_ie->HtCapInfo.ShortGIfor20)
 			CLIENT_STATUS_SET_FLAG(entry, fCLIENT_STATUS_SGI20_CAPABLE);
@@ -297,7 +297,6 @@ VOID set_sta_ht_cap(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *entry, HT_CAPABILITY_IE 
 			CLIENT_STATUS_SET_FLAG(entry, fCLIENT_STATUS_HT_RX_LDPC_CAPABLE);
 	}
 
-	ba_en = wlan_config_get_ba_enable(entry->wdev);
 	if (wlan_config_get_amsdu_en(entry->wdev) && !ba_en)
 		CLIENT_STATUS_SET_FLAG(entry, fCLIENT_STATUS_AMSDU_INUSED);
 
@@ -324,10 +323,13 @@ static VOID eapsetht(
 		switch (wlan_operate_get_rx_stream(wdev)) {
 		case 4:
 			ht_cap->MCSSet[3] = wdev->eap.eapmcsset[3];
+			/* fall through */
 		case 3:
 			ht_cap->MCSSet[2] = wdev->eap.eapmcsset[2];
+			/* fall through */
 		case 2:
 			ht_cap->MCSSet[1] = wdev->eap.eapmcsset[1];
+			/* fall through */
 		case 1:
 			ht_cap->MCSSet[0] = wdev->eap.eapmcsset[0];
 			break;
@@ -362,7 +364,7 @@ VOID RTMPSetHT(
 #endif /* CONFIG_MULTI_CHANNEL */
 	HT_CAPABILITY_IE *ht_cap = (HT_CAPABILITY_IE *)wlan_operate_get_ht_cap(wdev);
 	struct _RTMP_CHIP_CAP *cap;
-
+	UINT8 band_idx = HcGetBandByWdev(wdev);
 	cap = hc_get_chip_cap(pAd->hdev_ctrl);
 #ifdef CONFIG_AP_SUPPORT
 
@@ -393,13 +395,13 @@ VOID RTMPSetHT(
 	switch (wlan_operate_get_rx_stream(wdev)) {
 	case 4:
 		ht_cap->MCSSet[3] =  0xff;
-
+		/* fall through */
 	case 3:
 		ht_cap->MCSSet[2] =  0xff;
-
+		/* fall through */
 	case 2:
 		ht_cap->MCSSet[1] =  0xff;
-
+		/* fall through */
 	case 1:
 	default:
 		ht_cap->MCSSet[0] =  0xff;
@@ -461,14 +463,15 @@ VOID RTMPSetHT(
 #endif /* TXBF_SUPPORT */
 #ifdef CONFIG_AP_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(pAd) {
-		for (idx = 0; idx < pAd->ApCfg.BssidNum; idx++)
-			RTMPSetIndividualHT(pAd, idx);
-
+		for (idx = 0; idx < pAd->ApCfg.BssidNum; idx++) {
+			if (HcGetBandByWdev(&pAd->ApCfg.MBSSID[idx].wdev) == band_idx)
+				RTMPSetIndividualHT(pAd, idx);
+		}
 #ifdef APCLI_SUPPORT
-
-		for (idx = 0; idx < MAX_APCLI_NUM; idx++)
-			RTMPSetIndividualHT(pAd, idx + MIN_NET_DEVICE_FOR_APCLI);
-
+		for (idx = 0; idx < MAX_APCLI_NUM; idx++) {
+			if (HcGetBandByWdev(&pAd->StaCfg[idx].wdev) == band_idx)
+				RTMPSetIndividualHT(pAd, idx + MIN_NET_DEVICE_FOR_APCLI);
+		}
 #endif /* APCLI_SUPPORT */
 	}
 #endif /* CONFIG_AP_SUPPORT */
@@ -514,7 +517,7 @@ VOID RTMPSetHT(
 VOID RTMPSetIndividualHT(RTMP_ADAPTER *pAd, UCHAR apidx)
 {
 	RT_PHY_INFO *pDesired_ht_phy = NULL;
-	UCHAR TxStream = 1;
+	UCHAR TxStream;
 	UCHAR DesiredMcs = MCS_AUTO;
 	UINT32 encrypt_mode = 0;
 	struct wifi_dev *wdev = NULL;
@@ -643,7 +646,6 @@ VOID RTMPSetIndividualHT(RTMP_ADAPTER *pAd, UCHAR apidx)
 	}
 
 	TxStream = wlan_operate_get_tx_stream(wdev);
-
 	RTMPZeroMemory(pDesired_ht_phy, sizeof(RT_PHY_INFO));
 	MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("RTMPSetIndividualHT : Desired MCS = %d\n", DesiredMcs));
 
@@ -761,7 +763,8 @@ VOID RTMPSetIndividualHT(RTMP_ADAPTER *pAd, UCHAR apidx)
 	}
 
 	/* update HT Rate setting */
-	MlmeUpdateHtTxRates(pAd, wdev);
+	if (WMODE_CAP_N(wdev->PhyMode))
+		MlmeUpdateHtTxRates(pAd, wdev);
 
 #ifdef DOT11_VHT_AC
 
@@ -1013,13 +1016,13 @@ BOOLEAN RTMPCheckHt(
 	switch (wlan_operate_get_rx_stream(sta->wdev)) {
 	case 4:
 		pStaCfg->MlmeAux.HtCapability.MCSSet[3] = 0xff;
-
+		/* fall through */
 	case 3:
 		pStaCfg->MlmeAux.HtCapability.MCSSet[2] = 0xff;
-
+		/* fall through */
 	case 2:
 		pStaCfg->MlmeAux.HtCapability.MCSSet[1] = 0xff;
-
+		/* fall through */
 	case 1:
 	default:
 		pStaCfg->MlmeAux.HtCapability.MCSSet[0] = 0xff;
@@ -1166,13 +1169,13 @@ BOOLEAN check_ht(
 	switch (wlan_operate_get_rx_stream(sta->wdev)) {
 	case 4:
 		sta_cfg->MlmeAux.HtCapability.MCSSet[3] = 0xff;
-
+		/* fall through */
 	case 3:
 		sta_cfg->MlmeAux.HtCapability.MCSSet[2] = 0xff;
-
+		/* fall through */
 	case 2:
 		sta_cfg->MlmeAux.HtCapability.MCSSet[1] = 0xff;
-
+		/* fall through */
 	case 1:
 	default:
 		sta_cfg->MlmeAux.HtCapability.MCSSet[0] = 0xff;

@@ -423,7 +423,9 @@ INT sta_ieee_802_3_data_rx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, RX_BLK *pRx
 	FRAME_CONTROL *pFmeCtrl = (FRAME_CONTROL *)pRxBlk->FC;
 	struct wifi_dev_ops *ops = wdev->wdev_ops;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
-
+#ifdef TR181_SUPPORT
+	UCHAR bandIdx = HcGetBandByWdev(wdev);
+#endif
 	wdev_idx = wdev->wdev_idx;
 	MTWF_LOG(DBG_CAT_RX, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(): wcid=%d, wdev_idx=%d, pRxBlk->Flags=0x%x, fRX_AP/STA/ADHOC=0x%x/0x%x/0x%x, Type/SubType=%d/%d, FrmDS/ToDS=%d/%d\n",
 			 __func__, pEntry->wcid, wdev->wdev_idx,
@@ -441,6 +443,9 @@ INT sta_ieee_802_3_data_rx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, RX_BLK *pRx
 
 	pEntry->NoDataIdleCount = 0;
 	tr_ctl->tr_entry[pEntry->wcid].NoDataIdleCount = 0;
+#ifdef TR181_SUPPORT
+	pAd->WlanCounters[bandIdx].RxTotByteCount.QuadPart += pRxBlk->MPDUtotalByteCnt;
+#endif
 	pAd->RxTotalByteCnt += pRxBlk->MPDUtotalByteCnt;
 
 	if (((FRAME_CONTROL *)pRxBlk->FC)->SubType & 0x08) {
@@ -495,6 +500,9 @@ INT sta_ieee_802_11_data_rx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, RX_BLK *pR
 	PSTA_ADMIN_CONFIG pStaCfg = NULL;
 	struct wifi_dev_ops *ops = wdev->wdev_ops;
 	struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
+#ifdef TR181_SUPPORT
+	UCHAR bandIdx = HcGetBandByWdev(wdev);
+#endif
 
 	pStaCfg = GetStaCfgByWdev(pAd, wdev);
 
@@ -811,7 +819,9 @@ INT sta_ieee_802_11_data_rx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, RX_BLK *pR
 			if (rtmp_chk_tkip_mic(pAd, pEntry, pRxBlk) == FALSE)
 				return TRUE;
 		}
-
+#ifdef TR181_SUPPORT
+		pAd->WlanCounters[bandIdx].RxTotByteCount.QuadPart += pRxBlk->MPDUtotalByteCnt;
+#endif
 		pAd->RxTotalByteCnt += pRxBlk->MPDUtotalByteCnt;
 #ifdef MAC_REPEATER_SUPPORT
 
@@ -917,7 +927,9 @@ INT sta_ampdu_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
 	UINT8 tx_hw_hdr_len = cap->tx_hw_hdr_len;
 	struct tr_counter *tr_cnt = &pAd->tr_ctl.tr_cnt;
-
+#ifdef TR181_SUPPORT
+	UCHAR bandIdx = HcGetBandByWdev(wdev);
+#endif
 	if (!fill_tx_blk(pAd, wdev, pTxBlk)) {
 		tr_cnt->fill_tx_blk_fail_drop++;
 		RELEASE_NDIS_PACKET(pAd, pTxBlk->pPacket, NDIS_STATUS_FAILURE);
@@ -1099,6 +1111,9 @@ INT sta_ampdu_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 	pAd->RalinkCounters.TransmittedMPDUsInAMPDUCount.u.LowPart++;
 	pAd->RalinkCounters.TransmittedOctetsInAMPDUCount.QuadPart += pTxBlk->SrcBufLen;
 #endif /* STATS_COUNT_SUPPORT */
+#ifdef TR181_SUPPORT
+	pAd->WlanCounters[bandIdx].TxTotByteCount.QuadPart += pTxBlk->SrcBufLen;
+#endif
 	pAd->TxTotalByteCnt += pTxBlk->SrcBufLen;
 	asic_write_tx_resource(pAd, pTxBlk, TRUE, &freeCnt);
 #ifdef SMART_ANTENNA
@@ -1163,7 +1178,9 @@ INT sta_legacy_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 	INT32 ret = NDIS_STATUS_SUCCESS;
 	struct wifi_dev_ops *ops = wdev->wdev_ops;
 	struct tr_counter *tr_cnt = &pAd->tr_ctl.tr_cnt;
-
+#ifdef TR181_SUPPORT
+	UCHAR bandIdx = HcGetBandByWdev(wdev);
+#endif
 	if (!fill_tx_blk(pAd, wdev, pTxBlk)) {
 		tr_cnt->fill_tx_blk_fail_drop++;
 		RELEASE_NDIS_PACKET(pAd, pTxBlk->pPacket, NDIS_STATUS_FAILURE);
@@ -1209,6 +1226,9 @@ INT sta_legacy_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 		pTxBlk->pMacEntry->saTxCnt++;
 
 #endif /* SMART_ANTENNA */
+#ifdef TR181_SUPPORT
+	pAd->WlanCounters[bandIdx].TxTotByteCount.QuadPart += pTxBlk->SrcBufLen;
+#endif
 	pAd->TxTotalByteCnt += pTxBlk->SrcBufLen;
 	return NDIS_STATUS_SUCCESS;
 }
@@ -1231,7 +1251,9 @@ INT sta_frag_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 	UINT NextMpduSize;
 	UINT32 ret = NDIS_STATUS_SUCCESS;
 	struct tr_counter *tr_cnt = &pAd->tr_ctl.tr_cnt;
-
+#ifdef TR181_SUPPORT
+	UCHAR bandIdx = HcGetBandByWdev(wdev);
+#endif
 	if (!fill_tx_blk(pAd, wdev, pTxBlk)) {
 		tr_cnt->fill_tx_blk_fail_drop++;
 		RELEASE_NDIS_PACKET(pAd, pTxBlk->pPacket, NDIS_STATUS_FAILURE);
@@ -1482,6 +1504,9 @@ INT sta_frag_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *pTxBlk)
 			pTxBlk->pMacEntry->saTxCnt++;
 
 #endif /* SMART_ANTENNA */
+#ifdef TR181_SUPPORT
+		pAd->WlanCounters[bandIdx].TxTotByteCount.QuadPart += pTxBlk->SrcBufLen;
+#endif
 		pAd->TxTotalByteCnt += pTxBlk->SrcBufLen;
 #ifdef SOFT_ENCRYPT
 
@@ -2072,8 +2097,8 @@ INT sta_mlme_mgmtq_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *tx_blk)
 		transmit = &pMacEntry->snd_rate;
 		mac_info.Txopmode = IFS_PIFS;
 		pMacEntry->snd_reqired = FALSE;
-		MTWF_LOG(DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():Kick Sounding to %02x:%02x:%02x:%02x:%02x:%02x, dataRate(PhyMode:%s, BW:%sHz, %dSS, MCS%d)\n",
-				 __func__, PRINT_MAC(pMacEntry->Addr),
+		MTWF_LOG(DBG_CAT_TX, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s():Kick Sounding to "MACSTR", dataRate(PhyMode:%s, BW:%sHz, %dSS, MCS%d)\n",
+				 __func__, MAC2STR(pMacEntry->Addr),
 				 get_phymode_str(transmit->field.MODE),
 				 get_bw_str(transmit->field.BW),
 				 (transmit->field.MCS >> 4) + 1, (transmit->field.MCS & 0xf)));
@@ -2174,9 +2199,12 @@ INT sta_mlme_dataq_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *tx_blk)
 	/* In WMM-UAPSD, mlme frame should be set psm as power saving but probe request frame */
 	/* Data-Null packets alse pass through MMRequest in RT2860, however, we hope control the psm bit to pass APSD*/
 	if (pHeader_802_11->FC.Type != FC_TYPE_DATA) {
-		if ((pHeader_802_11->FC.SubType == SUBTYPE_PROBE_REQ) ||
-			!(pStaCfg->wdev.UapsdInfo.bAPSDCapable && pAd->CommonCfg.APEdcaParm[0].bAPSDCapable))
-			pHeader_802_11->FC.PwrMgmt = PWR_ACTIVE;
+		if (pStaCfg)
+			if ((pHeader_802_11->FC.SubType == SUBTYPE_PROBE_REQ) ||
+				!(pStaCfg->wdev.UapsdInfo.bAPSDCapable && pAd->CommonCfg.APEdcaParm[0].bAPSDCapable))
+				pHeader_802_11->FC.PwrMgmt = PWR_ACTIVE;
+			else
+				pHeader_802_11->FC.PwrMgmt = pAd->CommonCfg.bAPSDForcePowerSave;
 		else
 			pHeader_802_11->FC.PwrMgmt = pAd->CommonCfg.bAPSDForcePowerSave;
 	}
@@ -2305,8 +2333,17 @@ INT sta_mlme_dataq_tx(RTMP_ADAPTER *pAd, struct wifi_dev *wdev, TX_BLK *tx_blk)
 
 				if (act_hdr->Category == CATEGORY_BA && act_hdr->Action == ADDBA_REQ) {
 					PFRAME_ADDBA_REQ addba_frame = (PFRAME_ADDBA_REQ)(tx_blk->pSrcBufHeader + tx_hw_hdr_len);
+#ifdef RT_BIG_ENDIAN
+					BA_PARM tempBaParm;
+					NdisMoveMemory((PUCHAR)(&tempBaParm), (PUCHAR)(&addba_frame->BaParm),
+						sizeof(BA_PARM));
+					*(USHORT *)(&tempBaParm) = le2cpu16(*(USHORT *)(&tempBaParm));
+					mac_info.TID = tempBaParm.TID;
+					mac_info.q_idx = WMM_UP2AC_MAP[tempBaParm.TID];
+#else
 					mac_info.TID = addba_frame->BaParm.TID;
 					mac_info.q_idx = WMM_UP2AC_MAP[addba_frame->BaParm.TID];
+#endif
 					mac_info.addba = TRUE;
 				}
 			}

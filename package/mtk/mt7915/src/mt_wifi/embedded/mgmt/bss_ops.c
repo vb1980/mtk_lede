@@ -73,7 +73,7 @@ static VOID BssCipherParse(BSS_ENTRY *pBss)
 	USHORT							Count;
 	SHORT								Length;
 	UCHAR end_field = 0;
-	UCHAR res = TRUE;
+	UCHAR res;
 	/* WepStatus will be reset later, if AP announce TKIP or AES on the beacon frame.*/
 	CLEAR_SEC_AKM(pBss->AKMMap);
 	CLEAR_CIPHER(pBss->PairwiseCipher);
@@ -460,7 +460,7 @@ static VOID BssCipherParse(BSS_ENTRY *pBss)
  */
 VOID BssTableInit(BSS_TABLE *Tab)
 {
-	int i;
+	UINT i;
 
 	Tab->BssNr = 0;
 	Tab->BssOverlapNr = 0;
@@ -572,7 +572,8 @@ VOID BssTableDeleteEntry(BSS_TABLE *Tab, UCHAR *pBssid, UCHAR Channel)
 
 			for (j = i; j < Tab->BssNr - 1; j++) {
 				pOldAddr = Tab->BssEntry[j].pVarIeFromProbRsp;
-				NdisMoveMemory(&(Tab->BssEntry[j]), &(Tab->BssEntry[j + 1]), sizeof(BSS_ENTRY));
+				/* delete this entry and use the behind entry replace this entry*/
+				BssEntryCopy(Tab, &(Tab->BssEntry[j]), &(Tab->BssEntry[j + 1]));
 
 				if (pOldAddr) {
 					RTMPZeroMemory(pOldAddr, MAX_VIE_LEN);
@@ -582,15 +583,8 @@ VOID BssTableDeleteEntry(BSS_TABLE *Tab, UCHAR *pBssid, UCHAR Channel)
 					Tab->BssEntry[j].pVarIeFromProbRsp = pOldAddr;
 				}
 			}
-
-			pOldAddr = Tab->BssEntry[Tab->BssNr - 1].pVarIeFromProbRsp;
-			NdisZeroMemory(&(Tab->BssEntry[Tab->BssNr - 1]), sizeof(BSS_ENTRY));
-
-			if (pOldAddr) {
-				RTMPZeroMemory(pOldAddr, MAX_VIE_LEN);
-				Tab->BssEntry[Tab->BssNr - 1].pVarIeFromProbRsp = pOldAddr;
-			}
-
+			/*clear the last one entry*/
+			BssEntryReset(Tab, &Tab->BssEntry[Tab->BssNr - 1]);
 			Tab->BssNr -= 1;
 			return;
 		}
@@ -605,6 +599,7 @@ VOID BssTableDeleteEntry(BSS_TABLE *Tab, UCHAR *pBssid, UCHAR Channel)
  */
 VOID BssEntrySet(
 	IN RTMP_ADAPTER *pAd,
+	struct wifi_dev *wdev,
 	OUT BSS_ENTRY *pBss,
 	IN BCN_IE_LIST * ie_list,
 	IN CHAR Rssi,
@@ -641,6 +636,9 @@ VOID BssEntrySet(
 
 	pBss->BssType = ie_list->BssType;
 	pBss->BeaconPeriod = ie_list->BeaconPeriod;
+#ifdef TR181_SUPPORT
+	pBss->DtimPeriod = ie_list->NbrDtimPeriod;
+#endif
 
 	if (ie_list->BssType == BSS_INFRA) {
 		if (ie_list->CfParm.bValid) {
@@ -727,10 +725,36 @@ VOID BssEntrySet(
 				(cmm_ies->ht_op.AddHtInfo.ExtChanOffset != EXTCHA_NONE) &&
 				(cmm_ies->ht_cap.HtCapInfo.ChannelWidth == BW_40) &&
 				(pBss->CentralChannel != cmm_ies->ht_op.ControlChan)) {
+				if (vht_op->vht_op_info.ch_width == 2 || vht_op->vht_op_info.ch_width == 3) {
+				/* VHT operation definition 1*/
+					if (vht_op->vht_op_info.ch_width == 2)
+					/* 160M */
+						pBss->CentralChannel = vht_op->vht_op_info.ccfs_0;
+					else if (vht_op->vht_op_info.ch_width == 3) {
+					/* 80M + 80M */
+						pBss->CentralChannel = vht_op->vht_op_info.ccfs_0;
+						pBss->SecCentralChannel = vht_op->vht_op_info.ccfs_1;
+					}
+				} else {
+				/* VHT operation definition 2*/
+					if (vht_op->vht_op_info.ccfs_1 == 0)
+					/* 80M */
+						pBss->CentralChannel = vht_op->vht_op_info.ccfs_0;
+					else {
+						if (((vht_op->vht_op_info.ccfs_1) - (vht_op->vht_op_info.ccfs_0)) == 8 ||
+							((vht_op->vht_op_info.ccfs_1) - (vht_op->vht_op_info.ccfs_0)) == -8)
+						/* 160M */
+							pBss->CentralChannel = vht_op->vht_op_info.ccfs_1;
+						else {
+						/* 80M+80M */
+							pBss->CentralChannel = vht_op->vht_op_info.ccfs_0;
+							pBss->SecCentralChannel = vht_op->vht_op_info.ccfs_1;
+						}
+					}
+				}
 				MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-						 ("%s():VHT vht_op_info->center_freq_1=%d, Bss->CentCh=%d, change from CentralChannel to cent_ch!\n",
-						  __func__, vht_op->vht_op_info.ccfs_0, pBss->CentralChannel));
-				pBss->CentralChannel = vht_op->vht_op_info.ccfs_0;
+						 ("%s():VHT vht_op_info->center_freq_0=%d, vht_op_info->center_freq_1=%d, Bss->CentralChannel=%d, ssid=%s!\n",
+						  __func__, vht_op->vht_op_info.ccfs_0, vht_op->vht_op_info.ccfs_1, pBss->CentralChannel, pBss->Ssid));
 			}
 		}
 
@@ -902,7 +926,7 @@ VOID BssEntrySet(
 		}
 	}
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
-	CustomerBssEntrySet(pAd, ie_list, pBss, LengthVIE, pVIE);
+	CustomerBssEntrySet(pAd, wdev, ie_list, pBss, LengthVIE, pVIE);
 #endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 #ifdef OCE_SUPPORT
 #ifdef CONFIG_AP_SUPPORT
@@ -910,11 +934,16 @@ VOID BssEntrySet(
 	pBss->is_11bonly_ap = ie_list->is_11bonly_ap;
 #endif
 #endif /* OCE_SUPPORT */
+#ifdef MAP_6E_SUPPORT
+	pBss->rnr_info.channel = ie_list->rnr_info.channel;
+	pBss->rnr_info.op = ie_list->rnr_info.op;
+#endif
 }
 
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 VOID CustomerBssEntrySet(
 	IN RTMP_ADAPTER *pAd,
+	struct wifi_dev *wdev,
 	IN BCN_IE_LIST *ie_list,
 	IN BSS_ENTRY * pBss,
 	IN USHORT LengthVIE,
@@ -927,19 +956,8 @@ VOID CustomerBssEntrySet(
 	UINT8 Antenna = 1;
 
 	struct customer_bss_entry *CustomerBssEntry;
-	struct wifi_dev *wdev = NULL;
-	BSS_TABLE *ScanTab = NULL;
-	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
-	UCHAR apidx = pObj->ioctl_if;
-#ifdef APCLI_SUPPORT
-	if (pObj->ioctl_if_type == INT_APCLI) {
-		wdev = &pAd->StaCfg[apidx].wdev;
-	} else
-#endif /* APCLI_SUPPORT */
-	{
-		wdev = &pAd->ApCfg.MBSSID[apidx].wdev;
-	}
-	ScanTab = get_scan_tab_by_wdev(pAd, wdev);
+
+	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 
 	RTMP_SPIN_LOCK(&ScanTab->event_bss_entry_lock);
 
@@ -1100,34 +1118,26 @@ VOID CustomerBssEntrySet(
 	}
 
 	/* fix memory leak when trigger scan continuously*/
-	if ( ie_list->CustomerVendorIE.pointer && ie_list->CustomerVendorIE.length > 0) {
+	if (ie_list->CustomerVendorIE.pointer && ie_list->CustomerVendorIE.length > 0) {
 		int ret;
 		CHAR *vendor_ie_temp;
 
-		//MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_DEBUG,("%s(caller:%pS),00000 pointer=%p  ssid=%s vielen=%d\n",
-		//		__func__, OS_TRACE, CustomerBssEntry->vendor_ie.pointer, CustomerBssEntry->ssid, ie_list->CustomerVendorIE.length));
 		ret = os_alloc_mem(pAd, (UCHAR **)&vendor_ie_temp, ie_list->CustomerVendorIE.length);
 		if (ret == NDIS_STATUS_FAILURE) {
 			/* keep the last vendor_ie pointer */
 			MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
 				("\n\n\n%s: ALLOC Memory fail\n\n\n", __func__));
 		} else {
-			os_move_mem(vendor_ie_temp, ie_list->CustomerVendorIE.pointer, ie_list->CustomerVendorIE.length);
+			os_move_mem(vendor_ie_temp, ie_list->CustomerVendorIE.pointer,
+				ie_list->CustomerVendorIE.length);
 
 			if (CustomerBssEntry->vendor_ie.pointer != NULL)
 				os_free_mem(CustomerBssEntry->vendor_ie.pointer);
 
 			CustomerBssEntry->vendor_ie.pointer = vendor_ie_temp;
-			CustomerBssEntry->vendor_ie.length = ie_list->CustomerVendorIE.length;
+	CustomerBssEntry->vendor_ie.length = ie_list->CustomerVendorIE.length;
 		}
-
-		//MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_DEBUG,("%s(caller:%pS),11111 pointer=%p  ssid=%s vielen=%d\n",
-		//		__func__, OS_TRACE, CustomerBssEntry->vendor_ie.pointer, CustomerBssEntry->ssid, ie_list->CustomerVendorIE.length));
-	} 
-    else {
-
-		//MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_DEBUG,("%s(caller:%pS),22222 pointer=%p  ssid=%s vielen=%d\n",
-		//		__func__, OS_TRACE, CustomerBssEntry->vendor_ie.pointer, CustomerBssEntry->ssid, ie_list->CustomerVendorIE.length));
+	} else {
 		if (CustomerBssEntry->vendor_ie.pointer != NULL)
 			os_free_mem(CustomerBssEntry->vendor_ie.pointer);
 		CustomerBssEntry->vendor_ie.pointer = NULL;
@@ -1195,25 +1205,40 @@ ULONG BssTableSetEntry(
 			for (i = 0; i < pAd->ApCfg.ApCliNum; i++) {
 				pApCliEntry = &pAd->StaCfg[i];
 
-				if ((!MAC_ADDR_EQUAL(pApCliEntry->MlmeAux.Bssid, ZERO_MAC_ADDR) && MAC_ADDR_EQUAL(pApCliEntry->MlmeAux.Bssid, ie_list->Bssid))
-					|| (pApCliEntry->MlmeAux.SsidLen > 0 && SSID_EQUAL(pApCliEntry->MlmeAux.Ssid, pApCliEntry->MlmeAux.SsidLen, ie_list->Ssid, ie_list->SsidLen))) {
+				if (MAC_ADDR_EQUAL(pApCliEntry->MlmeAux.Bssid, ie_list->Bssid)
+					|| SSID_EQUAL(pApCliEntry->MlmeAux.Ssid, pApCliEntry->MlmeAux.SsidLen, ie_list->Ssid, ie_list->SsidLen)) {
 					bInsert = TRUE;
 					break;
 				}
 			}
 
+#ifdef CONFIG_MAP_SUPPORT
+			if (IS_MAP_TURNKEY_ENABLE(pAd)) {
+				for (i = 0; i < MAX_PROFILE_CNT; i++) {
+					if(wdev->MAPCfg.scan_bh_ssids.scan_SSID_val[i].SsidLen &&
+						ie_list->SsidLen &&
+					SSID_EQUAL(wdev->MAPCfg.scan_bh_ssids.scan_SSID_val[i].ssid,
+						wdev->MAPCfg.scan_bh_ssids.scan_SSID_val[i].SsidLen,
+						ie_list->Ssid, ie_list->SsidLen)) {
+						bInsert = TRUE;
+						break;
+					}
+				}
+			}
+#endif
+
 #endif /* APCLI_SUPPORT */
 
 			if (
 #ifdef CONFIG_STA_SUPPORT
-				(pStaCfg && !STA_STATUS_TEST_FLAG(pStaCfg, fSTA_STATUS_MEDIA_STATE_CONNECTED)) ||
+				((pStaCfg != NULL) && !STA_STATUS_TEST_FLAG(pStaCfg, fSTA_STATUS_MEDIA_STATE_CONNECTED)) ||
 #endif
 #ifdef CONFIG_AP_SUPPORT
 				!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) ||
 #endif
 				!OPSTATUS_TEST_FLAG(pAd, fOP_AP_STATUS_MEDIA_STATE_CONNECTED)) {
-				if ((!MAC_ADDR_EQUAL(ScanCtrl->Bssid, ZERO_MAC_ADDR) && MAC_ADDR_EQUAL(ScanCtrl->Bssid, ie_list->Bssid)) ||
-					(ScanCtrl->SsidLen > 0 && SSID_EQUAL(ScanCtrl->Ssid, ScanCtrl->SsidLen, ie_list->Ssid, ie_list->SsidLen))
+				if (MAC_ADDR_EQUAL(ScanCtrl->Bssid, ie_list->Bssid) ||
+					SSID_EQUAL(ScanCtrl->Ssid, ScanCtrl->SsidLen, ie_list->Ssid, ie_list->SsidLen)
 #ifdef APCLI_SUPPORT
 					|| bInsert
 #endif /* APCLI_SUPPORT */
@@ -1227,7 +1252,8 @@ ULONG BssTableSetEntry(
 
 					/* fix memory leak when trigger scan continuously */
 					BssEntryReset(Tab, &Tab->BssEntry[Idx]);
-					BssEntrySet(pAd, &Tab->BssEntry[Idx], ie_list, Rssi, LengthVIE, pVIE);
+					BssEntrySet(pAd, wdev, &Tab->BssEntry[Idx], ie_list,
+                                                    Rssi, LengthVIE, pVIE);
 					Tab->BssOverlapNr += 1;
 					Tab->BssOverlapNr = Tab->BssOverlapNr % MAX_LEN_OF_BSS_TABLE;
 #ifdef RT_CFG80211_SUPPORT
@@ -1242,32 +1268,36 @@ ULONG BssTableSetEntry(
 		}
 
 		Idx = Tab->BssNr;
-		BssEntrySet(pAd, &Tab->BssEntry[Idx], ie_list, Rssi, LengthVIE, pVIE);
+		BssEntrySet(pAd, wdev, &Tab->BssEntry[Idx], ie_list, Rssi, LengthVIE, pVIE);
 		Tab->BssNr++;
 	} else if (Idx < MAX_LEN_OF_BSS_TABLE)
-		BssEntrySet(pAd, &Tab->BssEntry[Idx], ie_list, Rssi, LengthVIE, pVIE);
+		BssEntrySet(pAd, wdev, &Tab->BssEntry[Idx], ie_list, Rssi, LengthVIE, pVIE);
 	else
 		MTWF_LOG(DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s(error):Idx is larger than MAX_LEN_OF_BSS_TABLE", __func__));
 
 	return Idx;
 }
-	
+
 /* fix memory leak when trigger scan continuously */
 VOID BssEntryReset(
-	IN BSS_TABLE *Tab,
-	INOUT BSS_ENTRY *pBss)
+	IN struct _BSS_TABLE *Tab,
+	IN OUT struct _BSS_ENTRY *pBss)
 {
-	if( pBss ) {
+	if (pBss) {
 		UCHAR *pOldAddr = pBss->pVarIeFromProbRsp;
 
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
-		RTMP_SPIN_LOCK(&Tab->event_bss_entry_lock);
+		if (Tab)
+			RTMP_SPIN_LOCK(&Tab->event_bss_entry_lock);
+
 		if (pBss->CustomerBssEntry.vendor_ie.pointer != NULL) {
 			os_free_mem(pBss->CustomerBssEntry.vendor_ie.pointer);
 			pBss->CustomerBssEntry.vendor_ie.pointer = NULL;
 		}
 		pBss->CustomerBssEntry.vendor_ie.length = 0;
-		RTMP_SPIN_UNLOCK(&Tab->event_bss_entry_lock);
+
+		if (Tab)
+			RTMP_SPIN_UNLOCK(&Tab->event_bss_entry_lock);
 #endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
 		NdisZeroMemory(pBss, sizeof(BSS_ENTRY));
@@ -1281,43 +1311,37 @@ VOID BssEntryReset(
 	}
 }
 
-
 VOID BssEntryCopy(
-	IN BSS_TABLE *TabDst,
-	OUT BSS_ENTRY *pBssDst,
-	IN BSS_ENTRY *pBssSrc)
+	IN struct _BSS_TABLE *TabDst,
+	OUT struct _BSS_ENTRY *pBssDst,
+	IN struct _BSS_ENTRY *pBssSrc)
 {
-	if( pBssDst && pBssSrc ) {
+	if (pBssDst && pBssSrc) {
 		BssEntryReset(TabDst, pBssDst);
 
-		RTMP_SPIN_LOCK(&TabDst->event_bss_entry_lock);
 		NdisMoveMemory(pBssDst, pBssSrc, sizeof(BSS_ENTRY));
 #ifdef CUSTOMER_VENDOR_IE_SUPPORT
 		{
 			int ret;
 			CHAR *vendor_ie_temp = NULL;
-			if ((pBssSrc->CustomerBssEntry.vendor_ie.pointer != NULL) && 
+
+			if ((pBssSrc->CustomerBssEntry.vendor_ie.pointer != NULL) &&
 				(pBssSrc->CustomerBssEntry.vendor_ie.length > 0)) {
-				ret = os_alloc_mem(NULL, (UCHAR **)&vendor_ie_temp, pBssSrc->CustomerBssEntry.vendor_ie.length);
+				ret = os_alloc_mem(NULL, (UCHAR **)&vendor_ie_temp,
+						pBssSrc->CustomerBssEntry.vendor_ie.length);
 				if (ret == NDIS_STATUS_FAILURE) {
 					MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_ERROR,
 						("\n\n\n%s: ALLOC Memory fail\n\n\n", __func__));
 				} else {
-					os_move_mem(vendor_ie_temp, 
-						pBssSrc->CustomerBssEntry.vendor_ie.pointer, 
+					os_move_mem(vendor_ie_temp,
+						pBssSrc->CustomerBssEntry.vendor_ie.pointer,
 						pBssSrc->CustomerBssEntry.vendor_ie.length);
 				}
 			}
 
-			//RTMP_SPIN_LOCK(&TabDst->event_bss_entry_lock);
-			//if (pBssDst->CustomerBssEntry.vendor_ie.pointer != NULL) {
-			//	os_free_mem(pBssDst->CustomerBssEntry.vendor_ie.pointer);
-			//}
 			pBssDst->CustomerBssEntry.vendor_ie.pointer = vendor_ie_temp;
-			//RTMP_SPIN_UNLOCK(&TabDst->event_bss_entry_lock);
 		}
 #endif /* CUSTOMER_VENDOR_IE_SUPPORT */
-		RTMP_SPIN_UNLOCK(&TabDst->event_bss_entry_lock);
 	}
 }
 
@@ -1329,7 +1353,7 @@ VOID BssTableSsidSort(
 	IN CHAR Ssid[],
 	IN UCHAR SsidLen)
 {
-	INT i;
+	UINT i;
 #ifdef CONFIG_STA_SUPPORT
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 #ifdef WSC_STA_SUPPORT
@@ -1353,16 +1377,16 @@ VOID BssTableSsidSort(
 
 #endif /* CONFIG_STA_SUPPORT */
 
-	for (i = 0; i < ScanTab->BssNr && ScanTab->BssNr < MAX_LEN_OF_BSS_TABLE; i++) {
+	for (i = 0; i < ScanTab->BssNr && ScanTab->BssNr <= MAX_LEN_OF_BSS_TABLE; i++) {
 		BSS_ENTRY *pInBss = &ScanTab->BssEntry[i];
 		BOOLEAN	bIsHiddenApIncluded = FALSE;
 
 #ifdef CONFIG_OWE_SUPPORT
 		if (pInBss->hide_open_owe_bss) {
 			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				("%s : skip %02x-%02x-%02x-%02x-%02x-%02x, SSID:%s, AKM:0x%x by OWE transition\n",
+				("%s : skip "MACSTR", SSID:%s, AKM:0x%x by OWE transition\n",
 				__func__,
-				PRINT_MAC(pInBss->Bssid),
+				MAC2STR(pInBss->Bssid),
 				pInBss->Ssid,
 				pInBss->AKMMap));
 			continue;
@@ -1605,7 +1629,7 @@ VOID BssTableSortByRssi(
 	IN OUT BSS_TABLE *OutTab,
 	IN BOOLEAN isInverseOrder)
 {
-	INT i, j;
+	UINT i, j;
 	BSS_ENTRY *pTmpBss = NULL;
 	/* allocate memory */
 	os_alloc_mem(NULL, (UCHAR **)&pTmpBss, sizeof(BSS_ENTRY));
@@ -1652,7 +1676,9 @@ VOID bss_table_maintenance(
 	ULONG	now_time = 0;
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 
-	for (i = 0; i < total_bssNr; i++) {
+	if (total_bssNr > MAX_LEN_OF_BSS_TABLE)
+		total_bssNr = MAX_LEN_OF_BSS_TABLE;
+	for (i = 0; i < total_bssNr;) {
 		BSS_ENTRY *pBss = &Tab->BssEntry[i];
 
 		bDelEntry = FALSE;
@@ -1679,7 +1705,8 @@ VOID bss_table_maintenance(
 
 			for (j = i; j < total_bssNr - 1; j++) {
 				pOldAddr = Tab->BssEntry[j].pVarIeFromProbRsp;
-				NdisMoveMemory(&(Tab->BssEntry[j]), &(Tab->BssEntry[j + 1]), sizeof(BSS_ENTRY));
+				/* delete this entry and use the behind entry replace this entry*/
+				BssEntryCopy(Tab, &(Tab->BssEntry[j]), &(Tab->BssEntry[j + 1]));
 
 				if (pOldAddr) {
 					RTMPZeroMemory(pOldAddr, MAX_VIE_LEN);
@@ -1690,14 +1717,12 @@ VOID bss_table_maintenance(
 				}
 			}
 
-			pOldAddr = Tab->BssEntry[total_bssNr - 1].pVarIeFromProbRsp;
-			NdisZeroMemory(&(Tab->BssEntry[total_bssNr - 1]), sizeof(BSS_ENTRY));
-
-			if (pOldAddr)
-				RTMPZeroMemory(pOldAddr, MAX_VIE_LEN);
+			/*clear the last one entry*/
+			BssEntryReset(Tab, &Tab->BssEntry[Tab->BssNr - 1]);
 
 			total_bssNr -= 1;
-			i -= 1;
+		} else {
+			i++;
 		}
 	}
 
@@ -1723,9 +1748,10 @@ BOOLEAN bss_coex_insert_effected_ch_list(
 		CHANNEL_CTRL *pChCtrl;
 		struct common_ies *cmm_ies = &ie_list->cmm_ies;
 
+		os_zero_mem(&oper, sizeof(oper));
 		hc_radio_query_by_channel(pAd, Channel, &oper);
 
-		BandIdx = HcGetBandByChannel(pAd, Channel);
+		BandIdx = HcGetBandByWdev(wdev);
 		pChCtrl = hc_get_channel_ctrl(pAd->hdev_ctrl, BandIdx);
 
 		for (index = 0; index < pChCtrl->ChListNum; index++) {
@@ -1753,14 +1779,19 @@ BOOLEAN bss_coex_insert_effected_ch_list(
 					if (secChIdx >= 0)
 						pChCtrl->ChList[secChIdx].bEffectedChannel |= EFFECTED_CH_SECONDARY; /* 1; */
 
-					if ((Channel != ie_list->Channel) ||
-						(pAdd_HtInfo->ExtChanOffset != oper.ext_cha)) {
+					if ((Channel == ie_list->Channel) || ((Channel != ie_list->Channel)
+						 && (pAdd_HtInfo->ExtChanOffset != oper.ext_cha))) {
+						COPY_MAC_ADDR(pAd->CommonCfg.BssCoexApMac[pAd->CommonCfg.BssCoexApCnt],
+							ie_list->Addr2);
 						pAd->CommonCfg.BssCoexApCnt++;
 						Inserted = TRUE;
+
 					}
 				} else {
 					/* This is a legacy AP. */
 					pChCtrl->ChList[index].bEffectedChannel |=  EFFECTED_CH_LEGACY; /* 4; 1 for legacy AP. */
+					COPY_MAC_ADDR(pAd->CommonCfg.BssCoexApMac[pAd->CommonCfg.BssCoexApCnt],
+						ie_list->Addr2);
 					pAd->CommonCfg.BssCoexApCnt++;
 					Inserted = TRUE;
 				}

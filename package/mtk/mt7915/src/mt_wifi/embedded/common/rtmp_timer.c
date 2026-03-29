@@ -69,6 +69,10 @@ BUILD_TIMER_FUNCTION(RTMPIdsPeriodicExec);
 BUILD_TIMER_FUNCTION(FT_KDP_InfoBroadcast);
 #endif /* DOT11R_FT_SUPPORT */
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+BUILD_TIMER_FUNCTION(CSALastBcnTxEventTimeout);
+BUILD_TIMER_FUNCTION(ChnlSwitchStaNullAckWaitTimeout);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #endif /* CONFIG_AP_SUPPORT */
 
 #ifdef CONFIG_STA_SUPPORT
@@ -168,6 +172,7 @@ extern VOID ch_switch_monitor_timeout(IN PVOID system_specific1, IN PVOID functi
 			IN PVOID system_specific2, IN PVOID system_specific3);
 BUILD_TIMER_FUNCTION(ch_switch_monitor_timeout);
 #endif
+BUILD_TIMER_FUNCTION(ChOpTimeout);
 
 #ifdef DOT11_HE_AX
 #ifdef CONFIG_AP_SUPPORT

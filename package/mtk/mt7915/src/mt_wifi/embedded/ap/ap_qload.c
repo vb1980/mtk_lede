@@ -187,11 +187,14 @@ static VOID QBSS_LoadAlarm(
 						MiniportMMRequest(pAd, 0, pOutBuffer, FrameLen);
 						MlmeFreeMemory(pOutBuffer);
 					}
-					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("qbss> Alarm! Deauth the station %02x:%02x:%02x:%02x:%02x:%02x\n",
-							 PRINT_MAC(pEntry->Addr)));
+					MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("qbss> Alarm! Deauth the station "MACSTR"\n",
+							 MAC2STR(pEntry->Addr)));
 #ifdef MAP_R2
 					if (IS_MAP_ENABLE(pAd) && IS_MAP_R2_ENABLE(pAd))
 						wapp_handle_sta_disassoc(pAd, pEntry->wcid, REASON_DEAUTH_STA_LEAVING);
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+					WirelessEventSendDiassoc(pAd, pEntry, REASON_DEAUTH_STA_LEAVING);
 #endif
 					mac_entry_delete(pAd, pEntry);
 					continue;
@@ -264,7 +267,7 @@ Note:
 VOID QBSS_LoadInit(RTMP_ADAPTER *pAd)
 {
 	UINT32 IdBss;
-	QLOAD_CTRL *pQloadCtrl = HcGetQloadCtrl(pAd);
+	QLOAD_CTRL *pQloadCtrl;
 
 	/* check whether any BSS enables WMM feature */
 	for (IdBss = 0; IdBss < pAd->ApCfg.BssidNum; IdBss++) {
@@ -273,7 +276,7 @@ VOID QBSS_LoadInit(RTMP_ADAPTER *pAd)
 			|| (IS_RRM_ENABLE(&pAd->ApCfg.MBSSID[IdBss].wdev))
 #endif /* DOT11K_RRM_SUPPORT */
 			) {
-			if (pAd->ApCfg.MBSSID[IdBss].wdev.channel > 14)
+			if (wlan_config_get_ch_band(&pAd->ApCfg.MBSSID[IdBss].wdev) == CMD_CH_BAND_5G)
 				pQloadCtrl = HcGetQloadCtrlByRf(pAd, RFIC_5GHZ);
 			else
 				pQloadCtrl = HcGetQloadCtrlByRf(pAd, RFIC_24GHZ);
@@ -337,7 +340,7 @@ VOID QBSS_LoadAlarmReset(
 	pQloadCtrl->QloadAlarmDuration = 0;
 	pQloadCtrl->QloadAlarmNumber = 0;
 	pQloadCtrl->FlgQloadAlarmIsSuspended = FALSE;
-	QBSS_LoadAlarmBusyTimeThresholdReset(pAd, pAd->CommonCfg.BeaconPeriod);
+	QBSS_LoadAlarmBusyTimeThresholdReset(pAd, pAd->CommonCfg.BeaconPeriod[DBDC_BAND0]);
 #endif /* QLOAD_FUNC_BUSY_TIME_ALARM */
 }
 
@@ -607,7 +610,7 @@ VOID QBSS_LoadUpdate(
 	UINT32 BusyTime = 0;
 	UINT32 BusyTimeCcaNavTx = 0;
 	UINT32 BusyTimeId;
-	UINT32 TimePeriod = pAd->CommonCfg.BeaconPeriod;
+	UINT32 TimePeriod = pAd->CommonCfg.BeaconPeriod[DBDC_BAND0];
 #ifdef QLOAD_FUNC_BUSY_TIME_ALARM
 	BOOLEAN FlgIsBusyOverThreshold = FALSE;
 	BOOLEAN FlgIsAlarmNeeded = FALSE;
@@ -616,7 +619,7 @@ VOID QBSS_LoadUpdate(
 	BOOLEAN SameChanUtil = TRUE;
 #endif /* OCE_SUPPORT */
 	QLOAD_CTRL *pQloadCtrl = HcGetQloadCtrl(pAd);
-	UINT8 UpdateBands = 1, i = 0;
+	UINT8 UpdateBands, i = 0;
 #if defined(ACS_CTCC_SUPPORT) || defined(OCE_SUPPORT)
 	struct wifi_dev *wdev = NULL;
 	UCHAR band_idx = 0;
@@ -896,7 +899,7 @@ INT Show_QoSLoad_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *arg)
 	UINT32 Time;
 	QLOAD_CTRL *pQloadCtrl = HcGetQloadCtrl(pAd);
 
-	Time = pAd->CommonCfg.BeaconPeriod / QLOAD_BUSY_INTERVALS;
+	Time = pAd->CommonCfg.BeaconPeriod[DBDC_BAND0] / QLOAD_BUSY_INTERVALS;
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("\n\tPrimary Busy Time\tTimes\n"));
 
 	for (BusyTimeId = 0; BusyTimeId < QLOAD_BUSY_INTERVALS; BusyTimeId++) {
@@ -968,7 +971,7 @@ INT Set_QloadAlarmTimeThreshold_Proc(RTMP_ADAPTER *pAd, RTMP_STRING *Arg)
 
 	pQloadCtrl->QloadAlarmBusyTimeThreshold = (UCHAR)os_str_tol(Arg, 0, 10);
 	QBSS_LoadAlarmReset(pAd);
-	pQloadCtrl->QloadTimePeriodLast = pAd->CommonCfg.BeaconPeriod;
+	pQloadCtrl->QloadTimePeriodLast = pAd->CommonCfg.BeaconPeriod[DBDC_BAND0];
 #endif /* QLOAD_FUNC_BUSY_TIME_ALARM */
 	return TRUE;
 }

@@ -16,7 +16,11 @@ enum {
 
 struct time_log {
 #ifdef	LINUX
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 	struct timespec64 t;
+#else
+	struct timeval t;
+#endif
 #endif
 	ULONG time;
 	RTMP_STRING *name;

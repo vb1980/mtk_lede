@@ -160,8 +160,8 @@ VOID PeerDeauthAction(
 				MacTableDeleteEntry(pAd, pEntry->wcid, pEntry->Addr);
 
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					 ("AUTH_RSP - receive DE-AUTH from %02x:%02x:%02x:%02x:%02x:%02x\n",
-					  PRINT_MAC(Addr2)));
+					 ("AUTH_RSP - receive DE-AUTH from "MACSTR"\n",
+					  MAC2STR(Addr2)));
 		}
 
 #endif /* ADHOC_WPA2PSK_SUPPORT */

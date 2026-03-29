@@ -19,8 +19,13 @@ VOID log_time_begin(
 		NdisGetSystemUpTime(&tl->time);
 
 #ifdef LINUX
-	else if (unit == LOG_TIME_UNIT_US)
+	else if (unit == LOG_TIME_UNIT_US) {
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 		ktime_get_real_ts64(&tl->t);
+#else
+		do_gettimeofday(&tl->t);
+#endif
+	}
 
 #endif
 }
@@ -33,13 +38,25 @@ VOID log_time_end(
 {
 	ULONG temp;
 #ifdef LINUX
-	struct timespec64  t;
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
+	struct timespec64 t;
+	s64 diff_ns;
+#else
+	struct timeval t;
+#endif
 #endif
 
 	if (tl->unit == LOG_TIME_UNIT_US) {
 #ifdef LINUX
+#if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 		ktime_get_real_ts64(&t);
-		tl->time = (t.tv_sec - tl->t.tv_sec) * 1000000 + (t.tv_nsec / NSEC_PER_USEC) - (tl->t.tv_nsec / NSEC_PER_USEC);
+		diff_ns = ((s64)(t.tv_sec - tl->t.tv_sec) * 1000000000LL + 
+		           (s64)(t.tv_nsec - tl->t.tv_nsec));
+		tl->time = (ULONG)div64_s64(diff_ns, 1000);
+#else
+		do_gettimeofday(&t);
+		tl->time = (t.tv_sec - tl->t.tv_sec) * 1000000 + t.tv_usec - tl->t.tv_usec;
+#endif
 #endif
 	} else if (tl->unit == LOG_TIME_UNIT_MS) {
 		NdisGetSystemUpTime(&temp);

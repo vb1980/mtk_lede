@@ -378,13 +378,8 @@ VOID TYPE_FUNC FT_KDP_EventInform(
 		pFtKdp->Sequence = pEvtReAssoc->SeqNum;
 		NdisMoveMemory(pFtKdp->MacAddr, pEvtReAssoc->MacAddr, MAC_ADDR_LEN);
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE,
-			("ap_ftkd> The previous AP showed in Reassoc is =%02x:%02x:%02x:%02x:%02x:%02x\n",
-					 pEvtReAssoc->OldApMacAddr[0],
-					 pEvtReAssoc->OldApMacAddr[1],
-					 pEvtReAssoc->OldApMacAddr[2],
-					 pEvtReAssoc->OldApMacAddr[3],
-					 pEvtReAssoc->OldApMacAddr[4],
-					 pEvtReAssoc->OldApMacAddr[5]));
+			("ap_ftkd> The previous AP showed in Reassoc is ="MACSTR"\n",
+					 MAC2STR(pEvtReAssoc->OldApMacAddr)));
 
 		/* try to get the IP of old AP */
 		if (FT_KDP_R0KH_InfoGet(pAd, NULL,
@@ -686,13 +681,8 @@ BOOLEAN TYPE_FUNC FT_KDP_KeyRequestToUs(
 		(pEvtKeyReq->OUI[2] == FT_KDP_ELM_PRI_OUI_2)) {
 #ifdef FT_KDP_DEBUG
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE,
-				 ("ap_ftkd> Key Req: Station MAC = 0x%02x:%02x:%02x:%02x:%02x:%02x!\n",
-				  pEvtKeyReq->MacAddr[0],
-				  pEvtKeyReq->MacAddr[1],
-				  pEvtKeyReq->MacAddr[2],
-				  pEvtKeyReq->MacAddr[3],
-				  pEvtKeyReq->MacAddr[4],
-				  pEvtKeyReq->MacAddr[5]));
+				 ("ap_ftkd> Key Req: Station MAC = "MACSTR"!\n",
+				  MAC2STR(pEvtKeyReq->MacAddr)));
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE,
 				 ("ap_ftkd> Key Req: R1KH-ID = 0x%02x:%02x:%02x:%02x:%02x:%02x!\n",
 				  pEvtKeyReq->KeyInfo.R1KHID[0],
@@ -788,13 +778,8 @@ VOID TYPE_FUNC FT_KDP_KeyResponseToUs(
 		BOOLEAN			bUpdateR1kh = FALSE;
 #ifdef FT_KDP_DEBUG
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE,
-				 ("ap_ftkd> Key Rsp: Station MAC = 0x%02x:%02x:%02x:%02x:%02x:%02x!\n",
-				  pEvtKeyRsp->MacAddr[0],
-				  pEvtKeyRsp->MacAddr[1],
-				  pEvtKeyRsp->MacAddr[2],
-				  pEvtKeyRsp->MacAddr[3],
-				  pEvtKeyRsp->MacAddr[4],
-				  pEvtKeyRsp->MacAddr[5]));
+				 ("ap_ftkd> Key Rsp: Station MAC = "MACSTR"!\n",
+				  MAC2STR(pEvtKeyRsp->MacAddr)));
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE,
 				 ("ap_ftkd> Key Rsp: R1KH-ID = 0x%02x:%02x:%02x:%02x:%02x:%02x!\n",
 				  pEvtKeyRsp->KeyInfo.R1KHID[0],
@@ -930,8 +915,8 @@ VOID TYPE_FUNC FT_KDP_StationInform(
 
 	/* check if we are in security mode; if not, return */
 	if (!IS_AKM_OPEN(pAd->ApCfg.MBSSID[ApIdx].wdev.SecConfig.AKMMap)) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE, ("ap_ftkd> BSS [%02x:%02x:%02x:%02x:%02x:%02x] is open mode!\n",
-			PRINT_MAC(pAd->ApCfg.MBSSID[ApIdx].wdev.bssid)));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_TRACE, ("ap_ftkd> BSS ["MACSTR"] is open mode!\n",
+			MAC2STR(pAd->ApCfg.MBSSID[ApIdx].wdev.bssid)));
 		return; /* this BSS are open mode */
 	}
 
@@ -1027,15 +1012,7 @@ VOID TYPE_FUNC FT_KDP_CryptKeySet(
 	}
 
 	/* use the first 16B of KeyMaterial[] */
-    if ((NULL != FT_KDP_CB) && (NULL != FT_KDP_CB->CryptKey))
-    {
-        NdisMoveMemory(FT_KDP_CB->CryptKey, KeyMaterial, sizeof(KeyMaterial));
-    }
-    else
-    {
-        MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: NULL point is happen!\n", __func__));
-    }
-
+	NdisMoveMemory(FT_KDP_CB->CryptKey, KeyMaterial, sizeof(KeyMaterial));
 #endif /* FT_KDP_EMPTY */
 }
 

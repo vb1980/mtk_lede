@@ -195,6 +195,8 @@ s_int32 mt_op_get_antswap_capability(
 s_int32 mt_op_set_antswap(
 	struct test_wlan_info *winfos,
 	u_int32 ant);
+s_int32 mt_op_set_eeprom_to_fw(
+	struct test_wlan_info *winfos);
 s_int32 mt_op_get_thermal_value(
 	struct test_wlan_info *winfos,
 	struct test_configuration *test_configs);
@@ -359,7 +361,8 @@ s_int32 mt_op_restore_cr(
 s_int32 mt_op_set_ampdu_ba_limit(
 	struct test_wlan_info *winfos,
 	u_int8 wmm_idx,
-	u_int8 agg_limit);
+	u_int8 agg_limit,
+	u_char band_idx);
 s_int32 mt_op_set_sta_pause_cr(
 	struct test_wlan_info *winfos);
 s_int32 mt_op_set_ifs_cr(

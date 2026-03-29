@@ -146,6 +146,8 @@ typedef enum _ENUM_EXT_CMD_CR4_SET_ID_T {
 	CR4_SET_ID_RED_TARGET_DELAY = 0x10,
 	CR4_SET_ID_RED_ENTER_LOW_FREE_PLE_MODE = 0x11,
 	CR4_SET_ID_WA_CAP = 0x12,
+	WA_SET_OPTION_AC_TAIL_DROP_MIN_QUOTA = 0x13,
+	WA_SET_OPTION_AC_TAIL_DROP_MAX_QUOTA = 0x14,
 	WA_SET_OPTION_TXD_FLOW_CTRL = 0x20,
 	WA_SET_OPTION_CONFIG_WMM_MODE = 0x21,
 	WA_SET_OPTION_PKTLOSS_CHK = 0x23,
@@ -690,6 +692,19 @@ enum EXT_CMD_TYPE {
 	EXT_CMD_ID_LINK_TEST_FEATURE_CTRL = 0x78,
 
 	EXT_CMD_ID_THERMAL_DBG_CMD = 0x79,
+
+	/*ZERO_LOSS_CSA_SUPPORT*/
+	EXT_CMD_ID_CHECK_PEER_STA_LINK = 0x7A,
+
+	/*ZERO_PKT_LOSS_CSA_REFINE*/
+	EXT_CMD_ID_SET_ZERO_PKT_LOSS_VARIABLE	= 0x7B,
+
+	/*ZERO_PKT_LOSS_CSA_MAC_TX_STOP*/
+	EXT_CMD_ID_SET_MAC_TX_ENABLE = 0x7C,
+
+	/*ZERO_LOSS_CSA_SUPPORT*/
+	EXT_CMD_ID_STA_PS_Q_LIMIT = 0x7D,
+
 #if defined(A4_CONN) || defined(MBSS_AS_WDS_AP_SUPPORT)
 	EXT_CMD_ID_MWDS_SUPPORT = 0x80,
 #endif
@@ -736,6 +751,9 @@ enum EXT_CMD_TYPE {
 #ifdef CFG_SUPPORT_FALCON_MURU
 	EXT_CMD_ID_MURU_CTRL = 0x9F,
 #endif
+#ifdef WIFI_EAP_FEATURE
+	EXT_CMD_ID_EAP_CTRL = 0xA0,
+#endif
 	EXT_CMD_ID_TPC_CTRL = 0xA1,
 	EXT_CMD_ID_DBG_TXCMD = 0xA2,
 	EXT_CMD_ID_RDD_IPI_HIST_CTRL = 0xA3,
@@ -749,10 +767,10 @@ enum EXT_CMD_TYPE {
 #ifdef IGMP_TVM_SUPPORT
 	EXT_CMD_ID_IGMP_MULTICAST_SET_GET = 0xA7,
 #endif /* IGMP_TVM_SUPPORT */
-
 #ifdef CFG_SUPPORT_FALCON_SR
 	EXT_CMD_ID_SR_CTRL = 0xA8,
 #endif /* CFG_SUPPORT_FALCON_SR */
+	EXT_CMD_ID_GET_WTBL_TX_COUNTER = 0xAA,
 #if defined(PRE_CAL_MT7626_SUPPORT) || defined(PRE_CAL_MT7915_SUPPORT)
 	EXT_CMD_ID_GROUP_PRE_CAL_INFO = 0xAB,
 	EXT_CMD_ID_DPD_FLATNESS_INFO = 0xAC,
@@ -777,7 +795,8 @@ enum EXT_CMD_TYPE {
 	EXT_CMD_ID_CFG = 0xB7,
 	EXT_CMD_ID_ENABLE_NOISEFLOOR = 0xB8,
 	EXT_CMD_ID_RA_CTRL = 0xB9,
-	EXT_CMD_ID_SET_EDCCA = 0xBA,
+	EXT_CMD_ID_EDCCA = 0xBA,
+	EXT_CMD_ID_MULTICAST_SN_DENY_LIST = 0xBB,
 	EXT_CMD_ID_IGMP_CMD = 0xBC,
 	EXT_CMD_ID_IGMP_FLOODING_CMD = 0xBD,
 	EXT_CMD_ID_HWCFG = 0xBE,
@@ -785,7 +804,14 @@ enum EXT_CMD_TYPE {
 #ifdef CFG_SUPPORT_CSI
 	EXT_CMD_ID_CSI_CTRL = 0xC2,
 #endif
+	EXT_CMD_ID_RTS_THEN_CTS = 0xC3,
+#ifdef PLE_MONITOR_SUPPORT
+	EXT_CMD_ID_FLUSH_AC_QUEUE = 0xC4,
+#endif
+	EXT_CMD_ID_PKT_BUDGET_CTRL_CFG_QOS = 0xC5,
 #ifdef WIFI_MD_COEX_SUPPORT
+	EXT_CMD_ID_SET_IDC_STATE = 0xFB,
+	EXT_CMD_ID_GET_IDC_INFO = 0xFC,
 	EXT_CMD_ID_GET_LTE_CHN = 0xFD,
 	EXT_CMD_ID_APCCCI_MSG = 0xFE,
 #endif /* WIFI_MD_COEX_SUPPORT */
@@ -858,6 +884,17 @@ enum WO_CMD_ID {
 	WO_CMD_FW_LOG_CTRL = 0x000C,
 	WO_CMD_LOG_FLUSH = 0x000D,
 	WO_CMD_CHANGE_STATE = 0x000E,
+	WO_CMD_CPU_STATS_ENABLE = 0x000F,
+	WO_CMD_CPU_STATS_DUMP = 0x0010,
+	WO_CMD_EXCEPTION_INIT = 0x0011,
+	WO_CMD_PROF_CTRL = 0x0012,
+	WO_CMD_STA_BA_DUMP = 0x0013,
+	WO_CMD_BA_CTRL_DUMP = 0x0014,
+	WO_CMD_RXCNT_CTRL = 0x0015,
+	WO_CMD_RXCNT_INFO = 0x0016,
+	WO_CMD_SET_CAP = 0x0017,
+	WO_CMD_CCIF_RING_DUMP = 0x0018,
+	WO_CMD_WTBL_SEC_UPDATE = 0x0019,
 	WO_CMD_WED_END
 };
 
@@ -1079,6 +1116,10 @@ enum EXT_EVENT_TYPE {
 	EXT_EVENT_ID_RXFI_CAL_INFO = 0x65,
 	EXT_EVENT_ID_RXFD_CAL_INFO = 0x66,
 #endif /* defined(RLM_CAL_CACHE_SUPPORT) || defined(PRE_CAL_TRX_SET2_SUPPORT) */
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	EXT_EVENT_BCN_TX_NOTIFY = 0x67,
+	EXT_EVENT_ID_SEND_WCID = 0x68,
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 #ifdef RACTRL_FW_OFFLOAD_SUPPORT
 	EXT_EVENT_G_BAND_256QAM_PROBE_RESULT = 0x6B,
 #endif /* RACTRL_FW_OFFLOAD_SUPPORT */
@@ -1114,15 +1155,17 @@ enum EXT_EVENT_TYPE {
 #ifdef TXRX_STAT_SUPPORT
 	EXT_EVENT_ID_GET_STA_TX_STAT = 0xA9,
 #endif
+	EXT_EVENT_ID_GET_WTBL_TX_COUNTER = 0xAA,
 	EXT_EVENT_ID_GET_ALL_STA_STATS = 0xB5,
 	EXT_EVENT_ID_ENABLE_NOISEFLOOR = 0xB8,
+	EXT_EVENT_ID_EDCCA = 0XBA,
 	EXT_EVENT_ID_RXFE_LOSS_COMP    = 0xBD,
 	EXT_EVENT_ID_HWCFG_READ = 0xBE,
 #ifdef CFG_SUPPORT_CSI
 	EXT_EVENT_ID_CSI_CTRL = 0xC2,
 #endif
 #ifdef WIFI_MD_COEX_SUPPORT
-	EXT_EVENT_ID_LTE_IDC_REPORT    = 0xFD,
+	EXT_EVENT_ID_LTE_UNSAFE_CHN_REPORT    = 0xFD,
 	EXT_EVENT_ID_APCCCI_MSG = 0xFE,
 #endif /* WIFI_MD_COEX_SUPPORT */
 };
@@ -2242,6 +2285,7 @@ typedef struct GNU_PACKED _EXT_CMD_PCIE_ASPM_DYM_CTRL_T {
 #define TWT_AGRT_PARA_BITMAP_NEXT_TWT_32_BITSIS BIT(4) /* twt information, next twt*/
 #define TWT_AGRT_PARA_BITMAP_NEXT_TWT_48_BITSIS BIT(5) /* twt information, next twt*/
 #define TWT_AGRT_PARA_BITMAP_NEXT_TWT_64_BITSIS BIT(6) /* twt information, next twt*/
+#define TWT_AGRT_PARA_BITMAP_WAKE_DUR_UINT      BIT(7) /* control.wake_dur_unit 0:256us, 1:TU */
 
 typedef enum _TWT_AGRT_CTRL_CODE_T {
 	TWT_AGRT_CTRL_ADD = 0,
@@ -3118,7 +3162,8 @@ enum WTBL_TLV {
 	WTBL_SECURITY_KEY_V2 = 17,
 	WTBL_RATE = 18,
 	WTBL_PWR_OFFSET = 19,
-	WTBL_MAX_NUM = 20,
+	WTBL_VLAN2ETH = 21,
+	WTBL_MAX_NUM = 22,
 };
 /** @} */
 /** @} */
@@ -3328,6 +3373,7 @@ typedef struct GNU_PACKED _WTBL_BA_T {
 	UINT16	u2Sn;
 	UINT8	ucBaEn;
 	UINT8	ucBaWinSizeIdx;
+	/* Originator & Recipient */
 	UINT16	u2BaWinSize;
 	/* Recipient */
 	UINT8	aucPeerAddress[MAC_ADDR_LEN];
@@ -3458,7 +3504,14 @@ typedef struct GNU_PACKED _WTBL_RATE_T {
 	UINT16	u2Rate8;
 } CMD_WTBL_RATE_T, *P_CMD_WTBL_RATE_T;
 #endif
-
+#ifdef VLAN_SUPPORT
+typedef struct GNU_PACKED _CMD_WTBL_VLAN2ETH_T {
+	UINT16	u2Tag;/* Tag = 0x15 */
+	UINT16	u2Length;
+	UINT8	ucEnVlan2Eth;
+	UINT8	aucReserved[3];
+} CMD_WTBL_VLAN2ETH_T, *P_CMD_WTBL_VLAN2ETH_T;
+#endif
 #define	MAX_BUF_SIZE_OF_WTBL_INFO	(sizeof(CMD_WTBL_UPDATE_T) + \
 									 sizeof(CMD_WTBL_GENERIC_T) + \
 									 sizeof(CMD_WTBL_RX_T) + \
@@ -3627,30 +3680,6 @@ typedef struct GNU_PACKED _EXT_CMD_CHAN_SWITCH_T {
 } EXT_CMD_CHAN_SWITCH_T, *P_EXT_CMD_CHAN_SWITCH_T;
 
 
-#if defined(MT7615) || defined(MT7622)
-typedef struct GNU_PACKED _EXT_EVENT_ID_GET_TX_POWER_T {
-	UINT8 ucTxPwrType;
-	UINT8 ucEfuseAddr;
-	UINT8 ucEfuseContent;
-	UINT8 ucBand;
-} EXT_EVENT_ID_GET_TX_POWER_T, *P_EXT_EVENT_ID_GET_TX_POWER_T;
-
-typedef struct GNU_PACKED _EXT_CMD_GET_TX_POWER_T {
-	UINT8 ucTxPwrType;
-	UINT8 ucCenterChannel;
-	UINT8 ucDbdcIdx;
-	UINT8 ucBand;
-	UINT8 aucReserved[4];
-} EXT_CMD_GET_TX_POWER_T, *P_EXT_CMD_GET_TX_POWER_T;
-
-typedef struct GNU_PACKED _EXT_CMD_TX_POWER_CTRL_T {
-	UINT8 ucCenterChannel;
-	UINT8 ucDbdcIdx;
-	UINT8 ucBand;
-	UINT8 ucReserved[1];
-	UINT8 aucBinContent[908];
-} EXT_CMD_TX_POWER_CTRL_T, *P_EXT_CMD_TX_POWER_CTRL_T;
-#else
 typedef struct _EXT_EVENT_ID_GET_TX_POWER_T {
 	UINT8 u1EventCategoryID;
 	UINT8 i1TargetPower;
@@ -3674,7 +3703,6 @@ typedef struct GNU_PACKED _EXT_CMD_TX_POWER_CTRL_T
 	UINT8 u1CenterChannel;
 	UINT8 u1Reserved[3];
 } EXT_CMD_TX_POWER_CTRL_T, *P_EXT_CMD_TX_POWER_CTRL_T;
-#endif /* defined(MT7615) || defined(MT7622) */
 
 typedef struct _CMD_POWER_RATE_TXPOWER_CTRL_T {
 	UINT8 ucPowerCtrlFormatId;
@@ -3821,15 +3849,49 @@ typedef struct _EXT_CMD_GET_STA_TX_STAT_T {
 } EXT_CMD_GET_STA_TX_STAT_T, *P_EXT_CMD_GET_STA_TX_STAT_T;
 #endif
 
+INT32 MtCmdGetWtblTxStat(struct _RTMP_ADAPTER *pAd, UINT32 u4Field, UINT8 ucWcid);
+typedef struct _EXT_EVENT_WTBL_TX_COUNTER_RESULT_T {
+	UINT32  u4Field;
+	UINT16	PerStaRetriedPktCnt[MAX_LEN_OF_MAC_TABLE];
+    UINT16	u2WlanIdx;
+    UINT8	aucReserved[2];
+} EXT_EVENT_WTBL_TX_COUNTER_RESULT_T;
+typedef struct _EXT_CMD_GET_WTBL_TX_COUNT_T {
+    UINT32	u4Field;
+    UINT8	ucWlanIdx;
+    UINT8	aucReserved[3];
+} EXT_CMD_GET_WTBL_TX_COUNT_T, *P_EXT_CMD_GET_WTBL_TX_COUNT_T;
+
+typedef struct _EXT_EVENT_EDCCA_T {
+	UINT_8 u1CmdIdx;
+	UINT_8 u1BandIdx;
+	INT_8 i1CrVal[3];
+	BOOLEAN fginit;
+	UINT_8 aucReserve[2];
+} EXT_EVENT_EDCCA_T, *P_EXT_EVENT_EDCCA_T;
+
+
+#if defined(MT7986) || defined(MT7916)
+#define IPI_ANT_NUM 8
+#else
+#define IPI_ANT_NUM 4
+#endif
+
 typedef struct _EXT_EVENT_ENABLE_NOISE_FLOOR_T {
+	UINT8 u1mode; /*0: idle power, 1: IPI */
+	UINT8 au1reserved[3];
 	UINT32 au4avgpwr[4];
+	UINT32 au4avgPIHist[IPI_ANT_NUM][11] /* ant * ipi */;
 } EXT_EVENT_ENABLE_NOISE_FLOOR_T, *P_EXT_EVENT_ENABLE_NOISE_FLOOR_T;
 
 #ifdef WIFI_MD_COEX_SUPPORT
 typedef struct _EXT_EVENT_FW2APCCCI_T {
-	UINT8 dtb_idx;
+	UINT32 pci_base_addr;
 	UINT16 len;
-	UCHAR data[0]; /* FW cmd length limit 1.6k bytes*/
+	UINT8 pci_num;
+	UINT8 pci_slot_id;
+	UINT8 card_type;
+	UINT8 data[0]; /* FW cmd length limit 1.6k bytes*/
 } EXT_EVENT_FW2APCCCI_T, *P_EXT_EVENT_FW2APCCCI_T;
 
 typedef struct _EVENT_LTE_SAFE_CHN_T {
@@ -3844,14 +3906,19 @@ typedef struct _EXT_CMD_ENABLE_NOISE_FLOOR_T {
 	BOOLEAN fgEnable;
 	UINT8 u1TimeOut;
 	UINT8 u1Count;
-	UINT8 u1reserved;
+	UINT8 u1EventCount;
 } EXT_CMD_ENABLE_NOISE_FLOOR_T, *P_EXT_CMD_ENABLE_NOISE_FLOOR_T;
 
 typedef enum _STA_STAT_EVENT_TYPE {
     EVENT_PHY_ALL_TX_RX_RATE = 0x1,
     EVENT_PHY_TX_STAT_PER_WCID = 0x2,
     EVENT_PHY_RX_STAT = 0x03,
+#ifdef ENHANCE_STAT_SUPPORT
+    EVENT_PHY_TXRX_AIR_TIME = 0x05,
+    EVENT_PHY_AVG_AMPDU_CNT = 0x06
+#else
     EVENT_PHY_TXRX_AIR_TIME = 0x05
+#endif
 } STA_STAT_EVENT_TYPE, *P_STA_STAT_EVENT_TYPE;
 
 typedef struct _EXT_CMD_GET_ALL_STA_STAT_T {
@@ -3890,6 +3957,21 @@ typedef struct _EXT_EVENT_RX_STAT_RESULT_T {
     EXT_EVENT_RX_STAT_T rRxStatResult[DBDC_BAND_NUM];
 } EXT_EVENT_RX_STAT_RESULT_T, *P_EXT_EVENT_RX_STAT_RESULT_T;
 
+
+#endif
+#ifdef ENHANCE_STAT_SUPPORT
+typedef struct _EXT_EVENT_PER_STA_AVG_AMPDU_SIZE_STAT_T {
+    UINT_16 u2WlanIdx;
+    UINT_8 u1AvgAmpduCnt;
+    UINT_8 u1LastAmpduCnt;
+} EXT_EVENT_PER_STA_AVG_AMPDU_SIZE_STAT_T, *P_EXT_EVENT_PER_STA_AVG_AMPDU_SIZE_STAT_T;
+
+typedef struct _EXT_EVENT_AVG_AMPDU_SIZE_RESULT_T {
+	UINT_8 u1PhyEventId;
+    UINT_8 u1FlagMoreEvent;
+    UINT_16 u2StaNum;
+    EXT_EVENT_PER_STA_AVG_AMPDU_SIZE_STAT_T rAvgAmpduSizeStatResult[MAX_LEN_OF_MAC_TABLE];
+} EXT_EVENT_AVG_AMPDU_SIZE_RESULT_T, *P_EXT_EVENT_AVG_AMPDU_SIZE_RESULT_T;
 #endif
 
 #ifdef CONFIG_MAP_SUPPORT
@@ -4033,17 +4115,6 @@ typedef struct _THERMO_ITEM_INFO_T {
 	INT8	cUpperBound;
 } THERMO_ITEM_INFO_T, *P_THERMO_ITEM_INFO_T;
 
-#if defined(MT7615) || defined(MT7622)
-typedef struct GNU_PACKED _EXT_CMD_GET_SENSOR_RESULT_T {
-	UINT8 u1ActionIdx;
-	UINT8 au1Reserved[3];
-} EXT_CMD_GET_SENSOR_RESULT_T, *P_EXT_CMD_GET_SENSOR_RESULT_T;
-
-typedef struct GNU_PACKED _EXT_EVENT_GET_SENSOR_RESULT_T {
-	UINT32 u4SensorResult;
-	UINT32 u4Reserved;
-} EXT_EVENT_GET_SENSOR_RESULT_T, *P_EXT_EVENT_GET_SENSOR_RESULT_T;
-#else
 typedef struct GNU_PACKED _CMD_THERMAL_SENSOR_INFO_T {
 	UINT8  u1ThermalCtrlFormatId;
 	UINT8  u1ActionIdx;    /* 0: get temperature, 1: get thermal sensor ADC */
@@ -4082,7 +4153,6 @@ typedef struct _EXT_EVENT_THERMAL_SENSOR_TASK_RESPONSE_T {
 	UINT32 u4FuncPtr;
 } EXT_EVENT_THERMAL_SENSOR_TASK_RESPONSE_T, *P_EXT_EVENT_THERMAL_SENSOR_TASK_RESPONSE_T;
 
-#endif /* defined(MT7615) || defined(MT7622) */
 
 typedef struct GNU_PACKED _CMD_THERMAL_BASIC_INFO_T {
 	UINT8 u1PowerCtrlFormatId;
@@ -4161,19 +4231,8 @@ typedef struct _EXT_EVENT_EFUSE_BUFFER_MODE_READ_T {
 	UINT8 BinContent[];
 } EXT_EVENT_EFUSE_BUFFER_MODE_READ_T, *P_EXT_EVENT_EFUSE_BUFFER_MODE_READ_T;
 #endif	/* defined(MT7663) || defined(MT7626) || defined(AXE) || defined(MT7915) */
-#if defined(MT7615) || defined(MT7622) || defined(P18)
-struct GNU_PACKED _EXT_CMD_EFUSE_BUFFER_MODE_V1_T {
-	UINT8 ucSourceMode;
-	UINT8 ucReserved; /* Keep next UINT16 16-bit aligned, this needs correct N9 FW. */
-	UINT16 ucCount;
-	UINT8 BinContent[];
-};
-#endif	/* defined(MT7615) || defined(MT7622) || defined(P18) */
 
 union _EXT_CMD_EFUSE_BUFFER_MODE_T {
-#if defined(MT7615) || defined(MT7622) || defined(P18)
-	struct _EXT_CMD_EFUSE_BUFFER_MODE_V1_T v1;
-#endif
 #if defined(MT7663) || defined(MT7626) || defined(AXE) || defined(MT7915)
 	struct _EXT_CMD_EFUSE_BUFFER_MODE_V2_T v2;
 #endif
@@ -4251,13 +4310,6 @@ typedef struct GNU_PACKED _SW_RADAR_TYPE_T
 	UINT32 rt_stg_pri_diff_min; /* Staggered PRF radar: min PRI Difference between 1st and 2nd  */
 } SW_RADAR_TYPE_T, *PSW_RADAR_TYPE_T;
 
-#if defined(MT7615) || defined(MT7622)
-typedef struct GNU_PACKED _EXT_EVENT_RDD_REPORT_T {
-	UINT8       rdd_idx;
-	UINT8       reserved[3];
-} EXT_EVENT_RDD_REPORT_T, *P_EXT_EVENT_RDD_REPORT_T;
-
-#else
 /* size of period pulse buffer and long pulse buffer */
 #define PPB_SIZE 32
 #define LPB_SIZE 32
@@ -4371,7 +4423,6 @@ typedef struct GNU_PACKED _RDM_RDD_LOG_CONFIG_UPDATE_T {
 	UINT8 sw_rdd_log_cond;      /*0: send log for every interrupt, 1: send log only when a radar is detected. */
 } CMD_RDM_RDD_LOG_CONFIG_UPDATE_T, *P_CMD_RDM_RDD_LOG_CONFIG_UPDATE_T;
 
-#endif /*defined(MT7615) || defined(MT7622)*/
 
 typedef struct GNU_PACKED _EXT_EVENT_CAC_END_T {
 	UINT8       ucRddIdx;
@@ -4486,30 +4537,6 @@ typedef enum _ENUM_THERMAL_PROTECTION_REASON_T {
 	THERAML_PROTECTION_REASON_RADIO
 } ENUM_THERMAL_PROTECTION_REASON_T, *P_ENUM_THERMAL_PROTECTION_REASON_T;
 
-#if defined(MT7615) || defined(MT7622)
-typedef struct GNU_PACKED _EXT_CMD_THERMAL_PROTECT_T {
-	UINT8 ucHighEnable;
-	CHAR cHighTempThreshold;
-	UINT8 ucLowEnable;
-	CHAR cLowTempThreshold;
-	UINT32 RecheckTimer;
-	UINT8 ucRFOffEnable;
-	CHAR cRFOffThreshold;
-	UINT8 ucType;
-	UINT8 ucExtraTag;
-	UINT8 ucLv0Duty;
-	UINT8 ucLv1Duty;
-	UINT8 ucLv2Duty;
-	UINT8 ucLv3Duty;
-} EXT_CMD_THERMAL_PROTECT_T, *P_EXT_CMD_THERMAL_PROTECT_T;
-
-typedef struct GNU_PACKED _EXT_EVENT_THERMAL_PROTECT_T {
-	UINT8 ucHLType;
-	CHAR cCurrentTemp;
-	UINT8 ucReason;
-	UINT8 aucReserve;
-} EXT_EVENT_THERMAL_PROTECT_T, *P_EXT_EVENT_THERMAL_PROTECT_T;
-#else
 
 typedef enum _ENUM_THERMAL_PROTECT_TX_DUTY_LEVEL_ITEM_T {
 	TX_DUTY_LEVEL_0 = 0,
@@ -4565,7 +4592,6 @@ typedef struct _EXT_EVENT_THERMAL_PROT_ITEM_INFO_T {
 	UINT16 u2DutyLevel[TX_DUTY_LEVEL_NUM];
 	UINT16 u2AdmitDutyLevel[TX_DUTY_LEVEL_NUM];
 } EXT_EVENT_THERMAL_PROT_ITEM_INFO_T, *P_EXT_EVENT_THERMAL_PROT_ITEM_INFO_T;
-#endif /* defined(MT7615) || defined(MT7622) */
 
 typedef enum _ENUM_THERMAL_PROTECT_ACT_TYPE {
 	THERMAL_PROTECT_ACT_TYPE_TRIG = 0,
@@ -6219,7 +6245,11 @@ typedef struct  {
 	UINT8 PmState;
 	UINT8 Bssid[6];
 	UINT8 DtimPeriod;
+#if defined(MT7915) || defined(MT7986) || defined(MT7916) || defined(MT7981)
+	UINT16 WlanIdx;
+#else
 	UINT8 WlanIdx;
+#endif
 	UINT16 BcnInterval;
 	UINT32 Aid;
 	UINT8 OwnMacIdx;
@@ -6517,16 +6547,19 @@ typedef enum _ENUM_RDD_GET_IPI_HIST_TYPE {
 	RDD_IPI_HIST_NUM
 } ENUM_RDD_GET_IPI_HIST_TYPE, *P_ENUM_RDD_GET_IPI_HIST_TYPE;
 
-typedef struct _EXT_CMD_ED_CCA_CTRL {
-	UINT8 u1SetVal;
+typedef struct _EXT_CMD_EDCCA_CMD_T {
 	UINT8 u1BandIdx;
 	UINT8 u1CmdIdx;
-	UINT8 aucReserve;
-} EXT_CMD_ED_CCA_CTRL, *P_EXT_CMD_ED_CCA_CTRL;
+	UINT8 u1Val[3];
+	BOOLEAN fginit;
+	UINT8 u1Reserve[2];
+} EXT_CMD_EDCCA_CMD_T, *P_EXT_CMD_EDCCA_CMD_T;
 
 typedef enum _ENUM_EDCCA_CTRL_T {
-	EDCCA_CTRL_EN = 0,
-	EDCCA_CTRL_THRES,
+	SET_EDCCA_CTRL_EN = 0,
+	SET_EDCCA_CTRL_THRES,
+	GET_EDCCA_CTRL_EN,
+	GET_EDCCA_CTRL_THRES,
 	EDCCA_CTRL_NUM
 } ENUM_EDCCA_CTRL_T, *P_ENUM_EDCCA_CTRL_T;
 
@@ -6896,7 +6929,12 @@ enum ENUM_MIB_COUNTER_T {
 	MIB_CNT_BA_CNT,
 	MIB_CNT_MAC2PHY_TX_TIME,
 	RMAC_CNT_OBSS_AIRTIME,
+#ifdef ENHANCE_STAT_SUPPORT
+	RMAC_CNT_NONWIFI_AIRTIME,
+	MIB_CNT_TXOP_INIT_COUNT
+#else
 	RMAC_CNT_NONWIFI_AIRTIME
+#endif
 };
 
 /*MacInfo ID: 0x04 EDCA*/
@@ -7146,6 +7184,20 @@ typedef enum {
 } CAL_RESTORE_FUNC_IDX;
 #endif /* CAL_BIN_FILE_SUPPORT */
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+typedef struct _EXT_CMD_CHK_PEER_STA_LINK {
+	UINT8      u1NumOfSta;
+	UINT16      u2Wcid[3];
+	UINT8	   u1Reserve;
+} EXT_CMD_CHK_PEER_STA_LINK_T, *P_EXT_CMD_CHK_PEER_STA_LINK_T;
+
+typedef struct _EXT_CMD_SET_ZERO_PKT_LOSS_VARIABLE {
+	UINT_8		u1ZeroPktLossVariable;
+	UINT_8		u1Value;
+	UINT_8		u1Reserve[2];
+} EXT_CMD_SET_ZERO_PKT_LOSS_VARIABLE_T, *P_EXT_CMD_SET_ZERO_PKT_LOSS_VARIABLE_T;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 enum {
 	RXHDR_TRANS = 0,
 	RXHDR_BL = 1,
@@ -7270,12 +7322,44 @@ typedef struct GNU_PACKED _EXT_CMD_CFG_CERT_CFG_T {
 	UINT8	aucReserved[3];
 } EXT_CMD_CFG_CERT_CFG_T, *P_EXT_CMD_CFG_CERT_CFG_T;
 
+typedef struct GNU_PACKED _EXT_CMD_CFG_POWER_BACKOFF_T {
+	UINT16	u2Tag;
+	UINT16	u2Length;
+	INT8	i1PowerBackoff;
+} EXT_CMD_CFG_POWER_BACKOFF_T, *P_EXT_CMD_CFG_POWER_BACKOFF_T;
+
+typedef struct _EXT_CMD_CFG_SET_RTS_SIGTA_EN_T {
+	UINT16  u2Tag;
+	UINT16  u2Length;
+	BOOLEAN Enable; /* 0: Disable, 1: Enable */
+	UINT8   aucReserve[3];
+} EXT_CMD_CFG_SET_RTS_SIGTA_EN_T, *P_EXT_CMD_CFG_SET_RTS_SIGTA_EN_T;
+
+typedef struct _EXT_CMD_CFG_SET_SCH_DET_DIS_T {
+	UINT16  u2Tag;
+	UINT16  u2Length;
+	BOOLEAN Disable;   /* 0: Enable, 1: Disable */
+	UINT8   aucReserve[3];
+} EXT_CMD_CFG_SET_SCH_DET_DIS_T, *P_EXT_CMD_CFG_SET_SCH_DET_DIS_T;
+
+typedef struct _EXT_CMD_CFG_SET_RTS0_PKT_THRESHOLD_CFG_T {
+	UINT16  u2Tag;
+	UINT16  u2Length;
+	BOOLEAN Enable;   /* 0: Disable, 1: Enable */
+	UINT8   ucType;   /* 0: Len, 1: Number */
+	UINT32  u4Value;
+	UINT8   aucReserve[3];
+} EXT_CMD_CFG_SET_RTS0_PKT_THRESHOLD_CFG_T, *P_EXT_CMD_CFG_SET_RTS0_PKT_THRESHOLD_CFG_T;
 typedef enum _EXT_CMD_CFGINFO_TAG_T {
 	EXT_CMD_CFGINFO_HOSTREPORT_TX_LATENCY = 0,
 	EXT_CMD_CFGINFO_CHECKSUM,
 	EXT_CMD_CFGINFO_RX_FILTER_DROP_CTRL_FRAME,
 	EXT_CMD_CFGINFO_AGG_AC_LIMIT,
 	EXT_CMD_CFGINFO_CERT_CFG,
+	EXT_CMD_CFGINFO_POWER_BACKOFF,
+	EXT_CMD_CFGINFO_RTS_SIGTA_EN = 7,
+	EXT_CMD_CFGINFO_SCH_DET_DIS,
+	EXT_CMD_CFGINFO_RTS0_PKT_THRESHOLD_CFG,
 	EXT_CMD_CFG_MAX_NUM
 } EXT_CMD_CFGINFO_TAG_T;
 
@@ -7285,6 +7369,10 @@ typedef enum _ENUM_CFG_FEATURE {
 	CFGINFO_RX_FILTER_DROP_CTRL_FRAME_FEATURE = (1 << EXT_CMD_CFGINFO_RX_FILTER_DROP_CTRL_FRAME),
 	CFGINFO_AGG_AC_LIMT_FEATURE = (1 << EXT_CMD_CFGINFO_AGG_AC_LIMIT),
 	CFGINFO_CERT_CFG_FEATURE = (1 << EXT_CMD_CFGINFO_CERT_CFG),
+	CFGINFO_POWER_BACKOFF_FEATURE = (1 << EXT_CMD_CFGINFO_POWER_BACKOFF),
+	CFGINFO_RTS_SIGTA_EN_FEATURE = (1 << EXT_CMD_CFGINFO_RTS_SIGTA_EN),
+	CFGINFO_SCH_DET_DIS_FEATURE = (1 << EXT_CMD_CFGINFO_SCH_DET_DIS),
+	CFGINFO_RTS0_PKT_THRESHOLD_CFG_FEATURE = (1 << EXT_CMD_CFGINFO_RTS0_PKT_THRESHOLD_CFG),
 } ENUM_CFG_FEATURE, *P_ENUM_CFG_FEATURE;
 
 UINT16 GetRealPortQueueID(struct cmd_msg *msg, UINT8 cmd_type);
@@ -7364,6 +7452,20 @@ typedef struct GNU_PACKED _EXT_EVENT_CSA_NOTIFY_T {
 	UINT8 aucReserved;
 } EXT_EVENT_CSA_NOTIFY_T, *P_EXT_EVENT_CSA_NOTIFY_T;
 
+#ifdef ZERO_LOSS_CSA_SUPPORT
+typedef struct EXT_EVENT_NULL_ACK_WCID {
+	UINT_16 u2NullAckWcid;
+	UINT_8 u1Resrved[2];
+} EXT_EVENT_NULL_ACK_WCID_T, *P_EXT_EVENT_NULL_ACK_WCID_T;
+
+typedef struct GNU_PACKED _EXT_EVENT_BCN_TX_NOTIFY_T {
+	UINT8 ucBandIdx;
+	UINT8 ucChannelSwitchCount;
+	UINT8 ucOwnMacIdx;
+	UINT8 aucReserved[1];
+} EXT_EVENT_BCN_TX_NOTIFY_T, *P_EXT_EVENT_BCN_TX_NOTIFY_T;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
+
 typedef struct GNU_PACKED _EXT_EVENT_BCC_NOTIFY_T {
 	UINT8 ucBandIdx;
 	UINT8 ucOwnMacIdx;
@@ -7413,6 +7515,27 @@ typedef struct GNU_PACKED _EXT_CMD_ID_MULTICAST_ENTRY_DELETE {
 	UINT8 aucMemberAddr[6];
 	UINT16 u2Wcid;
 } EXT_CMD_ID_MULTICAST_ENTRY_DELETE_T, *P_EXT_CMD_ID_MULTICAST_ENTRY_DELETE_T;
+
+#define DENY_IPV4_ADDR_LEN                     4
+#define IGMP_DENY_TABLE_SIZE_MAX				16
+#define DENY_ENTRY_VALID							1
+#define DENY_ENTRY_INVALID							0
+
+typedef struct igmp_entry_s{
+	UINT_8 addr[DENY_IPV4_ADDR_LEN];
+} igmp_entry_t;
+
+typedef struct igmp_deny_list_S{
+	igmp_entry_t entry[IGMP_DENY_TABLE_SIZE_MAX];
+} igmp_deny_list_t;
+
+typedef struct GNU_PACKED _EXT_CMD_ID_MULTICAST_SN_DENY_LIST{
+	UINT8 ucBssInfoIdx;
+	UINT8 ucEntryCount;
+	UINT8 ucAddToList;
+	UINT8 ucReserve;
+	igmp_deny_list_t deny_list;
+} EXT_CMD_ID_MULTICAST_SN_DENY_LIST_T, *P_EXT_CMD_ID_MULTICAST_SN_DENY_LIST_T;
 
 typedef struct GNU_PACKED _EXT_CMD_ID_IGMP_FLOODING_CMD {
 	UINT8 bInsert;
@@ -7655,12 +7778,146 @@ typedef struct _CMD_TOAE_ON_OFF_CTRL {
 	UINT8   aucReserve[3];
 } CMD_TOAE_ON_OFF_CTRL, *P_CMD_TOAE_ON_OFF_CTRL;
 
-typedef struct _CMD_EDCCA_ON_OFF_CTRL {
-	BOOLEAN fgEDCCAEnable;
-	UINT8   ucDbdcBandIdx;
-	UINT8   aucReserve[2];
-} CMD_EDCCA_ON_OFF_CTRL, *P_CMD_EDCCA_ON_OFF_CTRL;
+#ifdef WIFI_EAP_FEATURE
+typedef enum _EAP_FEATURE_CATEGORY {
+	INIT_IPI_CTRL = 0x0,
+	GET_IPI_VALUE = 0x1,
+	SET_DATA_TXPWR_OFFSET = 0x2,
+	SET_RA_TABLE_DATA = 0x3,
+	GET_RATE_INFO = 0x4,
+	EAP_FEATURE_NUM
+} EAP_FEATURE_CATEGORY, *P_EAP_FEATURE_CATEGORY;
 
+enum {
+	EAP_EVENT_IPI_VALUE,
+	EAP_EVENT_SHOW_RATE_TABLE,
+	EAP_EVENT_NUM,
+};
+
+#define EAP_FW_RA_SWITCH_TBL_PATH            "/etc/FwRASwitchTbl.dat"
+#define EAP_FW_RA_HW_FB_TBL_PATH             "/etc/FwRAHwFbTbl.dat"
+
+#define EAP_FW_RA_SWITCH_TBL_UPD_PATH_7615   "/etc/FwRASwitchTblUpd7615.dat"
+#define EAP_FW_RA_HW_FB_TBL_UPD_PATH_7615    "/etc/FwRAHwFbTblUpd7615.dat"
+#define EAP_FW_RA_SWITCH_TBL_UPD_PATH_7622   "/etc/FwRASwitchTblUpd7622.dat"
+#define EAP_FW_RA_HW_FB_TBL_UPD_PATH_7622    "/etc/FwRAHwFbTblUpd7622.dat"
+#define EAP_FW_RA_SWITCH_TBL_UPD_PATH_7663   "/etc/FwRASwitchTblUpd7663.dat"
+#define EAP_FW_RA_HW_FB_TBL_UPD_PATH_7663    "/etc/FwRAHwFbTblUpd7663.dat"
+#define EAP_FW_RA_SWITCH_TBL_UPD_PATH_7626   "/etc/FwRASwitchTblUpd7626.dat"
+#define EAP_FW_RA_HW_FB_TBL_UPD_PATH_7626    "/etc/FwRAHwFbTblUpd7626.dat"
+
+#define NUM_OF_COL_RATE_SWITCH_TABLE  15
+#define NUM_OF_COL_RATE_HWFB_TABLE    8
+#define RA_TBL_INDEX_INVALID          0xFF
+
+typedef enum _ENUM_RA_TABLE {
+	eRateSwitchTable = 0,
+	eRateHwFbTable,
+	eRateTableMax
+} ENUM_RA_TABLE, *P_ENUM_RA_TABLE;
+
+typedef enum _ENUM_RA_SWITCH_TABLE {
+	eRateSwTbl11b = 0,
+	eRateSwTbl11g,
+	eRateSwTbl11bg,
+	eRateSwTbl11n1ss = 0x10,
+	eRateSwTbl11n2ss,
+	eRateSwTbl11n3ss,
+	eRateSwTbl11n4ss,
+	eRateSwTblvht1ss = 0x20,
+	eRateSwTblvht2ss,
+	eRateSwTblvht3ss,
+	eRateSwTblvht4ss,
+	eRateSwTblvht2ssbccbw80,
+	eRateSwTblhe1ss = 0x30,
+	eRateSwTblhe2ss,
+	eRateSwTblMax = 0xff
+} ENUM_RA_SWITCH_TABLE, *P_ENUM_RA_SWITCH_TABLE;
+
+typedef enum _ENUM_RA_HWFB_TABLE {
+	eRateHwFbTbl11b = 0,
+	eRateHwFbTbl11g,
+	eRateHwFbTbl11bg,
+	eRateHwFbTbl11n1ss = 0x10,
+	eRateHwFbTbl11n2ss,
+	eRateHwFbTbl11n3ss,
+	eRateHwFbTbl11n4ss,
+	eRateHwFbTblbgn1ss,
+	eRateHwFbTblbgn2ss,
+	eRateHwFbTblbgn3ss,
+	eRateHwFbTblbgn4ss,
+	eRateHwFbTblvht1ss = 0x20,
+	eRateHwFbTblvht2ss,
+	eRateHwFbTblvht3ss,
+	eRateHwFbTblvht4ss,
+	eRateHwFbTblvht2ssbccbw80,
+	eRateHwFbTblhe1ss = 0x30,
+	eRateHwFbTblhe2ss,
+	eRateHwFbTblMax = 0xff
+} ENUM_RA_HWFB_TABLE, *P_ENUM_RA_HWFB_TABLE;
+
+typedef struct _RATE_TABLE_UPDATE {
+	UINT8 u1RaTblType;
+	UINT8 u1RaTblIdx;
+	CHAR  acTableName[40];
+} RATE_TABLE_UPDATE, *P_RATE_TABLE_UPDATE;
+
+typedef struct _CMD_INIT_IPI_CTRL_T {
+	UINT32 u4EapCtrlCmdId;
+	UINT8  u1BandIdx;
+	UINT8  au1Reserved[3];
+} CMD_INIT_IPI_CTRL_T, *P_CMD_INIT_IPI_CTRL_T;
+
+typedef struct _CMD_GET_IPI_VALUE {
+	UINT32 u4EapCtrlCmdId;
+	UINT8  u1BandIdx;
+	UINT8  au1Reserved[3];
+} CMD_GET_IPI_VALUE, *P_CMD_GET_IPI_VALUE;
+
+typedef struct _EVENT_GET_IPI_VALUE {
+	UINT32 u4EapCtrlEventId;
+	UINT32 au4IPIValue[11];
+} EVENT_GET_IPI_VALUE, *P_EVENT_GET_IPI_VALUE;
+
+typedef struct _CMD_SET_DATA_TXPWR_OFFSET {
+	UINT32 u4EapCtrlCmdId;
+	UINT8  u1WlanIdx;		/* #256STA */
+	INT8   i1TxPwrOffset;
+	UINT8  u1BandIdx;
+} CMD_SET_DATA_TXPWR_OFFSET, *P_CMD_SET_DATA_TXPWR_OFFSET;
+
+typedef struct _CMD_SET_RA_TABLE {
+	UINT32 u4EapCtrlCmdId;
+	UINT8  u1RaTblTypeIdx;
+	UINT8  u1RaTblIdx;
+	UINT8  u1BandIdx;
+	UINT8  u1Reserved1;
+	UINT16 u2RaTblLength;
+	UINT16 u2Reserved2;
+	UCHAR  ucBuf[512];
+} CMD_SET_RA_TABLE, *P_CMD_SET_RA_TABLE;
+
+typedef struct _EVENT_SHOW_RATE_TABLE {
+	UINT32 u4EapCtrlEventId;
+	UINT16 u2RaTblLength;
+	UINT8  u1RaTblTypeIdx;
+	UINT8  u1RaTblIdx;
+	UINT8  u1RW;
+	UINT8  u1Reserved[3];
+	UCHAR  ucBuf[512];
+} EVENT_SHOW_RATE_TABLE, *P_EVENT_SHOW_RATE_TABLE;
+
+typedef struct _CMD_SHOW_RATE_TABLE {
+	UINT32 u4EapCtrlCmdId;
+	UINT8  u1RaTblTypeIdx;
+	UINT8  u1RaTblIdx;
+	UINT8  u1BandIdx;
+	UINT8  u1RW;
+} CMD_SHOW_RATE_TABLE, *P_CMD_SHOW_RATE_TABLE;
+
+PCHAR getRaTableName(UINT8 TblType, UINT8 TblIdx);
+UINT8 getRaTableIndex(UINT8 TblType, CHAR *TblName);
+#endif /* WIFI_EAP_FEATURE */
 
 #ifdef WIFI_GPIO_CTRL
 #define GPIO_INDEX_MIN_VAL  10
@@ -8252,14 +8509,16 @@ INT32 MtCmdFwDecompressStart(struct _RTMP_ADAPTER *ad, P_INIT_CMD_WIFI_START_WIT
 #ifdef DOT11V_MBSSID_SUPPORT
 BOOLEAN MtUpdateBcnToMcuV2(
 	IN struct _RTMP_ADAPTER *pAd,
-	VOID *wdev_void);
+	VOID *wdev_void,
+	BOOLEAN BcnSntReq);
 #else
 BOOLEAN MtUpdateBcnToMcu(
 	IN struct _RTMP_ADAPTER *pAd,
-	VOID *wdev_void);
+	VOID *wdev_void,
+	BOOLEAN BcnSntReq);
 #endif /* DOT11V_MBSSID_SUPPORT */
 
-INT32 MtCmdBcnOffloadSet(struct _RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T bcn_offload);
+INT32 MtCmdBcnOffloadSet(struct _RTMP_ADAPTER *pAd, CMD_BCN_OFFLOAD_T *bcn_offload);
 #endif
 
 INT32 MtCmdFdFrameOffloadSet(struct _RTMP_ADAPTER *pAd, P_CMD_FD_FRAME_OFFLOAD_T fdFrame_offload);
@@ -8459,11 +8718,7 @@ INT32 MtCmdGetPerStaTxStat(struct _RTMP_ADAPTER *pAd, UINT8 *ucEntryBitmap, UINT
 #endif
 
 #ifdef CONFIG_ATE
-#if defined(MT7615) || defined(MT7622)
-INT32 MtCmdGetTxPower(struct _RTMP_ADAPTER *pAd, UINT8 pwrType, UINT8 centerCh, UINT8 dbdc_idx, UINT8 Ch_Band, P_EXT_EVENT_ID_GET_TX_POWER_T prTxPwrResult);
-#else
 INT32 MtCmdGetTxPower(struct _RTMP_ADAPTER *pAd, UINT8 u1DbDcIdx, UINT8 u1CenterCh, UINT8 u1AntIdx, P_EXT_EVENT_ID_GET_TX_POWER_T prTxPwrResult);
-#endif /* defined(MT7615) || defined(MT7622) */
 INT32 MtCmdSetTxPowerCtrl(struct _RTMP_ADAPTER *pAd, struct _ATE_TXPOWER TxPower);
 INT32 MtCmdSetForceTxPowerCtrl(struct _RTMP_ADAPTER *pAd, UINT8 ucBandIdx, INT8 cTxPower, UINT8 ucPhyMode, UINT8 ucTxRate, UINT8 ucBW);
 #endif /* CONFIG_ATE */
@@ -8899,22 +9154,13 @@ INT32 CmdExtSetTmrCR(
 
 INT32 CmdExtStaRecUpdate(
 	struct _RTMP_ADAPTER *pAd,
-	STA_REC_CFG_T StaRecCfg);
+	STA_REC_CFG_T *pStaRecCfg);
 
 INT32 CmdETxBfStaRecRead(
 	struct _RTMP_ADAPTER *pAd,
 	UINT16  u2WlanId);
 
-#if defined(MT7615) || defined(MT7622)
-INT32 CmdTxBfTxPwrBackOff(
-    struct _RTMP_ADAPTER *pAd,
-    UCHAR  ucBandIdx,
-    PCHAR  pacTxPwrFccBfOnCase,
-    PCHAR  pacTxPwrFccBfOffCase
-    );
-#else
 INT32 MtCmdThermalProtectAdmitDutyInfo(struct _RTMP_ADAPTER *pAd);
-#endif /* defined(MT7615) || defined(MT7622) */
 
 INT32 CmdTxBfAwareCtrl(
 	struct _RTMP_ADAPTER *pAd,
@@ -9030,9 +9276,15 @@ INT32 MtCmdSetVht1024QamSupport(struct _RTMP_ADAPTER *pAd);
 
 INT SetHeraProtectionPerPpduDis(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
+INT SetHeraMuInitRateInterval(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+INT SetHeraMuDisableSwitchSu(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
+INT SetHeraSingleNssTxEnable(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
+
 INT32 MtCmdTmrCal(struct _RTMP_ADAPTER *pAd, UINT8 enable, UINT8 band, UINT8 bw, UINT8 ant, UINT8 role);
 
-INT32 MtCmdEdcaParameterSet(struct _RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T EdcaParam);
+INT32 MtCmdEdcaParameterSet(struct _RTMP_ADAPTER *pAd, MT_EDCA_CTRL_T *EdcaParam);
 
 INT32 MtCmdSlotTimeSet(struct _RTMP_ADAPTER *pAd, UINT8 SlotTime, UINT8 SifsTime, UINT8 RifsTime, UINT16 EifsTime, UCHAR BandIdx);
 
@@ -9067,13 +9319,11 @@ INT32 MtCmdRddCtrl(
 	IN UCHAR ucRddRxSel,
 	IN UCHAR ucSetVal);
 
-#if !(defined(MT7615) || defined(MT7622))
 INT32 mt_cmd_set_fcc5_min_lpn(struct _RTMP_ADAPTER *pAd, UINT16 min_lpn_update);
 INT32 mt_cmd_set_radar_thres_param(struct _RTMP_ADAPTER *pAd, P_CMD_RDM_RADAR_THRESHOLD_UPDATE_T  p_radar_threshold);
 INT32 mt_cmd_set_pls_thres_param(struct _RTMP_ADAPTER *pAd, P_CMD_RDM_PULSE_THRESHOLD_UPDATE_T p_pls_threshold);
 INT32 mt_cmd_set_rdd_log_config(struct _RTMP_ADAPTER *pAd, UINT8 hw_rdd_log_en,	UINT8 sw_rdd_log_en, UINT8 sw_rdd_log_cond);
 INT32 mt_cmd_set_test_radar_pattern(struct _RTMP_ADAPTER *pAd, P_CMD_RDM_TEST_RADAR_PATTERN_T cmd_set_test_pls_pattern);
-#endif
 
 typedef enum _ENUM_RDD_THRESCMD_T {
 	ENUM_RDM_FCC5_LPN_UPDATE = 1,
@@ -9125,6 +9375,16 @@ INT32 MtCmdThermalMode(struct _RTMP_ADAPTER *pAd, UINT8 Mode, UINT8 Action);
 INT32 MtCmdCalReStoreFromFileProc(struct _RTMP_ADAPTER *pAd, CAL_RESTORE_FUNC_IDX FuncIdx);
 INT32 MtCmdPATrimReStoreProc(struct _RTMP_ADAPTER *pAd);
 #endif /* CAL_BIN_FILE_SUPPORT */
+#ifdef ZERO_LOSS_CSA_SUPPORT
+typedef enum _ENUM_ZERO_PKT_LOSS_VARIABLE {
+	CHANNEL_SWITCH_TRIGGER_COUNT = 0,
+	ZERO_PKT_LOSS_ENABLE,
+} ENUM_ZERO_PKT_LOSS_VARIABLE, *P_ZERO_PKT_LOSS_VARIABLE;
+
+INT32 MtCmdSetChkPeerLink(struct _RTMP_ADAPTER *pAd, UINT8 WcidCount, UINT8 *wcidlist);
+INT32 MtCmdSetZeroPktLossVariable(struct _RTMP_ADAPTER *pAd, ENUM_ZERO_PKT_LOSS_VARIABLE eVariable, UINT8 Value);
+INT32 MtCmdSetMacTxEnable(struct _RTMP_ADAPTER *pAd, UINT8 enable);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 INT32 CmdRxHdrTransUpdate(struct _RTMP_ADAPTER *pAd, BOOLEAN En, BOOLEAN ChkBssid, BOOLEAN InSVlan, BOOLEAN RmVlan, BOOLEAN SwPcP);
 INT32 CmdRxHdrTransBLUpdate(struct _RTMP_ADAPTER *pAd, UINT8 Index, UINT8 En, UINT16 EthType);
@@ -9176,6 +9436,7 @@ INT32 CmdMcastAllowNonMemberEnable(struct _RTMP_ADAPTER *pAd, UINT8 Msg_type, BO
 
 BOOLEAN CmdMcastEntryInsert(struct _RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, UINT8 Type, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
 BOOLEAN CmdMcastEntryDelete(struct _RTMP_ADAPTER *pAd, PUCHAR GrpAddr, UINT8 BssIdx, PUCHAR MemberAddr, PNET_DEV dev, UINT16 wcid);
+BOOLEAN CmdMcastEntryDenyList(struct _RTMP_ADAPTER *pAd, UINT8 BssIdx, UINT8 ucEntryCount, UINT8 ucAddToList, UINT_8 *pAddr);
 
 INT32 CmdMcastFloodingCIDR(struct _RTMP_ADAPTER *pAd, UCHAR EntryIPType, BOOLEAN bInsert, PUCHAR MacData, PUINT32 PrefixMask);
 #ifdef IGMP_TVM_SUPPORT
@@ -9217,6 +9478,22 @@ INT32 MtCmdTxBfBackoffCtrl(struct _RTMP_ADAPTER *pAd, BOOLEAN fgTxBFBackoffEn, U
 INT32 MtCmdThermoCompCtrl(struct _RTMP_ADAPTER *pAd, BOOLEAN fgThermoCompEn, UCHAR BandIdx);
 INT32 MtCmdTxPwrRfTxAntCtrl(struct _RTMP_ADAPTER *pAd, UINT8 ucTxAntIdx);
 INT32 MtCmdTxPwrShowInfo(struct _RTMP_ADAPTER *pAd, UCHAR ucTxPowerInfoCatg, UINT8 ucBandIdx);
+#ifdef WIFI_EAP_FEATURE
+INT32 MtCmdInitIPICtrl(struct _RTMP_ADAPTER *pAd, UINT8 BandIdx);
+INT32 MtCmdGetIPIValue(struct _RTMP_ADAPTER *pAd, UINT8 BandIdx);
+INT32 MtCmdSetDataTxPwrOffset(struct _RTMP_ADAPTER *pAd, UINT16 WlanIdx,
+		INT8 TxPwr_Offset, UINT8 BandIdx);
+INT32 MtCmdSetRaTable(struct _RTMP_ADAPTER *pAd, UINT8 BandIdx, UINT8 TblType,
+		UINT8 TblIndex, UINT16 TblLength, PUCHAR Buffer);
+INT32 MtCmdGetRaTblInfo(struct _RTMP_ADAPTER *pAd, UINT8 BandIdx,
+		UINT8 TblType, UINT8 TblIndex, UINT8 ReadnWrite);
+#endif /* WIFI_EAP_FEATURE */
+INT32 MtCmdSetEDCCAThreshold(struct _RTMP_ADAPTER *pAd, UINT8 edcca_threshold[], UINT8 BandIdx);
+INT32 MtCmdSetEDCCACEnable(struct _RTMP_ADAPTER *pAd, UCHAR BandIdx, UCHAR EDCCACtrl);
+INT32 MtCmdGetEDCCAThreshold(struct _RTMP_ADAPTER *pAd, UINT8 BandIdx, BOOLEAN fginit);
+INT32 MtCmdGetEDCCAEnable(struct _RTMP_ADAPTER *pAd, UCHAR BandIdx);
+
+
 #ifdef WIFI_GPIO_CTRL
 INT MtCmdSetGpioCtrl(struct _RTMP_ADAPTER *pAd, UINT8 GpioIdx, BOOLEAN GpioEn);
 INT MtCmdSetGpioVal(struct _RTMP_ADAPTER *pAd, UINT8 GpioIdx, UINT8 GpioVal);
@@ -9251,7 +9528,10 @@ INT32 MtCmdATEModeCtrl(struct _RTMP_ADAPTER *pAd, UCHAR ATEMode);
 
 INT32 CmdExtSER(struct _RTMP_ADAPTER *pAd, UINT8 action, UINT8 ser_set, UINT8 ucDbdcIdx);
 
-INT32 CmdExtCmdCfgUpdate(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, ENUM_CFG_FEATURE eFeature, VOID *param);
+INT32 CmdExtCmdCfgUpdate(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, ENUM_CFG_FEATURE eFeature, VOID *param, UINT16 length);
+
+INT32 CmdExtRtsThenCtsRetryCnt(
+		struct _RTMP_ADAPTER *pAd, UINT16 u2WlanIdx, UINT_8 u1Ac, UINT_8 u1RtsFailThenCtsRetryCnt);
 
 #ifdef DSCP_PRI_SUPPORT
 INT32 MtCmdSetDscpPri(struct _RTMP_ADAPTER *pAd, UINT8 bss_idx);
@@ -9279,6 +9559,12 @@ typedef struct GNU_PACKED _CMD_SET_DSCP_PRI_T {
 #define PBC_WMM_UP_DEFAULT_VO (1900)
 #define PBC_WMM_UP_DEFAULT_MGMT (32)
 
+#define PBC_WMM_UP_DEFAULT_BK_BAND0 (450)
+#define PBC_WMM_UP_DEFAULT_BE_BAND0 (750)
+#define PBC_WMM_UP_DEFAULT_VI_BAND0 (950)
+#define PBC_WMM_UP_DEFAULT_VO_BAND0 (950)
+#define PBC_WMM_UP_DEFAULT_MGMT_BAND0 (32)
+
 typedef struct GNU_PACKED _CMD_PKT_BUDGET_CTRL_ENTRY_T {
 	UINT16 lower_bound;
 	UINT16 upper_bound;
@@ -9289,8 +9575,13 @@ typedef struct GNU_PACKED _CMD_PKT_BUDGET_CTRL_T {
 	UINT8 queue_num;
 	UINT16 wlan_idx;
 	UINT8 aucReserved[4];
-	CMD_PKT_BUDGET_CTRL_ENTRY_T aacQue[PBC_NUM_OF_PKT_BUDGET_CTRL_QUE];
+	CMD_PKT_BUDGET_CTRL_ENTRY_T aacQue[DBDC_BAND_NUM * PBC_NUM_OF_PKT_BUDGET_CTRL_QUE];
 } CMD_PKT_BUDGET_CTRL_T, *P_CMD_PKT_BUDGET_CTRL_T;
+
+typedef struct GNU_PACKED _CMD_PKT_BUDGET_CTRL_QOS_T {
+	UINT8 qos_enable;
+	UINT8 aucReserved[3];
+} CMD_PKT_BUDGET_CTRL_QOS_T, *P_CMD_PKT_BUDGET_CTRL_QOS_T;
 
 enum {
 	PBC_TYPE_FIRST = 0,
@@ -9309,8 +9600,17 @@ enum {
 };
 
 INT32 MtCmdPktBudgetCtrl(struct _RTMP_ADAPTER *pAd, UINT8 bss_idx, UINT16 wcid, UCHAR type);
+INT32 MtCmdPktBudgetCtrlQoS(struct _RTMP_ADAPTER *pAd, BOOLEAN qos_enable);
 
 #endif /*PKT_BUDGET_CTRL_SUPPORT*/
+
+#ifdef ZERO_LOSS_CSA_SUPPORT
+typedef struct GNU_PACKED _CMD_STA_PS_Q_LIMIT_T {
+	UINT16 u2Wcid;
+	UINT16 u2PsQLimit;
+} CMD_STA_PS_Q_LIMIT_T, *P_CMD_STA_PS_Q_LIMIT_T;
+INT32 MtCmdStaPsQLimit(struct _RTMP_ADAPTER *pAd, UINT16 wcid, UINT16 PsQLimit);
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 INT32 MtCmdSetBWFEnable(struct _RTMP_ADAPTER *pAd, UINT8 Enable);
 #ifdef CONFIG_HOTSPOT_R2
@@ -9328,6 +9628,8 @@ INT ShowHeraRelatedInfoProc(struct _RTMP_ADAPTER *pAd, RTMP_STRING *arg);
 
 #ifdef WIFI_MD_COEX_SUPPORT
 VOID QueryLteSafeChannel(struct _RTMP_ADAPTER *pAd);
+VOID MtCmdIdcInfoQuery(struct _RTMP_ADAPTER *pAd);
+INT32 MtCmdIdcStateUpdate(struct _RTMP_ADAPTER *pAd, BOOLEAN enable);
 #endif
 
 #ifdef PRE_CAL_MT7622_SUPPORT
@@ -9345,7 +9647,6 @@ INT32 MtCmdSetDpdFlatnessCal_7915(struct _RTMP_ADAPTER *pAd, UINT16 idx, UINT32 
 #endif /* PRE_CAL_MT7915_SUPPORT */
 INT32 mt_cmd_set_rdd_ipi_hist(struct _RTMP_ADAPTER *pAd, P_EXT_CMD_RDD_IPI_HIST_T p_cmd_rdd_ipi_hist);
 INT32 mt_cmd_get_rdd_ipi_hist(struct _RTMP_ADAPTER *pAd, UINT8 rdd_ipi_hist_idx, P_EXT_EVENT_RDD_IPI_HIST p_rdd_ipi_hist_rlt);
-INT32 mt_cmd_set_ed_cca(struct _RTMP_ADAPTER *pAd, P_EXT_CMD_ED_CCA_CTRL p_cmd_set_edcca);
 INT32 MtCmdPhyShapingFilterDisable(struct _RTMP_ADAPTER *pAd);
 INT32 mt_cmd_get_rx_stat(struct _RTMP_ADAPTER *pAd, UCHAR band_idx, P_TESTMODE_STATISTIC_INFO p_rx_stat_rlt);
 INT32 mt_cmd_set_rx_stat_user_idx(struct _RTMP_ADAPTER *pAd, UCHAR band_idx, UINT16 user_idx);
@@ -9496,6 +9797,18 @@ typedef struct _CMD_VLAN_INFO_UPDATE_T {
 	UINT8 ucOpCode;
 	UINT8 aucReserved[3];
 } CMD_VLAN_INFO_UPDATE_T, *P_CMD_VLAN_INFO_UPDATE_T;
+
+#ifdef PLE_MONITOR_SUPPORT
+typedef struct _CMD_SET_FLUSH_AC_QUEUE_T {
+	UINT16 u2WlanId;
+	UINT16 u2PktCnt;
+	BOOLEAN fgNeedChkPs;
+	UINT8 u1Reserve[3];
+} CMD_SET_FLUSH_AC_QUEUE_T, *P_CMD_SET_FLUSH_AC_QUEUE_T;
+
+INT32 cmd_flush_ac_queue(struct _RTMP_ADAPTER *ad, UINT16 u2WlanId, UINT16 u2PktCnt, BOOLEAN fgNeedChkPs);
+#endif
+
 #ifdef VLAN_SUPPORT
 INT32 cmd_vlan_update(struct _RTMP_ADAPTER *ad, UCHAR band_idx, UINT8 omac_idx, UINT8 op_code, UINT16 value);
 #endif
@@ -9531,4 +9844,11 @@ typedef enum _PKTLOSS_CHK_ENUM_CTRL {
 	PKTLOSS_CHK_CONTINUE_HEX_DUMP = 5
 } PKTLOSS_CHK_ENUM_CTRL;
 #endif
+
+typedef struct _EXT_CMD_SET_RTS_THEN_CTS_RETRY {
+	UINT_16  u2Wcid;
+	UINT_8   u1Ac;
+	UINT_8   u1RtsFailThenCtsRetryCnt;
+} EXT_CMD_SET_RTS_THEN_CTS_RETRY_T, *P_EXT_CMD_SET_RTS_THEN_CTS_RETRY_T;
+
 #endif /* __MT_CMD_H__ */

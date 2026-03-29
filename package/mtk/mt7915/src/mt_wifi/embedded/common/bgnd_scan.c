@@ -412,11 +412,6 @@ VOID BackgroundScanInit(
 	UCHAR vht_bw = 0;
 #endif
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(pAd->hdev_ctrl);
-#ifdef MT_DFS_SUPPORT
-#if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
-	PDFS_PARAM pDfsParam = &pAd->CommonCfg.DfsParameter;
-#endif
-#endif
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s ===============>\n", __func__));
 
@@ -437,11 +432,6 @@ VOID BackgroundScanInit(
 
 #ifdef MT_DFS_SUPPORT
 	pAd->BgndScanCtrl.DfsZeroWaitDuration = DEFAULT_OFF_CHNL_CAC_TIME;/* 120000; 2 min */
-#if (DFS_ZEROWAIT_DEFAULT_FLOW == 1)
-	/* Initialize timer if DFS zero-wait default flow is supported */
-	if (pDfsParam->bDedicatedZeroWaitDefault)
-		RTMPInitTimer(pAd, &pAd->BgndScanCtrl.DfsZeroWaitTimer, GET_TIMER_FUNCTION(dfs_zero_wait_ch_init_timeout), pAd, FALSE);
-#endif /* DFS_ZEROWAIT_DEFAULT_FLOW */
 #endif
 
 	/*
@@ -887,9 +877,8 @@ VOID BackgroundChannelSwitchAnnouncementAction(
 	/* pAd->BgndScanCtrl.BgndScanStatMachine.CurrState = BGND_SCAN_IDLE; //For temporary */
 }
 
-NDIS_STATUS set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+INT set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 {
-	NDIS_STATUS status = NDIS_STATUS_SUCCESS;
 	INT32 recv = 0;
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(pAd->hdev_ctrl);
@@ -905,7 +894,7 @@ NDIS_STATUS set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg
 	if (wdev == NULL) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 		("%s: wdev is Null\n", __func__));
-		return NDIS_STATUS_FAILURE;
+		return FALSE;
 	}
 
 	ch_band = wlan_config_get_ch_band(wdev);
@@ -922,17 +911,17 @@ NDIS_STATUS set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg
 					"ch:bw(0: 20MHz, 1: 40MHz, 2: 80MHz)\n"));
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("Set 0:0 to disable 5th RX\n"));
-		       return TRUE;
+		       return FALSE;
 		}
 
 		if (ch == 0 && bw == 0) {
-			if (ops->set_off_ch_scan)
-			ops->set_off_ch_scan(pAd, CH_SWITCH_BACKGROUND_SCAN_STOP, ENUM_BGND_BGND_TYPE);
+			if (ops->set_off_ch_scan) {
+				ops->set_off_ch_scan(pAd, CH_SWITCH_BACKGROUND_SCAN_STOP, ENUM_BGND_BGND_TYPE);
 
 				MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 					("%s: disable dedicated rx\n", __func__));
-
-				return NDIS_STATUS_SUCCESS;
+				return TRUE;
+			}
        }
 
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -1008,15 +997,13 @@ NDIS_STATUS set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg
 		} else {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("%s: Arg is Null\n", __func__));
-			status = NDIS_STATUS_FAILURE;
+			return FALSE;
 		}
-
-		return status;
+		return TRUE;
 }
 
-NDIS_STATUS set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
+INT set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg)
 {
-	NDIS_STATUS status = NDIS_STATUS_SUCCESS;
 	UCHAR band_idx = 0;
 	INT32 recv = 0;
 	UINT32 thres = 0;
@@ -1034,7 +1021,7 @@ NDIS_STATUS set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * ar
 	if (wdev == NULL) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 		("%s: wdev is Null\n", __func__));
-		return NDIS_STATUS_FAILURE;
+		return FALSE;
 	}
 
 	band_idx = HcGetBandByWdev(wdev);
@@ -1046,7 +1033,7 @@ NDIS_STATUS set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * ar
 				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 					("Format Error! Please enter in the following format\n"
 					"threshold(0-10):period(ms)\n"));
-		       return TRUE;
+		       return FALSE;
 		}
 
 		pAd->BgndScanCtrl.ipi_th = thres;
@@ -1070,10 +1057,10 @@ NDIS_STATUS set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * ar
 		} else {
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
 			("%s: Arg is Null\n", __func__));
-			status = NDIS_STATUS_FAILURE;
+			return FALSE;
 		}
 
-		return status;
+		return TRUE;
 }
 
 VOID dedicated_rx_hist_scan_timeout(
@@ -1279,6 +1266,7 @@ VOID DedicatedZeroWaitStop(
 	BACKGROUND_SCAN_CTRL *BgndScanCtrl = &pAd->BgndScanCtrl;
 	struct _RTMP_CHIP_OP *ops = hc_get_chip_ops(pAd->hdev_ctrl);
 
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() start.\n", __func__));
 #if (RDD_2_SUPPORTED == 0)
 	if (apply_cur_ch == TRUE) {
 		in_band_ch = GET_BGND_PARAM(pAd, INBAND_CH);
@@ -1316,6 +1304,8 @@ VOID DedicatedZeroWaitStop(
 #endif /* CFG_SUPPORT_MU_MIMO */
 
 #endif /* RDD_2_SUPPORTED */
+
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s() end.\n", __func__));
 
 }
 

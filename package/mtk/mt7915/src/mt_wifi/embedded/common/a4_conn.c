@@ -29,6 +29,10 @@
 #ifdef A4_CONN
 #include "rt_config.h"
 
+#ifdef WHNAT_SUPPORT
+extern int (*ppe_del_entry_by_mac)(unsigned char *mac);
+#endif
+
 BOOLEAN a4_interface_init(
 	IN PRTMP_ADAPTER adapter,
 	IN UCHAR if_index,
@@ -62,6 +66,14 @@ BOOLEAN a4_interface_init(
 		if (apcli_entry->a4_init == 0)
 			add_inf = TRUE;
 		apcli_entry->a4_init |= (1 << a4_type);
+
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+		if (adapter->MapAccept3Addr && (apcli_entry->eth_list_init == 0)) {
+			NdisAllocateSpinLock(adapter, &apcli_entry->eth_entry_lock);
+			DlListInit(&apcli_entry->eth_entry_list);
+			apcli_entry->eth_list_init = 1;
+		}
+#endif
 	}
 #else
 	else
@@ -91,7 +103,10 @@ BOOLEAN a4_interface_deinit(
 	PDL_LIST a4_entry_list = NULL;
 	PMAC_TABLE_ENTRY entry = NULL;
 	BOOLEAN delete_inf = FALSE;
-
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+	PDL_LIST eth_entry_list = NULL;
+	PEth_CONNECT_ENTRY eth_entry = NULL, eth_entryTmp = NULL;
+#endif
 	if (is_ap) {
 		if (!VALID_MBSS(adapter, if_index))
 			return FALSE;
@@ -126,6 +141,20 @@ BOOLEAN a4_interface_deinit(
 			if (!apcli_entry->a4_init)
 				delete_inf = TRUE;
 		}
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+		if (adapter->MapAccept3Addr && (apcli_entry->eth_list_init == 1)) {
+			eth_entry_list = &apcli_entry->eth_entry_list;
+			RTMP_SEM_LOCK(&apcli_entry->eth_entry_lock);
+			DlListForEachSafe(eth_entry, eth_entryTmp, eth_entry_list, Eth_CONNECT_ENTRY, List) {
+				DlListDel(&eth_entry->List);
+				os_free_mem(eth_entry);
+			}
+			RTMP_SEM_UNLOCK(&apcli_entry->eth_entry_lock);
+			NdisFreeSpinLock(&apcli_entry->eth_entry_lock);
+			apcli_entry->eth_list_init = 0;
+		}
+#endif
+
 	}
 #else
 	else
@@ -161,7 +190,9 @@ INT a4_get_entry_count(
 	if (!mbss->a4_init)
 		return 0;
 
+	RTMP_SEM_LOCK(&mbss->a4_entry_lock);
 	count = DlListLen(&mbss->a4_entry_list);
+	RTMP_SEM_UNLOCK(&mbss->a4_entry_lock);
 	return count;
 }
 
@@ -343,6 +374,7 @@ VOID a4_proxy_update(
 	UINT16 proxy_wcid = 0;
 	BOOLEAN found = FALSE;
 	PROUTING_ENTRY routing_entry = NULL;
+	MAC_TABLE_ENTRY *pMacEntry = NULL;
 
 	if (a4_get_entry_count(adapter, if_index) == 0)
 		return;
@@ -350,6 +382,13 @@ VOID a4_proxy_update(
 	if (!IS_WCID_VALID(adapter, wcid) || !mac_addr)
 		return;
 
+	pMacEntry = MacTableLookup(adapter, mac_addr);
+	if (pMacEntry && IS_ENTRY_A4(pMacEntry)) {
+		MTWF_DBG(adapter, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			"Addr4("MACSTR") is an A4 entry.\n",
+				MAC2STR(mac_addr));
+		return;
+	}
 	routing_entry = RoutingTabLookup(adapter, if_index, mac_addr, TRUE, &proxy_wcid);
 	found = (routing_entry != NULL) ? TRUE : FALSE;
 
@@ -357,6 +396,17 @@ VOID a4_proxy_update(
 		if (ROUTING_ENTRY_TEST_FLAG(routing_entry, ROUTING_ENTRY_A4)) {
 			/* Mean the target change to other ProxyAP */
 			if (proxy_wcid != wcid) {
+#ifdef WHNAT_SUPPORT
+				/* In WARP enabled scenario, the old HWNAT entry need to be
+				deleted when the STA is roaming from one agent to another.
+				*/
+				if (ppe_del_entry_by_mac != NULL) {
+					MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+						"Target "MACSTR" ProxyAP change from %u to %u\n",
+						MAC2STR(mac_addr), proxy_wcid, wcid);
+					ppe_del_entry_by_mac(mac_addr);
+				}
+#endif
 				RoutingTabSetOneFree(adapter, if_index, mac_addr, ROUTING_ENTRY_A4);
 				routing_entry = NULL;
 				found = FALSE;
@@ -729,6 +779,7 @@ INT Set_APProxy_Status_Show_Proc(
 	PROUTING_ENTRY routing_entry = NULL, *routing_entry_list;
 	UCHAR *proxy_mac_addr = NULL, proxy_ip[64];
 
+	BSS_STRUCT *mbss = NULL;
 	obj = (POS_COOKIE) adapter->OS_Cookie;
 	if_index = obj->ioctl_if;
 
@@ -753,8 +804,10 @@ INT Set_APProxy_Status_Show_Proc(
 		return TRUE;
 	}
 
+	mbss = &adapter->ApCfg.MBSSID[if_index];
 	a4_entry_list = &adapter->ApCfg.MBSSID[if_index].a4_entry_list;
 	NdisGetSystemUpTime(&now);
+	RTMP_SEM_LOCK(&mbss->a4_entry_lock);
 	DlListForEach(a4_entry, a4_entry_list, A4_CONNECT_ENTRY, List) {
 		if (a4_entry->valid && IS_WCID_VALID(adapter, a4_entry->wcid)) {
 			count = 0;
@@ -797,6 +850,7 @@ INT Set_APProxy_Status_Show_Proc(
 		}
 	}
 
+	RTMP_SEM_UNLOCK(&mbss->a4_entry_lock);
 	if (routing_entry_list)
 		os_free_mem(routing_entry_list);
 
@@ -810,4 +864,127 @@ INT Set_APProxy_Refresh_Proc(
 	adapter->a4_need_refresh = TRUE;
 	return TRUE;
 }
+#ifdef CONFIG_MAP_3ADDR_SUPPORT
+BOOLEAN eth_lookup_entry_by_addr(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr,
+	IN UCHAR update_time
+)
+{
+	PSTA_ADMIN_CONFIG apcli_entry = NULL;
+	PDL_LIST eth_entry_list = NULL;
+	PEth_CONNECT_ENTRY eth_entry = NULL;
+	BOOLEAN found = FALSE;
+
+	if (mac_addr == NULL)
+		return FALSE;
+
+	if (if_index >= MAX_MULTI_STA)
+		return FALSE;
+
+	apcli_entry = &adapter->StaCfg[if_index];
+
+	eth_entry_list = &apcli_entry->eth_entry_list;
+	DlListForEach(eth_entry, eth_entry_list, Eth_CONNECT_ENTRY, List) {
+		if (MAC_ADDR_EQUAL(mac_addr, eth_entry->mac)) {
+			if (update_time == TRUE)
+				eth_entry->entry_flush_count = Eth_Entry_Flush_Time;
+			found = TRUE;
+			break;
+		}
+	}
+	return found;
+}
+
+VOID eth_add_entry(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr
+)
+{
+	PEth_CONNECT_ENTRY eth_entry = NULL;
+	PSTA_ADMIN_CONFIG apcli_entry = NULL;
+
+	if (if_index >= MAX_MULTI_STA)
+		return FALSE;
+
+	apcli_entry = &adapter->StaCfg[if_index];
+
+	if (eth_lookup_entry_by_addr(adapter, if_index, mac_addr, TRUE))
+		return;
+	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s added "MACSTR" if_index %d in list \n", __func__, MAC2STR(mac_addr), if_index));
+	os_alloc_mem(adapter, (UCHAR **)&eth_entry, sizeof(Eth_CONNECT_ENTRY));
+
+	if (eth_entry) {
+		NdisZeroMemory(eth_entry, sizeof(A4_CONNECT_ENTRY));
+		eth_entry->entry_flush_count = Eth_Entry_Flush_Time;
+		memcpy(eth_entry->mac, mac_addr, MAC_ADDR_LEN);
+		RTMP_SEM_LOCK(&apcli_entry->eth_entry_lock);
+		DlListAddTail(&apcli_entry->eth_entry_list, &eth_entry->List);
+		RTMP_SEM_UNLOCK(&apcli_entry->eth_entry_lock);
+	} else
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("Fail to alloc memory for New ethernet client Entry\n"));
+}
+
+VOID eth_delete_entry(
+	IN PRTMP_ADAPTER adapter,
+	IN UCHAR if_index,
+	IN PUCHAR mac_addr
+)
+{
+	PEth_CONNECT_ENTRY eth_entry = NULL, eth_entryTmp = NULL;
+	PSTA_ADMIN_CONFIG apcli_entry = NULL;
+	PDL_LIST eth_entry_list = NULL;
+
+	if (mac_addr == NULL)
+		return FALSE;
+
+	if (if_index >= MAX_MULTI_STA)
+			return FALSE;
+
+	apcli_entry = &adapter->StaCfg[if_index];
+
+	eth_entry_list = &apcli_entry->eth_entry_list;
+	RTMP_SEM_LOCK(&apcli_entry->eth_entry_lock);
+	DlListForEachSafe(eth_entry, eth_entryTmp, eth_entry_list, Eth_CONNECT_ENTRY, List) {
+		if (MAC_ADDR_EQUAL(mac_addr, eth_entry->mac)) {
+			MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+				("%s deleted "MACSTR" if_index %d in list \n", __func__, MAC2STR(mac_addr), if_index));
+			DlListDel(&eth_entry->List);
+			os_free_mem(eth_entry);
+			break;
+		}
+	}
+	RTMP_SEM_UNLOCK(&apcli_entry->eth_entry_lock);
+}
+
+VOID eth_update_list(
+	IN PRTMP_ADAPTER adapter
+)
+{
+	PEth_CONNECT_ENTRY eth_entry = NULL;
+	PSTA_ADMIN_CONFIG apcli_entry = NULL;
+	PDL_LIST eth_entry_list = NULL;
+	UCHAR if_index;
+
+	for (if_index = 0; if_index < MAX_MULTI_STA; if_index++) {
+
+		apcli_entry = &adapter->StaCfg[if_index];
+
+		if (apcli_entry->eth_list_init) {
+			eth_entry_list = &apcli_entry->eth_entry_list;
+			DlListForEach(eth_entry, eth_entry_list, Eth_CONNECT_ENTRY, List) {
+				eth_entry->entry_flush_count--;
+				if (eth_entry->entry_flush_count <= 0) {
+					eth_delete_entry(adapter, if_index, eth_entry->mac);
+					break;
+				}
+			}
+		}
+	}
+}
+#endif
 #endif /* A4_CONN */

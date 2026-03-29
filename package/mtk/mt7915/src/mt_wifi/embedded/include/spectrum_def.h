@@ -55,13 +55,16 @@ typedef struct _MEASURE_REQ_ENTRY {
 	ULONG lastTime;
 	BOOLEAN	Valid;
 	UINT8 DialogToken;
+	UINT8 measuretype;
 	UINT8 MeasureDialogToken[3];	/* 0:basic measure, 1: CCA measure, 2: RPI_Histogram measure. */
 	BOOLEAN skip_time_check;
-	UINT8 CurrentState;
+	UINT8 BcnCurrentState;
+	UINT8 NrCurrentState;
 	void *Priv;
 	RALINK_TIMER_STRUCT WaitNRRspTimer;
 	UINT8 StaMac[MAC_ADDR_LEN];
 	UCHAR ControlIndex;
+	UCHAR RcvBcnRepCnt;
 	RALINK_TIMER_STRUCT WaitBCNRepTimer;
 } MEASURE_REQ_ENTRY, *PMEASURE_REQ_ENTRY;
 

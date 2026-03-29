@@ -144,19 +144,6 @@ int RtmpChipOpsHook(VOID *pCB)
 
 	/* default init */
 	RTMP_DRS_ALG_INIT(pAd, RATE_ALG_LEGACY);
-#ifdef RTMP_RBUS_SUPPORT
-
-	if (pAd->infType == RTMP_DEV_INF_RBUS) {
-		/* wilsonl, need DE provide info */
-#ifndef MT7622
-		RTMP_SYS_IO_READ32(0xb000000c, &pAd->CommonCfg.CID);
-		RTMP_SYS_IO_READ32(0xb0000000, &pAd->CommonCfg.CN);
-#endif
-		MTWF_LOG(DBG_CAT_HW, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CN: %lx\tCID = %lx\n",
-				 pAd->CommonCfg.CN, pAd->CommonCfg.CID));
-	}
-
-#endif /* RTMP_RBUS_SUPPORT */
 	/*initial chip hook function*/
 	WfSysPreInit(pAd);
 

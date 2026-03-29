@@ -12,12 +12,47 @@ config WDS_SUPPORT
 
 config WIFI_EAP_FEATURE
 	bool "EAP Feature"
-	depends on WIFI_DRIVER
+	depends on MT_AP_SUPPORT
 	default y
 
-config WIFI_GPIO_CTRL
-	bool "GPIO Control"
-	depends on WIFI_DRIVER
+config VLAN_SUPPORT
+	bool "VLAN support"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config TXRX_STAT_SUPPORT
+	bool "TxRx Stats Support"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config SNIFFER_SUPPORT
+	bool "SNIFFER"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config ANTENNA_CONTROL_SUPPORT
+	bool "Antenna Control Support"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config MGMT_TXPWR_CTRL
+	bool "Mgmt TxPower Control"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config RA_PHY_RATE_SUPPORT
+	bool "RA PHY RATE Support"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config AMPDU_CONF_SUPPORT
+	bool "AMPDU Config retry & agglimit Support"
+	depends on WIFI_EAP_FEATURE
+	default n
+
+config ACK_CTS_TIMEOUT_SUPPORT
+	bool "ACK CTS Timeout cck & ofdm Support"
+	depends on WIFI_EAP_FEATURE
 	default n
 
 config MBSS_SUPPORT
@@ -56,7 +91,7 @@ config MAC_REPEATER_SUPPORT
 
 config MWDS
     bool "Mixed WDS(MWDS)"
-    depends on CHIP_MT7615E
+    depends on CHIP_MT7615E || CHIP_MT7915
     depends on MT_AP_SUPPORT
     select APCLI_SUPPORT
     default n
@@ -144,11 +179,6 @@ config WIFI_MSI_SUPPORT
         depends on CHIP_MT7615E
         default n
 
-config SNIFFER_SUPPORT
-	bool "SNIFFER"
-	depends on MT_AP_SUPPORT
-	default n
-
 config CFG80211_SUPPORT
 	bool "CFG80211"
 	depends on MT_AP_SUPPORT
@@ -179,6 +209,30 @@ config ENTERPRISE_AP_SUPPORT
 	depends on MT_AP_SUPPORT
 	default n
 
+#IAP STA DUMP
+#config WIFI_IAP_STA_DUMP_FEATURE_SUPPORT
+#	bool "IW command station dump for iAP/Eap feature Support"
+#	depends on MT_AP_SUPPORT
+#	default n
+
+#IAP POWER SAVE
+#config WIFI_IAP_POWER_SAVE_FEATURE_SUPPORT
+#	bool "IW command power save set for iAP/Eap feature Support"
+#	depends on MT_AP_SUPPORT
+#	default n
+
+#IAP IW SCAN
+#config WIFI_IAP_IW_SCAN_FEATURE_SUPPORT
+#	bool "IW command scan feature Support"
+#	depends on MT_AP_SUPPORT
+#	default n
+
+#IAP IW SET CHANNEL
+#config WIFI_IAP_IW_SET_CHANNEL_FEATURE_SUPPORT
+#	bool "IW command set channel Support"
+#	depends on MT_AP_SUPPORT
+#	default n
+
 config DYNAMIC_VLAN_SUPPORT
 	bool "Dynamic VLAN Support"
 	depends on ENTERPRISE_AP_SUPPORT
@@ -191,40 +245,6 @@ config RADIUS_MAC_AUTH_SUPPORT
 	depends on CFG80211_SUPPORT
 	default n
 
-#config ANTENNA_CONTROL_SUPPORT
-#	bool "Antenna Control Support"
-#	depends on MT_AP_SUPPORT
-#	default n
-
-#ACK CTS Timeout
-#config MTK_ACK_CTS_TIMEOUT_SUPPORT
-#	bool "ACK CTS Timeout cck & ofdm Support"
-#	depends on MTK_MT_AP_SUPPORT
-#	default n
-
-#IAP STA DUMP
-#config MTK_WIFI_IAP_STA_DUMP_FEATURE_SUPPORT
-#	bool "IW command station dump for iAP/Eap feature Support"
-#	depends on MTK_MT_AP_SUPPORT
-#	default n
-
-#IAP POWER SAVE
-#config MTK_WIFI_IAP_POWER_SAVE_FEATURE_SUPPORT
-#	bool "IW command power save set for iAP/Eap feature Support"
-#	depends on MTK_MT_AP_SUPPORT
-#	default n
-
-#IAP IW SCAN
-#config MTK_WIFI_IAP_IW_SCAN_FEATURE_SUPPORT
-#	bool "IW command scan feature Support"
-#	depends on MTK_MT_AP_SUPPORT
-#	default n
-
-#IAP IW SET CHANNEL
-#config MTK_WIFI_IAP_IW_SET_CHANNEL_FEATURE_SUPPORT
-#	bool "IW command set channel Support"
-#	depends on MTK_MT_AP_SUPPORT
-#	default n
 
 #APCLI STA
 config APCLI_STA_SUPPORT
@@ -329,11 +349,6 @@ config GREENAP_SUPPORT
 	depends on MT_AP_SUPPORT
 	default y
 
-config TXRX_STAT_SUPPORT
-	bool "TxRx Stats Support"
-	depends on WIFI_DRIVER
-	default n
-
 config PCIE_ASPM_DYM_CTRL_SUPPORT
 	bool "Pcie Aspm Dynamic Control Support"
 	depends on MT_AP_SUPPORT
@@ -399,11 +414,6 @@ config OWE_SUPPORT
 	depends on WPA3_SUPPORT
 	default n
 
-config VLAN_SUPPORT
-	bool "VLAN support"
-	depends on MT_AP_SUPPORT
-	default n
-
 config RCSA_SUPPORT
 	bool "Reverse-CSA"
 	depends on WIFI_DRIVER
@@ -420,9 +430,9 @@ config PROFILING_SUPPORT
 	bool "WIFI Profiling Support"
 	default n
 
-#config MLME_MULTI_QUEUE_SUPPORT
-#	bool "Mlme Multi Queue Support"
-#	default n
+config MLME_MULTI_QUEUE_SUPPORT
+	bool "Mlme Multi Queue Support"
+	default n
 
 #config WIFI_DIAG
 #	bool "CTC WIFI diagnose feature support"

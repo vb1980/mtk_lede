@@ -105,7 +105,7 @@ VOID ActionStateMachineInit(
 #endif /* WIFI_TWT_SUPPORT */
 	StateMachineSetAction(S, ACT_IDLE, MT2_MLME_WNM_EVT_REPORT, (STATE_MACHINE_FUNC)sta_send_event_report);
 #endif
-	StateMachineSetAction(S, ACT_IDLE, CATEGORY_PD, (STATE_MACHINE_FUNC)PeerProtectedDualAction);
+	StateMachineSetAction(S, ACT_IDLE, CATEGORY_PD, (STATE_MACHINE_FUNC)PeerPublicAction);
 }
 
 
@@ -703,9 +703,8 @@ VOID Send2040CoexistAction(
 	if (IS_ENTRY_PEER_AP(&pAd->MacTab.Content[Wcid])) {
 		apidx = pAd->MacTab.Content[Wcid].func_tb_idx;
 		ActHeaderInit(pAd, &Frame.Hdr, pAd->MacTab.Content[Wcid].Addr, pAd->StaCfg[apidx].wdev.if_addr, pAd->MacTab.Content[Wcid].Addr);
-		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\x1b[31m\n%02x:%02x:%02x:%02x:%02x:%02x \x1b[m\n",
-				 pAd->MacTab.Content[Wcid].Addr[0], pAd->MacTab.Content[Wcid].Addr[1], pAd->MacTab.Content[Wcid].Addr[2],
-				 pAd->MacTab.Content[Wcid].Addr[3], pAd->MacTab.Content[Wcid].Addr[4], pAd->MacTab.Content[Wcid].Addr[5]));
+		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("\x1b[31m\n"MACSTR" \x1b[m\n",
+				 MAC2STR(pAd->MacTab.Content[Wcid].Addr)));
 	}
 
 #endif /* APCLI_SUPPORT */
@@ -886,46 +885,6 @@ VOID ChannelSwitchAction(
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
 
-VOID PeerProtectedDualAction (RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
-{
-		UCHAR Action = Elem->Msg[LENGTH_802_11 + 1];
-
-#if defined(WAPP_SUPPORT) && defined(CONFIG_AP_SUPPORT)
-
-		if (!GasEnable(pAd, Elem))
-#endif
-			if ((!VALID_UCAST_ENTRY_WCID(pAd, Elem->Wcid))
-					&& (Action != ACTION_GAS_INITIAL_REQ)
-					&& (Action != ACTION_GAS_INITIAL_RSP)
-					&& (Action != ACTION_GAS_COMEBACK_REQ)
-					&& (Action != ACTION_GAS_COMEBACK_RSP)
-				   )
-					return;
-
-		switch (Action) {
-#ifdef CONFIG_AP_SUPPORT
-#if defined(WAPP_SUPPORT) || defined(FTM_SUPPORT)
-
-		case ACTION_GAS_INIT_REQ:
-			if (GasEnable(pAd, Elem))
-				ReceiveGASInitReq(pAd, Elem);
-
-			break;
-
-		case ACTION_GAS_CB_REQ:
-			if (GasEnable(pAd, Elem))
-				ReceiveGASCBReq(pAd, Elem);
-
-			break;
-#endif
-#endif /* CONFIG_AP_SUPPORT */
-
-		default:
-			break;
-		}
-}
-
-
 VOID PeerPublicAction(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 {
 	UCHAR Action = Elem->Msg[LENGTH_802_11 + 1];
@@ -992,7 +951,7 @@ VOID PeerPublicAction(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 #ifdef BW_VENDOR10_CUSTOM_FEATURE
 			IS_APCLI_BW_SYNC_FEATURE_ENBL(pAd) ||
 #endif
-			pAd->CommonCfg.bBssCoexEnable == FALSE || (pAd->CommonCfg.bForty_Mhz_Intolerant == TRUE)) {
+			pAd->CommonCfg.bBssCoexEnable == FALSE || (pAd->CommonCfg.bForty_Mhz_Intolerant == TRUE) || !(WMODE_CAP_2G(wdev->PhyMode))) {
 			MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("20/40 BSS CoexMgmt=%d, bForty_Mhz_Intolerant=%d, ignore this action!!\n",
 					 pAd->CommonCfg.bBssCoexEnable,
 					 pAd->CommonCfg.bForty_Mhz_Intolerant));
@@ -1495,6 +1454,11 @@ VOID PeerHTAction(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 VOID PeerVHTAction(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 {
 	UCHAR Action = Elem->Msg[LENGTH_802_11 + 1];
+#ifdef ZERO_LOSS_CSA_SUPPORT
+	UINT i = 0;
+	INT ZeroLossStaIndex = -1;
+	struct DOT11_H *pDot11h = NULL;
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 
 	if (!VALID_UCAST_ENTRY_WCID(pAd, Elem->Wcid))
 		return;
@@ -1509,7 +1473,33 @@ VOID PeerVHTAction(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 		hex_dump("OperatingModeNotify", &Elem->Msg[0], Elem->MsgLen);
 		MTWF_LOG(DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\t RxNssType=%d, RxNss=%d, ChBW=%d\n",
 				 op_mode->rx_nss_type, op_mode->rx_nss, op_mode->ch_width));
+#ifdef ZERO_LOSS_CSA_SUPPORT
+		/*Handle: some sta send VHT action frame after switching channel due to CSA*/
+		if (pAd->Zero_Loss_Enable == 1) {
+			if (pEntry) {
+				for (i = 0; i < 3; i++) {
+					if (pAd->ZeroLossSta[i].wcid == pEntry->wcid) {
+						ZeroLossStaIndex = i;
+						break;
+					}
+				}
+			}
 
+			pDot11h = (struct DOT11_H *)pEntry->wdev->pDot11_H;
+			if (ZeroLossStaIndex >= 0) {
+				if ((pAd->ZeroLossSta[ZeroLossStaIndex].ChnlSwitchSkipTx)
+					&& (pDot11h->ChnlSwitchState >= ASIC_CHANNEL_SWITCH_COMMAND_ISSUED)) {
+					pAd->ZeroLossSta[ZeroLossStaIndex].ChnlSwitchSkipTx = 0;
+					AsicUpdateSkipTx(pAd, pEntry->wcid, 0); /*reset skip tx*/
+					pAd->ZeroLossSta[ZeroLossStaIndex].resume_time = jiffies_to_msecs(jiffies);
+					pAd->chan_switch_time[15] = jiffies_to_msecs(jiffies);
+					MTWF_DBG(pAd, DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+						"Tx Enabled for wcid %d\n", pEntry->wcid);
+					return;
+				}
+			}
+		}
+#endif /*ZERO_LOSS_CSA_SUPPORT*/
 		if (op_mode->rx_nss_type == 0) {
 			pEntry->force_op_mode = TRUE;
 			NdisMoveMemory(&pEntry->operating_mode, op_mode, 1);

@@ -208,10 +208,6 @@ static UINT8 *build_he_phy_cap(struct wifi_dev *wdev, UINT8 *f_buf)
 	}
 #endif
 
-	if (wlan_config_get_mu_dl_mimo(wdev)) {
-		if (wdev->wdev_type == WDEV_TYPE_AP)
-			phy_cap_2 |= DOT11AX_PHY_CAP_MU_BFER;
-	}
 #ifdef CONFIG_STA_SUPPORT
 	if (wdev->wdev_type == WDEV_TYPE_STA)
 		phy_cap_2 |= DOT11AX_PHY_CAP_PARTIAL_BW_DL_MU_MIMO;
@@ -234,17 +230,17 @@ static UINT8 *build_he_phy_cap(struct wifi_dev *wdev, UINT8 *f_buf)
 		phy_cap_2 |= DOT11AX_PHY_CAP_PWR_BOOST_FACTOR;
 		phy_cap_2 |= DOT11AX_PHY_CAP_SU_MU_PPDU_4x_HE_LTF_DOT8_US;
 
-		phy_cap_3 |= (1 << DOT11AX_PHY_CAP_NOMINAL_PKT_PAD_SHIFT);
-
 		phy_cap_4 |= DOT11AX_PHY_CAP_LONGER_16_HE_SIGB_OFDM_SYM;
 		phy_cap_4 |= DOT11AX_PHY_CAP_NON_TRIG_CQI_FEEDBACK;
 		phy_cap_4 |= DOT11AX_PHY_CAP_TX_1024QAM_LT_242_TONE_RU;
 		phy_cap_4 |= DOT11AX_PHY_CAP_RX_1024QAM_LT_242_TONE_RU;
 		phy_cap_4 |= DOT11AX_PHY_CAP_RX_FULL_BW_HE_MU_PPDU_W_COMPRESS_SIGB;
 		phy_cap_4 |= DOT11AX_PHY_CAP_RX_FULL_BW_HE_MU_PPDU_W_NON_COMPRESS_SIGB;
+		phy_cap_4 |= (1 << DOT11AX_PHY_CAP_NOMINAL_PKT_PAD_SHIFT);
 	}
 #endif
-
+	phy_cap_4 |= DOT11AX_PHY_CAP_TX_1024QAM_LT_242_TONE_RU;
+	phy_cap_4 |= DOT11AX_PHY_CAP_RX_1024QAM_LT_242_TONE_RU;
 #ifdef HE_TXBF_SUPPORT
 	if (IS_PHY_CAPS(phy_caps, fPHY_CAP_TXBF)) {
 		struct he_bf_info he_bf_struct;
@@ -260,8 +256,12 @@ static UINT8 *build_he_phy_cap(struct wifi_dev *wdev, UINT8 *f_buf)
 		if (he_bf_struct.bf_cap & HE_SU_BFEE)
 			phy_cap_2 |= DOT11AX_PHY_CAP_SU_BFEE;
 
-		if (he_bf_struct.bf_cap & HE_MU_BFER)
-			phy_cap_2 |= DOT11AX_PHY_CAP_MU_BFER;
+		if (he_bf_struct.bf_cap & HE_MU_BFER) {
+			if (wlan_config_get_mu_dl_mimo(wdev)) {
+				if (wdev->wdev_type == WDEV_TYPE_AP)
+					phy_cap_2 |= DOT11AX_PHY_CAP_MU_BFER;
+			}
+		}
 
 		if (he_bf_struct.bf_cap & HE_BFEE_NG_16_SU_FEEDBACK)
 			phy_cap_2 |= DOT11AX_PHY_CAP_NG16_SU_FEEDBACK;
@@ -432,25 +432,30 @@ VOID init_default_ppe(struct he_pe_info *pe_info, UINT8 max_nss, UINT8 max_ru_nu
 static UINT8 build_ppet_info_field(UINT8 *pos, UINT8 nss_num, UINT8 ru_num, UINT8 ru_alloc)
 {
 	UINT8 *ie_buf = pos;
-	UINT8 i, ie_len = 0;
-	UINT8 ppet_mask = 0xff, ppet_len = 0, ppet_bits = 0, ppet_pad = 0;
-	UINT8 ppet_default[] = {
-		0x1c, 0xc7, 0x71, 0x1c, 0xc7, 0x71, 0x1c, 0xc7, 0x71
-	};
+	UINT8 i, ie_len = 0, array_idx = 0;
+	UINT8 ppet_mask = 0xff, ppet_len = 0, ppet_bits = 0, ppet_pad_bit_bum = 0;
+	/* Four consecutive sets of PPET8 for 011 and PPET16 for 100 in network order */
+	UINT8 ppet_default[] = {0x1c, 0xc7, 0x71};
+	BOOLEAN need_padd = FALSE;
 
 	ppet_bits = (nss_num * (DOT11AX_PPE_PPET8_PPET16_BITS_NUM * ru_num));
-	ppet_len = (ppet_bits - 1) / 8;
-	if ((ppet_bits - 1) % 8)
+	ppet_len = (ppet_bits >> 3);
+	if ((ppet_bits & 0x07) != 0) {
 		ppet_len++;
+		need_padd = TRUE;
+		ppet_pad_bit_bum = 8 - (ppet_bits & 0x07);
+	}
 	ie_len = 1 + ppet_len;
 	*ie_buf = (UINT8)((nss_num - 1) | DOT11AX_PPE_RU_IDX_MSK(ru_alloc));
 	ie_buf++;
-	for (i = 0; i < ppet_len; i++) {
-		*ie_buf = ppet_default[i];
-		if ((i == ppet_len - 1) && ((ppet_bits - 1) % 8)) {
-			ppet_pad = (8 - (ppet_bits - 1) % 8);
-			*ie_buf = ppet_default[i] & (ppet_mask >> ppet_pad);
-		}
+	for (i = 0, array_idx = 0; i < ppet_len; i++, array_idx++) {
+		/* go back to head and reuse element, avoid using division for performance purpose */
+		if (array_idx == 3)
+			array_idx = 0;
+		*ie_buf = ppet_default[array_idx];
+		if ((i == (ppet_len - 1)) && (need_padd == TRUE))
+			*ie_buf = ppet_default[array_idx] & (ppet_mask >> ppet_pad_bit_bum);
+
 		ie_buf++;
 	}
 
@@ -820,6 +825,147 @@ static UINT8 *build_he_twt_ie(struct wifi_dev *wdev, UINT16 wcid, UINT8 *f_buf, 
 	return pos;
 }
 
+#ifdef CONFIG_6G_SUPPORT
+static UINT8 *build_he_6g_rnr(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 queried_s_ssid)
+{
+	struct _EID_STRUCT *eid = (struct _EID_STRUCT *)f_buf;
+	UINT8 *pos = f_buf;
+	UINT8 ie_len = 0;
+	struct neighbor_ap_info nap_info = {0};
+	UINT8 tbtt_info_len = 0;
+	struct _BSS_STRUCT *bss = (struct _BSS_STRUCT *)wdev->func_dev;
+	struct _repted_bss_info *reported_bss = NULL;
+	UINT16 reported_bss_num = wdev->ap6g_cfg.dsc_oob.repted_bss_cnt;
+	prepted_bss_info repted_bss_list = wdev->ap6g_cfg.dsc_oob.repted_bss_list;
+	UINT32 reported_bss_features = 0;
+	UINT32 reported_bss_s_ssid = 0;
+	UINT32 i = 0;
+	UINT8 bss_param = 0;
+	UINT8 psd_bw20 = 1;                 /* temp value of 20 MHz PSD */
+	BOOLEAN is_same_ssid = FALSE;
+	BOOLEAN en_short_ssid = TRUE;		/* force carry short-ssid field */
+	BOOLEAN en_queried_bss = FALSE;		/* reply queried bss only */
+	BOOLEAN en_multi_rnr = FALSE;		/* neighbour APs be part of multiple RNR IEs */
+
+	MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+			 "%s: wdev(%d), queried_s_ssid(%x), reported count(%d), bss_list %p\n",
+			 __func__, wdev->wdev_idx, queried_s_ssid, reported_bss_num, repted_bss_list);
+
+	/* check reported count */
+	if ((reported_bss_num == 0) || (repted_bss_list == NULL))
+		return pos;
+
+	/*
+	 * RNR IE rules:
+	 *   1.Multiple-RNR: RNR IE for each APs
+	 *   2.Single-RNR:   RNR IE for all APs
+	 *                   - possibly different TBTT Info Len, froce carry short_ssid (same_ssid=0)
+	 */
+
+	for (i = 0; i < reported_bss_num; i++) {
+		reported_bss = repted_bss_list + i;
+
+		/* check if reply queried bss only */
+		reported_bss_s_ssid = Crcbitbybitfast(reported_bss->ssid, reported_bss->ssid_len);
+		if (en_queried_bss && (queried_s_ssid != 0) && (reported_bss_s_ssid != queried_s_ssid))
+			continue;
+
+		/* Add IE for multi_rnr or 1st RNR */
+		if ((en_multi_rnr) || (i == 0)) {
+
+			/* EID per-reported bss */
+			eid->Eid = IE_RNR;
+			pos = &eid->Octet[0];
+
+			/* if same ssid, short-ssid is useless */
+			if ((en_multi_rnr) && (!en_short_ssid) && (reported_bss->ssid_len == bss->SsidLen) &&
+				(memcmp(reported_bss->ssid, bss->Ssid, reported_bss->ssid_len) == 0)) {
+				is_same_ssid = TRUE;
+				tbtt_info_len = sizeof(struct he_6g_rnr_tbtt_info_set_wo_ssid);
+			} else {
+				is_same_ssid = FALSE;
+				tbtt_info_len = sizeof(struct he_6g_rnr_tbtt_info_set_w_ssid);
+			}
+
+			/*Neighbot AP Information: TBTT Information Header/Operating Class/Channel Number*/
+			nap_info.tbtt_info_hdr |= DOT11_RNR_TBTT_INFO_HDR_FILTERED_NEIGHBOR_AP;
+
+			if (en_multi_rnr) {
+				DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT(nap_info.tbtt_info_hdr, 0);	/* minus one */
+			} else {
+				DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_COUNT(nap_info.tbtt_info_hdr, (reported_bss_num - 1));	/* minus one */
+			}
+
+			DOT11_RNR_TBTT_INFO_HDR_TBTTINFO_LEN(nap_info.tbtt_info_hdr, tbtt_info_len);
+			nap_info.op_class = reported_bss->op_class;
+			nap_info.ch_num = reported_bss->channel;
+			NdisMoveMemory(pos, (UINT8 *)&nap_info, sizeof(nap_info));
+			pos += sizeof(nap_info);
+		}
+
+		reported_bss_features = reported_bss->bss_feature_set;
+		bss_param =
+			(is_same_ssid ? TBTT_INFO_BSS_PARAM_SAME_SSID : 0) |
+			((reported_bss_features & AP_6G_MULTI_BSSID) ? TBTT_INFO_BSS_PARAM_MULTI_BSSID : 0) |
+			((reported_bss_features & AP_6G_TRANS_BSSID) ? TBTT_INFO_BSS_PARAM_TRANSMIT_BSSID : 0) |
+			((reported_bss_features & AP_6G_UNSOL_PROBE_RSP_EN) ?
+				TBTT_INFO_BSS_PARAM_UNSOLICITED_PROBE_RSP_ACTIVE : 0) |
+			TBTT_INFO_BSS_PARAM_COLOCATED_AP;
+
+		/*Neighbor AP Information: TBTT Information Set*/
+		if (is_same_ssid) {
+			struct he_6g_rnr_tbtt_info_set_wo_ssid he6g_rnr_tbtt_info_wo_ssid = {0};
+
+			NdisZeroMemory((UINT8 *)&he6g_rnr_tbtt_info_wo_ssid, sizeof(he6g_rnr_tbtt_info_wo_ssid));
+			he6g_rnr_tbtt_info_wo_ssid.nap_tbtt_offset = 0xFF;
+			COPY_MAC_ADDR(he6g_rnr_tbtt_info_wo_ssid.bssid, reported_bss->bssid);
+			he6g_rnr_tbtt_info_wo_ssid.bss_param = bss_param;
+			he6g_rnr_tbtt_info_wo_ssid.psd_bw20 = psd_bw20;
+			NdisMoveMemory(pos, (UINT8 *)&he6g_rnr_tbtt_info_wo_ssid, sizeof(he6g_rnr_tbtt_info_wo_ssid));
+
+			MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					 "\tbssid=%02x-%02x-%02x-%02x-%02x-%02x, bss_param=%02x\n",
+					 PRINT_MAC(he6g_rnr_tbtt_info_wo_ssid.bssid),
+					 he6g_rnr_tbtt_info_wo_ssid.bss_param);
+		} else {
+			struct he_6g_rnr_tbtt_info_set_w_ssid he6g_rnr_tbtt_info_w_ssid = {0};
+
+			NdisZeroMemory((UINT8 *)&he6g_rnr_tbtt_info_w_ssid, sizeof(he6g_rnr_tbtt_info_w_ssid));
+			he6g_rnr_tbtt_info_w_ssid.nap_tbtt_offset = 0xFF;
+			COPY_MAC_ADDR(he6g_rnr_tbtt_info_w_ssid.bssid, reported_bss->bssid);
+			he6g_rnr_tbtt_info_w_ssid.short_ssid = reported_bss_s_ssid;
+			he6g_rnr_tbtt_info_w_ssid.bss_param = bss_param;
+			he6g_rnr_tbtt_info_w_ssid.psd_bw20 = psd_bw20;
+			NdisMoveMemory(pos, (UINT8 *)&he6g_rnr_tbtt_info_w_ssid, sizeof(he6g_rnr_tbtt_info_w_ssid));
+
+			MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					 "\tbssid=%02x-%02x-%02x-%02x-%02x-%02x, short_ssid=%08x, bss_param=%02x\n",
+					 PRINT_MAC(he6g_rnr_tbtt_info_w_ssid.bssid),
+					 he6g_rnr_tbtt_info_w_ssid.short_ssid,
+					 he6g_rnr_tbtt_info_w_ssid.bss_param);
+		}
+		pos += tbtt_info_len;
+
+		/* update eid_length to multi_rnr or last RNR */
+		if ((en_multi_rnr) || (i == (reported_bss_num - 1))) {
+			ie_len = pos - (UINT8 *)eid - 2;
+			if (ie_len != 0) {
+				eid->Len = ie_len;
+			}
+
+			MTWF_DBG(NULL, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+					 "\tAdd IE Len = %d\n", eid->Len);
+
+			/* point to next EID */
+			eid = (struct _EID_STRUCT *)pos;
+		}
+	}
+
+	return pos;
+}
+
+#endif /* CONFIG_6G_SUPPORT */
+
 /*
  * Defined in IEEE 802.11AX
  * Appeared in Beacon, ProbResp frames
@@ -1017,6 +1163,19 @@ UINT32 add_reassoc_rsp_he_ies(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 f_len)
 	return offset;
 }
 
+#ifdef CONFIG_6G_SUPPORT
+UINT32 add_he_6g_rnr_ie(struct wifi_dev *wdev, UINT8 *f_buf, UINT32 f_len, UINT32 queried_s_ssid)
+{
+	UINT8 *local_fbuf = f_buf + f_len;
+	UINT32 offset = 0;
+
+	local_fbuf = build_he_6g_rnr(wdev, local_fbuf, queried_s_ssid);
+	offset = (UINT32)(local_fbuf - f_buf - f_len);
+
+	return offset;
+}
+#endif /* CONFIG_6G_SUPPORT */
+
 /*
  * Build up IEs for STA
  */
@@ -1099,6 +1258,14 @@ static VOID peer_he_mac_caps(struct _MAC_TABLE_ENTRY *peer, struct he_mac_capinf
 		peer->cap.he_mac_cap |= HE_OFDMA_RA;
 	peer->cap.ampdu.max_he_ampdu_len_exp =
 		GET_DOT11AX_MAX_AMPDU_LEN_EXP(mac_cap->mac_capinfo_1);
+	if (peer->cap.ampdu.max_he_ampdu_len_exp > 0) {
+		if ((peer->MaxRAmpduFactor >= AMPDU_LEN_128K) && (peer->MaxRAmpduFactor != AMPDU_LEN_1024K)) {
+			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+					("%s: Peer (wcid %d) AmpduFactor check failed, set AF to AMPDU_LEN_1024K\n",
+					 __func__, peer->wcid));
+			peer->MaxRAmpduFactor = AMPDU_LEN_1024K;
+		}
+	}
 	if (mac_cap->mac_capinfo_1 & DOT11AX_MAC_CAP_AMSDU_FRAG)
 		peer->cap.he_mac_cap |= HE_AMSDU_FRAG;
 	if (mac_cap->mac_capinfo_1 & DOT11AX_MAC_CAP_FLEX_TWT_SCHDL)
@@ -1783,6 +1950,8 @@ UINT32 parse_he_assoc_req_ies(UINT8 *ie_head, VOID *ie_list)
 
 VOID he_mode_adjust(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *peer)
 {
+	UCHAR PeerMaxBw;
+
 	if (!WMODE_CAP_AX(wdev->PhyMode))
 		return;
 
@@ -1792,6 +1961,29 @@ VOID he_mode_adjust(struct wifi_dev *wdev, struct _MAC_TABLE_ENTRY *peer)
 	if (WMODE_CAP_AX_5G(wdev->PhyMode))
 		peer->cap.modes |= HE_5G_SUPPORT;
 	peer->MaxHTPhyMode.field.MODE = MODE_HE;
+
+	PeerMaxBw = HE_BW_20;
+	if (WMODE_CAP_AX_2G(wdev->PhyMode)) {/* 2G */
+		if (peer->cap.ch_bw.he_ch_width & SUPP_40M_CW_IN_24G_BAND)
+			PeerMaxBw = HE_BW_2040;
+	} else {/* 5G */
+		if (peer->cap.ch_bw.he_ch_width & SUPP_40M_80M_CW_IN_5G_BAND) {
+			PeerMaxBw = HE_BW_80;
+			if (peer->cap.ch_bw.he_ch_width & SUPP_160M_CW_IN_5G_BAND)
+				PeerMaxBw = HE_BW_160;
+			if (peer->cap.ch_bw.he_ch_width & SUPP_160M_8080M_CW_IN_5G_BAND)
+				PeerMaxBw = HE_BW_8080;
+		}
+	}
+	peer->MaxHTPhyMode.field.BW = min(PeerMaxBw, wlan_operate_get_he_bw(wdev));
+
+	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+			("%s(), MODE = %d, BW = %d, SGI = %d, STBC = %d\n", __func__,
+			 peer->MaxHTPhyMode.field.MODE,
+			 peer->MaxHTPhyMode.field.BW,
+			 peer->MaxHTPhyMode.field.ShortGI,
+			 peer->MaxHTPhyMode.field.STBC));
+
 }
 
 /* debugging */
@@ -2058,6 +2250,7 @@ VOID get_own_he_ie(struct wifi_dev *wdev, struct he_ies *he_ie)
 /* current usage: WDS only */
 VOID update_peer_he_params(struct _MAC_TABLE_ENTRY *peer, struct he_ies *he_ie)
 {
+	CLIENT_STATUS_SET_FLAG(peer, fCLIENT_STATUS_HE_CAPABLE);
 	/* mac caps */
 	peer_he_mac_caps(peer, &he_ie->he_caps.mac_cap);
 	/* phy caps */

@@ -111,6 +111,10 @@ static NDIS_STATUS load_code(struct _RTMP_ADAPTER *pAd, UINT32 method, struct im
 		if (src->img_ptr) {
 			src->applied_method = BIN_METHOD;
 			ret =  NDIS_STATUS_SUCCESS;
+		} else {
+			MTWF_DBG(pAd, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Can't alloc memory for firmware bin\n");
+			ret = NDIS_STATUS_RESOURCES;
+			return ret;
 		}
 	}
 
@@ -215,6 +219,7 @@ VOID show_fw_info(struct _RTMP_ADAPTER *pAd)
 
 static VOID show_release_info_cpu(UCHAR *ptr)
 {
+#define MAX_RELEASE_INFO_LEN	2048
 	UINT8 tag_id = 0;
 	UINT8 padding_length = 0;
 	UINT16 tag_length = 0;
@@ -237,8 +242,14 @@ static VOID show_release_info_cpu(UCHAR *ptr)
 	else
 		total_length = tag_length;
 
+	if (total_length > MAX_RELEASE_INFO_LEN) {
+		MTWF_DBG(NULL, DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"\t invalid total length = %d\n", total_length);
+		return;
+	}
+
 	/* parsing individual tag */
-	while (total_length > 0) {
+	while (total_length > 0 && total_length < USHRT_MAX) {
 		img_get_16bit(&tag_length, &ptr, 1);
 		img_get_8bit(&padding_length, &ptr, 1);
 		img_get_8bit(&tag_id, &ptr, 1);
@@ -246,12 +257,22 @@ static VOID show_release_info_cpu(UCHAR *ptr)
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 			("\ttag %d, padding length = %d, tag length = %d\n", tag_id, padding_length, tag_length));
 
-		FWDL_PRINT_CHAR(ptr, tag_length, ("\tpayload: "));
+		if (total_length < (4 + tag_length + padding_length))
+			break;
+
+		if (tag_length > MAX_RELEASE_INFO_LEN)
+			break;
+
+		if (tag_length > 0 && tag_length < USHRT_MAX) {
+			FWDL_PRINT_CHAR(ptr, tag_length, ("\tpayload: "));
+		}
+
 		ptr += (tag_length + padding_length);
 		total_length -= (4 + tag_length + padding_length);
 	}
 
 	return;
+#undef MAX_RELEASE_INFO_LEN
 }
 
 static NDIS_STATUS parse_patch_v1(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu, struct patch_dl_target *target)
@@ -263,7 +284,7 @@ static NDIS_STATUS parse_patch_v1(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu
 	UINT8 *img_ptr;
 	UINT32 num_of_region, i;
 
-	if (cpu < 0 || cpu >= MAX_CPU) {
+	if (cpu >= MAX_CPU) {
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: target cpu incorrect!!!\n", __func__));
 		ret = NDIS_STATUS_INVALID_DATA;
 		goto out;
@@ -327,7 +348,7 @@ static NDIS_STATUS parse_patch_v2(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu
 	struct patch_glo_desc *glo_desc;
 	struct patch_sec_map *sec_map;
 
-	if (cpu < 0 || cpu >= MAX_CPU) {
+	if (cpu >= MAX_CPU) {
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: target cpu incorrect!!!\n", __func__));
 		ret = NDIS_STATUS_INVALID_DATA;
 		goto out;
@@ -362,9 +383,12 @@ static NDIS_STATUS parse_patch_v2(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu
 	MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 				("\tSection num: 0x%x, subsys: 0x%x\n", num_of_region, be2cpu32(glo_desc->subsys)));
 
-	ret = alloc_patch_target(pAd, target, num_of_region);
-	if (ret)
-		goto out;
+	if (num_of_region > 0 && num_of_region < UINT_MAX) {
+		ret = alloc_patch_target(pAd, target, num_of_region);
+		if (ret)
+			goto out;
+	}
+
 
 	/* section map */
 	for (i = 0; i < num_of_region; i++) {
@@ -501,7 +525,7 @@ static NDIS_STATUS parse_fw_v1(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu, s
 	UINT8 *img_ptr;
 	UINT32 num_of_region, i;
 
-	if (cpu < 0 || cpu >= MAX_CPU) {
+	if (cpu >= MAX_CPU) {
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: target cpu incorrect!!!\n", __func__));
 		ret = NDIS_STATUS_INVALID_DATA;
 		goto out;
@@ -566,7 +590,7 @@ static NDIS_STATUS parse_fw_v2(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu, s
 	UINT8 *img_ptr;
 	UINT32 num_of_region, i, offset;
 
-	if (cpu < 0 || cpu >= MAX_CPU) {
+	if (cpu >= MAX_CPU) {
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: target cpu incorrect!!!\n", __func__));
 		ret = NDIS_STATUS_INVALID_DATA;
 		goto out;
@@ -656,7 +680,7 @@ static NDIS_STATUS parse_fw_v3(struct _RTMP_ADAPTER *pAd, enum target_cpu cpu, s
 	struct fw_info *fw_info;
 	UINT32 num_of_region, i, offset;
 
-	if (cpu < 0 || cpu >= MAX_CPU) {
+	if (cpu >= MAX_CPU) {
 		MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: target cpu incorrect!!!\n", __func__));
 		ret = NDIS_STATUS_INVALID_DATA;
 		goto out;
@@ -851,11 +875,13 @@ static NDIS_STATUS load_fw_v2_compressimg(struct _RTMP_ADAPTER *pAd, enum target
 			block_idx = 0;
 			compress_region_num += 1;
 			MTWF_LOG(DBG_CAT_FW, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("REGION[%d] COMPRESSED IMAGE DOWNLOAD\n", i));
-			while (remain_chunk_size > 0) {
+			while (remain_chunk_size > 0 && remain_chunk_size <= region->img_size) {
 				UINT32 payload_size_per_chunk = 0;
 
 				fwdl_ctrl->stage = FWDL_STAGE_CMD_EVENT;
 				img_get_32bit(&payload_size_per_chunk, &img_ptr_pos, 1);
+				if (remain_chunk_size < 4)
+					break;
 				remain_chunk_size -= 4;
 				/* 1. config PDA */
 				block_dest_addr = region->img_dest_addr + block_idx * region->decomp_block_size;
@@ -872,6 +898,8 @@ static NDIS_STATUS load_fw_v2_compressimg(struct _RTMP_ADAPTER *pAd, enum target
 				ret = MtCmdFwScatters(pAd, img_ptr_pos, payload_size_per_chunk);
 				if (ret)
 					goto out;
+				if (remain_chunk_size < payload_size_per_chunk)
+					break;
 				remain_chunk_size -= payload_size_per_chunk;
 				img_ptr_pos += payload_size_per_chunk;
 				block_idx++;

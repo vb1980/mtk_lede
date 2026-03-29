@@ -125,7 +125,7 @@
 #define VHT_LDPC                0x02
 
 #define G_BAND_256QAM_AMPDU_FACTOR  7
-
+#define GET_WTBL_PER_STA_TX_COUNT	0x00000004
 #define LIMIT_MAX_PHY_RATE_THRESHOLD    50
 #define MAX_PHY_RATE_3SS                1300
 #define MAX_PHY_RATE_2SS                866
@@ -665,6 +665,9 @@ typedef enum _HERA_CMD_TYPE_T {
 	HERA_VHT_1024QAM_CMD = 6,
 	HERA_CFG_PTEC_PER_PPDU_CMD = 7,
 	HERA_CFG_FLAG_CMD = 8,
+	HERA_CFG_MU_INIT_RATE_INTV_CMD = 9,
+	HERA_CFG_MU_DIS_SWITCH_SU_CMD = 10,
+	HERA_SINGLE_NSS_TX_EN_CMD = 11,
 	HERA_MAX_COMMAND,
 } HERA_CMD_TYPE_T;
 
@@ -729,6 +732,22 @@ typedef struct _CMD_CFG_PTEC_PER_PPDU_T {
 	UINT_8  u1BandIdx;
 	UINT_8  au1Reserved[2];
 } CMD_CFG_PTEC_PER_PPDU_T, *P_CMD_CFG_PTEC_PER_PPDU_T;
+
+typedef struct _CMD_CFG_MU_INIT_RATE_INTV_T {
+	UINT_8 u1IntvInUnit50Ms;
+	UINT_8 au1Reserved[3];
+} CMD_CFG_MU_INIT_RATE_INTV_T, *P_CMD_CFG_MU_INIT_RATE_INTV_T;
+
+typedef struct _CMD_CFG_MU_DIS_SWITCH_SU_T {
+	BOOLEAN fgDisSwitchSU;
+	UINT_8  au1Reserved[3];
+} CMD_CFG_MU_DIS_SWITCH_SU_T, *P_CMD_CFG_MU_DIS_SWITCH_SU_T;
+
+struct _CMD_CFG_SINGLE_NSS_TX_EN_T {
+	BOOLEAN fgSingleNssTxEn;
+	UINT_8  u1BandIdx;
+	UINT_8  au1Reserved[2];
+};
 
 typedef struct _EXT_EVENT_MAX_AMSDU_LENGTH_UPDATE_T {
 	UINT_8 ucWlanIdx;	/* #256STA */

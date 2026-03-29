@@ -727,7 +727,7 @@ UINT32 BA_ResourceAllocate(
 	UINT8 Len = 7;
 	UINT8 ba_decline = wlan_config_get_ba_decline(pMacEntry->wdev);
 	UINT16 Status = 1;
-	UINT16 ba_rx_wsize = BA_WIN_SZ_64;
+	UINT16 ba_rx_wsize;
 	BA_PARM BaParm; /*0 - 2 */
 	USHORT TimeOutValue;
 	FRAME_ADDBA_REQ AddreqFrame;

@@ -169,7 +169,7 @@ static INT build_fils_discovery_info_field(
 	MAKE_IE_TO_BUF(buf, &TimeStamp, 8, len);
 
 	/* Beacon Interval */
-	BcnInterval = pAd->CommonCfg.BeaconPeriod;
+	BcnInterval = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 	MAKE_IE_TO_BUF(buf, &BcnInterval, 2, len);
 
 	/* SSID / Short SSID */
@@ -324,7 +324,8 @@ VOID ap_eapol_pairwise_3_send_at_pending_action(
 	MAKE_802_3_HEADER(Header802_3, pHandshake4Way->SAddr, pHandshake4Way->AAddr, EAPOL);
 
 	RTMPToWirelessSta(pAd, pEntry, Header802_3, LENGTH_802_3,
-					  mlmeEvent->ie, mlmeEvent->len,
+					  mlmeEvent->ie,
+					  (mlmeEvent->len > MAX_OPT_IE) ? MAX_OPT_IE : (mlmeEvent->len),
 					  (tr_entry->PortSecured == WPA_802_1X_PORT_SECURED) ? FALSE : TRUE);
 
 	RTMPCancelTimer(&pHandshake4Way->MsgRetryTimer, &Cancelled);
@@ -338,6 +339,7 @@ VOID ap_eapol_pairwise_2_process_at_pending_action(
 {
 	struct fils_info *filsInfo = &pEntry->filsInfo;
 	struct wifi_dev *wdev = NULL;
+	UINT32 mlmeEventLen;
 
 	if (filsInfo->is_pending_decrypt == FALSE)
 		return;
@@ -350,6 +352,12 @@ VOID ap_eapol_pairwise_2_process_at_pending_action(
 
 	wdev = pEntry->wdev;
 	filsInfo->status = mlmeEvent->status;
+
+	mlmeEventLen = mlmeEvent->len;
+	if (filsInfo->pending_ie_len < mlmeEventLen) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN, "ERROR in %s: MLME event length invalid:%d.\n", __func__, mlmeEventLen);
+		return;
+	}
 
 	if (filsInfo->pending_decrypt) {
 		PMLME_QUEUE_ELEM pElem;
@@ -386,8 +394,8 @@ VOID ap_eapol_pairwise_2_process_at_pending_action(
 	}
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-		 ("STA - %02x:%02x:%02x:%02x:%02x:%02x FILS decrypt back with %d\n",
-		  PRINT_MAC(pEntry->Addr), filsInfo->status));
+		 ("STA - "MACSTR" FILS decrypt back with %d\n",
+		  MAC2STR(pEntry->Addr), filsInfo->status));
 }
 
 VOID ap_assoc_extra_ie_at_pending_action(
@@ -423,6 +431,7 @@ VOID ap_assoc_reply_at_pending_action(
 	struct fils_info *filsInfo = &pEntry->filsInfo;
 	struct _SECURITY_CONFIG *pSecConfig = &pEntry->SecConfig;
 	struct wifi_dev *wdev = NULL;
+	UINT32 mlmeEventLen;
 
 	if (filsInfo->is_pending_assoc == FALSE)
 		return;
@@ -435,6 +444,13 @@ VOID ap_assoc_reply_at_pending_action(
 
 	wdev = pEntry->wdev;
 	filsInfo->status = mlmeEvent->status;
+
+	mlmeEventLen = mlmeEvent->len;
+	if (mlmeEventLen > MAX_MGMT_PKT_LEN) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_WARN,
+			"ERROR in %s: length invalid:%d.\n", __func__, mlmeEventLen);
+		return;
+	}
 
 	MiniportMMRequest(pAd, 0, mlmeEvent->ie, mlmeEvent->len);
 	filsInfo->is_pending_assoc = FALSE;
@@ -517,8 +533,8 @@ VOID ap_assoc_reply_at_pending_action(
 	}
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-		 ("%s: STA - %02x:%02x:%02x:%02x:%02x:%02x FILS assoc back with %d len(%d)\n",
-		  __func__, PRINT_MAC(pEntry->Addr), filsInfo->status, mlmeEvent->len));
+		 ("%s: STA - "MACSTR" FILS assoc back with %d len(%d)\n",
+		  __func__, MAC2STR(pEntry->Addr), filsInfo->status, mlmeEvent->len));
 
 }
 
@@ -547,7 +563,8 @@ VOID ap_auth_reply_at_pending_action(
 
 	hex_dump("FILS: ANonce", mlmeEvent->fils_anonce, FILS_NONCE_LEN);
 	hex_dump("FILS: SNonce", mlmeEvent->fils_snonce, FILS_NONCE_LEN);
-	hex_dump("FILS: KEK", mlmeEvent->fils_kek, mlmeEvent->fils_kek_len);
+	hex_dump("FILS: KEK", mlmeEvent->fils_kek,
+		(mlmeEvent->fils_kek_len > WPA_KEK_MAX_LEN) ? WPA_KEK_MAX_LEN : mlmeEvent->fils_kek_len);
 
 	NStatus = MlmeAllocateMemory(pAd, &pOutBuffer);
 
@@ -621,12 +638,18 @@ VOID RTMPIoctlStaMlmeEvent(
 		return;
 	}
 
+	if (pMlmeEvent->len >= MAX_MGMT_PKT_LEN) {
+		MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_WARN, "%s: MLME event too long () fail\n", __func__);
+		os_free_mem(pMlmeEvent);
+		return;
+	}
+
 	pEntry = MacTableLookup(pAd, pMlmeEvent->addr);
 
 	if (pEntry != NULL) {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-				 ("%s:(%02x:%02x:%02x:%02x:%02x:%02x, action: %d, algo: %d)\n",
-				  __func__, PRINT_MAC(pMlmeEvent->addr),
+				 ("%s:("MACSTR", action: %d, algo: %d)\n",
+				  __func__, MAC2STR(pMlmeEvent->addr),
 				  pMlmeEvent->mgmt_subtype, pMlmeEvent->auth_algo));
 
 		if (pMlmeEvent->mgmt_subtype == SUBTYPE_AUTH) {
@@ -646,8 +669,8 @@ VOID RTMPIoctlStaMlmeEvent(
 		}
 	} else {
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-				 ("%s:(%02x:%02x:%02x:%02x:%02x:%02x, Not Found)\n",
-				  __func__, PRINT_MAC(pMlmeEvent->addr)));
+				 ("%s:("MACSTR", Not Found)\n",
+				  __func__, MAC2STR(pMlmeEvent->addr)));
 	}
 
 	if (pMlmeEvent) {
@@ -783,8 +806,8 @@ VOID RTMPIoctlKeyEvent(
 	NdisMoveMemory(keyInfo, &KeyEvent->keyInfo, sizeof(NDIS_FILS_802_11_KEY));
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			 ("%s:(%02x:%02x:%02x:%02x:%02x:%02x action: %d)\n",
-			  __func__, PRINT_MAC(keyInfo->addr), KeyEvent->action));
+			 ("%s:("MACSTR" action: %d)\n",
+			  __func__, MAC2STR(keyInfo->addr), KeyEvent->action));
 
 	pEntry = MacTableLookup(pAd, keyInfo->addr);
 
@@ -866,8 +889,8 @@ VOID RTMPIoctlPmkCacheEvent(
 	}
 
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-			 ("%s:(%02x:%02x:%02x:%02x:%02x:%02x action: %d)\n",
-			  __func__, PRINT_MAC(PmkCacheEvent.addr), PmkCacheEvent.res));
+			 ("%s:("MACSTR" action: %d)\n",
+			  __func__, MAC2STR(PmkCacheEvent.addr), PmkCacheEvent.res));
 
 	pEntry = MacTableLookup(pAd, PmkCacheEvent.addr);
 
@@ -884,8 +907,8 @@ VOID RTMPIoctlPmkCacheEvent(
 
 		if (CacheIdx == INVALID_PMKID_IDX) {
 			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_FT, DBG_LVL_ERROR,
-				("%s : The PMK Cache doesn't exist for %02x:%02x:%02x:%02x:%02x:%02x\n",
-					 __func__, PRINT_MAC(pEntry->Addr)));
+				("%s : The PMK Cache doesn't exist for "MACSTR"\n",
+					 __func__, MAC2STR(pEntry->Addr)));
 			PmkCacheEvent.res = PMK_CACHE_STATUS_FAIL;
 			goto reply;
 		}

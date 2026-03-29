@@ -522,11 +522,14 @@ VOID RoutingTabMaintain(
 	PROUTING_ENTRY pRoutingEntry = NULL, pRoutingEntryNext = NULL;
 	BOOLEAN bNeedSend = FALSE, bBridgeFound = FALSE, bNeedDelete = FALSE, bCreateARP = FALSE;
 	UCHAR BridgeMAC[MAC_ADDR_LEN] = {0};
+	int entry_count = 0;
 
 	if (!VALID_MBSS(pAd, ifIndex))
 		return;
 
-	if (RoutingTabGetEntryCount(pAd, ifIndex) == 0)
+	entry_count = RoutingTabGetEntryCount(pAd, ifIndex);
+
+	if (entry_count == 0)
 		return;
 
 #ifdef MAC_REPEATER_SUPPORT
@@ -540,7 +543,7 @@ VOID RoutingTabMaintain(
 		struct net_device *pBridgeNetDev = NULL;
 		struct net *net = &init_net;
 		for_each_netdev(net, pBridgeNetDev) {
-			if (pBridgeNetDev->priv_flags == IFF_EBRIDGE) {
+			if (pBridgeNetDev->priv_flags & IFF_EBRIDGE) {
 				const struct in_device *pBridgeInDev = pBridgeNetDev->ip_ptr;
 				if (pBridgeInDev) {
 					const struct in_ifaddr *ifa = pBridgeInDev->ifa_list;
@@ -559,6 +562,10 @@ VOID RoutingTabMaintain(
 	if (!bBridgeFound)
 		return;
 
+	/* routing table is full, forcefully refresh all entry*/
+	if (entry_count == ROUTING_POOL_SIZE)
+		pAd->a4_need_refresh = TRUE;
+
 	pMbss = &pAd->ApCfg.MBSSID[ifIndex];
 	NdisGetSystemUpTime(&Now);
 	RTMP_SEM_LOCK(&pMbss->RoutingTabLock);
@@ -572,6 +579,9 @@ VOID RoutingTabMaintain(
 #ifdef A4_CONN
 			if (pAd->a4_need_refresh)
 				pRoutingEntry->NeedRefresh = TRUE;
+			else if ((pRoutingEntry->IPAddr == 0) &&
+				RTMP_TIME_AFTER(Now, (pRoutingEntry->KeepAliveTime + ROUTING_ENTRY_AGEOUT*5)))
+				pRoutingEntry->NeedRefresh = TRUE;
 #endif
 			/* Stage 1 Check*/
 			if ((pRoutingEntry->Valid &&
@@ -581,7 +591,7 @@ VOID RoutingTabMaintain(
 				|| pRoutingEntry->NeedRefresh
 #endif
 				) {
-				if (bBridgeFound) {
+				if ((pRoutingEntry->IPAddr != 0) && bBridgeFound) {
 					/* Stage 2 Check*/
 					if (pRoutingEntry->Retry == 0 || RTMP_TIME_AFTER(Now, pRoutingEntry->RetryTime)
 #ifdef A4_CONN

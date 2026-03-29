@@ -23,6 +23,19 @@
 #define BSS_COLOR_VALUE_MAX	63
 #define BSS_COLOR_ENTRY_MAX	32
 
+#ifdef CONFIG_AP_SUPPORT
+#define BSS_COLOR_DISABLE 0
+#define BSS_COLOR_VALUE_AUTO_INIT 255
+#define BSS_COLOR_OPMODE_SINGLE 0
+#define BSS_COLOR_OPMODE_BAND 1
+
+
+
+#define IS_BSS_COLOR_MANUAL_ACTIVE(pAd, band_idx) \
+  (pAd->ApCfg.bss_color_cfg.bss_color_enable[band_idx] >= BSS_COLOR_VALUE_MIN \
+				&& pAd->ApCfg.bss_color_cfg.bss_color_enable[band_idx] <= BSS_COLOR_VALUE_MAX)
+#endif
+
 /* the duration for which an HE AP shall wait before disabling BSS color, 50 ~ 255 */
 #define BSS_COLOR_COLLISION_AP_PERIOD 50
 /* the interval between successive BSS color collision reports, 5 ~ 10 */
@@ -91,6 +104,8 @@ void trigger_timer_callback(
 		IN PVOID FunctionContext,
 		IN PVOID SystemSpecific2,
 		IN PVOID SystemSpecific3);
+NDIS_STATUS bss_color_profile_enable(IN struct _RTMP_ADAPTER *pAd, IN RTMP_STRING * buffer);
+
 #endif
 
 #ifdef CONFIG_STA_SUPPORT

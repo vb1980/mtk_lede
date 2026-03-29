@@ -257,8 +257,8 @@ VOID CFG80211_P2pClientSendNullFrame(VOID *pAdCB, INT PwrMgmt)
 	pEntry = MacTableLookup(pAd, pAd->StaCfg[MAIN_MBSSID].MlmeAux.Bssid);
 
 	if (pEntry == NULL) {
-		MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CFG80211_ROC: Can't Find In Table: %02x:%02x:%02x:%02x:%02x:%02x\n",
-				 PRINT_MAC(pAd->StaCfg[MAIN_MBSSID].MlmeAux.Bssid)));
+		MTWF_LOG(DBG_CAT_P2P, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("CFG80211_ROC: Can't Find In Table: "MACSTR"\n",
+				 MAC2STR(pAd->StaCfg[MAIN_MBSSID].MlmeAux.Bssid)));
 	} else {
 		ApCliRTMPSendNullFrame(pAd,
 							   RATE_6,

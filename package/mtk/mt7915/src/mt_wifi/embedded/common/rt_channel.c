@@ -45,6 +45,8 @@ CH_FREQ_MAP CH_HZ_ID_MAP[] = {
 	{169, 5845},
 	{171, 5855},
 	{173, 5865},
+	{175, 5875},
+	{177, 5885},
 
 	/* HiperLAN2 */
 	{100, 5500},
@@ -321,6 +323,21 @@ CH_DESC Country_Region24_ChDesc_5GHZ[] = {
 	{}
 };
 
+CH_DESC Country_Region25_ChDesc_5GHZ[] = {
+	{36, 8, CHANNEL_DEFAULT_PROP},
+	{100, 5, CHANNEL_DEFAULT_PROP},
+	{132, 3, CHANNEL_DEFAULT_PROP},
+	{149, 8, CHANNEL_DEFAULT_PROP},
+	{}
+};
+
+CH_DESC Country_Region26_ChDesc_5GHZ[] = {
+	{36, 8, CHANNEL_DEFAULT_PROP},
+	{100, 12, CHANNEL_DEFAULT_PROP},
+	{149, 8, CHANNEL_DEFAULT_PROP},
+	{}
+};
+
 
 COUNTRY_REGION_CH_DESC Country_Region_ChDesc_5GHZ[] = {
 	{REGION_0_A_BAND, Country_Region0_ChDesc_5GHZ},
@@ -348,6 +365,8 @@ COUNTRY_REGION_CH_DESC Country_Region_ChDesc_5GHZ[] = {
 	{REGION_22_A_BAND, Country_Region22_ChDesc_5GHZ},
 	{REGION_23_A_BAND, Country_Region23_ChDesc_5GHZ},
 	{REGION_24_A_BAND, Country_Region24_ChDesc_5GHZ},
+	{REGION_25_A_BAND, Country_Region25_ChDesc_5GHZ},
+	{REGION_26_A_BAND, Country_Region26_ChDesc_5GHZ},
 	{}
 };
 
@@ -495,9 +514,9 @@ CH_DESP Country_DZ_ChDesp[] = {
 /*Argentina*/
 CH_DESP Country_AR_ChDesp[] = {
 	{ 1,   13, 30, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
-	{ 36,   4, 16, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 16, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
-	{ 100,  11, 23, BOTH, TRUE},	/*5490~5710MHz, Ch 100~140, Max BW: 40 */
+	{ 36,   4, 17, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
+	{ 52,   4, 24, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 100,  11, 24, BOTH, TRUE},	/*5490~5710MHz, Ch 100~140, Max BW: 40 */
 	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
 	{ 0},			/* end*/
 };
@@ -522,7 +541,7 @@ CH_DESP Country_AU_ChDesp[] = {
 	{ 1,   13, 36, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
 	{ 36,   4, 23, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
 	{ 52,   4, 23, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
-	{ 100, 12, 23, BOTH, TRUE},	/*5490~5730MHz, Ch 100~144, Max BW: 40 */
+	{ 100, 12, 30, BOTH, TRUE},	/*5490~5730MHz, Ch 100~144, Max BW: 40 */
 	{ 149,  5, 36, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
 	{ 0},			/* end*/
 };
@@ -639,9 +658,9 @@ CH_DESP Country_BW_ChDesp[] = {
 /*Brazil*/
 CH_DESP Country_BR_ChDesp[] = {
 	{ 1,   13, 30, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
-	{ 36,   4, 23, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 23, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
-	{ 100, 11, 23, BOTH, TRUE},	/*5490~5710MHz, Ch 100~140, Max BW: 40 */
+	{ 36,   4, 30, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
+	{ 52,   4, 24, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 100, 11, 24, BOTH, TRUE},	/*5490~5710MHz, Ch 100~140, Max BW: 40 */
 	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
 	{ 0},			/* end*/
 };
@@ -699,7 +718,7 @@ CH_DESP Country_CM_ChDesp[] = {
 CH_DESP Country_CA_ChDesp[] = {
 	{ 1,   11, 30, BOTH, FALSE},	/*2402~2472MHz, Ch 1~11,   Max BW: 40 */
 	{ 36,   4, 23, IDOR, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 23, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 52,   4, 24, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
 	{ 100, 12, 24, BOTH, TRUE},	/*5490~5730MHz, Ch 100~144, Max BW: 40 */
 	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
 	{ 0},			/* end*/
@@ -722,10 +741,11 @@ CH_DESP Country_TD_ChDesp[] = {
 };
 /*Chile*/
 CH_DESP Country_CL_ChDesp[] = {
-	{ 1,   13, 21, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
-	{ 36,   4, 21, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 21, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
-	{ 149,  4, 21, BOTH, FALSE},	/*5735~5815MHz, Ch 149~161, Max BW: 40 */
+	{ 1,   13, 30, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
+	{ 36,   4, 30, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
+	{ 52,   4, 30, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 100, 11, 30, BOTH, TRUE}, /*5470~5725MHz, Ch 100~140, Max BW: 40 */
+	{ 149,  4, 30, BOTH, FALSE},	/*5735~5815MHz, Ch 149~161, Max BW: 40 */
 	{ 0},			/* end*/
 };
 /*China*/
@@ -1302,11 +1322,11 @@ CH_DESP Country_MU_ChDesp[] = {
 };
 /*Mexico*/
 CH_DESP Country_MX_ChDesp[] = {
-	{ 1,   11, 33, BOTH, FALSE},	/*2402~2472MHz, Ch 1~11,   Max BW: 40 */
-	{ 36,   4, 23, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 23, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
-	{ 100,  5, 23, BOTH, TRUE},	/*5490~5590MHz, Ch 100~116, Max BW: 40 */
-	{ 149,  5, 36, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
+	{ 1,   11, 30, BOTH, FALSE},	/*2402~2472MHz, Ch 1~11,   Max BW: 40 */
+	{ 36,   4, 17, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
+	{ 52,   4, 24, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 100,  5, 24, BOTH, TRUE},	/*5490~5590MHz, Ch 100~116, Max BW: 40 */
+	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
 	{ 0},			/* end*/
 };
 /*Monaco*/
@@ -1532,6 +1552,7 @@ CH_DESP Country_RO_ChDesp[] = {
 CH_DESP Country_RU_ChDesp[] = {
 	{ 1,   13, 23, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
 	{ 36,   4, 20, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
+	{ 52,   4, 20, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
 	{ 132,  4, 20, BOTH, TRUE},	/*5650~5710MHz, Ch 132~144, Max BW: 40 */
 	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 20 */
 	{ 0},			/* end*/
@@ -1863,15 +1884,16 @@ CH_DESP Country_GB_ChDesp[] = {
 	{ 36,   4, 23, IDOR, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
 	{ 52,   4, 23, IDOR, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
 	{ 100, 11, 30, BOTH, TRUE},	/*5490~5710MHz, Ch 100~140, Max BW: 40 */
+	{ 149,  5, 23, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 80 */
 	{ 0},			/* end*/
 };
 /*United States*/
 CH_DESP Country_US_ChDesp[] = {
 	{ 1,   11, 30, BOTH, FALSE},	/*2402~2472MHz, Ch 1~11,   Max BW: 40 */
 	{ 36,   4, 30, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
-	{ 52,   4, 30, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
+	{ 52,   4, 24, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
 	{ 100, 12, 24, BOTH, TRUE},	/*5490~5730MHz, Ch 100~144, Max BW: 40 */
-	{ 149,  5, 30, BOTH, FALSE},	/*5735~5835MHz, Ch 149~165, Max BW: 40 */
+	{ 149,  8, 30, BOTH, FALSE},	/*5735~5885MHz, Ch 149~177, Max BW: 40 */
 	{ 0},			/* end*/
 };
 /*Uruguay*/
@@ -1917,7 +1939,7 @@ CH_DESP Country_VE_ChDesp[] = {
 };
 /*Viet Nam*/
 CH_DESP Country_VN_ChDesp[] = {
-	{ 1,   13, 20, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
+	{ 1,   13, 23, BOTH, FALSE},	/*2402~2482MHz, Ch 1~13,   Max BW: 40 */
 	{ 36,   4, 23, BOTH, FALSE},	/*5170~5250MHz, Ch 36~48, Max BW: 40 */
 	{ 52,   4, 23, BOTH, TRUE},	/*5250~5330MHz, Ch 52~64, Max BW: 40 */
 	{ 100, 12, 30, BOTH, TRUE},	/*5490~5730MHz, Ch 100~144, Max BW: 40 */
@@ -2246,21 +2268,13 @@ static UCHAR FillChList(
 
 		if ((pAd->CommonCfg.bIEEE80211H == 1) &&
 			(pAd->CommonCfg.RDDurRegion == FCC) &&
-#ifndef RT_CFG80211_SUPPORT
-			(pAd->Dot11_H.bDFSIndoor == 1))
-#else
 			(pAd->Dot11_H[BandIdx].bDFSIndoor == 1))
-#endif
 			 {
 			if (RESTRICTION_BAND_1(pAd, channel, bw))
 				continue;
 		} else if ((pAd->CommonCfg.bIEEE80211H == 1) &&
 				   (pAd->CommonCfg.RDDurRegion == FCC) &&
-#ifndef RT_CFG80211_SUPPORT
-			(pAd->Dot11_H.bDFSIndoor == 0))
-#else
-			(pAd->Dot11_H[BandIdx].bDFSIndoor == 0))
-#endif
+					(pAd->Dot11_H[BandIdx].bDFSIndoor == 0))
 			{
 				if ((channel >= 100) && (channel <= 140))
 					continue;
@@ -2298,7 +2312,7 @@ static UCHAR FillChList(
 #endif /* RT_CFG80211_SUPPORT */
 		j++;
 	}
-        hc_set_ChCtrlChListStat(pChCtrl, CH_LIST_STATE_DONE);             
+        hc_set_ChCtrlChListStat(pChCtrl, CH_LIST_STATE_DONE);
 	pChCtrl->ChListNum = j;
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("\x1b[1;33m [FillChList] Test - pChCtrl->ChListNum = %d \x1b[m \n", pChCtrl->ChListNum));
 
@@ -2406,7 +2420,7 @@ static inline VOID CreateChList(
 
 
 VOID BuildChannelListEx(
-	IN PRTMP_ADAPTER pAd, 
+	IN PRTMP_ADAPTER pAd,
         IN struct wifi_dev *wdev)
 {
 	PCH_REGION pChReg;
@@ -2602,6 +2616,8 @@ static const UCHAR wfa_ht_ch_ext[] = {
 	140, EXTCHA_ABOVE, 144, EXTCHA_BELOW,
 	149, EXTCHA_ABOVE, 153, EXTCHA_BELOW,
 	157, EXTCHA_ABOVE, 161, EXTCHA_BELOW,
+	165, EXTCHA_ABOVE, 169, EXTCHA_BELOW,
+	173, EXTCHA_ABOVE, 177, EXTCHA_BELOW,
 	0, 0
 };
 

@@ -215,6 +215,7 @@ typedef struct _BSS_INFO_ARGUMENT_T {
 	struct bcn_protection_cfg bcn_prot_cfg;
 #endif
 	UINT8 ucBandIdx;
+	BOOLEAN bBcnSntReq;
 	VOID *priv;
 	/* member "list" must be the last one */
 	DL_LIST list;
@@ -280,6 +281,7 @@ INT wifi_sys_update_starec_info(struct _RTMP_ADAPTER *ad, struct _STA_REC_CTRL_T
 INT register_wsys_notifier(struct _WIFI_SYS_INFO *wsys, struct notify_entry *ne);
 INT unregister_wsys_notifier(struct _WIFI_SYS_INFO *wsys, struct notify_entry *ne);
 struct _STA_REC_CTRL_T *get_starec_by_wcid(struct _RTMP_ADAPTER *ad, INT wcid);
+VOID del_starec(struct _RTMP_ADAPTER *ad, struct _STA_TR_ENTRY *tr_entry);
 
 #ifdef CONFIG_AP_SUPPORT
 #endif /*CONFIG_AP_SUPPORT*/
@@ -291,6 +293,9 @@ struct _STA_REC_CTRL_T *get_starec_by_wcid(struct _RTMP_ADAPTER *ad, INT wcid);
 VOID WifiSysRaInit(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_ENTRY *pEntry);
 VOID WifiSysUpdateRa(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_ENTRY *pEntry, struct _STAREC_AUTO_RATE_UPDATE_T *prParam);
 #endif /*RACTRL_FW_OFFLOAD_SUPPORT*/
+
+BOOLEAN wifi_sys_op_lock(struct wifi_dev *wdev);
+VOID wifi_sys_op_unlock(struct wifi_dev *wdev);
 
 VOID WifiSysUpdatePortSecur(struct _RTMP_ADAPTER *pAd, struct _MAC_TABLE_ENTRY *pEntry, ASIC_SEC_INFO *asic_sec_info);
 /*wifi system architecture layer api*/

@@ -33,7 +33,7 @@ extern s_int32 net_ad_tx(
 	struct wifi_dev *wdev,
 	struct _TX_BLK *tx_blk);
 
-static struct test_thread_cb g_test_thread[SERV_THREAD_NUM];
+static struct test_thread_cb g_test_thread[MAX_SERV_THREAD_NUM];
 struct test_ant_map test_ant_to_spe_idx_map[] = {
 	/* All */
 	{0x0, 0},
@@ -60,6 +60,27 @@ struct test_ant_map test_ant_to_spe_idx_map[] = {
 /*****************************************************************************
  *	Internal functions
  *****************************************************************************/
+s_int32 net_ad_concurrent_status(struct test_wlan_info *winfos,
+	u_int32 in_op_mode, u_int32 *is_concurrent)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	struct _RTMP_ADAPTER *ad = NULL;
+
+	/* Get adapter from jedi driver first */
+	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
+	if (ad == NULL)
+		return SERV_STATUS_OSAL_NET_INVALID_PAD;
+
+	*is_concurrent = 0;
+#ifdef DBDC_MODE
+	if ((in_op_mode & TESTMODE_GET_PARAM(ad, TESTMODE_BAND0, op_mode)) &&
+		(in_op_mode & TESTMODE_GET_PARAM(ad, TESTMODE_BAND1, op_mode)))
+		*is_concurrent = 1;
+#endif
+
+	return ret;
+}
+
 static s_int32 net_ad_mps_check_stat(
 	struct test_wlan_info *winfos,
 	struct test_configuration *configs)
@@ -285,7 +306,7 @@ static VOID net_ad_thread_set_service(
 VOID net_ad_thread_proceed_tx(
 	struct test_wlan_info *winfos, u_char band_idx)
 {
-	u_char thread_idx = SERV_THREAD_TEST;
+	u_char thread_idx = winfos->thread_idx;
 
 	RTMP_SEM_LOCK(&g_test_thread[thread_idx].lock);
 	net_ad_thread_set_service(winfos,
@@ -307,19 +328,23 @@ static s_int32 net_ad_thread_handler(
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	RTMP_ADAPTER *ad = NULL;
-	PQUEUE_HEADER mgmt_swq = NULL;
+	PQUEUE_HEADER mgmt_swq = NULL, mgmt_post_swq = NULL;
 	struct test_configuration *test_config;
 	struct test_tx_stack *stack = NULL;
 	struct ipg_param *ipg_param;
 	struct tx_time_param *tx_time_param = NULL;
 	struct tx_mpdu_info *mpdu_info = NULL;
 	struct wifi_dev *wdev;
+	struct _RTMP_CHIP_CAP *chip_cap = NULL;
 	u_int32 op_mode, txed_cnt = 0, tx_cnt = 0, pkt_tx_time, ipg;
 	s_int32 dequeue_size, multi_users = 0;
 	u_short q_idx;
 	u_int8 need_ampdu;
 	u_char hwq_idx;
-	u_int32 mgmt_swq_lmt = 0;
+	u_int32 mgmt_swq_lmt = 0, is_concurrent_tx = 0;
+	u_int32 band0_gen = 0, band1_gen = 0;
+	u_int32 ple_limit_pkt_quota = 0, mgmt_swq_num = 0;
+	u_int32 used;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
@@ -333,10 +358,13 @@ static s_int32 net_ad_thread_handler(
 	} else
 		mgmt_swq_lmt = MGMT_QUE_MAX_NUMS;
 
-	if (winfos->chip_cap.swq_per_band)
+	if (winfos->chip_cap.swq_per_band) {
 		mgmt_swq = &ad->mgmt_que[band_idx];
-	else
+		mgmt_post_swq = &ad->mgmt_post_que[band_idx];
+	} else {
 		mgmt_swq = &ad->mgmt_que[0];
+		mgmt_post_swq = &ad->mgmt_post_que[0];
+	}
 	test_config = &configs[band_idx];
 	stack = &test_config->stack;
 	op_mode = test_config->op_mode;
@@ -349,9 +377,13 @@ static s_int32 net_ad_thread_handler(
 	pkt_tx_time = tx_time_param->pkt_tx_time;
 	need_ampdu = mpdu_info->need_ampdu;
 	ipg = ipg_param->ipg;
-	wdev = (struct wifi_dev *)configs->stack.virtual_device[0];
+	wdev = (struct wifi_dev *)test_config->stack.virtual_device[0];
 	hwq_idx = hif_get_resource_idx(ad->hdev_ctrl, wdev, TX_MGMT, q_idx);
-	dequeue_size = g_test_thread[SERV_THREAD_TEST].deq_cnt;
+	dequeue_size = g_test_thread[winfos->thread_idx].deq_cnt;
+
+	chip_cap = hc_get_chip_cap(ad->hdev_ctrl);
+	/* limit pkt quota per band in the ple */
+	ple_limit_pkt_quota = chip_cap->hif_group_page_size/3;
 
 	do {
 		u_long free_num;
@@ -378,11 +410,16 @@ test_thread_dequeue:
 		if (!free_num)
 			break;
 
-round_tx:
-		if (((pkt_tx_time > 0) || (ipg > 0)) &&
-			(mgmt_swq->Number >= mgmt_swq_lmt))
-			break;
+		net_ad_concurrent_status(winfos, OP_MODE_TXFRAME,
+			&is_concurrent_tx);
 
+round_tx:
+		mgmt_swq_num = mgmt_swq->Number + mgmt_post_swq->Number;
+#if 0
+		if (((pkt_tx_time > 0) || (ipg > 0)) &&
+			(mgmt_swq_num >= mgmt_swq_lmt))
+			break;
+#endif
 		/* For service thread tx packet counter control */
 		if (tx_cnt <= txed_cnt)
 			break;
@@ -418,15 +455,67 @@ round_tx:
 				que = token_tx_get_queue_by_band(cb, 0);
 			free_token_cnt =
 				token_tx_get_free_cnt(que);
-			pkt_tx_token_id_max = que->pkt_tkid_max;
+			pkt_tx_token_id_max = que->pkt_tkid_cnt;
 			free_num = hif_get_tx_resource_free_num(ad->hdev_ctrl,
 								hwq_idx);
+			used =
+			atomic_read(&que->used_token_per_band[band_idx]);
 
-			if ((free_token_cnt
-				> (pkt_tx_token_id_max - TEST_ENQ_PKT_NUM))
-				&& (free_num > 0)
-				&& (mgmt_swq->Number < mgmt_swq_lmt))
-					goto round_tx;
+			/* DBDC mode always runs this part for dbdc tx duty stable */
+			if (is_concurrent_tx || IS_TEST_DBDC(winfos)) {
+#ifdef WHNAT_SUPPORT
+				if (chip_cap->qm == FAST_PATH_QM &&
+					IS_ASIC_CAP(ad, fASIC_CAP_WHNAT) && ad->CommonCfg.whnat_en &&
+						IS_MT7915(ad)) {
+
+					ple_limit_pkt_quota = pkt_tx_token_id_max/3;
+					mgmt_swq_num = mgmt_swq->Number + mgmt_post_swq->Number;
+
+					if (band_idx == TESTMODE_BAND0
+						&& (used < ple_limit_pkt_quota)
+						&& (mgmt_swq_num <=
+						mgmt_swq_lmt - 1)
+						&& ((mgmt_swq_num + used) <
+						(ple_limit_pkt_quota + 150)))
+						goto round_tx;
+					if (band_idx == TESTMODE_BAND1 &&
+						(used < ple_limit_pkt_quota * 2)
+						&& (mgmt_swq_num <=
+						mgmt_swq_lmt - 1)
+						&& ((mgmt_swq_num + used) <
+						(ple_limit_pkt_quota * 2 + 150
+						)))
+						goto round_tx;
+				} else
+#endif
+				{
+					if (band_idx == TESTMODE_BAND0) {
+						/* ple group page size 1/3 for band0 packet cnt */
+						if (((pkt_tx_token_id_max - free_token_cnt) < ple_limit_pkt_quota)
+							&& (free_num > 0)
+							&& (mgmt_swq->Number < mgmt_swq_lmt)) {
+								band0_gen++;
+								goto round_tx;
+						}
+					} else if (band_idx == TESTMODE_BAND1) {
+						/* ple group page size 2/3 for band1 packet cnt */
+						if (((pkt_tx_token_id_max - free_token_cnt) < (ple_limit_pkt_quota << 1))
+							&& (free_num > 0)
+							&& (mgmt_swq->Number < mgmt_swq_lmt)) {
+								band1_gen++;
+								goto round_tx;
+						}
+					}
+				}
+			} else {
+				if ((free_token_cnt
+					> TEST_ENQ_PKT_NUM)
+					&& (free_num > 0)
+					&& (mgmt_swq->Number < mgmt_swq_lmt)) {
+						(band_idx == 0) ? band0_gen++ : band1_gen++;
+						goto round_tx;
+				}
+			}
 		}
 
 		dequeue_size--;
@@ -486,7 +575,7 @@ static s_int32 net_ad_thread(u_long context)
 	struct test_wlan_info *winfos = NULL;
 	struct test_configuration *configs = NULL;
 	RTMP_ADAPTER *ad = NULL;
-	u_char thread_idx = SERV_THREAD_TEST;
+	u_char thread_idx = 0;
 	s_int32 status;
 	s_int32 band_idx = 0;
 	u_char service_stat = 0;
@@ -496,6 +585,7 @@ static s_int32 net_ad_thread(u_long context)
 
 	winfos = (struct test_wlan_info *)SERV_OS_TASK_GET_WINFOS(task);
 	configs = (struct test_configuration *)SERV_OS_TASK_GET_CONFIGS(task);
+	thread_idx = winfos->thread_idx;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
@@ -1124,53 +1214,66 @@ s_int32 net_ad_tx_v2(
 
 s_int32 net_ad_init_thread(
 	struct test_wlan_info *winfos,
-	struct test_configuration *configs,
-	enum service_thread_list thread_idx)
+	struct test_configuration *configs)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	RTMP_ADAPTER *ad = NULL;
+	u_char thread_idx = 0;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
 	if (ad == NULL)
 		return SERV_STATUS_OSAL_NET_INVALID_PAD;
 
-	/* Init test_thread_cb */
-	if (thread_idx == SERV_THREAD_TEST) {
-		g_test_thread[thread_idx].deq_cnt = 1;
-		g_test_thread[thread_idx].cmd_expire = RTMPMsecsToJiffies(3000);
-		SERV_OS_INIT_COMPLETION(&g_test_thread[thread_idx].cmd_done);
-
-		if (!g_test_thread[thread_idx].is_init) {
-			ret = sys_ad_init_os_task(
-					&g_test_thread[thread_idx].task,
-					"serv_thread_tx",
-					(VOID *)winfos,
-					(VOID *)configs);
-			if (ret)
-				goto err;
-
-			NdisAllocateSpinLock(
-				ad, &g_test_thread[thread_idx].lock);
-
-			ret = sys_ad_attach_os_task(
-				&g_test_thread[thread_idx].task,
-				net_ad_thread,
-				(ULONG)&g_test_thread[thread_idx].task);
-
-			if (!RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT
-				(&g_test_thread[thread_idx].cmd_done,
-				g_test_thread[thread_idx].cmd_expire))
-				goto err;
-
-			if (ret)
-				goto err;
-
-			g_test_thread[thread_idx].is_init = TRUE;
-		}
-
-		g_test_thread[thread_idx].service_stat = 0;
+	for (thread_idx = 0; thread_idx < MAX_SERV_THREAD_NUM; thread_idx++) {
+		if (!g_test_thread[thread_idx].is_init)
+			break;
 	}
+	if (thread_idx == MAX_SERV_THREAD_NUM) {
+
+		ret = SERV_STATUS_OSAL_SYS_FAIL;
+
+		SERV_LOG(SERV_DBG_CAT_ADAPT, SERV_DBG_LVL_ERROR,
+			("%s: tx thread num upto maxnum!!\n", __func__));
+		goto err;
+	}
+	winfos->thread_idx = thread_idx;
+
+	/* Init test_thread_cb */
+	g_test_thread[thread_idx].deq_cnt = 1;
+	g_test_thread[thread_idx].cmd_expire = RTMPMsecsToJiffies(3000);
+	SERV_OS_INIT_COMPLETION(&g_test_thread[thread_idx].cmd_done);
+
+	if (!g_test_thread[thread_idx].is_init) {
+		ret = sys_ad_init_os_task(
+				&g_test_thread[thread_idx].task,
+				"serv_thread_tx",
+				(VOID *)winfos,
+				(VOID *)configs);
+		if (ret)
+			goto err;
+
+		NdisAllocateSpinLock(
+			ad, &g_test_thread[thread_idx].lock);
+
+		ret = sys_ad_attach_os_task(
+			&g_test_thread[thread_idx].task,
+			net_ad_thread,
+			(ULONG)&g_test_thread[thread_idx].task);
+
+		if (!RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT
+			(&g_test_thread[thread_idx].cmd_done,
+			g_test_thread[thread_idx].cmd_expire))
+			goto err;
+
+		if (ret)
+			goto err;
+
+		g_test_thread[thread_idx].is_init = TRUE;
+	}
+
+	g_test_thread[thread_idx].service_stat = 0;
+
 
 	SERV_LOG(SERV_DBG_CAT_ADAPT, SERV_DBG_LVL_TRACE,
 		("%s: initialize thread_idx=%d\n", __func__, thread_idx));
@@ -1185,9 +1288,10 @@ err:
 }
 
 s_int32 net_ad_release_thread(
-	u_char thread_idx)
+	struct test_wlan_info *winfos)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
+	u_char thread_idx = winfos->thread_idx;
 
 	if (&g_test_thread[thread_idx].task)
 		ret = sys_ad_kill_os_task(&g_test_thread[thread_idx].task);
@@ -1361,9 +1465,6 @@ s_int32 net_ad_cfg_queue(
 #endif
 
 	if (enable) {
-		/* Start DMA */
-		chip_set_hif_dma(ad, DMA_TX_RX, TRUE);
-
 		/* Start to deq sw queue */
 		RTMP_CLEAR_FLAG(ad, fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET);
 
@@ -1400,9 +1501,6 @@ s_int32 net_ad_cfg_queue(
 #endif /* CONFIG_AP_SUPPROT */
 		/* Stop to deq sw queue */
 		RTMP_SET_FLAG(ad, fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET);
-
-		/* Stop DMA */
-		chip_set_hif_dma(ad, DMA_TX_RX, FALSE);
 	}
 
 	return ret;
@@ -1481,7 +1579,6 @@ s_int32 net_ad_stop_ap(
 		}
 	}
 #endif
-	chip_set_hif_dma(ad, DMA_TX_RX, TRUE);
 #ifdef CONFIG_AP_SUPPORT
 	APStop(ad, mbss, AP_BSS_OPER_ALL);
 #endif /* CONFIG_AP_SUPPORT */
@@ -1506,7 +1603,8 @@ s_int32 net_ad_enter_normal(
 		return SERV_STATUS_OSAL_NET_INVALID_PAD;
 
 	ad->CommonCfg.bEnableTxBurst = bak->en_tx_burst;
-	ad->CommonCfg.BeaconPeriod = bak->bcn_prd;
+	for (band_seq = 0; band_seq < TEST_DBDC_BAND_NUM; band_seq++)
+		ad->CommonCfg.BeaconPeriod[band_seq] = bak->bcn_prd[band_seq];
 	/* restore no beacon status */
 	for (band_seq = 0 ; band_seq < TEST_DBDC_BAND_NUM ; band_seq++)
 		ad->BcnCheckInfo[band_seq].nobcncnt = 0;
@@ -1539,6 +1637,7 @@ s_int32 net_ad_exit_normal(
 	struct test_backup_params *bak)
 {
 	RTMP_ADAPTER *ad = NULL;
+	u_int8 i;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
@@ -1552,9 +1651,12 @@ s_int32 net_ad_exit_normal(
 	bak->en_bss_coex = ad->CommonCfg.bBssCoexEnable;
 	/* To prevent BSS scan occupy execution time */
 	ad->CommonCfg.bBssCoexEnable = FALSE;
-	bak->bcn_prd = ad->CommonCfg.BeaconPeriod;
+	for (i = 0; i < TEST_DBDC_BAND_NUM; i++)
+		bak->bcn_prd[i] = ad->CommonCfg.BeaconPeriod[i];
 	/* To disable TBTT interrupt */
-	ad->CommonCfg.BeaconPeriod = 0;
+	for (i = 0; i < TEST_DBDC_BAND_NUM; i++)
+		ad->CommonCfg.BeaconPeriod[i] = 0;
+
 #if defined(GREENAP_SUPPORT)
 	bak->greenap = greenap_get_capability(ad);
 	greenap_set_capability(ad, FALSE);
@@ -1640,7 +1742,7 @@ s_int32 net_ad_update_wdev(
 			ad->dbdc_band0_tx_path = tx_stream_num;
 		} else {
 			ad->dbdc_band1_rx_path = rx_sel;
-			ad->dbdc_band0_tx_path = tx_stream_num;
+			ad->dbdc_band1_tx_path = tx_stream_num;
 		}
 	} else
 #endif	/* DBDC_MODE */
@@ -1677,7 +1779,10 @@ s_int32 net_ad_update_wdev(
 	wlan_config_set_rx_stream(wdev, configs->rx_ant);
 	wlan_config_set_ht_bw(wdev,
 		((configs->bw > TEST_BW_20) ? HT_BW_40 : HT_BW_20));
+
+
 	wlan_config_set_ext_cha(wdev, configs->ch_offset);
+
 	wlan_config_set_cen_ch_2(wdev, configs->channel_2nd);
 	if (configs->bw > TEST_BW_5)
 		wlan_config_set_vht_bw(wdev,
@@ -1798,6 +1903,7 @@ s_int32 net_ad_init_wdev(
 		wdev->PhyMode = TEST_WMODE_CAP_5G;
 	else
 		wdev->PhyMode = TEST_WMODE_CAP_24G;
+	wlan_config_set_ch_band(wdev, wdev->PhyMode);
 
 #ifdef CONFIG_AP_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(ad)
@@ -1862,6 +1968,7 @@ s_int32 net_ad_init_wdev(
 		wdev->PhyMode = TEST_WMODE_CAP_5G;
 	else
 		wdev->PhyMode = TEST_WMODE_CAP_24G;
+	wlan_config_set_ch_band(wdev, wdev->PhyMode);
 
 #ifdef CONFIG_AP_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_AP(ad)
@@ -2116,6 +2223,7 @@ s_int32 net_ad_apply_wtbl(
 			cap->modes |= (HE_24G_SUPPORT | HE_5G_SUPPORT);
 			cap->he_mac_cap |= HE_AMSDU_IN_ACK_EN_AMPDU;
 			ampdu->max_he_ampdu_len_exp = chip_cap->he_ampdu_exp;
+			ampdu->max_vht_ampdu_len_exp = chip_cap->vht_ampdu_exp;
 		}
 #endif
 		CLIENT_STATUS_SET_FLAG(entry, fCLIENT_STATUS_WMM_CAPABLE);
@@ -2360,12 +2468,12 @@ s_int32 net_ad_fill_phy_info(
 #if defined(DOT11_HE_AX)
 	if (phy_info->phy_mode > TEST_MODE_VHT) {
 		phy_info->rate = (tx_info->mcs & 0xf);
-		/* b'5 for DCM */
-		phy_info->dcm = (tx_info->mcs & BIT(5)) ? TRUE : FALSE;
+		/* b'4 for DCM */
+		phy_info->dcm = (tx_info->mcs & BIT(4)) ? TRUE : FALSE;
 
 		if (phy_info->phy_mode == TEST_MODE_HE_ER) {
-			/* b'4 for tone*/
-			if (tx_info->mcs & BIT(4))
+			/* b'5 for tone*/
+			if (tx_info->mcs & BIT(5))
 				phy_info->su_ext_tone = TRUE;
 			else
 				phy_info->su_ext_tone = FALSE;
@@ -2706,6 +2814,7 @@ s_int32 net_ad_enq_pkt(
 			pkt = (PNDIS_PACKET)skb2;
 			RTMP_SET_PACKET_WCID(pkt, entry->wcid);
 			RTMP_SET_PACKET_WDEV(pkt, wdev->wdev_idx);
+			RTMP_SET_BAND_IDX(pkt, HcGetBandByWdev(wdev));
 
 			RTMP_SET_PACKET_TXTYPE(pkt, TX_ATE_FRAME);
 
@@ -2873,6 +2982,54 @@ s_int32 net_ad_rx_done_handle(
 				chfreq0, chfreq1));
 			return SERV_STATUS_OSAL_NET_INVALID_PARAM;
 		}
+	}
+
+	return ret;
+}
+
+s_int32 net_ad_get_band_mode(
+	struct test_wlan_info *winfos,
+	u_char band_idx,
+	u_int32 *band_type)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	RTMP_ADAPTER *ad = NULL;
+
+	/* Get adapter from jedi driver first */
+	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
+	if (ad == NULL)
+		return SERV_STATUS_OSAL_NET_INVALID_PAD;
+
+
+	if (IS_MT7915(ad)) {
+		if (band_idx > TEST_DBDC_BAND1) {
+			*band_type = TEST_BAND_TYPE_UNUSE;
+			SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+				("%s(%d): band_idx = %d, band_type=%d\n",
+				__func__, __LINE__, band_idx, *band_type));
+			return ret;
+		}
+	}
+	/*
+	 * DLL will query two times per band0/band1 if DBDC chip set.
+	 * 0: no this band
+	 * 1: 2.4G
+	 * 2: 5G
+	 * 3. 2.4G+5G
+	 */
+	if (IS_TEST_DBDC(winfos)) {
+		*band_type = ((band_idx == TEST_DBDC_BAND0)
+			? TEST_BAND_TYPE_2_4G : TEST_BAND_TYPE_5G);
+	} else {
+		/* Always report 2.4+5G */
+		*band_type = TEST_BAND_TYPE_2_4G_5G;
+
+		/*
+		 * If IS_TEST_DBDC=0,
+		 * band_idx should not be 1 so return band_mode=0
+		 */
+		if (band_idx == TEST_DBDC_BAND1)
+			*band_type = TEST_BAND_TYPE_UNUSE;
 	}
 
 	return ret;
@@ -3176,7 +3333,6 @@ s_int32 net_ad_cfg_wtbl(
 		case TEST_BW_80:
 			wtbl_rate_cap->fgG8 = TRUE;
 			break;
-
 		case TEST_BW_160C:
 			wtbl_rate_cap->fgG16 = TRUE;
 			break;
@@ -3280,16 +3436,19 @@ s_int32 net_ad_set_wmm_param_by_qid(
 }
 
 s_int32 net_ad_clean_sta_q(
-	struct test_wlan_info *winfos, u_char wcid)
+	struct test_wlan_info *winfos, u_char band_idx, u_char wcid)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	RTMP_ADAPTER *ad = NULL;
 	struct qm_ops *ops = NULL;
+	struct wifi_dev *wdev = NULL;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
 	if (ad == NULL)
 		return SERV_STATUS_OSAL_NET_INVALID_PAD;
+
+	wdev = &ad->ate_wdev[band_idx][0];
 
 	ops = ad->qm_ops;
 
@@ -3298,6 +3457,10 @@ s_int32 net_ad_clean_sta_q(
 		if (ret)
 			ret = SERV_STATUS_OSAL_NET_FAIL_SEND_FWCMD;
 	}
+
+	if (ops->bss_clean_queue)
+			ops->bss_clean_queue(ad, wdev);
+
 
 	return ret;
 }
@@ -3503,7 +3666,7 @@ s_int32 net_ad_set_txbf_profile_tag_mcs_thrd(
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
 
-#ifndef DOT11_HE_AX	
+#ifndef DOT11_HE_AX
 	TxBfProfileTag_McsThd(&ad->rPfmuTag2,
 				mcs_lss,
 				mcs_sss);
@@ -3671,7 +3834,7 @@ s_int32 net_ad_read_bulk_mac_bbp_reg(
 #define REG_BLOCK_SIZE 128
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	RTMP_ADAPTER *ad = NULL;
-	u_int32 reg_seq, addr, reg_total, value;
+	u_int32 reg_seq, addr, reg_total, value = 0;
 	u_char offset_byte = 0x4;
 
 	/* Get adapter from jedi driver first */
@@ -3798,7 +3961,7 @@ s_int32 net_ad_read_write_eeprom(
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
 	RTMP_ADAPTER *ad = NULL;
-	u_int16 value;
+	u_int16 value = 0;
 
 	/* Get adapter from jedi driver first */
 	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
@@ -3978,6 +4141,7 @@ s_int32 net_ad_set_tmr(
 	struct test_tmr_info *tmr_info)
 {
 	s_int32 ret = SERV_STATUS_SUCCESS;
+	s_int32 tmplen = 0;
 	RTMP_ADAPTER *ad = NULL;
 	s_char tmr_setting[8], tmr_hw_version[8];
 
@@ -3999,8 +4163,23 @@ s_int32 net_ad_set_tmr(
 		return SERV_STATUS_OSAL_NET_INVALID_PARAM;
 	}
 
-	sprintf(tmr_setting, "%d", tmr_info->setting);
-	sprintf(tmr_hw_version, "%d", tmr_info->version);
+	tmplen = snprintf(tmr_setting,
+		sizeof(tmr_setting), "%d", tmr_info->setting);
+	if (sys_snprintf_error(sizeof(tmr_setting), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: tmr_setting snprintf error(%d)!\n",
+			__func__, tmplen));
+		return SERV_STATUS_OSAL_NET_INVALID_PARAM;
+	}
+
+	tmplen = snprintf(tmr_hw_version,
+		sizeof(tmr_hw_version), "%d", tmr_info->version);
+	if (os_snprintf_error(sizeof(tmr_hw_version), tmplen)) {
+		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+			("%s: tmr_hw_version snprintf error(%d)!\n",
+			__func__, tmplen));
+		return SERV_STATUS_OSAL_NET_INVALID_PARAM;
+	}
 
 	ret = TmrUpdateParameter(ad, tmr_info->through_hold, tmr_info->iter);
 	if (ret)
@@ -4506,3 +4685,115 @@ s_int32 net_ad_get_virtual_dev(
 	return ret;
 }
 
+s_int32 net_ad_check_txv(
+	IN struct test_wlan_info *winfos,
+	IN u_int8 band_idx,
+	IN struct test_configuration *configs,
+	IN void *virtual_wtbl)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	RTMP_ADAPTER *ad = NULL;
+	struct test_configuration *test_config = &configs[band_idx];
+	struct _MAC_TABLE_ENTRY *entry = (struct _MAC_TABLE_ENTRY *)virtual_wtbl;
+	struct _RTMP_CHIP_DBG *chip_dbg = NULL;
+
+	/* Get adapter from jedi driver first */
+	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
+	if (ad == NULL) {
+		ret = SERV_STATUS_OSAL_NET_INVALID_PAD;
+		SERV_LOG(SERV_DBG_CAT_ALL, SERV_DBG_LVL_ERROR,
+			("%s: NULL adapter, ret:0x%8x\n", __func__, ret));
+		return ret;
+	}
+
+	chip_dbg = hc_get_chip_dbg(ad->hdev_ctrl);
+
+	if (chip_dbg->check_txv && entry) {
+		UINT8 phy_mode = entry->phy_param.phy_mode;
+		UINT8 ofdm_rate[8] = {0xb, 0xf, 0xa, 0xe, 0x9, 0xd, 0x8, 0xc};
+
+		chip_dbg->check_txv(ad->hdev_ctrl, "spe idx", entry->phy_param.spe_idx, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "phy mode", entry->phy_param.phy_mode, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "dbw", entry->phy_param.bw, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "ER-106T", entry->phy_param.su_ext_tone, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "DCM", entry->phy_param.dcm, band_idx);
+
+		if (phy_mode == MODE_CCK) {
+			if (entry->phy_param.rate > MCS_8)
+				chip_dbg->check_txv(ad->hdev_ctrl, "Rate", entry->phy_param.rate+5, band_idx);
+			else
+				chip_dbg->check_txv(ad->hdev_ctrl, "Rate", entry->phy_param.rate, band_idx);
+		} else if (phy_mode == MODE_OFDM) {
+			chip_dbg->check_txv(ad->hdev_ctrl, "Rate", ofdm_rate[entry->phy_param.rate], band_idx);
+		} else
+			chip_dbg->check_txv(ad->hdev_ctrl, "Rate", entry->phy_param.rate, band_idx);
+
+		if (phy_mode < MODE_HTMIX)
+			chip_dbg->check_txv(ad->hdev_ctrl, "NSTS", 0, band_idx);
+		else if (phy_mode < MODE_VHT)
+			chip_dbg->check_txv(ad->hdev_ctrl, "NSTS", (entry->phy_param.rate >> 3), band_idx);
+		else
+			chip_dbg->check_txv(ad->hdev_ctrl, "NSTS", entry->phy_param.vht_nss-1, band_idx);
+
+		chip_dbg->check_txv(ad->hdev_ctrl, "HE LTF", entry->phy_param.ltf_type, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "HE GI", entry->phy_param.gi_type, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "stbc", entry->phy_param.stbc, band_idx);
+		chip_dbg->check_txv(ad->hdev_ctrl, "FEC Coding", entry->phy_param.ldpc, band_idx);
+
+		if (entry->phy_param.phy_mode > MODE_VHT)
+			chip_dbg->check_txv(ad->hdev_ctrl, "Max TPE", test_config->max_pkt_ext, band_idx);
+		else
+			chip_dbg->check_txv(ad->hdev_ctrl, "Max TPE", 0, band_idx);
+
+		chip_dbg->check_txv(ad->hdev_ctrl, "TX LEN",
+				test_config->tx_len + ((phy_mode > MODE_OFDM) ? 8 : 4), band_idx);
+				/* 4 bytes of FCS and 4 bytes of AMPDU delimiter*/
+	}
+
+	return ret;
+}
+
+s_int32 net_ad_get_rf_type_capability(
+	struct test_wlan_info *winfos,
+	u_int8 band_idx,
+	u_int32 *tx_ant,
+	u_int32 *rx_ant)
+{
+	s_int32 ret = SERV_STATUS_SUCCESS;
+	RTMP_ADAPTER *ad = NULL;
+
+	/* Get adapter from jedi driver first */
+	GET_PAD_FROM_NET_DEV(ad, winfos->net_dev);
+	if (ad == NULL)
+		return SERV_STATUS_OSAL_NET_INVALID_PAD;
+
+	/* the dbdc mode of single phy don't support this func */
+	if (IS_MT7915(ad) && IS_TEST_DBDC(winfos))
+		return SERV_STATUS_ENGINE_NOT_SUPPORTED;
+
+#ifdef DBDC_MODE
+	if (IS_TEST_DBDC(winfos)) {
+		if (band_idx == TEST_DBDC_BAND0) {
+			*tx_ant = ad->dbdc_band0_tx_path;
+			*rx_ant = ad->dbdc_band0_rx_path;
+			SERV_LOG(SERV_DBG_CAT_ALL, SERV_DBG_LVL_TRACE,
+				 ("DBDC band0 rx_ant:%d, tx_ant:%d\n", *rx_ant, *tx_ant));
+
+		} else {
+			*tx_ant = ad->dbdc_band1_tx_path;
+			*rx_ant = ad->dbdc_band1_rx_path;
+			SERV_LOG(SERV_DBG_CAT_ALL, SERV_DBG_LVL_TRACE,
+				 ("DBDC band1 rx_ant:%d, tx_ant:%d\n", *rx_ant, *tx_ant));
+
+		}
+	} else
+#endif
+	{
+		*rx_ant = ad->Antenna.field.RxPath;
+		*tx_ant = ad->Antenna.field.TxPath;
+		SERV_LOG(SERV_DBG_CAT_ALL, SERV_DBG_LVL_TRACE,
+			 ("single band rx_ant:%d, tx_ant:%d\n", *rx_ant, *tx_ant));
+	}
+
+	return ret;
+}

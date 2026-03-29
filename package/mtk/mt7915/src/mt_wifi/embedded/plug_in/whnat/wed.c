@@ -900,8 +900,8 @@ int wed_token_buf_init(struct wed_entry *entry)
 	struct wed_buf_res *res = &tx_ctrl->res;
 	/*tx resource allocate*/
 	res->token_num = (whnat->wifi.tx_token_nums - whnat->wifi.sw_tx_token_nums);
-	res->token_start = whnat->wifi.sw_tx_token_nums;
-	res->token_end = (whnat->wifi.tx_token_nums - 1);
+	res->token_start = 0;
+	res->token_end = (res->token_num - 1);
 
 #ifdef WED_DYNAMIC_BM_SUPPORT
 	res->wed_token_cnt = 1152;

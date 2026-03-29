@@ -126,6 +126,7 @@ VOID mbss_create_vif(RTMP_ADAPTER *pAd, RTMP_OS_NETDEV_OP_HOOK *pNetDevOps, INT3
 	UCHAR ifidx = IdBss;
 	UCHAR final_name[32] = "";
 	BOOLEAN autoSuffix = TRUE;
+	int ret;
 
 
 	dev_name = get_dev_name_prefix(pAd, INT_MBSSID);
@@ -135,7 +136,13 @@ VOID mbss_create_vif(RTMP_ADAPTER *pAd, RTMP_OS_NETDEV_OP_HOOK *pNetDevOps, INT3
 			("get_dev_name_prefix error!\n"));
 		return;
 	}
-	snprintf(final_name, sizeof(final_name), "%s", dev_name);
+
+	ret = snprintf(final_name, sizeof(final_name), "%s", dev_name);
+	if (os_snprintf_error(sizeof(final_name), ret)) {
+		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("final_name snprintf error!\n"));
+		return;
+	}
 
 	if (pAd->FlgMbssInit == TRUE) {
 		if (pAd->CommonCfg.wifi_cert) {

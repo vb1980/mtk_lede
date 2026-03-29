@@ -58,18 +58,6 @@ static inline BOOLEAN sync_fsm_state_transition(struct wifi_dev *wdev, ULONG Nex
 	ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
 	OldState = ScanCtrl->SyncFsm.CurrState;
 	ScanCtrl->SyncFsm.CurrState = NextState;
-	/* add for multi wdev reuse sync state machine,
-		update CurOccupyWdev when state change */
-	if( OldState == SYNC_FSM_IDLE && NextState != SYNC_FSM_IDLE )
-		ScanCtrl->CurOccupyWdev = wdev;
-
-
-	/* add for multi wdev reuse sync state machine,
-		update CurOccupyWdev when state change */
-	if(ScanCtrl->SyncFsm.CurrState==SYNC_FSM_LISTEN)
-		pAd->ScanCurrState=2;
-	else if(ScanCtrl->SyncFsm.CurrState==SYNC_FSM_IDLE)
-		pAd->ScanCurrState=1;
 
 	if (ScanCtrl->ScanReqwdev)
 		MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_WARN,
@@ -102,10 +90,8 @@ static VOID sync_fsm_enqueue_req(struct wifi_dev *wdev)
 	if (ScanCtrl->ScanType == SCAN_IMPROVED) {
 		ScanInfo->bImprovedScan = TRUE;
 		ScanCtrl->ImprovedScanWdev = wdev;
-	} else if (ScanCtrl->ScanType == SCAN_PARTIAL) {
-		ScanCtrl->PartialScan.bScanning = TRUE;
+	} else if (ScanCtrl->ScanType == SCAN_PARTIAL)
 		ScanCtrl->PartialScan.pwdev = wdev;
-	}
 }
 
 static VOID sync_fsm_scan_timeout(
@@ -224,8 +210,12 @@ static BOOLEAN sta_enqueue_join_probe_request(PRTMP_ADAPTER pAd, struct wifi_dev
 			} else {
 #ifdef CONFIG_MAP_SUPPORT
 				if (IS_MAP_ENABLE(pAd)) {
-					MgtMacHeaderInitExt(pAd, &Hdr80211, SUBTYPE_PROBE_REQ, 0,
-										MlmeAux->Bssid, wdev->if_addr, MlmeAux->Bssid);
+					if (IS_MAP_CERT_ENABLE(pAd) || IS_MAP_API_ENABLE(pAd))
+						MgtMacHeaderInitExt(pAd, &Hdr80211, SUBTYPE_PROBE_REQ, 0,
+									MlmeAux->Bssid, wdev->if_addr, MlmeAux->Bssid);
+					else
+						MgtMacHeaderInitExt(pAd, &Hdr80211, SUBTYPE_PROBE_REQ, 0,
+									BROADCAST_ADDR, wdev->if_addr, BROADCAST_ADDR);
 				} else {
 #endif
 					MgtMacHeaderInitExt(pAd, &Hdr80211, SUBTYPE_PROBE_REQ, 0,
@@ -306,6 +296,11 @@ static BOOLEAN sta_enqueue_join_probe_request(PRTMP_ADAPTER pAd, struct wifi_dev
 		if (IS_MBO_ENABLE(wdev))
 			MakeMboOceIE(pAd, wdev, NULL, pOutBuffer + FrameLen, &FrameLen, MBO_FRAME_TYPE_PROBE_REQ);
 #endif /* MBO_SUPPORT */
+#ifdef DOT11K_RRM_SUPPORT
+		if (IS_RRM_ENABLE(wdev))
+			RRM_InsertRRMEnCapIE(pAd, wdev, pOutBuffer + FrameLen, &FrameLen, wdev->func_idx);
+#endif
+
 #ifdef WSC_INCLUDED
 		ie_info.frame_buf = (UCHAR *)(pOutBuffer + FrameLen);
 		FrameLen += build_wsc_ie(pAd, &ie_info);
@@ -342,8 +337,6 @@ static BOOLEAN sync_fsm_error_handle(struct wifi_dev *wdev, MLME_QUEUE_ELEM *Ele
 	BOOLEAN isErrHandle = TRUE;
 	USHORT Status = MLME_INVALID_FORMAT;
 
-	/* ASSERT(wdev);*/
-
 	switch (Elem->MsgType) {
 	case SYNC_FSM_JOIN_REQ:
 	case SYNC_FSM_ADHOC_START_REQ:
@@ -353,6 +346,7 @@ static BOOLEAN sync_fsm_error_handle(struct wifi_dev *wdev, MLME_QUEUE_ELEM *Ele
 
 	case SYNC_FSM_SCAN_REQ:
 	case SYNC_FSM_SCAN_TIMEOUT:
+		sync_fsm_state_transition(wdev, SYNC_FSM_IDLE);
 		cntl_scan_conf(wdev, Status);
 		break;
 
@@ -385,7 +379,7 @@ static BOOLEAN sync_fsm_msg_checker(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem)
 	} else
 		isMsgDrop = TRUE;
 
-	if (isMsgDrop == TRUE) {
+	if ((isMsgDrop == TRUE) && wdev != NULL) {
 	/*	ASSERT(wdev); */
 		isErrHandle = sync_fsm_error_handle(wdev, Elem);
 
@@ -440,15 +434,16 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 	struct wifi_dev *ConWpsdev = NULL;
 	PWSC_CTRL   pTriggerApCliWscControl;
 	PWSC_CTRL   pOpposApCliWscControl;
+#ifdef MULTI_INF_SUPPORT
 	PRTMP_ADAPTER pOpposAd;
-	BOOLEAN     bTwoCardConWPS = FALSE;
+	BOOLEAN bTwoCardConWPS = FALSE;
+#endif
 	UCHAR apcli_idx;
 #ifdef MULTI_INF_SUPPORT /* Index 0 for 2.4G, 1 for 5Ghz Card */
 	UINT opposIfaceIdx = !multi_inf_get_idx(pAd);
 #endif /* MULTI_INF_SUPPORT */
 #endif /*CON_WPS*/
 #if defined(CON_WPS)
-	pOpposAd = NULL;
 	pOpposApCliWscControl = NULL;
 	pTriggerApCliWscControl = NULL;
 #ifdef MULTI_INF_SUPPORT /* Index 0 for 2.4G, 1 for 5Ghz Card */
@@ -475,11 +470,12 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 	else
 		return Status;
 
-	if (ConWpsdev) {
-		pApCliWscControl = &pAd->StaCfg[ifIdx].wdev.WscControl;
-		pAd->StaCfg[ifIdx].ConWpsApCliModeScanDoneStatus = CON_WPS_APCLI_SCANDONE_STATUS_FINISH;
-	}
+	pApCliWscControl = &pAd->StaCfg[ifIdx].wdev.WscControl;
+	if (pApCliWscControl == NULL)
+		return Status;
+	pAd->StaCfg[ifIdx].ConWpsApCliModeScanDoneStatus = CON_WPS_APCLI_SCANDONE_STATUS_FINISH;
 
+#ifdef MULTI_INF_SUPPORT
 	if (pOpposAd) {
 		for (apcli_idx = 0; apcli_idx < pOpposAd->ApCfg.ApCliNum; apcli_idx++) {
 			if (pOpposAd->StaCfg[apcli_idx].wdev.WscControl.conWscStatus == CON_WPS_STATUS_APCLI_RUNNING) {
@@ -495,7 +491,9 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 		}
 	}
 
-	if (bTwoCardConWPS == FALSE) {
+	if (bTwoCardConWPS == FALSE)
+#endif
+	{
 		for (apcli_idx = 0; apcli_idx < pAd->ApCfg.ApCliNum; apcli_idx++) {
 			if (apcli_idx == ifIdx)
 				continue;
@@ -506,6 +504,7 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 		}
 	}
 
+#ifdef MULTI_INF_SUPPORT
 	if (pOpposAd && pAd->ApCfg.ConWpsApCliMode == CON_WPS_APCLI_BAND_AUTO) { /* 2.2G and 5G must trigger scan */
 		if (pOpposAd && bTwoCardConWPS) {
 			for (apcli_idx = 0; apcli_idx < pAd->ApCfg.ApCliNum; apcli_idx++) {
@@ -516,7 +515,9 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 				}
 			}
 		}
-	} else {
+	} else
+#endif
+	{
 		for (apcli_idx = 0; apcli_idx < pAd->ApCfg.ApCliNum; apcli_idx++) {
 			if (pAd->StaCfg[apcli_idx].ConWpsApCliModeScanDoneStatus ==
 				CON_WPS_APCLI_SCANDONE_STATUS_ONGOING ||
@@ -539,15 +540,19 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 		}
 	}
 
+#ifdef MULTI_INF_SUPPORT
 	if ((pOpposApCliWscControl) == NULL && pOpposAd) {
 		pOpposApCliWscControl = &pOpposAd->StaCfg[BSS0].wdev.WscControl;
 		bTwoCardConWPS = TRUE;
 	}
+#endif
 
 	if (pOpposApCliWscControl == NULL) {
 		pOpposApCliWscControl = &pAd->StaCfg[ifIdx].wdev.WscControl;
 		pOpposApCliWscControl->wdev = &pAd->StaCfg[ifIdx].wdev;
+#ifdef MULTI_INF_SUPPORT
 		bTwoCardConWPS = FALSE;
+#endif
 	}
 
 	WscPBCBssTableSort(pAd, pApCliWscControl);
@@ -555,13 +560,11 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 #ifdef MULTI_INF_SUPPORT /* Index 0 for 2.4G, 1 for 5Ghz Card */
 
 	if (pOpposAd && bTwoCardConWPS) {
-		if (pOpposApCliWscControl)
-			WscPBCBssTableSort(pOpposAd, pOpposApCliWscControl);
+		WscPBCBssTableSort(pOpposAd, pOpposApCliWscControl);
 	} else
 #endif /* MULTI_INF_SUPPORT */
 	{
-		if (pOpposApCliWscControl)
-			WscPBCBssTableSort(pAd, pOpposApCliWscControl);
+		WscPBCBssTableSort(pAd, pOpposApCliWscControl);
 	}
 
 	MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("[Iface_Idx: %d] Scan_Completed!!! In APMlmeScanCompleteAction\n", currIfaceIdx));
@@ -593,6 +596,7 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 		continue;
 	}
 
+#ifdef MULTI_INF_SUPPORT
 	if (bTwoCardConWPS) {
 		if (pApCliWscControl->WscPBCBssCount == 1 && pOpposApCliWscControl->WscPBCBssCount == 1) {
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[Iface_Idx: %d] AutoPreferIface = %d\n"
@@ -623,7 +627,9 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 			WscConWpsStop(pAd, TRUE, pApCliWscControl);
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("!! (5)STOP APCLI = %d !!\n", !currIfaceIdx));
 		}
-	} else {
+	} else
+#endif
+	{
 		currIfaceIdx = (pApCliWscControl->EntryIfIdx & 0x0F);
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[Iface_Idx: %d] Registrar_Found,  APCLI_Auto_Mode PreferIface = %d\n",
 				 currIfaceIdx, pAd->ApCfg.ConWpsApcliAutoPreferIface));
@@ -696,6 +702,7 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 		}
 	}
 
+#ifdef MULTI_INF_SUPPORT
 	if (bTwoCardConWPS) {
 		if (bNeedSetPBCTimer && pApCliWscControl->WscPBCTimerRunning == FALSE) {
 			if (pApCliWscControl->bWscTrigger) {
@@ -704,7 +711,9 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 				RTMPSetTimer(&pApCliWscControl->WscPBCTimer, 1000);
 			}
 		}
-	} else {
+	} else
+#endif
+	{
 		if (pTriggerApCliWscControl != NULL &&
 			(pTriggerApCliWscControl->WscPBCTimerRunning == FALSE) &&
 			(pTriggerApCliWscControl->bWscTrigger == TRUE)) {
@@ -713,7 +722,7 @@ static USHORT con_wps_scan_done_handler(PRTMP_ADAPTER pAd, MLME_QUEUE_ELEM *Elem
 			MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("!! One Card DBDC Trigger %s WPS!!\n", (pTriggerApCliWscControl->IfName)));
 			RTMPSetTimer(&pTriggerApCliWscControl->WscPBCTimer, 1000);
 		} else {
-			if (pApCliWscControl && pApCliWscControl->WscPBCTimerRunning == FALSE &&
+			if (pApCliWscControl->WscPBCTimerRunning == FALSE &&
 				(pApCliWscControl->bWscTrigger == TRUE)) {
 				pAd->StaCfg[(pApCliWscControl->EntryIfIdx & 0x0F)].ConWpsApCliModeScanDoneStatus = CON_WPS_APCLI_SCANDONE_STATUS_ONGOING;
 				pApCliWscControl->WscPBCTimerRunning = TRUE;
@@ -770,9 +779,8 @@ static VOID sync_fsm_scan_complete_action(
 		}
 #endif /* OCE_SUPPORT */
 
-	}
-	if (Status == MLME_SUCCESS)
 		cntl_scan_conf(wdev, Status);
+	}
 }
 
 static VOID sync_fsm_join_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
@@ -788,7 +796,6 @@ static VOID sync_fsm_join_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 	BSS_ENTRY *pBss = NULL;
 	PSTA_ADMIN_CONFIG pStaCfg = GetStaCfgByWdev(pAd, wdev);
 	MAC_TABLE_ENTRY *pEntry = GetAssociatedAPByWdev(pAd, wdev);
-	SCAN_CTRL *ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);  //succeess link to rootap then one more scan again
 
 	/*ASSERT(pStaCfg);*/
 	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE,
@@ -808,10 +815,7 @@ static VOID sync_fsm_join_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 #endif /*COEX_SUPPORT */
 	/* reset all the timers */
 	RTMPCancelTimer(&mlmeAux->JoinTimer, &Cancelled);
-	//sync_fsm_enqueue_req(wdev);   //succeess link to rootap then one more scan again
-	ScanCtrl->ScanReqwdev = wdev; //succeess link to rootap then one more scan again
-	ScanCtrl->PartialScan.pwdev = wdev; //succeess link to rootap then one more scan again
-
+	sync_fsm_enqueue_req(wdev);
 	mlmeAux->Rssi = -128;
 	mlmeAux->isRecvJoinRsp = FALSE;
 	mlmeAux->BssType = pStaCfg->BssType;
@@ -936,9 +940,6 @@ static VOID sync_fsm_join_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 	else if (sta_enqueue_join_probe_request(pAd, wdev) == TRUE)
 		isGoingToJoin = TRUE;
 
-	/*WCNCR00212669 resolved:if disable apcli, stop scan,在当前信道发probe 的时候下iwpriv apclix0 set ApCliEnable=0不会立刻停止scan*/
-	if(pStaCfg ->ApcliInfStat.Enable == FALSE)
- 		isGoingToJoin = FALSE;
 join_ret:
 
 	if (isGoingToJoin) {
@@ -977,8 +978,8 @@ static VOID sync_fsm_join_timeout_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_E
 
 	isRecvRsp = (isRecvRsp && (*pCtrl_CurrState != APCLI_CTRL_DISCONNECTED));
 #endif /* APCLI_CONNECTION_TRIAL */
-	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("APCLI_SYNC - MlmeAux.Bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			 PRINT_MAC(pApCliEntry->MlmeAux.Bssid)));
+	MTWF_LOG(DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_TRACE, ("APCLI_SYNC - MlmeAux.Bssid="MACSTR"\n",
+			 MAC2STR(pApCliEntry->MlmeAux.Bssid)));
 
 	if (isRecvRsp) {
 #ifdef APCLI_AUTO_CONNECT_SUPPORT
@@ -1084,6 +1085,8 @@ static VOID sync_fsm_scan_timeout_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_E
 		if (ScanCtrl->state ==	OFFCHANNEL_SCAN_START) {
 			MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 					("%s	pAd->ScanCtrl.CurrentGivenChan_Index = %d\n", __func__, ScanCtrl->CurrentGivenChan_Index));
+			/*disbale getting NF*/
+			EnableNF(pAd, 0, 20, 2, 0);
 			/* Last channel to scan from list */
 			if ((ScanCtrl->Num_Of_Channels	- ScanCtrl->CurrentGivenChan_Index) == 1) {
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
@@ -1091,9 +1094,26 @@ static VOID sync_fsm_scan_timeout_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_E
 				ScanCtrl->Channel = 0;
 				ScanCtrl->state = OFFCHANNEL_SCAN_COMPLETE;
 			}
-		} else
+		} else {
 #endif
-				ScanCtrl->Channel = scan_find_next_channel(pAd, ScanCtrl, ScanCtrl->Channel);
+			ScanCtrl->Channel = scan_find_next_channel(pAd, ScanCtrl, ScanCtrl->Channel);
+			/* only scan the channel which binding band supported */
+			if (ScanCtrl->ScanReqwdev != NULL && (ScanCtrl->Channel != 0)) {
+				while ((WMODE_CAP_2G(ScanCtrl->ScanReqwdev->PhyMode) && ScanCtrl->Channel > 14) ||
+						(WMODE_CAP_5G(ScanCtrl->ScanReqwdev->PhyMode) && ScanCtrl->Channel <= 14)
+#ifdef CONFIG_MAP_SUPPORT
+						|| (IS_MAP_ENABLE(pAd) && MapNotRequestedChannel(ScanCtrl->ScanReqwdev, ScanCtrl->Channel))
+						|| (CheckNonOccupancyChannel(pAd, ScanCtrl->ScanReqwdev, ScanCtrl->Channel) == FALSE)
+#endif
+				      ) {
+					ScanCtrl->Channel = scan_find_next_channel(pAd, ScanCtrl, ScanCtrl->Channel);
+					if (ScanCtrl->Channel == 0)
+						break;
+				}
+			}
+#ifdef OFFCHANNEL_SCAN_FEATURE
+		}
+#endif
 #ifdef CONFIG_AP_SUPPORT
 
 	/* snowpin for ap/sta IF_DEV_CONFIG_OPMODE_ON_AP(pAd) */
@@ -1113,16 +1133,16 @@ static VOID sync_fsm_scan_timeout_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_E
 			if (ScanCtrl->state == OFFCHANNEL_SCAN_START) {
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("[%s] channel no : %d : obss time :%d\n",
-						 __func__, pAd->ChannelInfo.ChannelNo,
-						 pAd->ChannelInfo.ChStats.Obss_Time));
+						 __func__, pAd->ChannelInfo.ChannelNo[BandIdx],
+						 pAd->ChannelInfo.ChStats[BandIdx].Obss_Time));
 				memcpy(Rsp.ifrn_name, ScanCtrl->if_name, IFNAMSIZ);
 				Rsp.Action = OFFCHANNEL_INFO_RSP;
 				Rsp.data.channel_data.channel_busy_time = pAd->ChannelInfo.chanbusytime[pAd->ApCfg.current_channel_index];
-				Rsp.data.channel_data.NF = pAd->ChannelInfo.AvgNF;
-				Rsp.data.channel_data.channel = pAd->ChannelInfo.ChannelNo;
-				Rsp.data.channel_data.tx_time = pAd->ChannelInfo.ChStats.Tx_Time;
-				Rsp.data.channel_data.rx_time = pAd->ChannelInfo.ChStats.Rx_Time;
-				Rsp.data.channel_data.obss_time = pAd->ChannelInfo.ChStats.Obss_Time;
+				Rsp.data.channel_data.NF = pAd->ChannelInfo.AvgNF[BandIdx];
+				Rsp.data.channel_data.channel = pAd->ChannelInfo.ChannelNo[BandIdx];
+				Rsp.data.channel_data.tx_time = pAd->ChannelInfo.ChStats[BandIdx].Tx_Time;
+				Rsp.data.channel_data.rx_time = pAd->ChannelInfo.ChStats[BandIdx].Rx_Time;
+				Rsp.data.channel_data.obss_time = pAd->ChannelInfo.ChStats[BandIdx].Obss_Time;
 				Rsp.data.channel_data.channel_idx = pAd->ApCfg.current_channel_index;
 				/* This value to be used by application to calculate  channel busy percentage */
 				Rsp.data.channel_data.actual_measured_time = ScanCtrl->ScanTimeActualDiff;
@@ -1150,9 +1170,8 @@ static VOID sync_fsm_scan_timeout_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_E
 				MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 						("[%s][%d]:Next OFFChannel scan for : %d:Scan type =%d from given list\n",
 						 __func__, __LINE__, ScanCtrl->Channel, ScanCtrl->ScanType));
-				pAd->ChannelInfo.bandidx = HcGetBandByChannel(pAd, ScanCtrl->Channel);
 				if (ScanCtrl->Channel) {
-					pAd->ChannelInfo.ChannelNo = ScanCtrl->Channel;
+					pAd->ChannelInfo.ChannelNo[BandIdx] = ScanCtrl->Channel;
 				}
 			}
 			/* move to next channel */
@@ -1220,14 +1239,16 @@ static VOID sync_fsm_scan_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 	SCAN_ACTION_INFO scan_action_info = {0};
 #ifdef CONFIG_AP_SUPPORT
 	UCHAR BssIdx = 0;
+	UCHAR bandIndex = 0;
 #endif /* CONFIG_AP_SUPPORT */
-	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_DEBUG, ("SYNC - %s:[%d] LAST_CH: %d, BAND: %d\n",
+	MTWF_LOG(DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("SYNC - %s:[%d] LAST_CH: %d, BAND: %d\n",
 			 __func__, __LINE__, ScanInfo->LastScanChannel, ScanCtrl->BandIdx));
 	/*ASSERT(wdev);*/
 
 	if (!wdev)
 		return;
 
+	bandIndex = HcGetBandByWdev(wdev);
 
 	/*
 	Check the total scan tries for one single OID command
@@ -1247,10 +1268,15 @@ static VOID sync_fsm_scan_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 
 		/* Disable beacon tx for all BSS */
 		for (BssIdx = 0; BssIdx < pAd->ApCfg.BssidNum; BssIdx++) {
-			wdev = &pAd->ApCfg.MBSSID[BssIdx].wdev;
+			struct wifi_dev *pwdev = NULL;
+			pwdev = &pAd->ApCfg.MBSSID[BssIdx].wdev;
 
-			if (wdev->bAllowBeaconing)
-				UpdateBeaconHandler(pAd, wdev, BCN_UPDATE_DISABLE_TX);
+			if (!pwdev)
+				continue;
+			if (bandIndex != HcGetBandByWdev(pwdev))
+				continue;
+			if (pwdev->bAllowBeaconing)
+				UpdateBeaconHandler(pAd, pwdev, BCN_UPDATE_DISABLE_TX);
 		}
 
 #endif /* CONFIG_AP_SUPPORT */
@@ -1258,9 +1284,9 @@ static VOID sync_fsm_scan_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 		NdisGetSystemUpTime(&ScanInfo->LastScanTime);
 		ScanInfo->ScanChannelCnt = 0;
 		RTMPCancelTimer(&ScanCtrl->ScanTimer, &Cancelled);
+		ScanCtrl->ScanType = ScanType;
 		sync_fsm_enqueue_req(wdev);
 		ScanCtrl->BssType = BssType;
-		ScanCtrl->ScanType = ScanType;
 		ScanCtrl->SsidLen = SsidLen;
 		NdisMoveMemory(ScanCtrl->Ssid, Ssid, SsidLen);
 #ifdef OFFCHANNEL_SCAN_FEATURE
@@ -1273,6 +1299,25 @@ static VOID sync_fsm_scan_req_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM 
 		} else
 #endif
 		ScanCtrl->Channel = scan_find_next_channel(pAd, ScanCtrl, wdev->ScanInfo.LastScanChannel);
+#ifdef OFFCHANNEL_SCAN_FEATURE
+		if (!ScanCtrl->Num_Of_Channels) {
+#endif
+		if (ScanCtrl->ScanReqwdev != NULL && (ScanCtrl->Channel != 0)) {
+			while ((WMODE_CAP_2G(ScanCtrl->ScanReqwdev->PhyMode) && ScanCtrl->Channel > 14) ||
+					(WMODE_CAP_5G(ScanCtrl->ScanReqwdev->PhyMode) && ScanCtrl->Channel <= 14)
+#ifdef CONFIG_MAP_SUPPORT
+					|| (IS_MAP_ENABLE(pAd) && MapNotRequestedChannel(ScanCtrl->ScanReqwdev, ScanCtrl->Channel))
+					|| (CheckNonOccupancyChannel(pAd, ScanCtrl->ScanReqwdev, ScanCtrl->Channel) == FALSE)
+#endif
+			      ) {
+				ScanCtrl->Channel = scan_find_next_channel(pAd, ScanCtrl, ScanCtrl->Channel);
+				if (ScanCtrl->Channel == 0)
+					break;
+			}
+		}
+#ifdef OFFCHANNEL_SCAN_FEATURE
+		}
+#endif
 #ifdef OFFCHANNEL_SCAN_FEATURE
 	{
 		if (ScanCtrl->state == OFFCHANNEL_SCAN_START)
@@ -1421,7 +1466,7 @@ VOID Vendor10RssiUpdate(
 			return;
 
 		MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-			("[%s]: Bcn Mac Address %02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(pEntry->Addr)));
+			("[%s]: Bcn Mac Address "MACSTR"\n", __func__, MAC2STR(pEntry->Addr)));
 
 		/* Continuous Averaging */
 		pEntry->CurRssi += RealRssi;
@@ -1438,7 +1483,7 @@ VOID Vendor10RssiUpdate(
 			if ((IS_VALID_ENTRY(pEntry)) && (pEntry->wdev->wdev_type == WDEV_TYPE_STA || pEntry->wdev->wdev_type == WDEV_TYPE_REPEATER)
 				&& (pEntry->func_tb_idx < MAX_APCLI_NUM)) {
 				MTWF_LOG(DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
-					("[%s]: Mlme Mac Address %02X:%02X:%02X:%02X:%02X:%02X\n", __func__, PRINT_MAC(pEntry->Addr)));
+					("[%s]: Mlme Mac Address "MACSTR"\n", __func__, MAC2STR(pEntry->Addr)));
 
 				/* RSSI fetch from WTBL */
 				chip_get_rssi(pAd, pEntry->wcid, &RSSI[0]);
@@ -1867,15 +1912,14 @@ LabelErr:
 	if (VarIE != NULL)
 		os_free_mem(VarIE);
 
-	if (ie_list != NULL) {
-	#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-		/* fix memory leak when trigger scan continuously*/
-		if (ie_list->CustomerVendorIE.pointer)
-			os_free_mem(ie_list->CustomerVendorIE.pointer);
-	#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
-		os_free_mem(ie_list);
-	}
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
+	if (ie_list != NULL)
+		os_free_mem(ie_list);
 }
 
 static VOID sync_fsm_peer_request_idle_action(struct _RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
@@ -1970,6 +2014,11 @@ static VOID sync_fsm_peer_response_idle_action(struct _RTMP_ADAPTER *pAd, MLME_Q
 	MAC_TABLE_ENTRY *pEntry = NULL;
 	UCHAR Channel = 0;
 #endif
+
+#ifdef DOT11_HE_AX
+	UCHAR BandIdx = HcGetBandByWdev(wdev);
+	AUTO_CH_CTRL *pAutoChCtrl = HcGetAutoChCtrlbyBandIdx(pAd, BandIdx);
+#endif
 	RETURN_IF_PAD_NULL(pAd);
 
 #ifdef CONFIG_ATE
@@ -2045,7 +2094,8 @@ static VOID sync_fsm_peer_response_idle_action(struct _RTMP_ADAPTER *pAd, MLME_Q
 	}
 #endif
 #ifdef DOT11_HE_AX
-	if (HAS_HE_OP_EXIST(ie_list->cmm_ies.ie_exists))
+	if (HAS_HE_OP_EXIST(ie_list->cmm_ies.ie_exists) && wdev->channel
+		&& (pAutoChCtrl->AutoChSelCtrl.AutoChScanStatMachine.CurrState != AUTO_CH_SEL_SCAN_LISTEN))
 		parse_he_bss_color_info(wdev, ie_list);
 #endif
 
@@ -2061,15 +2111,14 @@ LabelErr:
 	if (VarIE != NULL)
 		os_free_mem(VarIE);
 
-	if (ie_list != NULL) {
-	#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-		/* fix memory leak when trigger scan continuously*/
-		if (ie_list->CustomerVendorIE.pointer)
-			os_free_mem(ie_list->CustomerVendorIE.pointer);
-	#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
-		os_free_mem(ie_list);
-	}
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
+	if (ie_list != NULL)
+		os_free_mem(ie_list);
 
 	return;
 }
@@ -2239,15 +2288,14 @@ LabelErr:
 	if (VarIE != NULL)
 		os_free_mem(VarIE);
 
-	if (ie_list != NULL) {
-	#ifdef CUSTOMER_VENDOR_IE_SUPPORT
-		/* fix memory leak when trigger scan continuously*/
-		if (ie_list->CustomerVendorIE.pointer)
-			os_free_mem(ie_list->CustomerVendorIE.pointer);
-	#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
-		os_free_mem(ie_list);
-	}
+#ifdef CUSTOMER_VENDOR_IE_SUPPORT
+	/* fix memory leak when trigger scan continuously*/
+	if (ie_list && ie_list->CustomerVendorIE.pointer)
+		os_free_mem(ie_list->CustomerVendorIE.pointer);
+#endif /* CUSTOMER_VENDOR_IE_SUPPORT */
 
+	if (ie_list != NULL)
+		os_free_mem(ie_list);
 }
 
 #ifdef CONFIG_STA_ADHOC_SUPPORT
@@ -2310,7 +2358,7 @@ static VOID sync_fsm_adhoc_start_req_action(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *
 		Privacy = IS_SECURITY(&wdev->SecConfig);
 		pStaCfg->MlmeAux.CapabilityInfo = CAP_GENERATE(0, 1, Privacy, (pAd->CommonCfg.TxPreamble == Rt802_11PreambleShort),
 										  pAd->CommonCfg.bUseShortSlotTime, 0);
-		pStaCfg->MlmeAux.BeaconPeriod = pAd->CommonCfg.BeaconPeriod;
+		pStaCfg->MlmeAux.BeaconPeriod = pAd->CommonCfg.BeaconPeriod[HcGetBandByWdev(wdev)];
 		pStaCfg->MlmeAux.AtimWin = adhocInfo->AtimWin;
 		pStaCfg->MlmeAux.Channel = wdev->channel;
 		pStaCfg->MlmeAux.CentralChannel = wdev->channel;
@@ -2368,8 +2416,15 @@ static VOID sync_fsm_adhoc_start_req_action(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *
 VOID sync_fsm_reset(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev)
 {
 	UCHAR BandIdx = HcGetBandByWdev(wdev);
+	ULONG OldState = pAd->ScanCtrl[BandIdx].SyncFsm.CurrState;
 
 	pAd->ScanCtrl[BandIdx].SyncFsm.CurrState = SYNC_FSM_IDLE;
+
+	MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_NOTICE,
+			 "(caller : %pS) SYNC[%s, Band:%d]: [%s] =========================================> [%s]\n",
+			  OS_TRACE, wdev->if_dev->name,
+			  BandIdx, SYNC_FSM_STATE_STR[OldState],
+			  SYNC_FSM_STATE_STR[pAd->ScanCtrl[BandIdx].SyncFsm.CurrState]);
 }
 
 VOID sync_fsm_init(struct _RTMP_ADAPTER *pAd, UCHAR BandIdx, STATE_MACHINE *Sm, STATE_MACHINE_FUNC Trans[])
@@ -2559,17 +2614,4 @@ VOID sync_cntl_fsm_to_idle_when_scan_req(RTMP_ADAPTER *pAd, struct wifi_dev *wde
 					 ("%s: fail to set scan parameters\n", __func__));
 		}
 	}
-}
-
-/* add for multi wdev reuse sync state machine */
-VOID sync_fsm_init_for_wdev(struct _RTMP_ADAPTER *pAd, struct wifi_dev *wdev, STATE_MACHINE *Sm, STATE_MACHINE_FUNC Trans[])
-{
-	StateMachineInit(Sm, (STATE_MACHINE_FUNC *)Trans, SYNC_FSM_MAX_STATE, SYNC_FSM_MAX_MSG,
-					 (STATE_MACHINE_FUNC)sync_fsm_msg_invalid_state, SYNC_FSM_IDLE, SYNC_FSM_BASE);
-
-	StateMachineSetAction(Sm, SYNC_FSM_IDLE, SYNC_FSM_PEER_BEACON, (STATE_MACHINE_FUNC)sync_fsm_peer_response_idle_action);
-	StateMachineSetAction(Sm, SYNC_FSM_IDLE, SYNC_FSM_PEER_PROBE_REQ, (STATE_MACHINE_FUNC)sync_fsm_peer_request_idle_action);
-
-	wdev->sync_machine.CurrState = SYNC_FSM_IDLE;
-	wdev->sync_machine_init = TRUE;
 }

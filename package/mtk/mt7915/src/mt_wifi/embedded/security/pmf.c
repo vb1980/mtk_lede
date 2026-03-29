@@ -38,10 +38,6 @@ UCHAR PMF_MMIE_BUFFER[18] = {0x4C, 0x10,
 							 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 							};
 
-#define SAQ_IDLE	0
-#define SAQ_RETRY	1
-#define SAQ_SENDING	2
-
 
 VOID PMF_PeerAction(
 	IN PRTMP_ADAPTER pAd,
@@ -84,7 +80,7 @@ VOID PMF_MlmeSAQueryReq(
 
 	if (pPmfCfg) {
 		if ((pPmfCfg->UsePMFConnect == FALSE)) {
-			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s : Entry is not PMF capable, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, PRINT_MAC(pEntry->Addr)));
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s : Entry is not PMF capable, STA("MACSTR")\n", __func__, MAC2STR(pEntry->Addr)));
 			return;
 		}
 
@@ -140,18 +136,18 @@ VOID PMF_MlmeSAQueryReq(
 						  END_OF_ARGS);
 		if (wpa3_test_ctrl != 12) {
 			if (pPmfCfg->SAQueryStatus == SAQ_IDLE) {
-				RTMPSetTimer(&pPmfCfg->SAQueryTimer, 1000); /* 1000ms */
+				RTMPSetTimer(&pPmfCfg->SAQueryTimer, DEFAULT_SAQUERY_TIMEOUT);
 				MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s -- SAQueryTimer\n", __func__));
 			}
 
 			pPmfCfg->SAQueryStatus = SAQ_SENDING;
-			RTMPSetTimer(&pPmfCfg->SAQueryConfirmTimer, 200); /* 200ms */
+			RTMPSetTimer(&pPmfCfg->SAQueryConfirmTimer, DEFAULT_SAQUERY_CONFIRM_TIMEOUT);
 		}
 		/* transmit the frame */
 		MiniportMMRequest(pAd, QID_MGMT, pOutBuffer, FrameLen);
 		os_free_mem(pOutBuffer);
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Send SA Query Request to STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				 __func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Send SA Query Request to STA("MACSTR")\n",
+				 __func__, MAC2STR(pEntry->Addr)));
 	}
 }
 
@@ -188,8 +184,8 @@ VOID PMF_PeerSAQueryReqAction(
 
 		if (!pEntry) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : Entry is not found, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : Entry is not found, STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
@@ -197,31 +193,31 @@ VOID PMF_PeerSAQueryReqAction(
 
 		if (pPmfCfg->UsePMFConnect == FALSE) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : Entry is not PMF capable, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : Entry is not PMF capable, STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
 		if (Elem->MsgLen < LENGTH_802_11 + 4) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : saq req len(%lu) is wrong, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, Elem->MsgLen, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : saq req len(%lu) is wrong, STA("MACSTR")\n",
+				__func__, Elem->MsgLen, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
 		/* Fix PMF 5.3.3.4 un-protect SA Query Req. Need to ignore. */
 		if (pHeader->Hdr.FC.Wep == 0) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : un-Protected SA Query Req.!!! Drop it!!, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : un-Protected SA Query Req.!!! Drop it!!, STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
 		if (pEntry->SecConfig.ocv_support) {
 			if (parse_oci_ie(pEntry->pAd, pEntry->wdev, oci_ptr, Elem->MsgLen - LENGTH_802_11 - 4) == FALSE) {
 				   MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-					("[PMF]%s : oci check fail, drop it! STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-					__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+					("[PMF]%s : oci check fail, drop it! STA("MACSTR")\n",
+					__func__, MAC2STR(pHeader->Hdr.Addr2)));
 				   return;
 			} else if (pEntry->SecConfig.wait_csa_sa_query) {
 				struct tx_rx_ctl *tr_ctl = &pAd->tr_ctl;
@@ -282,7 +278,7 @@ VOID PMF_PeerSAQueryReqAction(
 		/* transmit the frame */
 		MiniportMMRequest(pAd, QID_MGMT, pOutBuffer, FrameLen);
 		os_free_mem(pOutBuffer);
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Send SA Query Response to STA(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, PRINT_MAC(SAQRspHdr.Addr1)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Send SA Query Response to STA("MACSTR")\n", __func__, MAC2STR(SAQRspHdr.Addr1)));
 	}
 }
 
@@ -314,8 +310,8 @@ VOID PMF_PeerSAQueryRspAction(
 
 		if (!pEntry) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : Entry is not found, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : Entry is not found, STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
@@ -323,23 +319,23 @@ VOID PMF_PeerSAQueryRspAction(
 
 		if (pPmfCfg->UsePMFConnect == FALSE) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : Entry is not PMF capable, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : Entry is not PMF capable, STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
 		if (Elem->MsgLen < LENGTH_802_11 + 4) {
 			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : saq rsp len(%lu) is wrong, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, Elem->MsgLen, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : saq rsp len(%lu) is wrong, STA("MACSTR")\n",
+				__func__, Elem->MsgLen, MAC2STR(pHeader->Hdr.Addr2)));
 			return;
 		}
 
 		if (pEntry->SecConfig.ocv_support &&
 			parse_oci_ie(pEntry->pAd, pEntry->wdev, oci_ptr, Elem->MsgLen - LENGTH_802_11 - 4) == FALSE) {
 			   MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR,
-				("[PMF]%s : oci check fail, drop it! STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				__func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+				("[PMF]%s : oci check fail, drop it! STA("MACSTR")\n",
+				__func__, MAC2STR(pHeader->Hdr.Addr2)));
 			   return;
 		}
 
@@ -349,9 +345,9 @@ VOID PMF_PeerSAQueryRspAction(
 			pPmfCfg->SAQueryStatus = SAQ_IDLE;
 			RTMPCancelTimer(&pPmfCfg->SAQueryTimer, &Cancelled);
 			RTMPCancelTimer(&pPmfCfg->SAQueryConfirmTimer, &Cancelled);
-			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Compare TransactionID correctly, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Compare TransactionID correctly, STA("MACSTR")\n", __func__, MAC2STR(pHeader->Hdr.Addr2)));
 		} else
-			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Compare TransactionID wrong, STA(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, PRINT_MAC(pHeader->Hdr.Addr2)));
+			MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - Compare TransactionID wrong, STA("MACSTR"), AP TransactionID =%d, STA TransactionID =%d\n", __func__, MAC2STR(pHeader->Hdr.Addr2), pPmfCfg->TransactionID, TransactionID));
 	}
 }
 
@@ -367,8 +363,8 @@ VOID PMF_SAQueryTimeOut(
 	if (pEntry) {
 		RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)pEntry->pAd;
 
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - STA(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-				 __func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - STA("MACSTR")\n",
+				 __func__, MAC2STR(pEntry->Addr)));
 #ifdef CONFIG_STA_SUPPORT
 
 		if (IS_ENTRY_PEER_AP(pEntry)) {
@@ -409,7 +405,7 @@ VOID PMF_SAQueryConfirmTimeOut(
 	if (pEntry) {
 		PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pEntry->pAd;
 
-		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - STA(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, PRINT_MAC(pEntry->Addr)));
+		MTWF_LOG(DBG_CAT_SEC, CATSEC_PMF, DBG_LVL_ERROR, ("[PMF]%s - STA("MACSTR")\n", __func__, MAC2STR(pEntry->Addr)));
 		pEntry->SecConfig.PmfCfg.SAQueryStatus = SAQ_RETRY;
 		PMF_MlmeSAQueryReq(pAd, pEntry);
 	}

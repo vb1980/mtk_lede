@@ -71,19 +71,6 @@
 			| ERROR_DETECT_N9_NORMAL_STATE)
 #endif
 
-#if defined(MT7615) || defined(MT7622)
-#define ERROR_DETECT_MASK \
-	(ERROR_DETECT_STOP_PDMA_WITH_FW_RELOAD \
-	  | ERROR_DETECT_STOP_PDMA \
-	  | ERROR_DETECT_RESET_DONE \
-	  | ERROR_DETECT_RECOVERY_DONE \
-	  | ERROR_DETECT_N9_NORMAL_STATE \
-	  | ERROR_DETECT_LMAC_ERROR \
-	  | ERROR_DETECT_PSE_ERROR \
-	  | ERROR_DETECT_PLE_ERROR \
-	  | ERROR_DETECT_PDMA_ERROR \
-	  | ERROR_DETECT_PCIE_ERROR)
-#endif
 
 #define ERROR_RECOVERY_PDMA0_STOP_NOTIFY BIT(0)
 #define ERROR_RECOVERY_PDMA0_INIT_DONE_NOTIFY BIT(1)
@@ -344,6 +331,9 @@ struct hif_pci_tx_ring {
 	enum resource_attr ring_attr;
 	UINT32 hw_didx_addr;
 	UINT32 TxDmaIdx;
+#ifdef PLE_MONITOR_SUPPORT
+	UINT32 TxDmaIdx_last;
+#endif
 	RTMP_DMACB *Cell;
 	UINT32 TxSwFreeIdx;
 	ULONG tx_ring_state;
@@ -442,6 +432,11 @@ typedef struct _PCI_HIF_T {
 
 	/* flag that indicate if the PICE power status in configuration space.. */
 	BOOLEAN bPCIclkOff;
+#ifdef PLE_MONITOR_SUPPORT
+	BOOLEAN PleBufferMonitorEn;
+	UINT32 abnormal_cnt[DBDC_BAND_NUM];
+	UINT32 last_dma_idx[DBDC_BAND_NUM];
+#endif
 #ifdef CUT_THROUGH
 	VOID *PktTokenCb;
 #endif /* CUT_THROUGH */
@@ -468,6 +463,9 @@ struct pci_task_group {
 #endif
 	RTMP_NET_TASK_STRUCT subsys_int_task;
 	RTMP_NET_TASK_STRUCT sw_int_task;
+#ifdef WF_RESET_SUPPORT
+	RTMP_NET_TASK_STRUCT wf_reset_task;
+#endif /* WF_RESET_SUPPORT */
 	struct net_device napi_dev;
 	struct napi_struct rx_data_done_napi_task;
 	VOID *priv;
@@ -486,6 +484,9 @@ struct pci_schedule_task_ops {
 #endif
 	INT(*schedule_subsys_int)(struct pci_task_group *group);
 	INT(*schedule_sw_int)(struct pci_task_group *group);
+#ifdef WF_RESET_SUPPORT
+	INT(*schedule_wf_reset)(struct pci_task_group *group);
+#endif /* WF_RESET_SUPPORT */
 };
 
 struct pci_hif_chip {
@@ -605,6 +606,11 @@ VOID pci_hif_chip_exit(struct pci_hif_chip *hif_chip);
 BOOLEAN pci_rx_event_dma_done_handle(struct _RTMP_ADAPTER *pAd, UINT8 resource_idx);
 
 VOID pci_rx_all(struct _PCI_HIF_T *pci_hif);
+#ifdef PLE_MONITOR_SUPPORT
+BOOLEAN wfdma_abnormal_check(struct _RTMP_ADAPTER *pAd);
+VOID check_ple_buffer_status(struct _RTMP_ADAPTER *pAd);
+BOOLEAN host_dma1_abnormal_check(struct _RTMP_ADAPTER *pAd);
+#endif
 
 #endif /* __MT_HIF_PCI_H__ */
 

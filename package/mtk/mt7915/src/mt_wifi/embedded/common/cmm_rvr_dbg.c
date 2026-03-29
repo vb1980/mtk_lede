@@ -104,14 +104,30 @@ INT rd_dashboard(RTMP_ADAPTER *pAd, IN RTMP_IOCTL_INPUT_STRUCT *wrq)
 	INT Status = NDIS_STATUS_SUCCESS;
 	RTMP_STRING *msg;
 	PRvR_Debug_CTRL pRVRDBGCtrl;
+	INT ret, tmp;
 
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	if (msg == NULL)
-		return 0;
+		return FALSE;
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " RvR Debug Info ", "====================");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " RvR Debug Info ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
+
 	if ((pRVRDBGCtrl->ucViewLevel & VIEW_BASICINFO) == VIEW_BASICINFO)
 		printBasicinfo(pAd, msg);
 	if ((pRVRDBGCtrl->ucViewLevel & VIEW_WCID) == VIEW_WCID)
@@ -126,7 +142,16 @@ INT rd_dashboard(RTMP_ADAPTER *pAd, IN RTMP_IOCTL_INPUT_STRUCT *wrq)
 		printNoise(pAd, msg);
 	if ((pRVRDBGCtrl->ucViewLevel & VIEW_OTHERS) == VIEW_OTHERS)
 		printOthers(pAd, msg);
-	sprintf(msg+strlen(msg), "%s\n", "========================================================");
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s\n", "========================================================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
+
 	if ((pRVRDBGCtrl->ucViewLevel & VIEW_CNNUMBER) == VIEW_CNNUMBER)
 		updateCNNum(pAd, TRUE);
 	else
@@ -145,10 +170,18 @@ INT rd_view(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	RTMP_STRING *msg;
 	INT button = Case_SHOW;
 	UINT8 ucViewLevel_val = 0;
+	INT ret, tmp;
+
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
 
 	if (arg != NULL) {
 		if (strlen(arg) > 2) {
@@ -167,15 +200,37 @@ INT rd_view(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 
 	switch (button) {
 	case Case_ERROR:
-		sprintf(msg + strlen(msg), "No corresponding parameter !!!\n");
-		sprintf(msg + strlen(msg), "ex: iwpriv ra0 rd view=FF(bit8)\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "No corresponding parameter !!!\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "ex: iwpriv ra0 rd view=FF(bit8)\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case Case_SHOW:
 		printView(pAd, msg);
 		break;
 	case Case_SET:
 		pRVRDBGCtrl->ucViewLevel  = ucViewLevel_val;
-		sprintf(msg + strlen(msg), "pRVRDBGCtrl->ucViewLevel = %x", pRVRDBGCtrl->ucViewLevel);
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"pRVRDBGCtrl->ucViewLevel = %x", pRVRDBGCtrl->ucViewLevel);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	}
 	wrq->u.data.length = strlen(msg);
@@ -190,48 +245,118 @@ INT rd_view_plus(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *w
 	PRvR_Debug_CTRL pRVRDBGCtrl;
 	RTMP_STRING *msg;
 	INT view_val = VIEW_ERROR;
-	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
+	INT ret, tmp;
 
+	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
 
 	if (arg)
 		view_val = getViewLevelValue(arg);
 	switch (view_val) {
 	case VIEW_BASICINFO:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_BASICINFO;
-		sprintf(msg + strlen(msg), "VIEW_BASICINFO Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_BASICINFO Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_WCID:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_WCID;
-		sprintf(msg + strlen(msg), "VIEW_WCID Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_WCID Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_MACCOUNTER:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_MACCOUNTER;
-		sprintf(msg + strlen(msg), "VIEW_MACCOUNTER Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_MACCOUNTER Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_PHYCOUNTER:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_PHYCOUNTER;
-		sprintf(msg + strlen(msg), "VIEW_PHYCOUNTER Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_PHYCOUNTER Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_CNNUMBER:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_CNNUMBER;
-		sprintf(msg + strlen(msg), "VIEW_CNNUMBER Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_CNNUMBER Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_NOISE:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_NOISE;
-		sprintf(msg + strlen(msg), "VIEW_NOISE Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_NOISE Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_6:
 		break;
 	case VIEW_OTHERS:
 		pRVRDBGCtrl->ucViewLevel  |= VIEW_OTHERS;
-		sprintf(msg + strlen(msg), "VIEW_OTHERS Enable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_OTHERS Enable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_ERROR:
-		sprintf(msg + strlen(msg), "No corresponding parameter !!!\n");
-		sprintf(msg + strlen(msg), "ex: iwpriv ra0 rd view+=rate\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "No corresponding parameter !!!\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "ex: iwpriv ra0 rd view+=rate\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		printView(pAd, msg);
 		break;
 	}
@@ -247,49 +372,119 @@ INT rd_view_minus(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *
 	PRvR_Debug_CTRL pRVRDBGCtrl;
 	RTMP_STRING *msg;
 	INT view_val = VIEW_ERROR;
-	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
+	INT ret, tmp;
 
+	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
 
 	if (arg)
 		view_val = getViewLevelValue(arg);
 	switch (view_val) {
 	case VIEW_BASICINFO:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_BASICINFO;
-		sprintf(msg + strlen(msg), "VIEW_BASICINFO Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_BASICINFO Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_WCID:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_WCID;
-		sprintf(msg + strlen(msg), "VIEW_WCID Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_WCID Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_MACCOUNTER:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_MACCOUNTER;
-		sprintf(msg + strlen(msg), "VIEW_MACCOUNTER Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_MACCOUNTER Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_PHYCOUNTER:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_PHYCOUNTER;
-		sprintf(msg + strlen(msg), "VIEW_PHYCOUNTER Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_PHYCOUNTER Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_CNNUMBER:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_CNNUMBER;
-		sprintf(msg + strlen(msg), "VIEW_CNNUMBER Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_CNNUMBER Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_NOISE:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_NOISE;
-		sprintf(msg + strlen(msg), "VIEW_NOISE Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_NOISE Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_6:
 
 		break;
 	case VIEW_OTHERS:
 		pRVRDBGCtrl->ucViewLevel  &= ~VIEW_OTHERS;
-		sprintf(msg + strlen(msg), "VIEW_OTHERS Disable");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "VIEW_OTHERS Disable");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case VIEW_ERROR:
-		sprintf(msg + strlen(msg), "No corresponding parameter !!!\n");
-		sprintf(msg + strlen(msg), "ex: iwpriv ra0 rd view-=rate\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "No corresponding parameter !!!\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "ex: iwpriv ra0 rd view-=rate\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		printView(pAd, msg);
 		break;
 	}
@@ -308,10 +503,19 @@ INT rd_wcid(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	INT button = Case_SHOW;
 	LONG input;
 	UINT16 wcid = 0;
+	INT ret, tmp;
+
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
+
 	if (arg != NULL) {
 		if (strlen(arg) > 3) {
 			button = Case_ERROR;
@@ -333,16 +537,46 @@ INT rd_wcid(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	}
 	switch (button) {
 	case Case_ERROR:
-		sprintf(msg + strlen(msg), "No corresponding parameter !!!\n");
-		sprintf(msg + strlen(msg), "ex: iwpriv ra0 rd sta=1~%d\n", WTBL_MAX_NUM(pAd));
-		sprintf(msg + strlen(msg), "or  iwpriv ra0 rd sta=0 for auto search first sta\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "No corresponding parameter !!!\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"ex: iwpriv ra0 rd sta=1~%d\n", WTBL_MAX_NUM(pAd));
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"or  iwpriv ra0 rd sta=0 for auto search first sta\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	case Case_SHOW:
 		Show_MacTable_Proc(pAd, ENTRY_NONE);
 		break;
 	case Case_SET:
 		pRVRDBGCtrl->wcid  = wcid;
-		sprintf(msg + strlen(msg), "pRVRDBGCtrl->wcid = %d", pRVRDBGCtrl->wcid);
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "pRVRDBGCtrl->wcid = %d", pRVRDBGCtrl->wcid);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	}
 	wrq->u.data.length = strlen(msg);
@@ -357,13 +591,28 @@ INT rd_reset(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	INT Status = NDIS_STATUS_SUCCESS;
 	RTMP_STRING *msg;
 	INT button = Case_SHOW;
+	INT ret, tmp;
+
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
 
 	switch (button) {
 	case Case_SHOW:
-		sprintf(msg + strlen(msg), "Reset all counter!\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "Reset all counter!\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		Set_ResetStatCounter_Proc(pAd, NULL);
 		break;
 	}
@@ -379,21 +628,110 @@ INT rd_help(RTMP_ADAPTER *pAd, RTMP_STRING *arg, RTMP_IOCTL_INPUT_STRUCT *wrq)
 	INT Status = NDIS_STATUS_SUCCESS;
 	RTMP_STRING *msg;
 	INT button = Case_SHOW;
+	INT ret, tmp;
+
 	os_alloc_mem(pAd, (UCHAR **)&msg, sizeof(CHAR)*MSG_LEN);
 	memset(msg, 0x00, MSG_LEN);
-	sprintf(msg, "\n");
+	ret = snprintf(msg, MSG_LEN, "\n");
+	if (os_snprintf_error(MSG_LEN, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		os_free_mem(msg);
+		return FALSE;
+	}
+
 	switch (button) {
 	case Case_SHOW:
-		sprintf(msg + strlen(msg), "%s", "iwpriv [Interface] rd [Sub-command]\n");
-		sprintf(msg + strlen(msg), "%s", "Sub-command List\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "view", "Show view level status\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "view=", "Set view level by hex value(8bits 00~FF)\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "view+=", "Enable view level by string\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "view-=", "Disable view level by string\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "wcid,sta,ap,apcli", "Show mac table\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "wcid=,sta=,ap=,apcli=", "Set WCID\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "reset", "Reset all counter\n");
-		sprintf(msg + strlen(msg), "%-25s %s", "help", "Show support command info\n");
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%s", "iwpriv [Interface] rd [Sub-command]\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%s", "Sub-command List\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "view", "Show view level status\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "view=", "Set view level by hex value(8bits 00~FF)\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "view+=", "Enable view level by string\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "view-=", "Disable view level by string\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "wcid,sta,ap,apcli", "Show mac table\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "wcid=,sta=,ap=,apcli=", "Set WCID\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "reset", "Reset all counter\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp,
+			"%-25s %s", "help", "Show support command info\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			os_free_mem(msg);
+			return FALSE;
+		}
 		break;
 	}
 	wrq->u.data.length = strlen(msg);
@@ -408,16 +746,36 @@ INT printBasicinfo (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	POS_COOKIE pObj = (POS_COOKIE) pAd->OS_Cookie;
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 	UINT8 ucBand = BAND0;
+	INT ret, tmp;
 
 	if (wdev != NULL)
 		ucBand = HcGetBandByWdev(wdev);
 	else
 		return FALSE;
 
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " BASIC ", "====================");
-	sprintf(msg+strlen(msg), "%-32s= %d\n", "Current Band ", ucBand);
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " BASIC ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n", "Current Band ", ucBand);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	RTMP_GET_TEMPERATURE(pAd, ucBand, &pAd->temperature);
-	sprintf(msg+strlen(msg), "%-32s= %d\n", "Current Temperature ", pAd->temperature);
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n", "Current Temperature ", pAd->temperature);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	return TRUE;
 }
 
@@ -425,14 +783,27 @@ VOID printView(RTMP_ADAPTER *pAd, IN RTMP_STRING *msg)
 {
 	PRvR_Debug_CTRL pRVRDBGCtrl;
 	INT view_bits = 0;
+	INT ret, tmp;
+
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
-	sprintf(msg + strlen(msg), "%-4s | %-6s | %-15s | %s\n", "bit", "arg", "info", "Status");
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%-4s | %-6s | %-15s | %s\n", "bit", "arg", "info", "Status");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+	}
 	for (PView_Key_Node = View_Key_Node_List; PView_Key_Node->key; PView_Key_Node++) {
-		sprintf(msg + strlen(msg), "%-4d | %-6s | %-15s | %s\n",
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-4d | %-6s | %-15s | %s\n",
 		view_bits++,
 		PView_Key_Node->key,
 		PView_Key_Node->str,
 		(pRVRDBGCtrl->ucViewLevel & PView_Key_Node->val ? "Enable":"Disable"));
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+		}
 	}
 }
 
@@ -446,10 +817,18 @@ INT printWcid (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	PRvR_Debug_CTRL pRVRDBGCtrl;
 	PMAC_TABLE_ENTRY pEntry = NULL;
 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+	INT ret, tmp;
 
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " WCID ", "====================");
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " WCID ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 
 	/* User assign aid, default = 0 will auto search first sta  */
 	if (pRVRDBGCtrl->wcid == 0)
@@ -465,11 +844,34 @@ INT printWcid (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 		return TRUE;
 
 	if (IS_ENTRY_CLIENT(pEntry) && pEntry->Sst == SST_ASSOC) {
-		sprintf(msg+strlen(msg), "%-32s= %d\n", "AID ", (int)pEntry->Aid);
-		sprintf(msg+strlen(msg), "%-32s= %02X:%02X:%02X:%02X:%02X:%02X\n", "MAC Addr ", PRINT_MAC(pEntry->Addr));
-		snprintf(tmp_str, temp_str_len, "%d %d %d %d", pEntry->RssiSample.AvgRssi[0], pEntry->RssiSample.AvgRssi[1],
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n", "AID ", (int)pEntry->Aid);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= %02X:%02X:%02X:%02X:%02X:%02X\n", "MAC Addr ", PRINT_MAC(pEntry->Addr));
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
+		ret = snprintf(tmp_str, temp_str_len, "%d %d %d %d", pEntry->RssiSample.AvgRssi[0], pEntry->RssiSample.AvgRssi[1],
 			 pEntry->RssiSample.AvgRssi[2], pEntry->RssiSample.AvgRssi[3]);
-		sprintf(msg+strlen(msg), "%-32s= %s\n", "RSSI0/1/2/3 ", tmp_str);
+		if (os_snprintf_error(temp_str_len, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= %s\n", "RSSI0/1/2/3 ", tmp_str);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
 		lastRxRate = pEntry->LastRxRate;
 		lastTxRate = pEntry->LastTxRate;
 		if (cap->fgRateAdaptFWOffload == TRUE) {
@@ -477,6 +879,7 @@ INT printWcid (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 				EXT_EVENT_TX_STATISTIC_RESULT_T rTxStatResult;
 				HTTRANSMIT_SETTING LastTxRate;
 
+				os_zero_mem(&rTxStatResult, sizeof(EXT_EVENT_TX_STATISTIC_RESULT_T));
 				MtCmdGetTxStatistic(pAd, GET_TX_STAT_ENTRY_TX_RATE, 0/*Don't Care*/, pEntry->wcid, &rTxStatResult);
 				LastTxRate.field.MODE = rTxStatResult.rEntryTxRate.MODE;
 				LastTxRate.field.BW = rTxStatResult.rEntryTxRate.BW;
@@ -510,61 +913,154 @@ INT printMacCounter (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	ULONG mpduper = 0;
 	ULONG mpduTXCount = 0;
 	PRvR_Debug_CTRL pRVRDBGCtrl;
+	INT ret, tmp;
 
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	if (wdev != NULL)
 		ucBand = HcGetBandByWdev(wdev);
 	else
 		return FALSE;
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " MAC COUNTER ", "====================");
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " MAC COUNTER ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 
 	/* Tx Count */
 	txCount = pAd->WlanCounters[ucBand].TransmittedFragmentCount.u.LowPart;
-	sprintf(msg+strlen(msg), "%-32s= %d\n", "Tx success count ", txCount);
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n", "Tx success count ", txCount);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+
 	if (IS_HIF_TYPE(pAd, HIF_MT)) {
 		txper = txCount == 0 ? 0 : 1000*(pAd->WlanCounters[ucBand].FailedCount.u.LowPart)/(pAd->WlanCounters[ucBand].FailedCount.u.LowPart+txCount);
-		sprintf(msg+strlen(msg), "%-32s= %ld PER=%ld.%1ld%%\n",
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld PER=%ld.%1ld%%\n",
 			"Tx fail count ",
 			(ULONG)pAd->WlanCounters[ucBand].FailedCount.u.LowPart,
 			txper/10, txper % 10);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
 	} else {
 		txper = txCount == 0 ? 0 : 1000*(pAd->WlanCounters[ucBand].RetryCount.u.LowPart+pAd->WlanCounters[ucBand].FailedCount.u.LowPart)/(pAd->WlanCounters[ucBand].RetryCount.u.LowPart+pAd->WlanCounters[ucBand].FailedCount.u.LowPart+txCount);
-		sprintf(msg+strlen(msg), "%-32s= %ld, PER=%ld.%1ld%%\n",
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld, PER=%ld.%1ld%%\n",
 			"Tx retry count ",
 			(ULONG)pAd->WlanCounters[ucBand].RetryCount.u.LowPart,
 			txper/10, txper % 10);
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
 	}
 	/*BF */
-	sprintf(msg+strlen(msg), "%-32s= %x %x\n",
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %x %x\n",
 		"Tx BF count(iBF/eBF) ", pRVRDBGCtrl->uiiBFTxcnt, pRVRDBGCtrl->uieBFTxcnt);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	/*AMPDU */
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Tx AGG Range 1 (1)", (LONG)(WlanCounter->TxAggRange1Count.u.LowPart));
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Tx AGG Range 2 (2~5)", (LONG)(WlanCounter->TxAggRange2Count.u.LowPart));
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Tx AGG Range 3 (6~15)", (LONG)(WlanCounter->TxAggRange3Count.u.LowPart));
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Tx AGG Range 4 (>15)", (LONG)(WlanCounter->TxAggRange4Count.u.LowPart));
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	mpduTXCount = WlanCounter->AmpduSuccessCount.u.LowPart;
-	sprintf(msg+strlen(msg), "%-32s= %ld\n", "Tx AMPDU success", mpduTXCount);
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n", "Tx AMPDU success", mpduTXCount);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	mpduper = mpduTXCount == 0 ? 0 : 1000 * (WlanCounter->AmpduFailCount.u.LowPart) / (WlanCounter->AmpduFailCount.u.LowPart + mpduTXCount);
-	sprintf(msg+strlen(msg), "%-32s= %ld PER=%ld.%1ld%%\n",
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld PER=%ld.%1ld%%\n",
 		"Tx AMPDU fail count", (ULONG)WlanCounter->AmpduFailCount.u.LowPart, mpduper/10, mpduper % 10);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	/* Rx Count */
 	rxCount = pAd->WlanCounters[ucBand].ReceivedFragmentCount.QuadPart;
-	sprintf(msg+strlen(msg), "%-32s= %d\n", "Rx success ", rxCount);
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n", "Rx success ", rxCount);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	rxper = pAd->WlanCounters[ucBand].ReceivedFragmentCount.u.LowPart == 0 ? 0 : 1000*(pAd->WlanCounters[ucBand].FCSErrorCount.u.LowPart)/(pAd->WlanCounters[ucBand].FCSErrorCount.u.LowPart+pAd->WlanCounters[ucBand].ReceivedFragmentCount.u.LowPart);
-	sprintf(msg+strlen(msg), "%-32s= %ld, PER=%ld.%1ld%%\n",
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld, PER=%ld.%1ld%%\n",
 		"Rx with CRC ",
 		(ULONG)pAd->WlanCounters[ucBand].FCSErrorCount.u.LowPart,
 		rxper/10, rxper % 10);
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Rx drop(out of resource)", (ULONG)pAd->Counters8023.RxNoBuffer);
-	sprintf(msg+strlen(msg), "%-32s= %ld\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %ld\n",
 		"Rx duplicate frame", (ULONG)pAd->WlanCounters[ucBand].FrameDuplicateCount.u.LowPart);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 
-	return  TRUE;
+	return TRUE;
 }
 
 
@@ -574,16 +1070,24 @@ INT printPhyCounter (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 	UINT8 ucBand = BAND0;
 	PRvR_Debug_CTRL pRVRDBGCtrl;
+	INT ret, tmp;
 
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	if (wdev != NULL)
 		ucBand = HcGetBandByWdev(wdev);
 	else
 		return FALSE;
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " PHY COUNTER ", "====================");
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " PHY COUNTER ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	if ((pRVRDBGCtrl->ucViewLevel & VIEW_CNNUMBER) == VIEW_CNNUMBER)
 		printCNNum(pAd, msg);
-	return  TRUE;
+	return TRUE;
 }
 
 
@@ -594,31 +1098,93 @@ INT printNoise (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 	UINT8 ucBand = BAND0;
 	PRvR_Debug_CTRL pRVRDBGCtrl;
+	INT ret, tmp;
 
 	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
 	if (wdev != NULL)
 		ucBand = HcGetBandByWdev(wdev);
 	else
 		return FALSE;
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " NOISE ", "====================");
-	sprintf(msg+strlen(msg), "%-32s= %s\n",
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " NOISE ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %s\n",
 		"MibBucket ", pAd->OneSecMibBucket.Enabled[ucBand] ? "Enable":"Disable");
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"Channel Busy Time ", pAd->OneSecMibBucket.ChannelBusyTimeCcaNavTx[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"Primary Channel Busy Time ", pAd->OneSecMibBucket.ChannelBusyTime[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"OBSS Air Time ", pAd->OneSecMibBucket.OBSSAirtime[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"Tx Air Time ", pAd->OneSecMibBucket.MyTxAirtime[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"Rx Air Time ", pAd->OneSecMibBucket.MyRxAirtime[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %d\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %d\n",
 		"EDCCA Time ", pAd->OneSecMibBucket.EDCCAtime[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %x\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %x\n",
 		"PD count ", pAd->OneSecMibBucket.PdCount[ucBand]);
-	sprintf(msg+strlen(msg), "%-32s= %x\n",
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp, "%-32s= %x\n",
 		"MDRDY Count ", pAd->OneSecMibBucket.MdrdyCount[ucBand]);
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
 	return TRUE;
 }
 
@@ -636,7 +1202,17 @@ INT printOthers (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 	else
 		return FALSE;
 	*/
-	sprintf(msg+strlen(msg), "%s%-16s%s\n", "====================", " OTHERS ", "====================");
+	INT ret, tmp;
+
+	tmp = MSG_LEN - strlen(msg);
+	ret = snprintf(msg + strlen(msg), tmp,
+		"%s%-16s%s\n", "====================", " OTHERS ", "====================");
+	if (os_snprintf_error(tmp, ret)) {
+		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			"snprintf error!\n");
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
@@ -644,18 +1220,38 @@ INT printCNNum (RTMP_ADAPTER *pAd, RTMP_STRING *msg)
 {
 	if (IS_MT7615(pAd) || IS_MT7622(pAd)) {
 
-	PRvR_Debug_CTRL pRVRDBGCtrl;
-	UINT8 idx;
+		PRvR_Debug_CTRL pRVRDBGCtrl;
+		UINT8 idx;
+		INT ret, tmp;
 
-	pRVRDBGCtrl = &pAd->RVRDBGCtrl;
-	if (pRVRDBGCtrl->ucCNcnt != 10) {
-		setCNNum(pAd, FALSE);
-		setRXV2(pAd, FALSE);
-	}
-	sprintf(msg+strlen(msg), "%-32s= ",	"Condition Number ");
-	for (idx = 0; idx < 10; idx++)
-		sprintf(msg+strlen(msg), "%-2d ", pAd->rxv2_cyc3[idx]);
-	sprintf(msg+strlen(msg), "\n");
+		pRVRDBGCtrl = &pAd->RVRDBGCtrl;
+		if (pRVRDBGCtrl->ucCNcnt != 10) {
+			setCNNum(pAd, FALSE);
+			setRXV2(pAd, FALSE);
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "%-32s= ",	"Condition Number ");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
+		for (idx = 0; idx < 10; idx++) {
+			tmp = MSG_LEN - strlen(msg);
+			ret = snprintf(msg + strlen(msg), tmp, "%-2d ", pAd->rxv2_cyc3[idx]);
+			if (os_snprintf_error(tmp, ret)) {
+				MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"snprintf error!\n");
+				return FALSE;
+			}
+		}
+		tmp = MSG_LEN - strlen(msg);
+		ret = snprintf(msg + strlen(msg), tmp, "\n");
+		if (os_snprintf_error(tmp, ret)) {
+			MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				"snprintf error!\n");
+			return FALSE;
+		}
 	}
 	return TRUE;
 }

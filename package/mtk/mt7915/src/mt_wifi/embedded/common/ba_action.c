@@ -354,12 +354,12 @@ static VOID ba_resource_dump_sn(struct ba_control *ba_ctl, PMAC_TABLE_ENTRY pEnt
 					if (ba_ctl->dbg_flag & SN_RECORD_MAC) {
 						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 							("idx(%d), wcid(%d),\
-							  ta(%02x:%02x:%02x:%02x:%02x:%02x),\
-							  ra(%02x:%02x:%02x:%02x:%02x:%02x),\
+							  ta("MACSTR"),\
+							  ra("MACSTR"),\
 							  sn(%d), amsdu(%d), type(%d), last_in_seq%d\n", j,
 							  dbg->wcid,
-							  dbg->ta[0], dbg->ta[1], dbg->ta[2], dbg->ta[3], dbg->ta[4], dbg->ta[5],
-							  dbg->ra[0], dbg->ra[1], dbg->ra[2], dbg->ra[3], dbg->ra[4], dbg->ra[5],
+							  MAC2STR(dbg->ta),
+							  MAC2STR(dbg->ra),
 							  dbg->sn, dbg->amsdu, dbg->type, dbg->last_in_seq));
 					} else {
 						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -372,12 +372,12 @@ static VOID ba_resource_dump_sn(struct ba_control *ba_ctl, PMAC_TABLE_ENTRY pEnt
 					if (ba_ctl->dbg_flag & SN_RECORD_MAC) {
 						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
 							("idx(%d), wcid(%d),\
-							  ta(%02x:%02x:%02x:%02x:%02x:%02x),\
-							  ra(%02x:%02x:%02x:%02x:%02x:%02x),\
+							  ta("MACSTR"),\
+							  ra("MACSTR"),\
 							  sn(%d), amsdu(%d), type(%d), last_in_seq%d\n", j,
 							  dbg->wcid,
-							  dbg->ta[0], dbg->ta[1], dbg->ta[2], dbg->ta[3], dbg->ta[4], dbg->ta[5],
-							  dbg->ra[0], dbg->ra[1], dbg->ra[2], dbg->ra[3], dbg->ra[4], dbg->ra[5],
+							  MAC2STR(dbg->ta),
+							  MAC2STR(dbg->ra),
 							  dbg->sn, dbg->amsdu, dbg->type, dbg->last_in_seq));
 					} else {
 						MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
@@ -398,6 +398,7 @@ VOID ba_resource_dump_all(RTMP_ADAPTER *pAd, ULONG second_idx)
 	BA_ORI_ENTRY *pOriBAEntry;
 	BA_REC_ENTRY *pRecBAEntry;
 	RTMP_STRING tmpBuf[10];
+	int ret;
 	struct reordering_mpdu *mpdu_blk = NULL, *msdu_blk = NULL;
 
 	for (i = 0; VALID_UCAST_ENTRY_WCID(pAd, i); i++) {
@@ -410,19 +411,44 @@ VOID ba_resource_dump_all(RTMP_ADAPTER *pAd, ULONG second_idx)
 			&& (pEntry->Sst != SST_ASSOC))
 			continue;
 
-		if (IS_ENTRY_PEER_AP(pEntry))
-			snprintf(tmpBuf, sizeof(tmpBuf), "%s", "ApCli");
-		else if (IS_ENTRY_REPEATER(pEntry))
-			snprintf(tmpBuf, sizeof(tmpBuf), "%s", "Repeater");
-		else if (IS_ENTRY_WDS(pEntry))
-			snprintf(tmpBuf, sizeof(tmpBuf), "%s", "WDS");
-		else if (IS_ENTRY_MESH(pEntry))
-			snprintf(tmpBuf, sizeof(tmpBuf), "%s", "Mesh");
-		else
-			snprintf(tmpBuf, sizeof(tmpBuf), "%s", "STA");
-
-		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%02X:%02X:%02X:%02X:%02X:%02X (Aid = %d) (%s) -\n",
-				 PRINT_MAC(pEntry->Addr), pEntry->Aid, tmpBuf));
+		if (IS_ENTRY_PEER_AP(pEntry)) {
+			ret = snprintf(tmpBuf, sizeof(tmpBuf), "%s", "ApCli");
+			if (os_snprintf_error(sizeof(tmpBuf), ret)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+		} else if (IS_ENTRY_REPEATER(pEntry)) {
+			ret = snprintf(tmpBuf, sizeof(tmpBuf), "%s", "Repeater");
+			if (os_snprintf_error(sizeof(tmpBuf), ret)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+		} else if (IS_ENTRY_WDS(pEntry)) {
+			ret = snprintf(tmpBuf, sizeof(tmpBuf), "%s", "WDS");
+			if (os_snprintf_error(sizeof(tmpBuf), ret)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+		} else if (IS_ENTRY_MESH(pEntry)) {
+			ret = snprintf(tmpBuf, sizeof(tmpBuf), "%s", "Mesh");
+			if (os_snprintf_error(sizeof(tmpBuf), ret)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+		} else {
+			ret = snprintf(tmpBuf, sizeof(tmpBuf), "%s", "STA");
+			if (os_snprintf_error(sizeof(tmpBuf), ret)) {
+				MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("%s:%d: snprintf error!\n",
+					__func__, __LINE__));
+				return;
+			}
+		}
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, (""MACSTR" (Aid = %d) (%s) -\n",
+				 MAC2STR(pEntry->Addr), pEntry->Aid, tmpBuf));
 		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("[Originator]\n"));
 
 		for (j = 0; j < NUM_OF_TID; j++) {
@@ -430,9 +456,10 @@ VOID ba_resource_dump_all(RTMP_ADAPTER *pAd, ULONG second_idx)
 				pOriBAEntry = &ba_ctl->BAOriEntry[pEntry->BAOriWcidArray[j]];
 
 				if (pOriBAEntry->ORI_BA_Status == Originator_Done)
-					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF, ("TID=%d, BAWinSize=%d, StartSeq=%d, CurTxSeq=%d\n",
-							 j, pOriBAEntry->BAWinSize, pOriBAEntry->Sequence,
-							 tr_ctl->tr_entry[pEntry->wcid].TxSeq[j]));
+					MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_OFF,
+							(" mac="MACSTR", TID=%d, BAWinSize=%d, StartSeq=%d, CurTxSeq=%d\n",
+							MAC2STR(pEntry->Addr), j, pOriBAEntry->BAWinSize, pOriBAEntry->Sequence,
+							tr_ctl->tr_entry[pEntry->wcid].TxSeq[j]));
 			}
 		}
 
@@ -1148,6 +1175,10 @@ BOOLEAN ba_resrc_ori_prep(
 	if (pBAEntry->ORI_BA_Status >= Originator_WaitRes) {
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_TRACE,
 				("%s(): ori BA session already exist, status = %d\n", __func__, pBAEntry->ORI_BA_Status));
+		if (pEntry->BAAutoTest)
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_OFF,
+					("<addba_info>: sta_mac="MACSTR", amsdu=%d, bapolice=%d, tid=%d, buffersize=%d\n",
+					MAC2STR(pEntry->Addr), amsdu_en, 1, TID, ba_wsize));
 		return FALSE;
 	}
 
@@ -1361,8 +1392,8 @@ BOOLEAN ba_resrc_rec_add(
 				 pEntry->wcid, pEntry->RXBAbitmap, pEntry->BARecWcidArray[tid]));
 	} else {
 		Status = FALSE;
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_TRACE, ("Can't Accept ADDBA for %02x:%02x:%02x:%02x:%02x:%02x TID = %d\n",
-				 PRINT_MAC(pEntry->Addr), tid));
+		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_TRACE, ("Can't Accept ADDBA for "MACSTR" TID = %d\n",
+				 MAC2STR(pEntry->Addr), tid));
 	}
 
 	return Status;
@@ -1413,6 +1444,8 @@ BOOLEAN ba_resrc_rec_del(
 	BA_REC_ENTRY *pBAEntry;
 	struct ba_control *ba_ctl = &pAd->tr_ctl.ba_ctl;
 
+	if (tid >= NUM_OF_TID)
+		return FALSE;
 	Idx = pAd->MacTab.Content[wcid].BARecWcidArray[tid];
 	if ((Idx == 0) || (Idx >= MAX_LEN_OF_BA_ORI_TABLE))
 		return FALSE;
@@ -1674,9 +1707,14 @@ VOID peer_addba_rsp_action(RTMP_ADAPTER *pAd, MLME_QUEUE_ELEM *Elem)
 		}
 		/* send BAR after BA session is build up */
 		SendRefreshBAR(pAd, pEntry);
+		if (pEntry->BAAutoTest)
+			MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_OFF,
+					("<addba_info>: sta_mac="MACSTR", amsdu=%d, bapolice=%d, tid=%d, buffersize=%d\n",
+					MAC2STR(pEntry->Addr), amsdu_en, pFrame->BaParm.BAPolicy, pFrame->BaParm.TID, ori_ba_wsize));
 		break;
 	case MLME_REQUEST_DECLINED:
 		pAd->MacTab.Content[Elem->Wcid].BADeclineBitmap |= 1 << pFrame->BaParm.TID;
+		/* fall through */
 		/* don't break, need to delete the session, too */
 	default:
 		/* delete the ori ba session passively */
@@ -1783,10 +1821,9 @@ BOOLEAN bar_process(RTMP_ADAPTER *pAd, UINT16 Wcid, ULONG MsgLen, PFRAME_BA_REQ 
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_ERROR, ("frame too large, size = %ld\n", MsgLen));
 		return FALSE;
 	} else if (MsgLen != sizeof(FRAME_BA_REQ)) {
+		/*
 		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_ERROR, ("BlockAck Request frame length size = %ld incorrect\n", MsgLen));
-		return FALSE;
-	} else if (MsgLen != sizeof(FRAME_BA_REQ)) {
-		MTWF_LOG(DBG_CAT_PROTO, CATPROTO_BA, DBG_LVL_ERROR, ("BlockAck Request frame length size = %ld incorrect\n", MsgLen));
+		*/
 		return FALSE;
 	}
 

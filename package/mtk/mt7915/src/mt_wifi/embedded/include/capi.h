@@ -27,12 +27,20 @@ VOID ap_set_wireless_nusers_ofdma(VOID *ad, VOID *param);
 VOID ap_set_wireless_mu_edca_override(VOID *ad, VOID *param);
 VOID ap_set_wireless_non_txbss_idx(VOID *ad, VOID *param);
 VOID ap_set_wireless_non_support(VOID *ad, VOID *param);
+#ifdef CONFIG_6G_SUPPORT
+VOID ap_set_wireless_act_ind_unsolicited_probe_rsp(VOID *ad, VOID *param);
+VOID ap_set_wireless_discovery_apply(VOID *ad, VOID *param);
+#endif /* CONFIG_6G_SUPPORT */
 /* export APIs */
 VOID ap_set_wireless_sta_configs(struct _RTMP_ADAPTER *ad, struct _MAC_TABLE_ENTRY *entry);
 VOID ap_set_wireless_bss_configs(struct _RTMP_ADAPTER *ad, struct wifi_dev *wdev);
 
 /* ap_set_rfeature */
 INT32  set_ap_rfeatures(PRTMP_ADAPTER pAd, RTMP_STRING *arg);
+
+#if defined(DOT11_HE_AX) && defined(FIXED_HE_GI_SUPPORT)
+VOID ap_set_he_fixed_gi_ltf_by_wcid_or_bss(RTMP_ADAPTER *pAd, UINT8 gi, UINT8 mode, UINT32 wcid, struct wifi_dev *wdev);
+#endif
 
 VOID ap_set_rfeature_ack_type(VOID *ad, VOID *param);
 VOID ap_set_rfeature_ack_policy(VOID *ad, VOID *param);

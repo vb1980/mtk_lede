@@ -63,8 +63,8 @@ VOID bgnd_scan_ipi_cr_init(IN PRTMP_ADAPTER pAd);
 #endif
 
 /* Dedicated RX */
-NDIS_STATUS set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg);
-NDIS_STATUS set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg);
+INT set_dfs_dedicated_rx_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg);
+INT set_dedicated_rx_hist_proc(IN PRTMP_ADAPTER pAd, IN RTMP_STRING * arg);
 VOID dedicated_rx_hist_scan_timeout(
 	IN PVOID SystemSpecific1,
 	IN PVOID FunctionContext,

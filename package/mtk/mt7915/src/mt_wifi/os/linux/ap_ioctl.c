@@ -346,9 +346,21 @@ INT ap_iw_handler(struct net_device *dev, struct iw_request_info *info,
 		if (IW_IOCTL_IDX(info->cmd) >= ap_standard_ioctl_num)
 			return -EOPNOTSUPP;
 		standard_descr = &(ap_standard_ioctl[IW_IOCTL_IDX(info->cmd)]);
-		if (IW_HEADER_TYPE_POINT == standard_descr->header_type)
+		if (standard_descr->header_type == IW_HEADER_TYPE_POINT) {
 			ret = copy_from_user(extra, wrqu->data.pointer,
-						wrqu->data.length * standard_descr->token_size);
+						(UINT64)wrqu->data.length * standard_descr->token_size);
+
+			/*
+			for kernel version >= 4.12.0, we will use standard_ioctl, but currently for case SSID len=32,
+			standard ioctl have a buffer overflow issue when calling iwconfig ra0/rai0 to get ESSID, that
+			will lead iwconfig has no ESSID result.
+			In order to not modify kernel/wireless_tool, we handle this scenario in driver code to minus
+			1 of data length, as kernel will automatically add it back, so acquire SSID result is correct.
+			*/
+			if (info->cmd == SIOCGIWESSID && wrqu->data.length == MAX_LEN_OF_SSID) {
+				wrqu->data.length -= 1;
+			}
+		}
 	} else {
 #ifdef CONFIG_WEXT_PRIV
 		INT extra_size;
@@ -551,7 +563,14 @@ struct iw_priv_args ap_priv_tab[] = {
 		RTPRIV_IOCTL_RX_STATISTICS,
 		IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
 		"rx"
-	}
+	},
+#ifdef CONFIG_COLGIN_MT6890
+	{
+		RTPRIV_IOCTL_LOW_POWER,
+		IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
+		"low_power"
+	},
+#endif
 };
 
 #ifdef CONFIG_APSTA_MIXED_SUPPORT
@@ -586,6 +605,7 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 	INT			apidx = 0;
 	UINT32		org_len;
 	RT_CMD_AP_IOCTL_CONFIG IoctlConfig, *pIoctlConfig = &IoctlConfig;
+	struct wifi_dev *wdev = NULL;
 
 	net_dev = (struct net_device *)net_dev_obj;
 
@@ -597,7 +617,10 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		 */
 		return -ENETDOWN;
 	}
-	memcpy(wrq->ifr_ifrn.ifrn_name, wrqin->ifr_ifrn.ifrn_name, IFNAMSIZ);
+
+	/*Get interface name from if dev, fix issue of ifname in struct iwreq
+	is invalid when use 32 bit user space + 64 bit kernel space*/
+	memcpy(wrq->ifr_ifrn.ifrn_name, net_dev->name, IFNAMSIZ);
 
 	wrq->u.data.pointer = wrqin->u.data.pointer;
 	wrq->u.data.length = wrqin->u.data.length;
@@ -652,9 +675,8 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 				if (copy_from_user(&sta_vlan_param, erq->pointer, erq->length)) {
 					Status = -EFAULT;
 				} else {
-					printk("STA Addr %02x %02x %02x %02x %02x %02x Vlan ID %d\n",
-						sta_vlan_param.sta_addr[0], sta_vlan_param.sta_addr[1], sta_vlan_param.sta_addr[2],
-						sta_vlan_param.sta_addr[3], sta_vlan_param.sta_addr[4], sta_vlan_param.sta_addr[5],
+					printk("STA Addr "MACSTR" Vlan ID %d\n",
+						MAC2STR(sta_vlan_param.sta_addr),
 						sta_vlan_param.vlan_id);
 					RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_SET_STA_VLAN, 0, &sta_vlan_param, sizeof(RT_CMD_AP_STA_VLAN));
 				}
@@ -698,7 +720,8 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 
 	case SIOCGIWESSID: { /*Get ESSID */
-		RT_CMD_AP_IOCTL_SSID IoctlSSID, *pIoctlSSID = &IoctlSSID;
+		RT_CMD_AP_IOCTL_SSID IoctlSSID = {0};
+		RT_CMD_AP_IOCTL_SSID *pIoctlSSID = &IoctlSSID;
 		struct iw_point *erq = &wrqin->u.essid;
 		PCHAR pSsidStr = NULL;
 
@@ -731,7 +754,7 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 
 	case SIOCGIWFREQ: { /* get channel/frequency (Hz) */
-		ULONG Channel;
+		ULONG Channel = 0;
 
 		RTMP_DRIVER_CHANNEL_GET(pAd, pIoctlConfig->apidx, &Channel);
 		wrqin->u.freq.m = Channel; /*wdev->channel; */
@@ -750,7 +773,8 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 
 	case SIOCGIWRATE: { /*get default bit rate (bps) */
-		RT_CMD_IOCTL_RATE IoctlRate, *pIoctlRate = &IoctlRate;
+		RT_CMD_IOCTL_RATE IoctlRate = {0};
+		RT_CMD_IOCTL_RATE *pIoctlRate = &IoctlRate;
 
 		pIoctlRate->priv_flags = RT_DEV_PRIV_FLAGS_GET(net_dev);
 		RTMP_DRIVER_BITRATE_GET(pAd, pIoctlRate);
@@ -790,8 +814,27 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 	case SIOCGIWSENS:   /*get sensitivity (dBm) */
 	case SIOCSIWSENS:	/*set sensitivity (dBm) */
 	case SIOCGIWPOWER:  /*get Power Management settings */
-	case SIOCSIWPOWER:  /*set Power Management settings */
-	case SIOCGIWTXPOW:  /*get transmit power (dBm) */
+	case SIOCSIWPOWER:/*set Power Management settings */
+		Status = RTMP_IO_EOPNOTSUPP;
+		break;
+	case SIOCGIWTXPOW:/*get transmit power (dBm) */
+	{
+		INT32 powerval = 0;
+
+		wdev = pIoctlConfig->wdev;
+		if (wdev->if_up_down_state == FALSE) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s RT_PRIV_IOCTL interface is down, cmd [%x] return!!!\n", __func__, cmd));
+			return -ENETDOWN;
+		}
+		powerval = rtmp_get_macPower(pAd);
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("power = %d\n", powerval));
+		wrqin->u.txpower.value = powerval;/* The value of the parameter itself */
+		wrqin->u.txpower.disabled = 0;/* Disable the feature */
+		wrqin->u.txpower.flags = 0;/* dBm */
+		wrqin->u.txpower.fixed = 0;/* Hardware should not use auto select */
+		break;
+	}
 	case SIOCSIWTXPOW:  /*set transmit power (dBm) */
 
 	case SIOCGIWRANGE:	/*Get range of parameters */
@@ -801,14 +844,27 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 	case RT_PRIV_IOCTL:
 	case RT_PRIV_IOCTL_EXT: {
+		wdev = pIoctlConfig->wdev;
 		subcmd = wrqin->u.data.flags;
+
+		if ((wdev != NULL) && (wdev->if_up_down_state == FALSE)) {
+			if (wdev_down_exec_ioctl(wrq, subcmd) == FALSE) {
+				MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+					"interface is down, cmd [%x] return!!!\n", cmd);
+				return -ENETDOWN;
+			}
+		}
 		Status = RTMP_AP_IoctlHandle(pAd, wrq, CMD_RT_PRIV_IOCTL, subcmd, wrqin->u.data.pointer, 0);
 	}
 	break;
 
 	case SIOCGIWPRIV:
 		if (wrqin->u.data.pointer) {
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+			if (access_ok(VERIFY_WRITE, wrqin->u.data.pointer, sizeof(ap_priv_tab)) != TRUE)
+#else
 			if (access_ok(wrqin->u.data.pointer, sizeof(ap_priv_tab)) != TRUE)
+#endif
 				break;
 
 			if ((ARRAY_SIZE(ap_priv_tab)) <= wrq->u.data.length) {
@@ -823,19 +879,45 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 
 	case RTPRIV_IOCTL_SET: {
+		wdev = pIoctlConfig->wdev;
+
+		if ((wdev != NULL) && (wdev->if_up_down_state == FALSE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s interface is down, cmd [%x] return!!!\n", __func__, cmd));
+			return -ENETDOWN;
+		}
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#else
 		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#endif
 			Status = RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_SET, 0, NULL, 0);
 	}
 	break;
 
 	case RTPRIV_IOCTL_SHOW: {
+		wdev = pIoctlConfig->wdev;
+
+		if ((wdev != NULL) && (wdev->if_up_down_state == FALSE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s interface is down, cmd [%x] return!!!\n", __func__, cmd));
+			return -ENETDOWN;
+		}
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#else
 		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#endif
 			Status = RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_SHOW, 0, NULL, 0);
 	}
 	break;
 
 	case RTPRIV_IOCTL_PHY_STATE: {
-		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#else
+		if (access_ok(wrqin->u.data.pointer, sizeof(ap_priv_tab)) != TRUE)
+#endif
 			Status = RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_PHY_STATE, 0, NULL, 0);
 	}
 	break;
@@ -864,6 +946,13 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 #ifdef AP_SCAN_SUPPORT
 
 	case RTPRIV_IOCTL_GSITESURVEY:
+		wdev = pIoctlConfig->wdev;
+
+		if ((wdev != NULL) && (wdev->if_up_down_state == FALSE)) {
+			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+				("%s interface is down, cmd [%x] return!!!\n", __func__, cmd));
+			return -ENETDOWN;
+		}
 		RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_GSITESURVEY, 0, NULL, 0);
 		break;
 #endif /* AP_SCAN_SUPPORT */
@@ -918,6 +1007,16 @@ INT rt28xx_ap_ioctl(void *net_dev_obj, void *data_obj, int cmd) /* snowpin for a
 		break;
 #endif
 
+#ifdef CONFIG_COLGIN_MT6890
+    case RTPRIV_IOCTL_LOW_POWER:
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+		if (access_ok(VERIFY_READ, wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#else
+		if (access_ok(wrqin->u.data.pointer, wrqin->u.data.length) == TRUE)
+#endif
+			Status = RTMP_AP_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_LOW_POWER, 0, NULL, 0);
+        break;
+#endif
 	default:
 		/*			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("IOCTL::unknown IOCTL's cmd = 0x%08x\n", cmd)); */
 		Status = RTMP_IO_EOPNOTSUPP;

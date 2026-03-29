@@ -15,7 +15,11 @@ struct _RTMP_CHIP_DBG;
 #define MT7915_MT_WTBL_SIZE         288
 #define MAX_INBAND_WTBL_NUM         20
 
+#ifdef CONFIG_COLGIN_MT6890
+#define MAX_NUM_OF_MT7915_STA       128
+#else
 #define MAX_NUM_OF_MT7915_STA       256
+#endif
 
 #define WTBL_MASK_UPDATE_MAX_RETRY	64000
 

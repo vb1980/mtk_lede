@@ -51,7 +51,6 @@ struct mt_wlan_hook_ctrl {
 
 void mt_wlan_hook_init(void);
 int mt_wlan_hook_call(unsigned short hook, void *ad, void *priv);
-int mt_wlan_hook_register(struct mt_wlan_hook_ops *ops);
-int mt_wlan_hook_unregister(struct mt_wlan_hook_ops *ops);
-
+int mt7915_mt_wlan_hook_register(struct mt_wlan_hook_ops *ops);
+int mt7915_mt_wlan_hook_unregister(struct mt_wlan_hook_ops *ops);
 #endif /*_MT_WLAN_HOOK_H_*/

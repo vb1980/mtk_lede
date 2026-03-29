@@ -52,6 +52,13 @@ VOID StaSiteSurvey(
 		ScanType = SCAN_ACTIVE;
 
 #endif /* WSC_STA_SUPPORT */
+
+	/*To do SiteSurvey, need TakeChannelOpCharge first*/
+	if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN, FALSE)) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: TakeChannelOpCharge fail for SCAN!!\n", __func__));
+		return;
+	}
+
 	RTMPZeroMemory(ScanReq.Ssid, MAX_LEN_OF_SSID);
 	ScanReq.SsidLen = 0;
 
@@ -76,13 +83,13 @@ VOID ApSiteSurvey_by_wdev(
 	struct wifi_dev		*wdev)
 {
 	MLME_SCAN_REQ_STRUCT    ScanReq;
-	SCAN_CTRL *ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
-	BSS_TABLE *ScanTab = get_scan_tab_by_wdev(pAd, wdev);
-	UINT8 band_idx = BAND0;
+	SCAN_CTRL *ScanCtrl = NULL;
+	BSS_TABLE *ScanTab = NULL;
+	UINT8 band_idx;
 #ifdef CON_WPS
 	UCHAR ifIdx;
 #endif /*ifIdx*/
-	struct DOT11_H *pDot11hTest = &pAd->Dot11_H[band_idx];
+	struct DOT11_H *pDot11hTest = NULL;
 	BOOLEAN bSupport5G = HcIsRfSupport(pAd, RFIC_5GHZ);
 	if (!wdev) {
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
@@ -90,7 +97,11 @@ VOID ApSiteSurvey_by_wdev(
 		return;
 	}
 
+	ScanCtrl = get_scan_ctrl_by_wdev(pAd, wdev);
+	ScanTab = get_scan_tab_by_wdev(pAd, wdev);
 	band_idx = HcGetBandByWdev(wdev);
+	pDot11hTest = &pAd->Dot11_H[band_idx];
+
 	if (bSupport5G && (pAd->CommonCfg.bIEEE80211H == 1)
 #ifdef MT_DFS_SUPPORT
 		&& (pAd->CommonCfg.DfsParameter.bDfsEnable == 1)
@@ -111,6 +122,13 @@ VOID ApSiteSurvey_by_wdev(
 		return;
 	}
 #endif
+
+	/*To do SiteSurvey, need TakeChannelOpCharge first*/
+	if (!TakeChannelOpCharge(pAd, wdev, CH_OP_OWNER_SCAN, FALSE)) {
+		MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s: TakeChannelOpCharge fail for SCAN!!\n", __func__));
+		return;
+	}
+
 	/* Don't clear the scan table if we are doing partial scan */
 #ifdef CON_WPS
 	ifIdx = wdev->func_idx;
@@ -123,7 +141,14 @@ VOID ApSiteSurvey_by_wdev(
 #endif /*CON_WPS*/
 		if ((ScanCtrl->PartialScan.bScanning == TRUE && ScanCtrl->Channel == 0) ||
 			ScanCtrl->PartialScan.bScanning == FALSE)
+#ifdef ENHANCE_STAT_SUPPORT
+		{
+			BssTableInit (ScanTab);
+			ResetScanChannelStats(pAd, band_idx);
+		}
+#else
 			BssTableInit(ScanTab);
+#endif
 
 	pAd->ApCfg.bAutoChannelAtBootup[band_idx] = ChannelSel;
 #ifdef OFFCHANNEL_SCAN_FEATURE
@@ -175,10 +200,21 @@ INT ApSiteSurveyNew_by_wdev(
 	MLME_SCAN_REQ_STRUCT    ScanReq;
 	BandIdx = HcGetBandByWdev(wdev);
 
+#ifdef SCAN_SUPPORT
+	if (scan_in_run_state(pAd, wdev)) {
+		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+			("%s::Failed!!!Scan is running, please try again after scan done!\n", __func__));
+		return FALSE;
+	}
+#endif
+
 	RTMPZeroMemory(&ScanReq, sizeof(ScanReq));;
 	AsicDisableSync(pAd, HW_BSSID_0);
 	MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s , %u, %u, %u", __func__, channel, timeout, ScanType));
 	BssTableInit(ScanTab);
+#ifdef ENHANCE_STAT_SUPPORT
+	ResetScanChannelStats(pAd, BandIdx);
+#endif
 	ChannelInfoResetNew(pAd);
 	/* pAd->Mlme.ApSyncMachine.CurrState = AP_SYNC_IDLE; */
 	/* TODO: Raghav: cancel existing scan */
@@ -193,14 +229,13 @@ INT ApSiteSurveyNew_by_wdev(
 	}
 
 	pAd->ApCfg.bAutoChannelAtBootup[BandIdx] = ChannelSel;
-	pAd->ChannelInfo.bandidx = BandIdx;
 	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_OFF,
-			("%s : bandidx :%d!! \n", __func__, pAd->ChannelInfo.bandidx));
+		("%s : bandidx :%d  channel :%d!!\n", __func__, BandIdx, channel));
 	if (channel) {
 			pAd->ApCfg.current_channel_index = Channel2Index (pAd, channel, BandIdx);
 			MTWF_LOG(DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
 				("[%s] ApCfg.current_channel_index = %d\n", __func__, pAd->ApCfg.current_channel_index));
-			pAd->ChannelInfo.ChannelNo = channel;
+			pAd->ChannelInfo.ChannelNo[BandIdx] = channel;
 	}
 	cntl_scan_request(wdev, &ScanReq);
 	return CHANNEL_MONITOR_STRG_SUCCESS;

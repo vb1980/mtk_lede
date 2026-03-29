@@ -378,6 +378,7 @@ NDIS_STATUS MATEngineExit(
 
 #endif
 	pAd->MatCfg.status = MAT_ENGINE_STAT_EXITED;
+	pAd->MatCfg.nodeCount = 0;
 	return TRUE;
 }
 

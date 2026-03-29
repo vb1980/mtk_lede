@@ -191,8 +191,8 @@ error1:
 	return 1;
 
 error2:
-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
-		("%s: invalid entry. no station link up.\n", __func__));
+	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE,
+		"invalid entry. no station link up.\n");
 	return 1;
 }
 
@@ -217,24 +217,14 @@ INT ShowTxPhyRate(
 {
 	INT status = FALSE;
 	UINT8 ucBandIdx;
-	struct  wifi_dev *wdev;
-#ifdef CONFIG_AP_SUPPORT
+
 	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
-	UCHAR	   apidx = pObj->ioctl_if;
-#endif /* CONFIG_AP_SUPPORT */
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 
-#ifdef CONFIG_AP_SUPPORT
-	/* obtain Band index */
-	if (apidx >= pAd->ApCfg.BssidNum)
+	if (wdev != NULL)
+		ucBandIdx = HcGetBandByWdev(wdev);
+	else
 		return FALSE;
-	wdev = &pAd->ApCfg.MBSSID[apidx].wdev;
-	ucBandIdx = HcGetBandByWdev(wdev);
-#endif /* CONFIG_AP_SUPPORT */
-
-#ifdef CONFIG_STA_SUPPORT
-	wdev = &pAd->StaCfg[0].wdev;
-	ucBandIdx = HcGetBandByWdev(wdev);
-#endif /* CONFIG_STA_SUPPORT */
 
 	if (ucBandIdx >= DBDC_BAND_NUM)
 		return FALSE;
@@ -293,27 +283,16 @@ INT ShowRxPhyRate(
 {
 	INT status = FALSE;
 	UINT8 ucBandIdx;
-	struct	wifi_dev *wdev;
 	UINT8 rx_rate = 0, rx_nsts = 0, rx_mode = 0, buf = 0;
 	CHAR str[6][20] = {"CCK", "OFDM", "HT Mix-Mode", "HT Green-Field", "VHT", "HE"};
-	CHAR rx_mode_str[20];
-#ifdef CONFIG_AP_SUPPORT
+	CHAR rx_mode_str[20] = {0};
 	POS_COOKIE	pObj = (POS_COOKIE) pAd->OS_Cookie;
-	UCHAR	   apidx = pObj->ioctl_if;
-#endif /* CONFIG_AP_SUPPORT */
+	struct wifi_dev *wdev = get_wdev_by_ioctl_idx_and_iftype(pAd, pObj->ioctl_if, pObj->ioctl_if_type);
 
-#ifdef CONFIG_AP_SUPPORT
-	/* obtain Band index */
-	if (apidx >= pAd->ApCfg.BssidNum)
+	if (wdev != NULL)
+		ucBandIdx = HcGetBandByWdev(wdev);
+	else
 		return FALSE;
-	wdev = &pAd->ApCfg.MBSSID[apidx].wdev;
-	ucBandIdx = HcGetBandByWdev(wdev);
-#endif /* CONFIG_AP_SUPPORT */
-
-#ifdef CONFIG_STA_SUPPORT
-	wdev = &pAd->StaCfg[0].wdev;
-	ucBandIdx = HcGetBandByWdev(wdev);
-#endif /* CONFIG_STA_SUPPORT */
 
 	if (ucBandIdx >= DBDC_BAND_NUM)
 		return FALSE;
@@ -579,6 +558,9 @@ static VOID phy_stat_multi_rssi_rsp_handle(struct cmd_msg *msg, char *Data, UINT
 
 	for (index = 0; index < num; index++) {
 		RssiPair->u2WlanIdx = ptr->u2WlanIdx;
+#ifdef RT_BIG_ENDIAN
+		RssiPair->u2WlanIdx = le2cpu16(RssiPair->u2WlanIdx);
+#endif
 		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 				("%s(): WlanIdx: %d\n", __func__, RssiPair->u2WlanIdx));
 
@@ -677,6 +659,9 @@ INT32 MtCmdMultiRssi(
 		os_zero_mem(&PhyStatRssi, sizeof(CMD_PHY_STATE_SHOW_RSSI_T));
 		PhyStatRssi.u1PhyStateInfoCatg = CMD_PHY_STATE_RSSI;
 		PhyStatRssi.u2WlanIdx = RssiPair[index].u2WlanIdx;
+#ifdef RT_BIG_ENDIAN
+		PhyStatRssi.u2WlanIdx = cpu2le16(PhyStatRssi.u2WlanIdx);
+#endif
 		AndesAppendCmdMsg(msg, (char *)&PhyStatRssi, sizeof(CMD_PHY_STATE_SHOW_RSSI_T));
 	}
 	ret = chip_cmd_tx(pAd, msg);

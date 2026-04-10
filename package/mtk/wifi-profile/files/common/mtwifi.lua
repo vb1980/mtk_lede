@@ -30,7 +30,7 @@ function add_vif_into_lan(vif)
         --os.execute("uci set network.lan.ifname=\""..brvifs.."\"")
         --os.execute("uci commit")
         --os.execute("ubus call network.interface.lan add_device \"{\\\"name\\\":\\\""..vif.."\\\"}\"")
-        -- os.execute("brctl addif br-lan "..vif)
+        os.execute("brctl addif br-lan "..vif)
         -- if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
         --     os.execute("echo 1 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
         -- end
@@ -55,7 +55,7 @@ function del_vif_from_lan(vif)
         -- if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
         --     os.execute("echo 0 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
         -- end
-        -- os.execute("brctl delif br-lan "..vif)
+        os.execute("brctl delif br-lan "..vif)
     end
 end
 
@@ -101,7 +101,7 @@ function mtwifi_up(devname)
             --     os.execute("/etc/init.d/wpad start")
             -- else
                 os.execute("ifconfig "..dev.main_ifname.." up")
-                -- add_vif_into_lan(dev.main_ifname)
+                add_vif_into_lan(dev.main_ifname)
             -- end
             -- if wifi_services_exist then
             --     miniupnpd_chk(devname, dev.main_ifname, true)
@@ -125,7 +125,7 @@ function mtwifi_up(devname)
                 --     os.execute("/etc/init.d/wpad start")
                 -- else
                     os.execute("ifconfig "..vif.." up")
-                    -- add_vif_into_lan(vif)
+                    add_vif_into_lan(vif)
                 -- end
                 -- if wifi_services_exist and safe_match(vif, dev.ext_ifname) then
                 --     miniupnpd_chk(devname, vif, true)
@@ -190,7 +190,7 @@ function mtwifi_down(devname)
             then
                 nixio.syslog("debug", "mtwifi_down: ifconfig "..vif.." down")
                 os.execute("ifconfig "..vif.." down")
-                -- del_vif_from_lan(vif)
+                del_vif_from_lan(vif)
             -- else nixio.syslog("debug", "mtwifi_down: skip "..vif..", prefix not match "..pre)
             end
         end

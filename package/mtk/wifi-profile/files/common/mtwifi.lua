@@ -27,10 +27,10 @@ function add_vif_into_lan(vif)
     if not string.match(brvifs, esc(vif)) then
         nixio.syslog("debug", "add "..vif.." into lan")
         brvifs = brvifs.." "..vif
-        --os.execute("uci set network.lan.ifname=\""..brvifs.."\"")
+        --os.execute("uci set network.lan.ifname=\""..brvifs.."\"") --netifd will down vif form /etc/config/network
         --os.execute("uci commit")
         --os.execute("ubus call network.interface.lan add_device \"{\\\"name\\\":\\\""..vif.."\\\"}\"")
-        os.execute("brctl addif br-lan "..vif)
+        os.execute("brctl addif br-lan "..vif) -- double insurance for rare failure
         -- if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
         --     os.execute("echo 1 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
         -- end

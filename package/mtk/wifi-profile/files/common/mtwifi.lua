@@ -31,9 +31,9 @@ function add_vif_into_lan(vif)
         --os.execute("uci commit")
         --os.execute("ubus call network.interface.lan add_device \"{\\\"name\\\":\\\""..vif.."\\\"}\"")
         os.execute("brctl addif br-lan "..vif) -- double insurance for rare failure
-        -- if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
-        --     os.execute("echo 1 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
-        -- end
+	if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
+            os.execute("echo 1 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
+	end
     else
         nixio.syslog("debug", vif.." is already added into lan")
     end
@@ -52,18 +52,11 @@ function del_vif_from_lan(vif)
         --os.execute("uci set network.lan.ifname=\""..brvifs.."\"")
         --os.execute("uci commit")
         --os.execute("ubus call network.interface.lan remove_device \"{\\\"name\\\":\\\""..vif.."\\\"}\"")
-        -- if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
-        --     os.execute("echo 0 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
-        -- end
+        if mtkwifi.exists("/proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6") then
+            os.execute("echo 0 > /proc/sys/net/ipv6/conf/"..vif.."/disable_ipv6")
+        end
         os.execute("brctl delif br-lan "..vif)
     end
-end
-
-local function safe_match(vif, pattern_prefix)
-    if not pattern_prefix or pattern_prefix == "" then
-        return false
-    end
-    return string.match(vif, esc(pattern_prefix).."[0-9]+")
 end
 
 function mtwifi_up(devname)
@@ -97,55 +90,59 @@ function mtwifi_up(devname)
         -- we have to bring up main_ifname first, main_ifname will create all other vifs.
         if mtkwifi.exists("/sys/class/net/"..dev.main_ifname) then
             nixio.syslog("debug", "mtwifi_up: ifconfig "..dev.main_ifname.." up")
-            -- if mtkwifi.exists("/etc/init.d/wpad") then
-            --     os.execute("/etc/init.d/wpad start")
-            -- else
+            if mtkwifi.exists("/etc/init.d/wpad") then
+                os.execute("/etc/init.d/wpad start")
+            else
                 os.execute("ifconfig "..dev.main_ifname.." up")
                 add_vif_into_lan(dev.main_ifname)
-            -- end
-            -- if wifi_services_exist then
-            --     miniupnpd_chk(devname, dev.main_ifname, true)
-            -- end
+            end
+            if wifi_services_exist then
+                miniupnpd_chk(devname, dev.main_ifname, true)
+            end
         else
             nixio.syslog("err", "mtwifi_up: main_ifname "..dev.main_ifname.." missing, quit!")
             return
         end
         for _,vif in ipairs(string.split(mtkwifi.read_pipe("ls /sys/class/net"), "\n"))
         do
+            -- add apclix-x to br-lan automatically
+            if string.match(vif, "apcli%a-%d+") then
+                add_vif_into_lan(vif)
+            end
             if vif ~= dev.main_ifname and
-            (  safe_match(vif, dev.ext_ifname)
-            or (safe_match(vif, dev.apcli_ifname) and
+            (  string.match(vif, esc(dev.ext_ifname).."[0-9]+")
+            or (string.match(vif, esc(dev.apcli_ifname).."[0-9]+") and
                 cfgs.ApCliEnable ~= "0" and cfgs.ApCliEnable ~= "")
-            or (safe_match(vif, dev.wds_ifname) and
+            or (string.match(vif, esc(dev.wds_ifname).."[0-9]+") and
                 cfgs.WdsEnable ~= "0" and cfgs.WdsEnable ~= "")
-            or safe_match(vif, dev.mesh_ifname))
+            or string.match(vif, esc(dev.mesh_ifname).."[0-9]+"))
             then
                 nixio.syslog("debug", "mtwifi_up: ifconfig "..vif.." up")
-                -- if mtkwifi.exists("/etc/init.d/wpad") then
-                --     os.execute("/etc/init.d/wpad start")
-                -- else
+                if mtkwifi.exists("/etc/init.d/wpad") then
+                    os.execute("/etc/init.d/wpad start")
+                else
                     os.execute("ifconfig "..vif.." up")
                     add_vif_into_lan(vif)
-                -- end
-                -- if wifi_services_exist and safe_match(vif, dev.ext_ifname) then
-                --     miniupnpd_chk(devname, vif, true)
-                -- end
+                end
+                if wifi_services_exist and string.match(vif, esc(dev.ext_ifname).."[0-9]+") then
+                    miniupnpd_chk(devname, vif, true)
+                end
             -- else nixio.syslog("debug", "mtwifi_up: skip "..vif..", prefix not match "..pre)
             end
         end
-        -- if wifi_services_exist then
-        --      d8021xd_chk(devname, dev.ext_ifname, dev.main_ifname, true)
-        -- end
+        if wifi_services_exist then
+             d8021xd_chk(devname, dev.ext_ifname, dev.main_ifname, true)
+        end
 
     else nixio.syslog("debug", "mtwifi_up: skip "..devname..", config(l1profile) not exist")
     end
 
     os.execute(" rm -rf /tmp/mtk/wifi/mtwifi*.need_reload")
     -- for ax7800 project, close the ra0.
-    if dev and string.find(dev.profile_path, "ax7800") then
+    if string.find(dev.profile_path, "ax7800") then
     	os.execute("ifconfig ra0 down")
     end
-    if dev and string.find(dev.profile_path, "ax5400") then
+    if string.find(dev.profile_path, "ax5400") then
         os.execute("ifconfig ra0 down")
     end
 end
@@ -161,9 +158,9 @@ function mtwifi_down(devname)
     nixio.syslog("debug", "mtwifi_down called!")
 
     -- M.A.N service
-    -- if mtkwifi.exists("/etc/init.d/man") then
-    --     os.execute("/etc/init.d/man stop")
-    -- end
+    if mtkwifi.exists("/etc/init.d/man") then
+        os.execute("/etc/init.d/man stop")
+    end
 
     local devs, l1parser = mtkwifi.__get_l1dat()
     -- l1 profile present, good!
@@ -177,18 +174,20 @@ function mtwifi_down(devname)
             nixio.syslog("err", "mtwifi_down: main_ifname "..dev.main_ifname.." missing, quit!")
             return
         end
-        -- if wifi_services_exist then
-        --     d8021xd_chk(devname,dev.ext_ifname,dev.main_ifname)
-        -- end
+        os.execute("iwpriv "..dev.main_ifname.." set hw_nat_register=0")
+        if wifi_services_exist then
+            d8021xd_chk(devname,dev.ext_ifname,dev.main_ifname)
+        end
         for _,vif in ipairs(string.split(mtkwifi.read_pipe("ls /sys/class/net"), "\n"))
         do
             if vif == dev.main_ifname
-            or safe_match(vif, dev.ext_ifname)
-            or safe_match(vif, dev.apcli_ifname)
-            or safe_match(vif, dev.wds_ifname)
-            or safe_match(vif, dev.mesh_ifname)
+            or string.match(vif, esc(dev.ext_ifname).."[0-9]+")
+            or string.match(vif, esc(dev.apcli_ifname).."[0-9]+")
+            or string.match(vif, esc(dev.wds_ifname).."[0-9]+")
+            or string.match(vif, esc(dev.mesh_ifname).."[0-9]+")
             then
                 nixio.syslog("debug", "mtwifi_down: ifconfig "..vif.." down")
+                os.execute("killall hostapd")
                 os.execute("ifconfig "..vif.." down")
                 del_vif_from_lan(vif)
             -- else nixio.syslog("debug", "mtwifi_down: skip "..vif..", prefix not match "..pre)

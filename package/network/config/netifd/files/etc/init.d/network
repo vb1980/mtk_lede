@@ -30,7 +30,7 @@ reload_service() {
 
 	init_switch
 	ubus call network reload || rv=1
-	/sbin/wifi up
+	/sbin/wifi reload_legacy
 	return $rv
 }
 
@@ -38,11 +38,6 @@ stop_service() {
 	/sbin/wifi down
 	ifdown -a
 	sleep 1
-}
-
-service_running() {
-        ubus -t 120 wait_for network.interface
-        /sbin/wifi up
 }
 
 validate_atm_bridge_section()

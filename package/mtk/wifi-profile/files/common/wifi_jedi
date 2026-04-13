@@ -159,9 +159,9 @@ function wifi(cmd, devname)
 	end
 
 	-- for wifi service which should setup after wifi up
--- if  cmd == "up" or cmd == "restart" or cmd == "reload" or cmd == "reset" then
---     _G["wifi_service_misc"]()
--- end
+	if  cmd == "up" or cmd == "restart" or cmd == "reload" or cmd == "reset" then
+		_G["wifi_service_misc"]()
+	end
 end
 
 function wifi_orig(cmd,devname)

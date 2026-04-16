@@ -1042,7 +1042,7 @@ define Device/jcg_q20
 	check-size
   DEVICE_VENDOR := JCG
   DEVICE_MODEL := Q20
-  DEVICE_PACKAGES := kmod-mt7915-firmware uboot-envtools
+  DEVICE_PACKAGES := kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
 endef
 TARGET_DEVICES += jcg_q20
 

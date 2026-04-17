@@ -812,6 +812,28 @@ define Device/h3c_tx1806
 endef
 TARGET_DEVICES += h3c_tx1806
 
+define Device/haier-sim
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	  check-size
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+
+define Device/haier_har-20s2u1
+  $(Device/haier-sim)
+  DEVICE_VENDOR := Haier
+  DEVICE_MODEL := HAR-20S2U1
+endef
+TARGET_DEVICES += haier_har-20s2u1
+
 define Device/hatlab_gateboard-one
   $(Device/dsa-migration)
   DEVICE_VENDOR := HATLab
@@ -1089,6 +1111,24 @@ define Device/jdcloud_re-sp-01b
 endef
 TARGET_DEVICES += jdcloud_re-sp-01b
 
+define Device/konka_komi-a8
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  UBINIZE_OPTS := -E 5
+  KERNEL_SIZE := 4096k
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	check-size
+  DEVICE_VENDOR := KONKA
+  DEVICE_MODEL := KOMI-A8
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+TARGET_DEVICES += konka_komi-a8
+
 define Device/lenovo_newifi-d1
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)
@@ -1188,6 +1228,24 @@ define Device/linksys_re6500
   SUPPORTED_DEVICES += re6500
 endef
 TARGET_DEVICES += linksys_re6500
+
+define Device/maipu_mpax18
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	  check-size
+  DEVICE_VENDOR := MAIPU
+  DEVICE_MODEL := MPAX18
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+TARGET_DEVICES += maipu_mpax18
 
 define Device/mediatek_ap-mt7621a-v60
   $(Device/dsa-migration)
@@ -1490,6 +1548,40 @@ define Device/planex_vr500
 endef
 TARGET_DEVICES += planex_vr500
 
+define Device/qihoo360_t6x
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  UBINIZE_OPTS := -E 5
+  KERNEL_SIZE := 8192k
+  IMAGE_SIZE := 121344k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+        check-size
+  DEVICE_VENDOR := Qihoo360
+  DEVICE_PACKAGES := kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+
+define Device/qihoo360_t6gs
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6GS
+endef
+TARGET_DEVICES += qihoo360_t6gs
+
+define Device/qihoo360_t6m
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6M
+endef
+TARGET_DEVICES += qihoo360_t6m
+
+define Device/qihoo360_t6u
+  $(Device/qihoo360_t6x)
+  DEVICE_MODEL := T6U
+endef
+TARGET_DEVICES += qihoo360_t6u
+
 define Device/raisecom_msg1500-x-00
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)
@@ -1541,6 +1633,13 @@ define Device/sercomm_na502
   DEVICE_PACKAGES := kmod-mt76x2 kmod-mt7603 kmod-usb3
 endef
 TARGET_DEVICES += sercomm_na502
+
+define Device/sim_ax1800t
+  $(Device/haier-sim)
+  DEVICE_VENDOR := SIM
+  DEVICE_MODEL := AX1800T
+endef
+TARGET_DEVICES += sim_ax1800t
 
 define Device/storylink_sap-g3200u3
   $(Device/dsa-migration)
@@ -2092,3 +2191,21 @@ define Device/zte_e8820s
   DEVICE_PACKAGES := kmod-mt7603 kmod-mt76x2 kmod-usb3 kmod-usb-ledtrig-usbport
 endef
 TARGET_DEVICES += zte_e8820s
+
+define Device/ztt_rx6000
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	  check-size
+  DEVICE_VENDOR := ZTT
+  DEVICE_MODEL := RX6000
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+TARGET_DEVICES += ztt_rx6000

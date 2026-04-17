@@ -86,15 +86,18 @@ platform_do_upgrade() {
 	h3c,tx1800-plus|\
 	h3c,tx1801-plus|\
 	h3c,tx1806|\
+	haier,har-20s2u1|\
 	hiwifi,hc5962|\
 	jcg,q20|\
 	jcg,q10pro|\
+	konka,komi-a8|\
 	linksys,e5600|\
 	linksys,ea7300-v1|\
 	linksys,ea7300-v2|\
 	linksys,ea7500-v2|\
 	linksys,ea8100-v1|\
 	linksys,ea8100-v2|\
+	maipu,mpax18|\
 	netgear,r6220|\
 	netgear,r6260|\
 	netgear,r6350|\
@@ -104,15 +107,20 @@ platform_do_upgrade() {
 	netgear,wac104|\
 	netgear,wac124|\
 	netis,wf2881|\
+	qihoo360,t6gs|\
+        qihoo360,t6m|\
+        qihoo360,t6u|\
 	raisecom,msg1500-x-00|\
 	sercomm,na502|\
+	sim,ax1800t|\
 	xiaomi,mi-router-3g|\
 	xiaomi,mi-router-3-pro|\
 	xiaomi,mi-router-4|\
 	xiaomi,mi-router-ac2100|\
 	xiaomi,mi-router-cr660x|\
 	xiaomi,redmi-router-ac2100|\
- 	zte,e8820s)
+ 	zte,e8820s|\
+	ztt,rx6000)
 		nand_do_upgrade "$1"
 		;;
 	hatlab,gateboard-one)

@@ -1042,7 +1042,7 @@ define Device/jcg_q20
 	check-size
   DEVICE_VENDOR := JCG
   DEVICE_MODEL := Q20
-  DEVICE_PACKAGES := kmod-mt7915-firmware uboot-envtools
+  DEVICE_PACKAGES := kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
 endef
 TARGET_DEVICES += jcg_q20
 
@@ -1910,7 +1910,7 @@ define Device/xiaomi_mi-router-cr660x
 	check-size
   DEVICE_VENDOR := Xiaomi
   DEVICE_MODEL := Mi Router CR660x
-  DEVICE_PACKAGES += kmod-mt7915-firmware wpad-openssl uboot-envtools
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
   SUPPORTED_DEVICES += xiaomi,mi-router-cr6606
 endef
 TARGET_DEVICES += xiaomi_mi-router-cr660x

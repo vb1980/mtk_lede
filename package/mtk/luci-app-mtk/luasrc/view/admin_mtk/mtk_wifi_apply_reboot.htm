@@ -1,0 +1,67 @@
+<%#
+    File name : mtk_wifi_apply_reboot.htm
+    This file is used in WebUI based on LuCI to handle the reboot event.
+%>
+<%+header%>
+    <h2><a>重启设备</a><h2>
+    <div id="div_reboot_warn">
+        <p class="alert-message">
+            由于驱动不支持动态添加或删除接口，
+            在添加或删除接口期间更改的设置尚未应用！
+            <br /><br />
+            <strong>
+                更改的设置只有在设备重启后才会应用。
+                请点击重启按钮。
+            </strong>
+            <br /><br />
+            <strong>提示：</strong><br />
+            请在重启前添加或删除所有需要的接口，以免需要再次重启设备。<br />
+            请按照以下说明添加或删除接口：<br />
+            1. 进入 <a href='<%=luci.dispatcher.build_url("admin", "network", "wifi")%>'>无线概览</a> 页面。<br />
+            2. 点击添加按钮添加新接口，或点击删除按钮删除现有接口。<br />
+            3. 如果正在添加新接口，请在填写完SSID等所有必填字段后点击<em>保存</em>按钮。<br />
+            4. 完成接口的添加/删除后，请点击任意页面上的<em>重载</em>按钮或
+               <em>保存并应用</em>按钮，系统将重定向到此页面以执行设备重启。</br>
+        </p>
+        <input class="cbi-button cbi-button-apply" type="button" value="重启" onclick="init_reboot()" />
+    </div>
+    <h4 id="msg_on_reboot" class="alert-message warning" style="display:none">
+        <img src="<%=resource%>/icons/loading.gif" alt="" style="vertical-align:middle" />
+        请稍候，设备重启正在进行中。
+    </h4>
+    <h4 id="unreach_msg" class="alert-message error" style="display:none">设备尚未恢复在线！</h4>
+    <script type="text/javascript">
+        function online()
+        {
+            location = '<%=controller%>';
+        }
+
+        function ping(numPings)
+        {
+            var loadingImg = document.createElement('IMG');
+            loadingImg.onload = online;
+            loadingImg.src = '<%=resource%>/icons/loading.gif?' + Math.random();
+            numPings -= 1;
+            if(numPings <= 0){
+                document.getElementById("msg_on_reboot").style.display = 'none';
+                document.getElementById("unreach_msg").style.display = '';
+            }
+            else{
+                window.setTimeout(ping, 10000, numPings);
+            }
+        }
+
+        function init_reboot_cb()
+        {
+            window.setTimeout(ping, 10000, 18);
+        }
+
+        function init_reboot()
+        {
+            document.getElementById('div_reboot_warn').style.display = 'none';
+            document.getElementById('msg_on_reboot').style.display = '';
+            (new XHR()).post('<%=controller%>/admin/mtk/wifi/reboot', { token: '<%=token%>' }, init_reboot_cb);
+        }
+
+    </script>
+<%+footer%>

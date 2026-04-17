@@ -37,7 +37,6 @@ ramips_setup_interfaces()
 		;;
 	asiarf,ap7621-nv1|\
 	glinet,gl-mt1300|\
-	jcg,q20|\
 	jdcloud,re-sp-01b|\
 	lenovo,newifi-d1|\
 	mikrotik,routerboard-m33g|\
@@ -46,6 +45,10 @@ ramips_setup_interfaces()
 	xiaomi,mi-router-4|\
 	xiaomi,mi-router-4a-gigabit)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
+		;;
+	jcg,q20)
+		ucidef_add_switch "switch0" \
+			"1:lan" "4:lan" "0:wan" "6u@eth0" "5u@eth1"
 		;;
 	beeline,smartbox-turbo-plus)
 		ucidef_add_switch "switch0" \
@@ -196,7 +199,7 @@ ramips_setup_macs()
 	fcj,g-ax1800-f|\
 	xiaomi,mi-router-cr660x)
 		lan_mac=$(cat /sys/class/net/eth0/address)
-		wan_mac=$(macaddr_add "$lan_mac" -1)
+		wan_mac=$(mtd_get_mac_binary factory 0x3fffa)
 		;;
 	h3c,tx1800-plus|\
 	h3c,tx1801-plus|\

@@ -3,6 +3,6 @@
 #include "mt7621_jcg_q20_q10pro.dtsi"
 
 / {
-	compatible = "jcg,q20", "mediatek,mt7621-soc";
-	model = "JCG Q20";
+	compatible = "jcg,q10pro", "mediatek,mt7621-soc";
+	model = "JCG Q10 Pro";
 };

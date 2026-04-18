@@ -66,15 +66,8 @@
 		};
 
 		partition@80000 {
-			label = "Nvram";
-			reg = <0x80000 0x40000>;
-			read-only;
-		};
-
-		partition@c0000 {
-			label = "Bdata";
-			reg = <0xc0000 0x40000>;
-			read-only;
+			label = "Config";
+			reg = <0x80000 0x80000>;
 		};
 
 		factory: partition@100000 {

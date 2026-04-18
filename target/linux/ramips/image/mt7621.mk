@@ -386,18 +386,19 @@ TARGET_DEVICES += buffalo_wsr-600dhp
 
 define Device/c-life_xg1
   $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
   BLOCKSIZE := 128k
   PAGESIZE := 2048
+  KERNEL_SIZE := 5120k
   UBINIZE_OPTS := -E 5
-  KERNEL_SIZE := 4096k
   IMAGE_SIZE := 91136k
   IMAGES += factory.bin
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
   IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
-	check-size
+        check-size
   DEVICE_VENDOR := C-Life
   DEVICE_MODEL := XG1
-  DEVICE_PACKAGES := kmod-mt7915-firmware uboot-envtools kmod-usb3
+  DEVICE_PACKAGES := kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl kmod-usb3
 endef
 TARGET_DEVICES += c-life_xg1
 
@@ -711,6 +712,44 @@ define Device/elecom_wrc-2533gst2
   ELECOM_HWNAME := WRC-2533GST2
 endef
 TARGET_DEVICES += elecom_wrc-2533gst2
+
+define Device/fcj_g-ax1800-white
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 5120k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += firmware.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+          check-size
+  DEVICE_VENDOR := FCJ
+  DEVICE_MODEL := G-AX1800
+  DEVICE_VARIANT := White
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+TARGET_DEVICES += fcj_g-ax1800-white
+
+define Device/fcj_g-ax1800-black
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 5120k
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 128512k
+  IMAGES += firmware.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+          check-size
+  DEVICE_VENDOR := FCJ
+  DEVICE_MODEL := G-AX1800
+  DEVICE_VARIANT := Black
+  DEVICE_PACKAGES += kmod-mt7915 luci-app-mtk wireless-tools uboot-envtools -wpad-openssl
+endef
+TARGET_DEVICES += fcj_g-ax1800-black
 
 define Device/fcj_g-ax1800-f
   $(Device/dsa-migration)

@@ -10,10 +10,10 @@
 	model = "FCJ G-AX1800-F";
 
 	aliases {
-		led-boot = &led_sys_red;
-		led-failsafe = &led_sys_red;
-		led-running = &led_sys_green;
-		led-upgrade = &led_sys_green;
+		led-boot = &led_status_red;
+		led-failsafe = &led_status_green;
+		led-running = &led_status_green;
+		led-upgrade = &led_status_red;
 		label-mac-device = &gmac0;
 	};
 
@@ -25,12 +25,12 @@
 	leds {
 		compatible = "gpio-leds";
 
-		led_sys_red: red {
+		led_status_red: sys_red {
 			label = "red:sys";
 			gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
 		};
 
-		led_sys_green: green {
+		led_status_green: sys_green {
 			label = "green:sys";
 			gpios = <&gpio 15 GPIO_ACTIVE_HIGH>;
 		};
@@ -55,7 +55,7 @@
 
 &nand {
 	status = "okay";
-
+	
 	mediatek,nmbm;
 	mediatek,bmt-max-ratio = <1>;
 	mediatek,bmt-max-reserved-blocks = <64>;
@@ -117,25 +117,39 @@
 };
 
 &gsw {
-	mediatek,portmap = "lllwl";
+	mediatek,portmap = "llllw";
 	status = "okay";
 };
 
-&hnat {
-	mtketh-wan = "eth1";
-	mtketh-ppd = "eth0";
-	mtketh-lan = "eth0";
-	mtketh-max-gmac = <2>;
-	/delete-property/ mtkdsa-wan-port;
+&switch0 {
+	status = "disabled";	
 };
 
-&switch0 {
-	status = "disabled";
+&hnat {
+        mtketh-wan = "eth1";
+        mtketh-ppd = "eth0";
+        mtketh-lan = "eth0";
+        mtketh-max-gmac = <2>;
+        status = "okay";
 };
 
 &state_default {
 	gpio {
 		groups = "jtag", "uart3", "wdt";
 		function = "gpio";
+	};
+};
+
+&factory {
+	compatible = "nvmem-cells";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	macaddr_factory_3fff4: macaddr@3fff4 {
+		reg = <0x3fff4 0x6>;
+	};
+
+	macaddr_factory_3fffa: macaddr@3fffa {
+		reg = <0x3fffa 0x6>;
 	};
 };

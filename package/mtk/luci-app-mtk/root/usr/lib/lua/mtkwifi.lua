@@ -1283,6 +1283,9 @@ function mtkwifi.__setup_eths()
 end
 
 function mtkwifi.__is_6890_project()
+    if not mtkwifi.exists("/etc/vendor_info") then
+        return false
+    end
     local str = mtkwifi.read_pipe("cat /etc/vendor_info | grep \"PLATFORM=\"")
     str = string.gsub(str, "PLATFORM=", "")
     if str:find("6890") then

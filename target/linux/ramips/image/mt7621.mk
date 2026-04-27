@@ -1438,6 +1438,22 @@ define Device/netis_wf2881
 endef
 TARGET_DEVICES += netis_wf2881
 
+define Device/nokia_a-040w-q
+  $(Device/dsa-migration)
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  IMAGE_SIZE := 129280k
+  UBINIZE_OPTS := -E 5
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+  DEVICE_VENDOR := Nokia
+  DEVICE_MODEL := A-040W-Q
+  DEVICE_PACKAGES := kmod-mt7615d_dbdc kmod-usb3 luci-oldapi \
+        kmod-usb-ledtrig-usbport wireless-tools uboot-envtools
+endef
+TARGET_DEVICES += nokia_a-040w-q
+
 define Device/openfi_5pro
   $(Device/dsa-migration)
   IMAGE_SIZE := 63448k
@@ -1490,8 +1506,6 @@ define Device/raisecom_msg1500-x-00
   DEVICE_VENDOR := RAISECOM
   DEVICE_MODEL := MSG1500
   DEVICE_VARIANT := X.00
-  DEVICE_ALT0_VENDOR := Nokia
-  DEVICE_ALT0_MODEL := A-040W-Q
   DEVICE_PACKAGES := kmod-mt7615d_dbdc kmod-usb3 luci-oldapi \
 	kmod-usb-ledtrig-usbport wireless-tools uboot-envtools
 endef

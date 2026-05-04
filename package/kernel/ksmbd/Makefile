@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ksmbd
 PKG_VERSION:=3.5.4
-PKG_RELEASE:=$(AUTORELEASE)
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/cifsd-team/cifsd/tar.gz/$(PKG_VERSION)?
@@ -61,7 +61,7 @@ endif
 
 define Build/Compile
 	$(KERNEL_MAKE) M="$(PKG_BUILD_DIR)" \
-	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+	KCFLAGS+=" $(EXTRA_CFLAGS)" \
 	$(PKG_EXTRA_KCONFIG) \
 	CONFIG_SMB_SERVER=m \
 	modules

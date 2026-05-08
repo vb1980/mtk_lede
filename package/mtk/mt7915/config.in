@@ -360,7 +360,7 @@ config MTK_MT7915_OFFCHANNEL_SCAN_FEATURE
 	bool "Channel Quality Monitor"
 	depends on MTK_MT7915_WIFI_DRIVER
 	depends on MTK_MT7915_MT_AP_SUPPORT
-	default n
+	default y
 
 #config MTK_MT7915_WFA_VHT_R2_PF
 #	bool "WFA VHT R2 Plugfest"
@@ -908,7 +908,7 @@ config MTK_MT7915_ENTERPRISE_AP_SUPPORT
 config MTK_MT7915_MLME_MULTI_QUEUE_SUPPORT
 	bool "Mlme MultiQueue Support"
 	depends on MTK_MT7915_MT_AP_SUPPORT
-	default n
+	default y
 
 config MTK_MT7915_DYNAMIC_WMM_SUPPORT
 	bool "Dynamic WMM Feature"
@@ -1180,7 +1180,7 @@ config MTK_MT7915_INTERWORKING
 
 config MTK_MT7915_LINUX_NET_TXQ_SUPPORT
 	bool "NET TX Queue Support"
-	default y
+	default n
 
 config MTK_MT7915_HWIFI_SUPPORT
 	bool "hardware wifi abstraction layer support"

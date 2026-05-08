@@ -360,9 +360,8 @@ static BOOLEAN sta_rx_peer_response_updated(struct _RTMP_ADAPTER *pAd,
 			(bcn_ie_list->Channel != bcn_ie_list->NewChannel)
 			&& (wdev->quick_ch_change == QUICK_CH_SWICH_DISABLE)
 #ifdef MAP_R2
-			&& (IS_MAP_TURNKEY_ENABLE(pAd))
+			&& (IS_MAP_TURNKEY_ENABLE(pAd) && (wdev->channel != bcn_ie_list->NewChannel))
 #endif
-			&& (wdev->channel != bcn_ie_list->NewChannel)
 			) {
 			UCHAR index = 0;
 			/*

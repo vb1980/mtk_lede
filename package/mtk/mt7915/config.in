@@ -1108,7 +1108,7 @@ config MTK_MT7915_BAND_STEERING
 
 config MTK_MT7915_LED_CONTROL_SUPPORT
 	bool "LED Control Support"
-	default y
+	default n
 
 config MTK_MT7915_WLAN_HOOK
        bool "WLAN hook Support"
@@ -1123,7 +1123,7 @@ config MTK_MT7915_RADIUS_ACCOUNTING_SUPPORT
 config MTK_MT7915_GREENAP_SUPPORT
 	bool "GreenAP Support"
 	depends on MTK_MT7915_MT_AP_SUPPORT
-	default n
+	default y
 
 config MTK_MT7915_VENDOR_FEATURE11_SUPPORT
         bool "Vendor11 Feature Enable"
@@ -1140,7 +1140,7 @@ config MTK_MT7915_CUSTOMER_VENDOR_IE_SUPPORT
 config MTK_MT7915_PCIE_ASPM_DYM_CTRL_SUPPORT
 	bool "Pcie Aspm Dynamic Control Support"
 	depends on MTK_MT7915_MT_AP_SUPPORT
-	default n
+	default y
 
 config MTK_MT7915_COEX_SUPPORT
 	bool "Coex Support"

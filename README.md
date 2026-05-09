@@ -1,8 +1,11 @@
-# 欢迎来到 和乐果 的LEDE_MT7621_MT791 LEDE源码仓库
+# 欢迎来到 和乐果 的LEDE_MT7621_MT7915 LEDE源码仓库
 基于<https://github.com/coolsnowwolf/lede>适配
 ## 注：自v5.0版本后已弃用237大佬的适配方案（237的mt7621源码已停更许久 且存在不少问题） 换用我自己适配的新版MT7915驱动和MTK无线配置软件（部分汉化）并进行了一些优化
 
-
+我编译的固件发布页
+CR660X
+<https://www.right.com.cn/forum/thread-8437285-1-1.html>
+<https://www.heleguo.cn/archives/248>
 
 ## 注意
 

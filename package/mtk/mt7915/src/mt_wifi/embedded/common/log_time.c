@@ -40,7 +40,7 @@ VOID log_time_end(
 #ifdef LINUX
 #if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 	struct timespec64 t;
-	s64 diff_ns;
+	u64 time_interval;
 #else
 	struct timeval t;
 #endif
@@ -50,9 +50,13 @@ VOID log_time_end(
 #ifdef LINUX
 #if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 		ktime_get_real_ts64(&t);
-		diff_ns = ((s64)(t.tv_sec - tl->t.tv_sec) * 1000000000LL + 
-		           (s64)(t.tv_nsec - tl->t.tv_nsec));
-		tl->time = (ULONG)div64_s64(diff_ns, 1000);
+#ifdef CONFIG_64BIT
+		tl->time = ((t.tv_sec - tl->t.tv_sec) * 1000000000 + t.tv_nsec - tl->t.tv_nsec)/1000;
+#else
+		time_interval = ((t.tv_sec - tl->t.tv_sec) * 1000000000 + t.tv_nsec - tl->t.tv_nsec);
+		do_div(time_interval, 1000);
+		tl->time = time_interval;
+#endif	/* CONFIG_64BIT */
 #else
 		do_gettimeofday(&t);
 		tl->time = (t.tv_sec - tl->t.tv_sec) * 1000000 + t.tv_usec - tl->t.tv_usec;

@@ -68,12 +68,11 @@ BOOLEAN CFG80211_CheckActionFrameType(
 			if (!mgmt->u.probe_resp.timestamp) {
 #if (KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE)
 				struct timespec64 tv;
-				UINT64 ts;
 
 				ktime_get_real_ts64(&tv);
-				ts = (((UINT64) tv.tv_sec * 1000000000) + tv.tv_nsec);
-				do_div(ts, 1000);
-				mgmt->u.probe_resp.timestamp = ts;
+				UINT64 nsec = ((UINT64) tv.tv_sec * 1000000000) + tv.tv_nsec;
+				do_div(nsec, 1000);
+				mgmt->u.probe_resp.timestamp = nsec;
 #else
 				struct timeval tv;
 

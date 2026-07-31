@@ -3,19 +3,13 @@ enable it.
 
 Signed-off-by: Shawn Lin <shawn.lin@rock-chips.com>
 ---
-
-Changes in v5: None
-Changes in v4: None
-Changes in v3: None
-Changes in v2: None
-
  arch/arm64/boot/dts/rockchip/rk3576.dtsi | 25 +++++++++++++++++++++++++
  1 file changed, 25 insertions(+)
 
 --- a/arch/arm64/boot/dts/rockchip/rk3576.dtsi
 +++ b/arch/arm64/boot/dts/rockchip/rk3576.dtsi
-@@ -1110,6 +1110,30 @@
- 			};
+@@ -1556,6 +1556,30 @@
+ 			status = "disabled";
  		};
  
 +		ufshc: ufshc@2a2d0000 {

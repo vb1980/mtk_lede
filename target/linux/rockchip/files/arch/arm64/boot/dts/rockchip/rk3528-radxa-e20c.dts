@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
-// Copyright (c) 2024 AY <amadeus@jmu.edu.cn>
 
 /dts-v1/;
+
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/rockchip.h>
-
 #include "rk3528.dtsi"
 
 / {
@@ -13,8 +12,10 @@
 	compatible = "radxa,e20c", "rockchip,rk3528";
 
 	aliases {
+		i2c1 = &i2c1;
 		mmc0 = &sdhci;
 		mmc1 = &sdmmc;
+		serial0 = &uart0;
 
 		led-boot = &led_sys;
 		led-failsafe = &led_sys;
@@ -31,7 +32,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&user_key>;
 
-		key-user {
+		button-user {
 			label = "user";
 			linux,code = <KEY_RESTART>;
 			gpios = <&gpio0 RK_PA0 GPIO_ACTIVE_LOW>;
@@ -42,7 +43,7 @@
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
-		pinctrl-0 = <&lan_led_en>, <&wan_led_en>, <&sys_led_en>;
+		pinctrl-0 = <&lan_led_g>, <&wan_led_g>, <&sys_led_g>;
 
 		lan {
 			label = "green:lan";
@@ -60,70 +61,7 @@
 		};
 	};
 
-	vcc_1v8: vcc-1v8 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_1v8";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		vin-supply = <&vcc_3v3>;
-	};
-
-	vcc_3v3: vcc-3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_3v3";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		vin-supply = <&vcc5v0_sys>;
-	};
-
-	vcc5v0_sys: vcc5v0-sys {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc5v0_sys";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-	};
-
-	vcc5v0_usb_host: vcc5v0-usb-host {
-		compatible = "regulator-fixed";
-		enable-active-high;
-		gpio = <&gpio0 RK_PA1 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&vcc5v0_usb_host_en>;
-		regulator-name = "vcc5v0_usb_host";
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-		vin-supply = <&vcc5v0_sys>;
-	};
-
-	vccio_sd: vccio-sd {
-		compatible = "regulator-gpio";
-		gpios = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;
-		regulator-name = "vccio_sd";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <3300000>;
-		states = <1800000 0x0>, <3300000 0x1>;
-		vin-supply = <&vcc5v0_sys>;
-	};
-
-	vcc_ddr: vcc-ddr {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_ddr";
-		regulator-always-on;
-		regulator-boot-on;
-		regulator-min-microvolt = <1200000>;
-		regulator-max-microvolt = <1200000>;
-		vin-supply = <&vcc5v0_sys>;
-	};
-
-	vdd_0v9: vdd-0v9 {
+	vdd_0v9: regulator-0v9-vdd {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_0v9";
 		regulator-always-on;
@@ -133,7 +71,70 @@
 		vin-supply = <&vcc5v0_sys>;
 	};
 
-	vdd_arm: vdd-arm {
+	vcc_ddr: regulator-1v1-vcc-ddr {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_ddr";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1100000>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vcc_1v8: regulator-1v8-vcc {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_1v8";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&vcc_3v3>;
+	};
+
+	vcc_3v3: regulator-3v3-vcc {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_3v3";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vcc5v0_sys: regulator-5v0-vcc-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
+	vcc5v0_usb20: regulator-5v0-vcc-usb20 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpios = <&gpio0 RK_PA1 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&usb_host_en>;
+		regulator-name = "vcc5v0_usb20";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vccio_sd: regulator-vccio-sd {
+		compatible = "regulator-gpio";
+		gpios = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sdmmc_vol_ctrl_h>;
+		regulator-name = "vccio_sd";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		states = <1800000 0x0>, <3300000 0x1>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vdd_arm: regulator-vdd-arm {
 		compatible = "pwm-regulator";
 		pwms = <&pwm1 0 5000 1>;
 		pwm-supply = <&vcc5v0_sys>;
@@ -145,7 +146,7 @@
 		regulator-settling-time-up-us = <250>;
 	};
 
-	vdd_logic: vdd-logic {
+	vdd_logic: regulator-vdd-logic {
 		compatible = "pwm-regulator";
 		pwms = <&pwm2 0 5000 1>;
 		pwm-supply = <&vcc5v0_sys>;
@@ -182,15 +183,15 @@
 	clock_in_out = "output";
 	nvmem-cells = <&eth_mac1>;
 	nvmem-cell-names = "mac-address";
+	phy-handle = <&rgmii_phy>;
+	phy-mode = "rgmii-id";
+	phy-supply = <&vcc_3v3>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&rgmii_miim
 		     &rgmii_tx_bus2
 		     &rgmii_rx_bus2
 		     &rgmii_rgmii_clk
 		     &rgmii_rgmii_bus>;
-	phy-handle = <&rgmii_phy>;
-	phy-mode = "rgmii-id";
-	phy-supply = <&vcc_3v3>;
 	snps,reset-active-low;
 	snps,reset-delays-us = <0 20000 100000>;
 	snps,reset-gpio = <&gpio4 RK_PC2 GPIO_ACTIVE_LOW>;
@@ -203,20 +204,27 @@
 };
 
 &i2c1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1m0_xfer>;
 	status = "okay";
 
-	eeprom: eeprom@50 {
-		compatible = "atmel,24c16";
+	eeprom@50 {
+		compatible = "belling,bl24c16a", "atmel,24c16";
 		#address-cells = <1>;
 		#size-cells = <1>;
 		reg = <0x50>;
 		pagesize = <16>;
 		read-only;
+		vcc-supply = <&vcc_3v3>;
 
 		nvmem-layout {
 			compatible = "fixed-layout";
 			#address-cells = <1>;
 			#size-cells = <1>;
+
+			eth_mac0: macaddr@9e {
+				reg = <0x9e 0x06>;
+			};
 
 			eth_mac1: macaddr@a4 {
 				reg = <0xa4 0x06>;
@@ -226,13 +234,15 @@
 };
 
 &mdio1 {
-	rgmii_phy: phy@1 {
+	rgmii_phy: ethernet-phy@1 {
 		compatible = "ethernet-phy-ieee802.3-c22";
 		reg = <0x1>;
 	};
 };
 
-&pcie2x1 {
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pciem1_pins>;
 	reset-gpios = <&gpio1 RK_PA2 GPIO_ACTIVE_HIGH>;
 	vpcie3v3-supply = <&vcc_3v3>;
 	status = "okay";
@@ -259,31 +269,41 @@
 	};
 
 	leds {
-		lan_led_en: lan-led-en {
+		lan_led_g: lan-led-g {
 			rockchip,pins = <4 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 
-		wan_led_en: wan-led-en {
+		wan_led_g: wan-led-g {
 			rockchip,pins = <4 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 
-		sys_led_en: sys-led-en {
+		sys_led_g: sys-led-g {
 			rockchip,pins = <4 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 
+	sdmmc {
+		sdmmc_vol_ctrl_h: sdmmc-vol-ctrl-h {
+			rockchip,pins = <4 RK_PB6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
 	usb {
-		vcc5v0_usb_host_en: vcc5v0-usb-host-en {
+		usb_host_en: usb-host-en {
 			rockchip,pins = <0 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 };
 
 &pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm1m0_pins>;
 	status = "okay";
 };
 
 &pwm2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm2m0_pins>;
 	status = "okay";
 };
 
@@ -291,13 +311,16 @@
 	status = "okay";
 };
 
+&saradc {
+	vref-supply = <&vcc_1v8>;
+	status = "okay";
+};
+
 &sdhci {
 	bus-width = <8>;
+	cap-mmc-highspeed;
 	mmc-hs200-1_8v;
-	max-frequency = <200000000>;
 	non-removable;
-	pinctrl-names = "default";
-	pinctrl-0 = <&emmc_bus8 &emmc_clk &emmc_cmd &emmc_strb>;
 	vmmc-supply = <&vcc_3v3>;
 	vqmmc-supply = <&vcc_1v8>;
 	status = "okay";
@@ -305,12 +328,9 @@
 
 &sdmmc {
 	bus-width = <4>;
+	cap-mmc-highspeed;
 	cap-sd-highspeed;
 	disable-wp;
-	max-frequency = <150000000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&sdmmc_bus4 &sdmmc_clk &sdmmc_cmd &sdmmc_det>;
-	rockchip,default-sample-phase = <90>;
 	sd-uhs-sdr104;
 	vmmc-supply = <&vcc_3v3>;
 	vqmmc-supply = <&vccio_sd>;
@@ -331,8 +351,12 @@
 	status = "okay";
 };
 
-&usb2phy0_host {
-	phy-supply = <&vcc5v0_usb_host>;
+&usb2phy_host {
+	phy-supply = <&vcc5v0_usb20>;
+	status = "okay";
+};
+
+&usb2phy_otg {
 	status = "okay";
 };
 
@@ -341,5 +365,13 @@
 };
 
 &usb_host0_ohci {
+	status = "okay";
+};
+
+&usb_host0_xhci {
+	extcon = <&usb2phy>;
+	maximum-speed = "high-speed";
+	phys = <&usb2phy_otg>;
+	phy-names = "usb2-phy";
 	status = "okay";
 };

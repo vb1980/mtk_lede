@@ -51,12 +51,31 @@ version_compare() {
     return 1
 }
 
+run_with_timeout() {
+   local timeout_sec="$1"
+   shift
+   "$@" &
+   local _pid=$!
+   (
+      sleep "$timeout_sec"
+      kill $_pid 2>/dev/null
+      sleep 0.5
+      kill -9 $_pid 2>/dev/null
+   ) &
+   local _watchdog=$!
+   wait $_pid 2>/dev/null
+   local _ret=$?
+   kill $_watchdog 2>/dev/null
+   wait $_watchdog 2>/dev/null
+   return $_ret
+}
+
 LAST_OPVER="/tmp/openclash_last_version"
 LAST_VER=$(sed -n 1p "$LAST_OPVER" 2>/dev/null |sed "s/^v//g" |tr -d "\n")
 if [ -x "/bin/opkg" ]; then
    OP_CV=$(rm -f /var/lock/opkg.lock && opkg status luci-app-openclash 2>/dev/null |grep 'Version' |awk -F 'Version: ' '{print $2}' 2>/dev/null)
 elif [ -x "/usr/bin/apk" ]; then
-   OP_CV=$(apk list luci-app-openclash 2>/dev/null|grep 'installed' | grep -oE '[0-9]+(\.[0-9]+)*' | head -1 2>/dev/null)
+   OP_CV=$(rm -f /lib/apk/db/lock && apk list luci-app-openclash 2>/dev/null|grep "installed" | grep -oE '[0-9]+(\.[0-9]+)*' | head -1 2>/dev/null)
 fi
 OP_LV=$(sed -n 1p "$LAST_OPVER" 2>/dev/null |sed "s/^v//g" |tr -d "\n")
 RELEASE_BRANCH=$(uci_get_config "release_branch" || echo "master")
@@ -129,27 +148,48 @@ if [ -n "$OP_CV" ] && [ -n "$OP_LV" ] && version_compare "$OP_CV" "$OP_LV" && [ 
          LOG_TIP "【$retry_count/$max_retries】【OpenClash - v$LAST_VER】Download successful, start pre update test..."
 
          pre_test_success=false
-         pkg_update_success=true
 
          if [ -x "/bin/opkg" ]; then
-            opkg update >/dev/null 2>&1
-            if [ $? -ne 0 ]; then
-               sleep 2
-               pkg_update_success=false
-               continue
-            fi
+            update_retry=0
+            max_update_retry=2
+            while [ $update_retry -lt $max_update_retry ]; do
+               update_retry=$((update_retry + 1))
+               run_with_timeout 30 opkg update >/dev/null 2>&1
+               opkg_ret=$?
+               rm -f /var/lock/opkg.lock
+               if [ $opkg_ret -eq 0 ]; then
+                  break
+               fi
+               if [ $update_retry -lt $max_update_retry ]; then
+                  LOG_ERROR "【$update_retry/$max_update_retry】【OpenClash - v$LAST_VER】opkg update failed or timed out, retrying..."
+                  sleep 2
+               else
+                  LOG_ERROR "【$update_retry/$max_update_retry】【OpenClash - v$LAST_VER】opkg update failed, trying pre update test..."
+               fi
+            done
             if [ -s "/tmp/openclash.ipk" ]; then
                if [ -n "$(opkg install /tmp/openclash.ipk --noaction 2>/dev/null |grep 'Upgrading luci-app-openclash on root' 2>/dev/null)" ]; then
                   pre_test_success=true
                fi
             fi
          elif [ -x "/usr/bin/apk" ]; then
-            apk update >/dev/null 2>&1
-            if [ $? -ne 0 ]; then
-               sleep 2
-               pkg_update_success=false
-               continue
-            fi
+            update_retry=0
+            max_update_retry=2
+            while [ $update_retry -lt $max_update_retry ]; do
+               update_retry=$((update_retry + 1))
+               run_with_timeout 30 apk update >/dev/null 2>&1
+               apk_ret=$?
+               rm -f /lib/apk/db/lock
+               if [ $apk_ret -eq 0 ]; then
+                  break
+               fi
+               if [ $update_retry -lt $max_update_retry ]; then
+                  LOG_ERROR "【$update_retry/$max_update_retry】【OpenClash - v$LAST_VER】apk update failed or timed out, retrying..."
+                  sleep 2
+               else
+                  LOG_ERROR "【$update_retry/$max_update_retry】【OpenClash - v$LAST_VER】apk update failed, trying pre update test..."
+               fi
+            done
             if [ -s "/tmp/openclash.apk" ]; then
                apk add -s -q --force-overwrite --clean-protected --allow-untrusted /tmp/openclash.apk >/dev/null 2>&1
                if [ $? -eq 0 ]; then
@@ -227,7 +267,7 @@ check_install_success()
    if [ -x "/bin/opkg" ]; then
       current_version=$(rm -f /var/lock/opkg.lock && opkg status luci-app-openclash 2>/dev/null |grep 'Version' |awk -F 'Version: ' '{print $2}' 2>/dev/null)
    elif [ -x "/usr/bin/apk" ]; then
-      current_version=$(apk list luci-app-openclash 2>/dev/null|grep 'installed' | grep -oE '[0-9]+(\.[0-9]+)*' | head -1 2>/dev/null)
+      current_version=$(apk list luci-app-openclash 2>/dev/null |grep "installed" | grep -oE '[0-9]+(\.[0-9]+)*' | head -1 2>/dev/null)
    fi
 
    if [ -n "$current_version" ] && [ "$current_version" = "$target_version" ]; then
@@ -240,41 +280,39 @@ check_install_success()
 install_missing_packages() {
    local installed_before="$1"
 
-   if [ -x "/bin/opkg" ]; then
+   if [ -n "$installed_before" ]; then
       for pkg in $installed_before; do
-         if ! opkg status "$pkg" >/dev/null 2>&1; then
-            local retry_count=0
-            local max_retries=3
-            while [ $retry_count -lt $max_retries ]; do
-               retry_count=$((retry_count + 1))
+         local retry_count=0
+         local max_retries=3
+         if [ -x "/bin/opkg" ]; then
+            if opkg status "$pkg" >/dev/null 2>&1; then
+               continue
+            fi
+         elif [ -x "/usr/bin/apk" ]; then
+            if apk list "$pkg" |grep "installed" >/dev/null 2>&1; then
+               continue
+            fi
+         fi
+
+         LOG_TIP "【$pkg】depended package reinstalling..."
+
+         while [ $retry_count -lt $max_retries ]; do
+            retry_count=$((retry_count + 1))
+            if [ -x "/bin/opkg" ]; then
                opkg install "$pkg"
-               if [ $? -eq 0 ]; then
-                  break
-               else
-                  if [ $retry_count -lt $max_retries ]; then
-                     sleep 2
-                  fi
-               fi
-            done
-         fi
-      done
-   elif [ -x "/usr/bin/apk" ]; then
-      for pkg in $installed_before; do
-         if ! apk info "$pkg" >/dev/null 2>&1; then
-            local retry_count=0
-            local max_retries=3
-            while [ $retry_count -lt $max_retries ]; do
-               retry_count=$((retry_count + 1))
+            elif [ -x "/usr/bin/apk" ]; then
                apk add "$pkg"
-               if [ $? -eq 0 ]; then
-                  break
+            fi
+            if [ $? -eq 0 ]; then
+               break
+            else
+               if [ $retry_count -lt $max_retries ]; then
+                  sleep 2
                else
-                  if [ $retry_count -lt $max_retries ]; then
-                     sleep 2
-                  fi
+                  LOG_ERROR "【$pkg】failed to install, please try to install it manually..."
                fi
-            done
-         fi
+            fi
+         done
       done
    fi
 }
@@ -298,7 +336,7 @@ while [ $install_retry_count -lt $max_install_retries ]; do
       opkg install /tmp/openclash.ipk
    elif [ -x "/usr/bin/apk" ]; then
       for pkg in $packages_to_check; do
-         if apk info "$pkg" >/dev/null 2>&1; then
+         if apk list "$pkg" |grep "installed" >/dev/null 2>&1; then
             installed_before="$installed_before $pkg"
          fi
       done

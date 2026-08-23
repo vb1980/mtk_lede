@@ -187,6 +187,16 @@ define Device/friendlyarm_nanopi-neo3
 endef
 TARGET_DEVICES += friendlyarm_nanopi-neo3
 
+define Device/friendlyarm_nanopi-r28s
+  DEVICE_VENDOR := FriendlyARM
+  DEVICE_MODEL := NanoPi R28S
+  SOC := rk3528
+  UBOOT_DEVICE_NAME := nanopi-zero2-rk3528
+  IMAGE/sysupgrade.img.gz := boot-common | boot-script | pine64-img | gzip | append-metadata
+  DEVICE_PACKAGES := kmod-aic8800-sdio kmod-gpio-button-hotplug kmod-r8169 wpad-openssl
+endef
+TARGET_DEVICES += friendlyarm_nanopi-r28s
+
 define Device/friendlyarm_nanopi-r2c
   DEVICE_VENDOR := FriendlyARM
   DEVICE_MODEL := NanoPi R2C
@@ -622,7 +632,7 @@ define Device/rongpin_king3399
   DEVICE_MODEL := King3399
   SOC := rk3399
   UBOOT_DEVICE_NAME := king3399-rk3399
-  IMAGE/sysupgrade.img.gz := boot-common | boot-script | pine64-img | gzip | append-metadata
+  IMAGE/sysupgrade.img.gz := boot-common | boot-script | pine64-bin | gzip | append-metadata
   DEVICE_PACKAGES := kmod-r8168 kmod-brcmfmac cypress-firmware-4356-sdio wpad-openssl
 endef
 TARGET_DEVICES += rongpin_king3399

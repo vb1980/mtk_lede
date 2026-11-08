@@ -9,7 +9,13 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libbpf
 PKG_VERSION:=1.7.0
-PKG_RELEASE:=1
+
+SR1010_UAPI_FIX:=$(if $(and $(filter y,$(CONFIG_TARGET_zte_zx279133)),\
+	$(filter y,$(CONFIG_TARGET_zte_zx279133_DEVICE_zte_zxslc-sr1010))),y)
+PKG_CONFIG_DEPENDS += CONFIG_TARGET_zte_zx279133 \
+	CONFIG_TARGET_zte_zx279133_DEVICE_zte_zxslc-sr1010
+PKG_PREPARED_DEPENDS += $(PKG_CONFIG_DEPENDS)
+PKG_RELEASE:=$(if $(SR1010_UAPI_FIX),2,1)
 
 PKG_SOURCE_URL:=https://github.com/libbpf/libbpf
 PKG_MIRROR_HASH:=c5ffaa91d22172cffb75439919876c1db8a75a82c5a2b8182db34f8867b8cab5
@@ -26,6 +32,29 @@ PKG_INSTALL:=1
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/nls.mk
+
+# Quilt's generic PatchDir fallback treats every top-level entry as a patch.
+# Stage only generic *.patch files so SR1010 subdirectories are not included.
+ifneq ($(strip $(QUILT)),)
+define Build/Patch
+	@rm -rf $(PKG_BUILD_DIR)/patches $(PKG_BUILD_DIR)/.patch-source
+	@mkdir -p $(PKG_BUILD_DIR)/.patch-source
+	@for patch in $(CURDIR)/patches/*.patch; do \
+		[ -f "$$$$patch" ] || continue; \
+		cp "$$$$patch" $(PKG_BUILD_DIR)/.patch-source/; \
+	done
+	$(call PatchDir,$(PKG_BUILD_DIR),$(PKG_BUILD_DIR)/.patch-source,)
+	@rm -rf $(PKG_BUILD_DIR)/.patch-source
+	@touch $(PKG_BUILD_DIR)/.quilt_used
+endef
+endif
+
+ifneq ($(SR1010_UAPI_FIX),)
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	$(call PatchDir,$(PKG_BUILD_DIR),$(CURDIR)/patches/sr1010,sr1010/)
+endef
+endif
 
 define Package/libbpf
   SECTION:=libs

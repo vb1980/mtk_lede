@@ -8,7 +8,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=fstools
-PKG_RELEASE:=1
+SR1010_SHARED_OVERLAY:=$(if $(and $(filter y,$(CONFIG_TARGET_zte_zx279133)),\
+	$(filter y,$(CONFIG_TARGET_zte_zx279133_DEVICE_zte_zxslc-sr1010))),y)
+PKG_RELEASE:=$(if $(SR1010_SHARED_OVERLAY),2,1)
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=$(PROJECT_GIT)/project/fstools.git
@@ -25,11 +27,39 @@ PKG_FLAGS:=nonshared
 
 PKG_BUILD_DEPENDS := util-linux
 PKG_CONFIG_DEPENDS := CONFIG_NAND_SUPPORT CONFIG_FSTOOLS_UBIFS_EXTROOT
+PKG_CONFIG_DEPENDS += CONFIG_TARGET_zte_zx279133 \
+	CONFIG_TARGET_zte_zx279133_DEVICE_zte_zxslc-sr1010
+PKG_PREPARED_DEPENDS += $(PKG_CONFIG_DEPENDS)
 
 PKG_MAINTAINER:=John Crispin <john@phrozen.org>
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
+
+# Quilt's generic PatchDir fallback treats every top-level entry as a patch.
+# Stage only generic *.patch files, so the SR1010 subdirectory and host
+# metadata are not mistaken for patches. New patch files are discovered
+# automatically without a committed series file.
+ifneq ($(strip $(QUILT)),)
+define Build/Patch
+	@rm -rf $(PKG_BUILD_DIR)/patches $(PKG_BUILD_DIR)/.patch-source
+	@mkdir -p $(PKG_BUILD_DIR)/.patch-source
+	@for patch in $(CURDIR)/patches/*.patch; do \
+		[ -f "$$$$patch" ] || continue; \
+		cp "$$$$patch" $(PKG_BUILD_DIR)/.patch-source/; \
+	done
+	$(call PatchDir,$(PKG_BUILD_DIR),$(PKG_BUILD_DIR)/.patch-source,)
+	@rm -rf $(PKG_BUILD_DIR)/.patch-source
+	@touch $(PKG_BUILD_DIR)/.quilt_used
+endef
+endif
+
+ifneq ($(SR1010_SHARED_OVERLAY),)
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	$(call PatchDir,$(PKG_BUILD_DIR),$(CURDIR)/patches/sr1010,sr1010/)
+endef
+endif
 
 CMAKE_OPTIONS += $(if $(CONFIG_FSTOOLS_UBIFS_EXTROOT),-DCMAKE_UBIFS_EXTROOT=y)
 CMAKE_OPTIONS += $(if $(CONFIG_FSTOOLS_OVL_MOUNT_FULL_ACCESS_TIME),-DCMAKE_OVL_MOUNT_FULL_ACCESS_TIME=y)

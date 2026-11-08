@@ -96,7 +96,7 @@ $(eval $(call KernelPackage,atl1e))
 define KernelPackage/libie-adminq
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel Ethernet common library - adminq helpers
-  DEPENDS:=@LINUX_6_18 +kmod-libie
+  DEPENDS:=@LINUX_6_18||LINUX_7_3 +kmod-libie
   KCONFIG:=CONFIG_LIBIE_ADMINQ
   HIDDEN:=1
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/libie/libie_adminq.ko
@@ -112,7 +112,7 @@ $(eval $(call KernelPackage,libie-adminq))
 define KernelPackage/libie-fwlog
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel Ethernet library fw log
-  DEPENDS:=@LINUX_6_18 +kmod-libie
+  DEPENDS:=@LINUX_6_18||LINUX_7_3 +kmod-libie
   KCONFIG:=CONFIG_LIBIE_FWLOG
   HIDDEN:=1
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/libie/libie_fwlog.ko
@@ -128,7 +128,7 @@ $(eval $(call KernelPackage,libie-fwlog))
 define KernelPackage/libie
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel Ethernet library
-  DEPENDS:=@LINUX_6_12||LINUX_6_18 +kmod-libeth
+  DEPENDS:=@LINUX_6_12||LINUX_6_18||LINUX_7_3 +kmod-libeth
   KCONFIG:=CONFIG_LIBIE
   HIDDEN:=1
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/libie/libie.ko
@@ -156,6 +156,22 @@ endef
 $(eval $(call KernelPackage,libeth))
 
 
+define KernelPackage/libeth-xdp
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Common Intel Ethernet library (XDP)
+  DEPENDS:=@LINUX_6_18||LINUX_7_3 +kmod-libeth
+  KCONFIG:=CONFIG_LIBETH_XDP
+  HIDDEN:=1
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/libeth/libeth_xdp.ko
+endef
+
+define KernelPackage/libeth-xdp/description
+ Common Intel Ethernet library (XDP support)
+endef
+
+$(eval $(call KernelPackage,libeth-xdp))
+
+
 define KernelPackage/libphy
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=PHY library
@@ -163,8 +179,9 @@ define KernelPackage/libphy
 	   CONFIG_PHYLIB_LEDS=y \
 	   CONFIG_MDIO_BUS
   FILES:=$(LINUX_DIR)/drivers/net/phy/libphy.ko \
-    $(LINUX_DIR)/drivers/net/phy/mdio-bus.ko@ge6.18
-  AUTOLOAD:=$(call AutoLoad,15,libphy mdio-bus@ge6.18,1)
+    $(LINUX_DIR)/drivers/net/phy/mdio-bus.ko@eq6.18 \
+    $(LINUX_DIR)/drivers/net/phy/mdio_bus.ko@ge7.3
+  AUTOLOAD:=$(call AutoLoad,15,libphy mdio-bus@eq6.18 mdio_bus@ge7.3,1)
 endef
 
 define KernelPackage/libphy/description
@@ -209,7 +226,7 @@ define KernelPackage/mdio-devres
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Supports MDIO device registration
   DEPENDS:=+kmod-libphy +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
-ifneq ($(KERNEL_PATCHVER),6.18)
+ifeq ($(filter 6.18 7.3,$(KERNEL_PATCHVER)),)
   KCONFIG:=CONFIG_MDIO_DEVRES
 endif
   HIDDEN:=1
@@ -367,11 +384,25 @@ endef
 $(eval $(call KernelPackage,phy-ax88796b))
 
 
+define KernelPackage/phylib-broadcom-ptp
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Broadcom Ethernet PHY PTP helper
+  HIDDEN:=1
+  DEPENDS:=@LINUX_6_18||LINUX_7_3 +kmod-phylib-broadcom +kmod-ptp
+  KCONFIG:=CONFIG_BCM_NET_PHYPTP
+  FILES:=$(LINUX_DIR)/drivers/net/phy/bcm-phy-ptp.ko
+  AUTOLOAD:=$(call AutoProbe,bcm-phy-ptp)
+endef
+
+$(eval $(call KernelPackage,phylib-broadcom-ptp))
+
+
 define KernelPackage/phy-broadcom
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Broadcom Ethernet PHY driver
    KCONFIG:=CONFIG_BROADCOM_PHY
-   DEPENDS:=+kmod-libphy +kmod-phylib-broadcom
+   DEPENDS:=+kmod-libphy +kmod-phylib-broadcom \
+	+(TARGET_armsr_armv8&&(LINUX_6_18||LINUX_7_3)):kmod-phylib-broadcom-ptp
    FILES:=$(LINUX_DIR)/drivers/net/phy/broadcom.ko
    AUTOLOAD:=$(call AutoLoad,18,broadcom,1)
 endef
@@ -504,7 +535,7 @@ $(eval $(call KernelPackage,phy-marvell-10g))
 define KernelPackage/phy-package
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Generic PHY Framework
-  DEPENDS:=@LINUX_6_18 +kmod-libphy
+  DEPENDS:=@LINUX_6_18||LINUX_7_3 +kmod-libphy
   KCONFIG:=CONFIG_PHY_PACKAGE
   HIDDEN:=1
   FILES:=$(LINUX_DIR)/drivers/net/phy/phy_package.ko
@@ -521,7 +552,7 @@ define KernelPackage/phy-micrel
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Micrel PHYs
    KCONFIG:=CONFIG_MICREL_PHY
-   DEPENDS:=+kmod-libphy +kmod-ptp +LINUX_6_18:kmod-phy-package
+   DEPENDS:=+kmod-libphy +kmod-ptp +(LINUX_6_18||LINUX_7_3):kmod-phy-package
    FILES:=$(LINUX_DIR)/drivers/net/phy/micrel.ko
    AUTOLOAD:=$(call AutoLoad,18,micrel,1)
 endef
@@ -621,8 +652,8 @@ define KernelPackage/phy-aquantia
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Aquantia Ethernet PHYs
   DEPENDS:=+kmod-libphy +kmod-hwmon-core \
-	+!(LINUX_6_12||LINUX_6_18):kmod-lib-crc-ccitt \
-	+(LINUX_6_12||LINUX_6_18):kmod-lib-crc-itu-t
+	+!(LINUX_6_12||LINUX_6_18||LINUX_7_3):kmod-lib-crc-ccitt \
+	+(LINUX_6_12||LINUX_6_18||LINUX_7_3):kmod-lib-crc-itu-t
   KCONFIG:=CONFIG_AQUANTIA_PHY
   FILES:=$(LINUX_DIR)/drivers/net/phy/aquantia.ko@lt6.1 \
 	$(LINUX_DIR)/drivers/net/phy/aquantia/aquantia.ko@ge6.1
@@ -725,7 +756,7 @@ $(eval $(call KernelPackage,dsa-mv88e6xxx))
 define KernelPackage/dsa-qca8k
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Qualcomm Atheros QCA8xxx switch family DSA support
-  DEPENDS:=+kmod-dsa +kmod-regmap-core +LINUX_6_18:kmod-mdio-devres
+  DEPENDS:=+kmod-dsa +kmod-regmap-core +(LINUX_6_18||LINUX_7_3):kmod-mdio-devres
   KCONFIG:= \
 	CONFIG_NET_DSA_QCA8K \
 	CONFIG_NET_DSA_QCA8K_LEDS_SUPPORT=y \
@@ -1281,7 +1312,7 @@ define KernelPackage/ixgbe
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel(R) 82598/82599 PCI-Express 10 Gigabit Ethernet support
   DEPENDS:=@PCI_SUPPORT +kmod-mdio +kmod-ptp +kmod-hwmon-core +kmod-libphy \
-	+kmod-mdio-devres +LINUX_6_12:kmod-libie +LINUX_6_18:kmod-libie-fwlog
+	+kmod-mdio-devres +LINUX_6_12:kmod-libie +(LINUX_6_18||LINUX_7_3):kmod-libie-fwlog
   KCONFIG:=CONFIG_IXGBE \
     CONFIG_IXGBE_HWMON=y \
     CONFIG_IXGBE_DCA=n \
@@ -1318,7 +1349,7 @@ $(eval $(call KernelPackage,ixgbevf))
 define KernelPackage/i40e
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel(R) Ethernet Controller XL710 Family support
-  DEPENDS:=@PCI_SUPPORT +kmod-ptp +LINUX_6_12:kmod-libie +LINUX_6_18:kmod-libie-adminq
+  DEPENDS:=@PCI_SUPPORT +kmod-ptp +LINUX_6_12:kmod-libie +(LINUX_6_18||LINUX_7_3):kmod-libie-adminq
   KCONFIG:=CONFIG_I40E \
     CONFIG_I40E_DCB=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/i40e/i40e.ko
@@ -1336,7 +1367,7 @@ define KernelPackage/iavf
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel(R) Ethernet Adaptive Virtual Function support
   DEPENDS:=@PCI_SUPPORT +LINUX_6_12:kmod-libie \
-	+LINUX_6_18:kmod-libie-adminq +LINUX_6_18:kmod-ptp
+	+(LINUX_6_18||LINUX_7_3):kmod-libie-adminq +(LINUX_6_18||LINUX_7_3):kmod-ptp
   KCONFIG:= \
        CONFIG_I40EVF \
        CONFIG_IAVF
@@ -1358,7 +1389,8 @@ define KernelPackage/ice
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Intel(R) Ethernet Controller E810 Series support
   DEPENDS:=@PCI_SUPPORT +kmod-ptp +kmod-hwmon-core +LINUX_6_12:kmod-libie \
-	+LINUX_6_18:kmod-libie-adminq +LINUX_6_18:kmod-libie-fwlog
+	+(LINUX_6_18||LINUX_7_3):kmod-libie-adminq +(LINUX_6_18||LINUX_7_3):kmod-libie-fwlog \
+	+(LINUX_6_18||LINUX_7_3):kmod-libeth-xdp
   KCONFIG:=CONFIG_ICE \
     CONFIG_ICE_HWMON=y \
     CONFIG_ICE_HWTS=n \
@@ -1514,7 +1546,7 @@ $(eval $(call KernelPackage,hinic))
 define KernelPackage/hinic3
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Huawei 3rd generation network adapters (HINIC3) support
-  DEPENDS:=@PCI_SUPPORT @TARGET_x86||TARGET_armsr_armv8 @LINUX_6_18
+  DEPENDS:=@PCI_SUPPORT @TARGET_x86||TARGET_armsr_armv8 @LINUX_6_18||LINUX_7_3
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/huawei/hinic3/hinic3.ko
   KCONFIG:=CONFIG_HINIC3
   AUTOLOAD:=$(call AutoProbe,hinic3)
@@ -2139,7 +2171,7 @@ $(eval $(call KernelPackage,sfc-siena))
 define KernelPackage/pcs-xpcs
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Synopsis DesignWare PCS driver
-  DEPENDS:=@(TARGET_x86_64||TARGET_armsr||TARGET_qcom) +kmod-phylink +LINUX_6_12||LINUX_6_18:kmod-mdio-devres
+  DEPENDS:=@(TARGET_x86_64||TARGET_armsr) +kmod-phylink +(LINUX_6_12||LINUX_6_18||LINUX_7_3):kmod-mdio-devres
   KCONFIG:=CONFIG_PCS_XPCS
   FILES:=$(LINUX_DIR)/drivers/net/pcs/pcs_xpcs.ko
   AUTOLOAD:=$(call AutoLoad,20,pcs_xpcs)
@@ -2151,7 +2183,7 @@ $(eval $(call KernelPackage,pcs-xpcs))
 define KernelPackage/stmmac-core
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Synopsis Ethernet Controller core (NXP,STMMicro,others)
-  DEPENDS:=@(TARGET_x86_64||TARGET_armsr||TARGET_qcom) +kmod-pcs-xpcs +kmod-ptp
+  DEPENDS:=@(TARGET_x86_64||TARGET_armsr) +kmod-pcs-xpcs +kmod-ptp
   KCONFIG:=CONFIG_STMMAC_ETH \
     CONFIG_STMMAC_SELFTESTS=n \
     CONFIG_STMMAC_PLATFORM \
@@ -2266,7 +2298,7 @@ $(eval $(call KernelPackage,atlantic))
 define KernelPackage/amazon-ena
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Elastic Network Adapter (for Amazon AWS)
-  DEPENDS:=@TARGET_x86_64||TARGET_armsr +LINUX_6_18:kmod-ptp
+  DEPENDS:=@TARGET_x86_64||TARGET_armsr +(LINUX_6_18||LINUX_7_3):kmod-ptp
   KCONFIG:=CONFIG_ENA_ETHERNET
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/amazon/ena/ena.ko
   AUTOLOAD:=$(call AutoLoad,12,ena)
@@ -2283,7 +2315,7 @@ define KernelPackage/lan743x
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Microchip LAN743x PCI Express Gigabit Ethernet NIC
   DEPENDS:=@PCI_SUPPORT +kmod-ptp +!LINUX_5_4:kmod-mdio-devres \
-	+!(LINUX_5_4||LINUX_5_10||LINUX_5_15):kmod-fixed-phy +(LINUX_6_12||LINUX_6_18):kmod-phylink
+	+!(LINUX_5_4||LINUX_5_10||LINUX_5_15):kmod-fixed-phy +(LINUX_6_12||LINUX_6_18||LINUX_7_3):kmod-phylink
   KCONFIG:=CONFIG_LAN743X
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/microchip/lan743x.ko
   AUTOLOAD:=$(call AutoProbe,lan743x)

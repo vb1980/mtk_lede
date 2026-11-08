@@ -354,6 +354,7 @@ config KERNEL_PSI
 
 config KERNEL_KALLSYMS
 	bool "Compile the kernel with symbol table information"
+	default n if TARGET_qualcommax_ipq60xx
 	default y if !SMALL_FLASH
 	help
 	  This will give you more information in stack traces from kernel oopses.
@@ -438,6 +439,7 @@ config KERNEL_DEBUG_KERNEL
 
 config KERNEL_DEBUG_INFO
 	bool "Compile the kernel with debug information"
+	depends on !TARGET_qualcommax
 	default y if !SMALL_FLASH
 	select KERNEL_DEBUG_KERNEL
 	help
@@ -457,7 +459,9 @@ config KERNEL_DEBUG_INFO_BTF
 	  Required to run BPF CO-RE applications.
 
 config KERNEL_DEBUG_INFO_BTF_MODULES
-	def_bool y
+	bool
+	default n if TARGET_armsr_armv8 && LINUX_6_18
+	default y
 	depends on KERNEL_DEBUG_INFO_BTF
 
 config KERNEL_MODULE_ALLOW_BTF_MISMATCH
@@ -559,6 +563,7 @@ config KERNEL_KPROBE_EVENTS
 
 config KERNEL_BPF_EVENTS
 	bool "Compile the kernel with BPF event support"
+	depends on !TARGET_qualcommax
 	default y if !SMALL_FLASH
 	select KERNEL_KPROBES
 	help
@@ -569,6 +574,7 @@ config KERNEL_BPF_EVENTS
 
 config KERNEL_BPF_STREAM_PARSER
 	bool "Enable BPF stream parser support"
+	depends on !TARGET_qualcommax
 	default y if !SMALL_FLASH
 	help
 	  Enable BPF socket maps and stream parsing required by dae/daed.
@@ -1255,6 +1261,7 @@ config KERNEL_NET_L3_MASTER_DEV
 
 config KERNEL_XDP_SOCKETS
 	bool "XDP sockets support"
+	depends on !TARGET_qualcommax
 	default y if !SMALL_FLASH
 	help
 	  XDP sockets allows a channel between XDP programs and

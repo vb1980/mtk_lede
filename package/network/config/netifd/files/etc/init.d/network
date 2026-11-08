@@ -47,7 +47,8 @@ service_running() {
         /sbin/wifi up
 }
 
-validate_netifd_loglevel() {
+validate_netifd_loglevel()
+{
 	uci_validate_section network "globals" "globals" \
 		'netifd_loglevel:uinteger:2'
 }
